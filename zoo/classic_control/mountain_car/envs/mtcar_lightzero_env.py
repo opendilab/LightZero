@@ -32,7 +32,6 @@ class MountainCarEnv(BaseEnv):
         )
         self._action_space = gym.spaces.Discrete(3, start=0)
         self._reward_space = gym.spaces.Box(low=-1, high=0.0, shape=(1, ), dtype=np.float32)
-        self._timestep = 0
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
@@ -74,9 +73,7 @@ class MountainCarEnv(BaseEnv):
         self._eval_episode_return = 0.
 
         action_mask = np.ones(self.action_space.n, 'int8')
-        self._timestep = 0
-
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
@@ -99,9 +96,7 @@ class MountainCarEnv(BaseEnv):
         obs = to_ndarray(obs)
         rew = to_ndarray(rew).astype(np.float32)
         action_mask = np.ones(self.action_space.n, 'int8')
-        self._timestep += 1
-
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(obs, rew, done, info)
 

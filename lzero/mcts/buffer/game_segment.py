@@ -31,7 +31,7 @@ class GameSegment:
         - store_search_stats
     """
 
-    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None) -> None:
+    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None, task_id = None) -> None:
         """
         Overview:
             Init the ``GameSegment`` according to the provided arguments.
@@ -45,19 +45,31 @@ class GameSegment:
         self.td_steps = config.td_steps
         self.frame_stack_num = config.model.frame_stack_num
         self.discount_factor = config.discount_factor
-        self.action_space_size = config.model.action_space_size
+        if not hasattr(config.model, "action_space_size_list"):
+            self.action_space_size = config.model.action_space_size
         self.gray_scale = config.gray_scale
         self.transform2string = config.transform2string
         self.sampled_algo = config.sampled_algo
         self.gumbel_algo = config.gumbel_algo
         self.use_ture_chance_label_in_chance_encoder = config.use_ture_chance_label_in_chance_encoder
 
-        if isinstance(config.model.observation_shape, int) or len(config.model.observation_shape) == 1:
-            # for vector obs input, e.g. classical control and box2d environments
-            self.zero_obs_shape = config.model.observation_shape
-        elif len(config.model.observation_shape) == 3:
-            # image obs input, e.g. atari environments
-            self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
+        if task_id is None:
+            if isinstance(config.model.observation_shape, int) or len(config.model.observation_shape) == 1:
+                # for vector obs input, e.g. classical control and box2d environments
+                self.zero_obs_shape = config.model.observation_shape
+            elif len(config.model.observation_shape) == 3:
+                # image obs input, e.g. atari environments
+                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
+        else:
+            if hasattr(config.model, "observation_shape_list"):
+                if isinstance(config.model.observation_shape_list[task_id], int) or len(config.model.observation_shape_list[task_id]) == 1:
+                    # for vector obs input, e.g. classical control and box2d environments
+                    self.zero_obs_shape = config.model.observation_shape_list[task_id]
+                elif len(config.model.observation_shape_list[task_id]) == 3:
+                    # image obs input, e.g. atari environments
+                    self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape_list[task_id][-2], config.model.observation_shape_list[task_id][-1])
+            else:
+                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
 
         self.obs_segment = []
         self.action_segment = []
@@ -68,7 +80,6 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
-        self.timestep_segment = []
 
         self.target_values = []
         self.target_rewards = []
@@ -136,7 +147,6 @@ class GameSegment:
             reward: np.ndarray,
             action_mask: np.ndarray = None,
             to_play: int = -1,
-            timestep: int = 0,
             chance: int = 0,
     ) -> None:
         """
@@ -149,8 +159,6 @@ class GameSegment:
 
         self.action_mask_segment.append(action_mask)
         self.to_play_segment.append(to_play)
-        self.timestep_segment.append(timestep)
-
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment.append(chance)
 
@@ -300,8 +308,6 @@ class GameSegment:
 
         self.action_mask_segment = np.array(self.action_mask_segment)
         self.to_play_segment = np.array(self.to_play_segment)
-        self.timestep_segment = np.array(self.timestep_segment)
-
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = np.array(self.chance_segment)
 
@@ -322,8 +328,6 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
-        self.timestep_segment = []
-
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
 

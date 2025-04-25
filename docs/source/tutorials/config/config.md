@@ -13,92 +13,33 @@ The `main_config` dictionary contains the main parameter settings for running th
 ### 1.1 Main Parameters in the `env` Part
 
 - `env_id`: Specifies the environment to be used.
-- `observation_shape`: The dimension of the environment's observations.
+- `obs_shape`: The dimension of the environment observation.
 - `collector_env_num`: The number of parallel environments used to collect data in the experience replay collector.
 - `evaluator_env_num`: The number of parallel environments used to evaluate policy performance in the evaluator.
-- `n_evaluator_episode`: The total number of episodes run across all environments in the evaluator.
-- `collect_max_episode_steps`: The maximum number of steps allowed per episode during data collection.
-- `eval_max_episode_steps`: The maximum number of steps allowed per episode during evaluation.
-- `frame_stack_num`: The number of consecutive frames stacked together as input.
-- `gray_scale`: Whether to use grayscale images.
-- `scale`: Whether to scale the input data.
-- `clip_rewards`: Whether to clip reward values.
-- `episode_life`: If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.
-- `env_type`: The type of environment.
-- `frame_skip`: The number of frames to repeat the same action.
-- `stop_value`: The target score that stops the training.
-- `replay_path`: Path to store the replay.
-- `save_replay`: Whether to save the replay video.
-- `channel_last`: Whether to put the channel dimension in the last dimension of the input data.
-- `warp_frame`: Whether to crop each frame of the picture.
+- `n_evaluator_episode`: The number of episodes run by each environment in the evaluator.
 - `manager`: Specifies the type of environment manager, mainly used to control the parallelization mode of the environment.
 
 ### 1.2 Main Parameters in the `policy` Part
 
-- `model`: Specifies the neural network model used by the policy.
-    - `model_type`: The type of model to use.
-    - `observation_shape`: The dimensions of the observation space.
-    - `action_space_size`: The size of the action space.
-    - `continuous_action_space`: Whether the action space is continuous.
-    - `num_res_blocks`: The number of residual blocks in the model.
-    - `downsample`: Whether to downsample the input.
-    - `norm_type`: The type of normalization used.
-    - `num_channels`: The number of channels in the convolutional layers (number of features extracted).
-    - `support_scale`: The range of the value support set (`-support_scale` to `support_scale`).
-    - `bias`: Whether to use bias terms in the layers.
-    - `discrete_action_encoding_type`: How discrete actions are encoded.
-    - `self_supervised_learning_loss`: Whether to use a self-supervised learning loss (as in EfficientZero).
-    - `image_channel`: The number of channels in the input image.
-    - `frame_stack_num`: Number of frames stacked.
-    - `gray_scale`: Whether to use gray images.
-    - `use_sim_norm`: Whether to use SimNorm after the Latent State.
-    - `use_sim_norm_kl_loss`: Whether the obs_loss corresponding to the Latent State after SimNorm uses KL divergence loss, which is often used together with SimNorm.
-    - `res_connection_in_dynamics`: Whether to use the residual connection in the dynamics model.
-- `learn`: Configuration for the learning process.
-    - `learner`: Configuration for the learner (dictionary type), including train iterations and checkpoint saving.
-    - `resume_training`: Whether to resume training.
-- `collect`: Configuration for the collect process.
-    - `collector`: Collector configuration (dictionary type), including type and print frequency.
-- `eval`: Configuration for the evaluation process
-    - `evaluator`: Evaluator configuration (dictionary type), including evaluation frequency, number of episodes to evaluate, and path to save images.
-- `other`: Other configurations.
-    - `replay_buffer`: Replay buffer configuration (dictionary type), including buffer size, maximum usage and staleness of experiences, and parameters for throughput control and monitoring.
-- `cuda`: Whether to use CUDA (GPU) for training.
-- `multi_gpu`: Whether to enable multi-GPU training.
-- `use_wandb`: Whether to use Weights & Biases (wandb) for logging.
-- `mcts_ctree`: Whether to use the C++ version of Monte Carlo Tree Search.
-- `collector_env_num`: The number of collection environments.
-- `evaluator_env_num`: The number of evaluation environments.
-- `env_type`: The type of environment (board game or non-board game).
-- `action_type`: The type of action space (fixed or other).
-- `game_segment_length`: The length corresponding to the basic unit game segment during collection.
-- `cal_dormant_ratio`: Whether to calculate the ratio of dormant neurons.
+- `model`: Specifies the neural network model used by the policy, including the input dimension of the model, the number of frame stacking, the action space dimension of the model output, whether the model needs to use downsampling, whether to use self-supervised learning auxiliary loss, the action encoding type, the Normalization mode used in the network, etc.
+- `cuda`: Specifies whether to migrate the model to the GPU for training.
+- `reanalyze_noise`: Whether to introduce noise during MCTS reanalysis, which can increase exploration.
+- `env_type`: Marks the environment type faced by the MuZero algorithm. According to different environment types, the MuZero algorithm will have some differences in detail processing.
+- `game_segment_length`: The length of the sequence (game segment) used for self-play.
+- `random_collect_episode_num`: The number of randomly collected episodes, providing initial data for exploration.
+- `eps`: Exploration control parameters, including whether to use the epsilon-greedy method for control, the update method of control parameters, the starting value, the termination value, the decay rate, etc.
 - `use_augmentation`: Whether to use data augmentation.
-- `augmentation`: The data augmentation methods to use.
-- `update_per_collect`: The number of model updates after each data collection phase.
-- `batch_size`: The batch size used for training updates.
-- `optim_type`: The type of optimizer.
-- `reanalyze_ratio`: The reanalyze ratio, which controls the probability to conduct reanalyze.
-- `reanalyze_noise`: Whether to introduce noise during MCTS reanalysis (for exploration).
-- `reanalyze_batch_size`: Reanalyze batch size.
-- `reanalyze_partition`: The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
--`random_collect_episode_num`: Number of episodes of random collection, to provide initial exploration data.
-- `eps`: Parameters for exploration control, including whether to use epsilon-greedy, update schedules, start/end values, and decay rate.
+- `update_per_collect`: The number of updates after each data collection.
+- `batch_size`: The batch size sampled during the update.
+- `optim_type`: Optimizer type.
 - `piecewise_decay_lr_scheduler`: Whether to use piecewise constant learning rate decay.
-- `learning_rate`: The initial learning rate.
+- `learning_rate`: Initial learning rate.
 - `num_simulations`: The number of simulations used in the MCTS algorithm.
-- `reward_loss_weight`: Weight for the reward loss.
-- `policy_loss_weight`: Weight for the policy loss.
-- `value_loss_weight`: Weight for the value loss.
-- `ssl_loss_weight`: The weight of the self-supervised learning loss.
-- `n_episode`: The number of episodes in parallel collector.
-- `eval_freq`: The frequency of policy evaluation (in terms of training steps).
-- `replay_buffer_size`: The capacity of the replay buffer.
-- `target_update_freq`: How often to update the target network.
-- `grad_clip_value`: Value to clip gradient.
-- `discount_factor`: Discount factor.
-- `td_steps`: TD steps.
-- `num_unroll_steps`: The number of rollout steps during MuZero training.
+- `reanalyze_ratio`: Reanalysis coefficient, controlling the probability of reanalysis.
+- `ssl_loss_weight`: The weight of the self-supervised learning loss function.
+- `n_episode`: The number of episodes run by each environment in the parallel collector.
+- `eval_freq`: Policy evaluation frequency (measured by training steps).
+- `replay_buffer_size`: The capacity of the experience replay buffer.
 
 Two frequently changed parameter setting areas are also specially mentioned here, annotated by comments:
 

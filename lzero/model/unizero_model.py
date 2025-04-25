@@ -6,8 +6,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
-    HFLanguageRepresentationNetwork
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 
@@ -81,16 +80,7 @@ class UniZeroModel(nn.Module):
             # TODO: only for MemoryEnv now
             self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, with_lpips=False)
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print('==' * 20)
-        elif world_model_cfg.obs_type == 'text':
-            self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim)
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False,)
+                                       decoder_network=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -107,13 +97,15 @@ class UniZeroModel(nn.Module):
                 norm_type=norm_type,
                 embedding_dim=world_model_cfg.embed_dim,
                 group_size=world_model_cfg.group_size,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
             )
 
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False,)
+                
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -144,7 +136,7 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network)
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
@@ -155,23 +147,20 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print('==' * 20)
 
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
-                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
         """
         Overview:
-            Initial inference of the UniZero model, which is the first step of the UniZero model.
-            This method uses the representation network to obtain the ``latent_state`` and the prediction network 
-            to predict the ``value`` and ``policy_logits`` of the ``latent_state``.
-        
+            Initial inference of UniZero model, which is the first step of the UniZero model.
+            To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
+            Then we use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``.
         Arguments:
             - obs_batch (:obj:`torch.Tensor`): The 3D image observation data.
-            - action_batch (:obj:`Optional[torch.Tensor]`): The actions taken, defaults to None.
-            - current_obs_batch (:obj:`Optional[torch.Tensor]`): The current observations, defaults to None.
-            - start_pos (:obj:`int`): The starting position for inference, defaults to 0.
-        
-        Returns:
-            - MZNetworkOutput: Contains the predicted value, reward, policy logits, and latent state.
-        
+        Returns (MZNetworkOutput):
+            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
+            - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action. \
+                In initial inference, we set it to zero vector.
+            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
         Shapes:
             - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
@@ -179,65 +168,51 @@ class UniZeroModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
-        """
+         """
         batch_size = obs_batch.size(0)
-        obs_act_dict = {
-            'obs': obs_batch,
-            'action': action_batch,
-            'current_obs': current_obs_batch
-        }
-        
-        # Perform initial inference using the world model
-        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, start_pos)
-        
-        # Extract and squeeze the outputs for clarity
-        latent_state = obs_token
-        reward = logits_rewards
-        policy_logits = logits_policy.squeeze(1)
-        value = logits_value.squeeze(1)
+        obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
+        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict)
+        latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value
+        policy_logits = policy_logits.squeeze(1)
+        value = value.squeeze(1)
 
         return MZNetworkOutput(
-            value=value,
-            reward=[0. for _ in range(batch_size)],  # Initialize reward to zero vector
-            policy_logits=policy_logits,
-            latent_state=latent_state,
+            value,
+            [0. for _ in range(batch_size)],
+            policy_logits,
+            latent_state,
         )
 
-    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index: int = 0,
-                            search_depth: list = None, start_pos: int = 0) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
+                            latent_state_index_in_search_path=[]) -> MZNetworkOutput:
         """
         Overview:
-            Performs recurrent inference of the UniZero model. This method concurrently predicts the latent dynamics 
-            (reward and next latent state) and decision-oriented quantities (value and policy) based on the learned 
-            latent history in the world model.
-
+            Recurrent inference of UniZero model.To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
+            and decision-oriented quantities (value/policy) conditioned on the learned latent history in the world_model.
         Arguments:
-            - state_action_history (:obj:`torch.Tensor`): The history of state-action pairs used for inference.
-            - simulation_index (:obj:`int`): The index for the current simulation, defaults to 0.
-            - search_depth (:obj:`list`, optional): The depth of the search for inference, defaults to an empty list.
-            - start_pos (:obj:`int`): The starting position for inference, defaults to 0.
-
-        Returns:
-            - MZNetworkOutput: Contains the predicted value, reward, policy logits, and next latent state.
-
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - action (:obj:`torch.Tensor`): The predicted action to rollout.
+        Returns (MZNetworkOutput):
+            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
+            - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action.
+            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - next_latent_state (:obj:`torch.Tensor`): The predicted next latent state.
         Shapes:
-            - state_action_history (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
+            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
+            - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
             - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
-            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of latent state, W_ is the width of latent state.
-        """
-        if search_depth is None:
-            search_depth = []
-
-        # Perform recurrent inference using the world model
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
+                latent state, W_ is the width of latent state.
+         """
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, search_depth, start_pos)
-
-        # Extract and squeeze the outputs for clarity
-        next_latent_state = logits_observations
-        reward = logits_rewards.squeeze(1)
-        policy_logits = logits_policy.squeeze(1)
-        value = logits_value.squeeze(1)
-
-        return MZNetworkOutput(value=value, reward=reward, policy_logits=policy_logits, latent_state=next_latent_state)
+            state_action_history, simulation_index, latent_state_index_in_search_path)
+        next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
+        policy_logits = policy_logits.squeeze(1)
+        value = value.squeeze(1)
+        reward = reward.squeeze(1)
+        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)

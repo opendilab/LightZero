@@ -374,7 +374,7 @@ class Roots:
             noises: List[float],
             value_prefixs: List[float],
             policies: List[List[float]],
-            to_play: Union[int, List] = -1
+            to_play: int = -1
     ) -> None:
         """
         Overview:
@@ -396,7 +396,7 @@ class Roots:
 
             self.roots[i].visit_count += 1
 
-    def prepare_no_noise(self, value_prefixs: List[float], policies: List[List[float]], to_play: Union[int, List] = -1) -> None:
+    def prepare_no_noise(self, value_prefixs: List[float], policies: List[List[float]], to_play: int = -1) -> None:
         """
         Overview:
             Expand the roots without noise.

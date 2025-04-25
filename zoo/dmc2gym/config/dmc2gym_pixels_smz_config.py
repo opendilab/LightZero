@@ -4,7 +4,7 @@ from easydict import EasyDict
 # ==============================================================
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'cartpole-balance'  # You can specify any DMC tasks here
+env_id = 'cartpole-swingup'  # You can specify any DMC tasks here
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]
 
@@ -18,28 +18,18 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-replay_ratio = 0.1
-batch_size = 256
+replay_ratio = 0.25
+batch_size = 1024
 max_env_step = int(1e6)
+reanalyze_ratio = 0.
 norm_type = 'LN'
 seed = 0
-
-# ======== debug config ======== 
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# continuous_action_space = True
-# K = 5  # num_of_sampled_actions
-# num_simulations = 5
-# replay_ratio = 0.05
-# update_per_collect =2
-# batch_size = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 dmc2gym_pixels_cont_sampled_muzero_config = dict(
-    exp_name=f'data_smz/dmc2gym_{env_id}_pixel_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_{norm_type}_seed{seed}',
+    exp_name=f'data_smz/dmc2gym_{env_id}_state_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
         continuous=True,
@@ -60,7 +50,6 @@ dmc2gym_pixels_cont_sampled_muzero_config = dict(
         model=dict(
             model_type='conv',
             observation_shape=(9, 84, 84),
-            downsample=True,
             image_channel=3,
             frame_stack_num=3,
             action_space_size=action_space_size,
@@ -68,8 +57,8 @@ dmc2gym_pixels_cont_sampled_muzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             norm_type=norm_type,
-            self_supervised_learning_loss=True,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         cuda=True,
         env_type='not_board_games',
@@ -77,19 +66,15 @@ dmc2gym_pixels_cont_sampled_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
-        use_priority=False,
         cos_lr_scheduler=True,
         learning_rate=0.0001,
         num_simulations=num_simulations,
-        reanalyze_ratio=0,
-        policy_entropy_weight=5e-2,
-        grad_clip_value=5,
-        manual_temperature_decay=True,
-        threshold_training_steps_for_final_temperature=int(2.5e4),
+        reanalyze_ratio=reanalyze_ratio,
+        policy_entropy_weight=5e-3,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_ratio=replay_ratio,
-        replay_buffer_size=int(1e5),
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

@@ -52,8 +52,8 @@ cfg = dict(
                 # We use the small size model for tictactoe.
                 num_res_blocks=1,
                 num_channels=16,
-                value_head_hidden_channels=[8],
-                policy_head_hidden_channels=[8],
+                fc_value_layers=[8],
+                fc_policy_layers=[8],
             ),
             sampled_algo=True,
             mcts_ctree=mcts_ctree,

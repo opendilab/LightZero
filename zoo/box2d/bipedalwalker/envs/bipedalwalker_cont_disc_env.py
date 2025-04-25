@@ -72,7 +72,6 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
-        self._timestep = 0
 
     def reset(self) -> np.ndarray:
         """
@@ -121,9 +120,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         self._action_space = gym.spaces.Discrete(self.K)
 
         action_mask = np.ones(self.K, 'int8')
-        self._timestep = 0
-
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
@@ -149,9 +146,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         done = terminated or truncated
 
         action_mask = np.ones(self.K, 'int8')
-        self._timestep += 1
-
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._eval_episode_return += rew
         if self._rew_clip:
             rew = max(-10, rew)

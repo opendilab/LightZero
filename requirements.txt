@@ -1,11 +1,11 @@
-DI-engine>=0.5.3
+DI-engine>=0.4.7
 gymnasium[atari]==0.28.0
-numpy>=1.24.1,<2
+numpy==1.24.1
 pympler
 minigrid
 moviepy
 pytest
 line_profiler
 xxhash
+simple_parsing
 einops
-openai

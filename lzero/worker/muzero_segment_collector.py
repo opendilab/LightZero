@@ -46,19 +46,22 @@ class MuZeroSegmentCollector(ISerialCollector):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             policy_config: 'policy_config' = None,  # noqa
+            task_id: int = None,
     ) -> None:
         """
         Overview:
-            Initialize the MuZeroSegmentCollector with the given parameters.
+            Initialize the MuZeroCollector with the given parameters.
         Arguments:
             - collect_print_freq (:obj:`int`): Frequency (in training steps) at which to print collection information.
             - env (:obj:`Optional[BaseEnvManager]`): Instance of the subclass of vectorized environment manager.
-            - policy (:obj:`Optional[namedtuple]`): Namedtuple of the collection mode policy API.
+            - policy (:obj:`Optional[namedtuple]`): namedtuple of the collection mode policy API.
             - tb_logger (:obj:`Optional[SummaryWriter]`): TensorBoard logger instance.
             - exp_name (:obj:`str`): Name of the experiment, used for logging and saving purposes.
             - instance_name (:obj:`str`): Unique identifier for this collector instance.
             - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.
         """
+        self.task_id = task_id
+
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -66,6 +69,10 @@ class MuZeroSegmentCollector(ISerialCollector):
         self._end_flag = False
 
         self._rank = get_rank()
+
+        print(f'rank {self._rank}, self.task_id: {self.task_id}')
+
+
         self._world_size = get_world_size()
         if self._rank == 0:
             if tb_logger is not None:
@@ -83,7 +90,9 @@ class MuZeroSegmentCollector(ISerialCollector):
             self._logger, _ = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
-            self._tb_logger = None
+            # =========== TODO: for unizero_multitask ddp_v2 ========
+            self._tb_logger = tb_logger
+
 
         self.policy_config = policy_config
         self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
@@ -124,7 +133,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             self._logger.debug(
                 'Set default num_segments mode(num_segments({}), env_num({}))'.format(self._default_num_segments, self._env_num)
             )
-        self._policy.reset()
+        self._policy.reset(task_id=self.task_id)
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -152,8 +161,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         self.to_play_dict = {i: None for i in range(self._env_num)}
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             self.chance_dict = {i: None for i in range(self._env_num)}
-        
-        self.timestep_dict = {i: None for i in range(self._env_num)}
 
         self.dones = np.array([False for _ in range(self._env_num)])
         self.last_game_segments = [None for _ in range(self._env_num)]
@@ -379,10 +386,6 @@ class MuZeroSegmentCollector(ISerialCollector):
             if env_id in init_obs.keys():
                 self.action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                 self.to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                if 'timestep' not in init_obs[env_id]:
-                    print(f"Warning: 'timestep' key is missing in init_obs[{env_id}], assigning value -1")
-                self.timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
-
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
@@ -390,7 +393,8 @@ class MuZeroSegmentCollector(ISerialCollector):
             GameSegment(
                 self._env.action_space,
                 game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
+                config=self.policy_config,
+                task_id=self.task_id
             ) for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
@@ -448,16 +452,15 @@ class MuZeroSegmentCollector(ISerialCollector):
                 #     ready_env_id = set(obs.keys())
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+
+
                 stack_obs = list(stack_obs.values())
 
                 self.action_mask_dict_tmp = {env_id: self.action_mask_dict[env_id] for env_id in ready_env_id}
                 self.to_play_dict_tmp = {env_id: self.to_play_dict[env_id] for env_id in ready_env_id}
-                self.timestep_dict_tmp = {env_id: self.timestep_dict[env_id] for env_id in ready_env_id}
                 
                 action_mask = [self.action_mask_dict_tmp[env_id] for env_id in ready_env_id]
                 to_play = [self.to_play_dict_tmp[env_id] for env_id in ready_env_id]
-                timestep = [self.timestep_dict_tmp[env_id] for env_id in ready_env_id]
-
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict_tmp = {env_id: self.chance_dict[env_id] for env_id in ready_env_id}
 
@@ -469,17 +472,19 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # ==============================================================
                 # Key policy forward step
                 # ==============================================================
-                # logging.info(f'ready_env_id:{ready_env_id}')
-                # logging.info(f'timestep:{timestep}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
+                # print(f'ready_env_id:{ready_env_id}')
+                if self.task_id is None:
+                    # single task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                else:
+                    # multi task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                timestep_dict_with_env_id = {
-                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
-                }
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -501,7 +506,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                 actions = {}
                 value_dict = {}
                 pred_value_dict = {}
-                timestep_dict = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -519,7 +523,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                     actions[env_id] = actions_with_env_id.pop(env_id)
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
-                    timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -540,17 +543,17 @@ class MuZeroSegmentCollector(ISerialCollector):
 
             interaction_duration = self._timer.value / len(timesteps)
 
-            for env_id, episode_timestep in timesteps.items():
+            for env_id, timestep in timesteps.items():
                 with self._timer:
-                    if episode_timestep.info.get('abnormal', False):
-                        # If there is an abnormal episode_timestep, reset all the related variables(including this env).
+                    if timestep.info.get('abnormal', False):
+                        # If there is an abnormal timestep, reset all the related variables(including this env).
                         # suppose there is no reset param, reset this env
                         self._env.reset({env_id: None})
                         self._policy.reset([env_id])
                         self._reset_stat(env_id)
-                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, episode_timestep.info))
+                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
                         continue
-                    obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
+                    obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
 
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
@@ -570,22 +573,18 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
-                            self.to_play_dict_tmp[env_id], timestep=to_ndarray(obs['timestep']), chance=self.chance_dict_tmp[env_id]
+                            self.to_play_dict_tmp[env_id], self.chance_dict_tmp[env_id]
                         )
                     else:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
-                            self.to_play_dict_tmp[env_id], timestep=to_ndarray(obs['timestep'])
+                            self.to_play_dict_tmp[env_id]
                         )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     self.action_mask_dict_tmp[env_id] = to_ndarray(obs['action_mask'])
                     self.to_play_dict_tmp[env_id] = to_ndarray(obs['to_play'])
-                    # self.timestep_dict_tmp[env_id] = to_ndarray(obs['timestep'])
-                    self.timestep_dict_tmp[env_id] = to_ndarray(obs.get('timestep', -1))
-
-
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         self.chance_dict_tmp[env_id] = to_ndarray(obs['chance'])
 
@@ -643,7 +642,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
+                            config=self.policy_config,
+                            task_id=self.task_id
                         )
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -651,11 +651,11 @@ class MuZeroSegmentCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-                if episode_timestep.done:
+                if timestep.done:
                     logging.info(f'========env {env_id} done!========')
                     self._total_episode_count += 1
 
-                    reward = episode_timestep.info['eval_episode_return']
+                    reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],
@@ -705,7 +705,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                     # Env reset is done by env_manager automatically
                     # NOTE: ============ reset the policy for the env_id. Default reset_init_data=True. ================
-                    self._policy.reset([env_id])
+                    self._policy.reset([env_id], task_id=self.task_id)
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
@@ -714,7 +714,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                     game_segments[env_id] =  GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
+                            config=self.policy_config,
+                            task_id=self.task_id
                         )
                     game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -735,11 +736,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
+        # TODO: for atari multitask new ddp pipeline
         # reduce data when enables DDP
-        if self._world_size > 1:
-            collected_step = allreduce_data(collected_step, 'sum')
-            collected_episode = allreduce_data(collected_episode, 'sum')
-            collected_duration = allreduce_data(collected_duration, 'sum')
+        # if self._world_size > 1:
+        #     collected_step = allreduce_data(collected_step, 'sum')
+        #     collected_episode = allreduce_data(collected_episode, 'sum')
+        #     collected_duration = allreduce_data(collected_duration, 'sum')
+
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
         self._total_duration += collected_duration
@@ -755,8 +758,9 @@ class MuZeroSegmentCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
-        if self._rank != 0:
-            return
+        # TODO: for atari multitask new ddp pipeline
+        # if self._rank != 0:
+        #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)
@@ -789,11 +793,20 @@ class MuZeroSegmentCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
+            print(f'collector output_log: rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue
-                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                if self.task_id is None:
+                    self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                else:
+                    self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v,
+                                               train_iter)
                 if k in ['total_envstep_count']:
                     continue
-                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                if self.task_id is None:
+                    self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                else:
+                    self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v,
+                                           self._total_envstep_count)

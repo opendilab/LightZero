@@ -542,8 +542,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         temperature: float = 1,
         to_play: List = [-1],
         epsilon: float = 0.25,
-        ready_env_id: np.array = None,
-        **kwargs,
+        ready_env_id: np.array = None
     ):
         """
         Overview:
@@ -666,7 +665,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: Union[int, List] =  [-1], ready_env_id: np.array = None, **kwargs):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.

@@ -15,7 +15,6 @@ config = EasyDict(
         env_type='not_board_games',
         use_priority=True,
         action_type='fixed_action_space',
-        game_segment_length=20,
     )
 )
 

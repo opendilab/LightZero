@@ -317,7 +317,7 @@ def configure_optimizers(
     return optimizer
 
 
-def prepare_obs_stack_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_obs_stack4_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
         Prepare the observation stack for UniZero model. This function processes the original batch of observations
@@ -359,7 +359,7 @@ def prepare_obs_stack_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> T
     return obs_batch, obs_target_batch
 
 
-def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
         Prepare the observations for the model by converting the original batch of observations
@@ -382,9 +382,12 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     # Calculate the dimension size to slice based on the model configuration.
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
     # For multi-layer perceptron models ('mlp'), use the number of frames to stack times the size of the observation space.
-    stack_dim = cfg.model.frame_stack_num * (
+    if task_id is None:
+        stack_dim = cfg.model.frame_stack_num * (
         cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape)
-
+    else:
+        stack_dim = cfg.model.frame_stack_num * (
+            cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape_list[task_id])
     # Slice the original observation tensor to obtain the batch for the initial inference.
     obs_batch = obs_batch_ori[:, :stack_dim]
 
@@ -395,7 +398,10 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
         # Determine the starting dimension to exclude based on the model type.
         # For 'conv', exclude the first 'image_channel' dimensions.
         # For 'mlp', exclude the first 'observation_shape' dimensions.
-        exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape
+        if task_id is None:
+            exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape
+        else:
+            exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape_list[task_id]
 
         # Slice the original observation tensor to obtain the batch for consistency loss calculation.
         obs_target_batch = obs_batch_ori[:, exclude_dim:]
@@ -550,7 +556,11 @@ def concat_output_value(output_lst: List) -> np.ndarray:
     # concat the values of the model output list
     value_lst = []
     for output in output_lst:
-        value_lst.append(output.value)
+        value_lst.append(output.value) # TODO:cpu
+
+    # print(f'value_lst:{value_lst}')
+    # print(f'value_lst[0]:{value_lst[0]}')
+    # print(f'value_lst[0].shape:{value_lst[0].shape}')
 
     value_lst = np.concatenate(value_lst)
 

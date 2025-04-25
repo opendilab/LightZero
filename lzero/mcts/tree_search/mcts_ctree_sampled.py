@@ -82,19 +82,16 @@ class SampledUniZeroMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], timestep: Union[int, List[Any]]
+            List[Any]], task_id=None
     ) -> None:
         """
         Overview:
-            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
-            This method utilizes the C++ implementation of the tree search for efficiency.
-
+            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
+            Use the cpp ctree.
         Arguments:
-            - roots (:obj:`Any`): A batch of expanded root nodes.
-            - model (:obj:`torch.nn.Module`): The neural network model used for inference.
-            - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
-            - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
-            - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
+            - roots (:obj:`Any`): a batch of expanded root nodes
+            - latent_state_roots (:obj:`list`): the hidden states of the roots
+            - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games
         """
         with torch.no_grad():
             model.eval()
@@ -140,7 +137,18 @@ class SampledUniZeroMCTSCtree(object):
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
+                # try:
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+                # except Exception as e:
+                #     print("="*20)
+                #     print(e)
+                #     # print("latent_states raw:", latent_states)
+                #     print("roots:", roots, "latent_state_roots:", latent_state_roots)
+                #     print ("latent_state_roots.shape:", latent_state_roots.shape)
+                #     # if not all(isinstance(x, np.ndarray) and x.shape == latent_states[0].shape for x in latent_states):
+                #     #     raise ValueError(f"Inconsistent latent_states shapes: {[x.shape if isinstance(x, np.ndarray) else type(x) for x in latent_states]}")
+                #     import ipdb; ipdb.set_trace()
+
                 if self._cfg.model.continuous_action_space is True:
                     # continuous action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device)
@@ -159,8 +167,12 @@ class SampledUniZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 # for Sampled UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index,
-                                                           latent_state_index_in_search_path, timestep)
+                if task_id is not None:
+                    # multi task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
+                else:
+                    # single task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -168,6 +180,9 @@ class SampledUniZeroMCTSCtree(object):
                 network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
+
+                # print("network_output.latent_state.shape:", network_output.latent_state.shape)
+
 
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()

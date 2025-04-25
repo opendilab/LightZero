@@ -11,9 +11,9 @@ def main(env_id, seed):
     collector_env_num = 8
     num_segments = 8
     game_segment_length = 20
-    evaluator_env_num = 10
+    evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
+    max_env_step = int(4e5)
     batch_size = 64
     num_layers = 2
     replay_ratio = 0.25
@@ -21,7 +21,8 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    buffer_reanalyze_freq = 1/50
+    # buffer_reanalyze_freq = 1/10
+    buffer_reanalyze_freq = 1 / 100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -31,8 +32,9 @@ def main(env_id, seed):
     # collector_env_num = 2
     # num_segments = 2
     # evaluator_env_num = 2
-    # num_simulations = 10
+    # num_simulations = 5
     # batch_size = 5
+    # buffer_reanalyze_freq = 1/1000000
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -47,9 +49,11 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
+            # collect_max_episode_steps=int(5e3),
+            # eval_max_episode_steps=int(5e3),
             # TODO: only for debug
-            # collect_max_episode_steps=int(50),
-            # eval_max_episode_steps=int(50),
+            # collect_max_episode_steps=int(20),
+            # eval_max_episode_steps=int(20),
         ),
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
@@ -58,6 +62,20 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 support_scale=300,
                 world_model_cfg=dict(
+                    # final_norm_option_in_obs_head='LayerNorm',
+                    # final_norm_option_in_encoder='LayerNorm',
+                    # predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
+                    
+                    final_norm_option_in_obs_head='SimNorm',
+                    final_norm_option_in_encoder='SimNorm',
+                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    # analysis_dormant_ratio_weight_rank=True, # TODO
+
+                    analysis_dormant_ratio_weight_rank=False, # TODO
+                    dormant_threshold=0.025,
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
+                    use_shared_projection=False,
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -72,7 +90,17 @@ def main(env_id, seed):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
-                    rotary_emb=False,
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
+                    num_experts_of_moe_in_transformer=4,
+                    # LoRA 参数：
+                    lora_r= 0,
+                    lora_alpha =1,
+                    lora_dropout= 0.0,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -90,7 +118,8 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            train_start_after_envsteps=0,
+            # train_start_after_envsteps=0, # only for debug
+            train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
@@ -125,7 +154,8 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # TODO: only for debug
+    main_config.exp_name = f'data_lz/data_unizero_atari_st_final-latent-simnorm/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -135,5 +165,4 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
-
     main(args.env, args.seed)

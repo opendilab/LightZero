@@ -528,7 +528,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-            'target_policy_entropy': target_policy_entropy / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
@@ -790,14 +790,8 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = 1
 
     def _forward_collect(
-            self,
-            data: torch.Tensor,
-            action_mask: list = None,
-            temperature: float = 1,
-            to_play: List = [-1],
-            epsilon: float = 0.25,
-            ready_env_id: np.array = None,
-            **kwargs,
+            self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
+            epsilon: float = 0.25, ready_env_id: np.array = None,
     ):
         """
         Overview:
@@ -930,7 +924,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1], ready_env_id: np.array = None, **kwargs):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None, ):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.

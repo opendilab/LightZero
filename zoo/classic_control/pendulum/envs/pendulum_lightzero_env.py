@@ -102,8 +102,7 @@ class PendulumEnv(CartPoleEnv):
             action_mask = np.ones(self.discrete_action_num, 'int8')
         else:
             action_mask = None
-        self._timestep = 0
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         return obs
 
@@ -149,8 +148,7 @@ class PendulumEnv(CartPoleEnv):
             action_mask = np.ones(self.discrete_action_num, 'int8')
         else:
             action_mask = None
-        self._timestep += 1
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(obs, rew, done, info)
 

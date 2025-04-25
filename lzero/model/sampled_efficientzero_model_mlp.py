@@ -20,9 +20,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
         action_space_size: int = 6,
         latent_state_dim: int = 256,
         lstm_hidden_size: int = 512,
-        reward_head_hidden_channels: SequenceType = [256],
-        value_head_hidden_channels: SequenceType = [256],
-        policy_head_hidden_channels: SequenceType = [256],
+        fc_reward_layers: SequenceType = [256],
+        fc_value_layers: SequenceType = [256],
+        fc_policy_layers: SequenceType = [256],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -62,9 +62,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
                 e.g. 4 for Lunarlander. For continuous action space, it is the dimension of the continuous action, e.g. 4 for bipedalwalker.
             - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.
             - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict value_prefix.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -116,9 +116,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
 
         self.lstm_hidden_size = lstm_hidden_size
         self.latent_state_dim = latent_state_dim
-        self.reward_head_hidden_channels = reward_head_hidden_channels
-        self.value_head_hidden_channels = value_head_hidden_channels
-        self.policy_head_hidden_channels = policy_head_hidden_channels
+        self.fc_reward_layers = fc_reward_layers
+        self.fc_value_layers = fc_value_layers
+        self.fc_policy_layers = fc_policy_layers
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -145,7 +145,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
             lstm_hidden_size=self.lstm_hidden_size,
-            reward_head_hidden_channels=self.reward_head_hidden_channels,
+            fc_reward_layers=self.fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=self.activation,
@@ -157,8 +157,8 @@ class SampledEfficientZeroModelMLP(nn.Module):
             continuous_action_space=self.continuous_action_space,
             action_space_size=self.action_space_size,
             num_channels=self.latent_state_dim,
-            value_head_hidden_channels=self.value_head_hidden_channels,
-            policy_head_hidden_channels=self.policy_head_hidden_channels,
+            fc_value_layers=self.fc_value_layers,
+            fc_policy_layers=self.fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=self.activation, 
@@ -397,8 +397,8 @@ class PredictionNetworkMLP(nn.Module):
         action_space_size,
         num_channels,
         common_layer_num: int = 2,
-        value_head_hidden_channels: SequenceType = [32],
-        policy_head_hidden_channels: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
@@ -422,8 +422,8 @@ class PredictionNetworkMLP(nn.Module):
                 continuous action.
             - num_channels (:obj:`int`): The num of channels in latent states.
             - num_res_blocks (:obj:`int`): The number of res blocks.
-            - value_head_hidden_channels (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
             - output_support_size (:obj:`int`): dim of value output.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
             # ==============================================================
@@ -465,7 +465,7 @@ class PredictionNetworkMLP(nn.Module):
         # ******* value and policy head ******
         self.fc_value_head = MLP(
             in_channels=self.num_channels,
-            hidden_channels=value_head_hidden_channels[0],
+            hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
             layer_num=2,
             activation=activation,
@@ -491,7 +491,7 @@ class PredictionNetworkMLP(nn.Module):
         else:
             self.fc_policy_head = MLP(
                 in_channels=self.num_channels,
-                hidden_channels=policy_head_hidden_channels[0],
+                hidden_channels=fc_policy_layers[0],
                 out_channels=action_space_size,
                 layer_num=2,
                 activation=activation,

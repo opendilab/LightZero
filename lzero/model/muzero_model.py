@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook, MLP_V2
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -28,9 +28,9 @@ class MuZeroModel(nn.Module):
         reward_head_channels: int = 16,
         value_head_channels: int = 16,
         policy_head_channels: int = 16,
-        reward_head_hidden_channels: SequenceType = [32],
-        value_head_hidden_channels: SequenceType = [32],
-        policy_head_hidden_channels: SequenceType = [32],
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -62,9 +62,9 @@ class MuZeroModel(nn.Module):
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -124,15 +124,15 @@ class MuZeroModel(nn.Module):
         elif observation_shape[1] == 64:
             latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
 
-        flatten_input_size_for_reward_head = (
+        flatten_output_size_for_reward_head = (
             (reward_head_channels * latent_size) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_input_size_for_value_head = (
+        flatten_output_size_for_value_head = (
             (value_head_channels * latent_size) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_input_size_for_policy_head = (
+        flatten_output_size_for_policy_head = (
             (policy_head_channels * latent_size) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
@@ -157,9 +157,9 @@ class MuZeroModel(nn.Module):
             num_res_blocks,
             num_channels + self.action_encoding_dim,
             reward_head_channels,
-            reward_head_hidden_channels,
+            fc_reward_layers,
             self.reward_support_size,
-            flatten_input_size_for_reward_head,
+            flatten_output_size_for_reward_head,
             downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
@@ -172,11 +172,11 @@ class MuZeroModel(nn.Module):
             num_channels,
             value_head_channels,
             policy_head_channels,
-            value_head_hidden_channels,
-            policy_head_hidden_channels,
+            fc_value_layers,
+            fc_policy_layers,
             self.value_support_size,
-            flatten_input_size_for_value_head,
-            flatten_input_size_for_policy_head,
+            flatten_output_size_for_value_head,
+            flatten_output_size_for_policy_head,
             downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
@@ -425,9 +425,9 @@ class DynamicsNetwork(nn.Module):
         num_res_blocks: int = 1,
         num_channels: int = 64,
         reward_head_channels: int = 64,
-        reward_head_hidden_channels: SequenceType = [32],
+        fc_reward_layers: SequenceType = [32],
         output_support_size: int = 601,
-        flatten_input_size_for_reward_head: int = 64,
+        flatten_output_size_for_reward_head: int = 64,
         downsample: bool = False,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
@@ -443,9 +443,9 @@ class DynamicsNetwork(nn.Module):
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of input, including obs and action encoding.
             - reward_head_channels (:obj:`int`): The channels of reward head.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
-            - flatten_input_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
+            - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
                 the input size of reward head.
             - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of \
@@ -459,7 +459,7 @@ class DynamicsNetwork(nn.Module):
         assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
 
         self.num_channels = num_channels
-        self.flatten_input_size_for_reward_head = flatten_input_size_for_reward_head
+        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
 
         self.action_encoding_dim = action_encoding_dim
         self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)
@@ -490,9 +490,10 @@ class DynamicsNetwork(nn.Module):
             else:
                 self.norm_reward = nn.LayerNorm([reward_head_channels, observation_shape[-2], observation_shape[-1]])
 
-        self.fc_reward_head = MLP_V2(
-            self.flatten_input_size_for_reward_head,
-            hidden_channels=reward_head_hidden_channels,
+        self.fc_reward_head = MLP(
+            self.flatten_output_size_for_reward_head,
+            hidden_channels=fc_reward_layers[0],
+            layer_num=len(fc_reward_layers) + 1,
             out_channels=output_support_size,
             activation=activation,
             norm_type=norm_type,

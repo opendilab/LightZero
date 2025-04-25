@@ -72,7 +72,6 @@ class LunarLanderEnv(CartPoleEnv):
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
-        self._timestep = 0
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -112,14 +111,12 @@ class LunarLanderEnv(CartPoleEnv):
         self._eval_episode_return = 0.
         if self._save_replay_gif:
             self._frames = []
-        self._timestep = 0
-        
         if 'Continuous' not in self._env_id:
             action_mask = np.ones(4, 'int8')
-            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
             action_mask = None
-            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return obs
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
@@ -140,16 +137,14 @@ class LunarLanderEnv(CartPoleEnv):
 
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
-        self._timestep += 1
-
         if 'Continuous' not in self._env_id:
             action_mask = np.ones(4, 'int8')
             # TODO: test the performance of varied_action_space.
             # action_mask[0] = 0
-            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
             action_mask = None
-            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+            obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         self._eval_episode_return += rew
         if done:
             info['eval_episode_return'] = self._eval_episode_return

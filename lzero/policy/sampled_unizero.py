@@ -13,7 +13,7 @@ from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack_for_unizero
+    prepare_obs_stack4_for_unizero
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from lzero.entry.utils import initialize_zeros_batch
@@ -130,14 +130,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 dormant_threshold=0.025,
                 # (str) The type of policy loss. Options could be ['kl', 'simple'].
                 policy_loss_type='kl',
-                # (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.
-                # If False, nn.Embedding is used for absolute position encoding.
-                # For more details on RoPE, refer to the author's blog: https://spaces.ac.cn/archives/8265/
-                rotary_emb=False,
-                # (int) The base value for calculating RoPE angles. Commonly set to 10000.
-                rope_theta=10000,
-                # (int) The maximum sequence length for position encoding.
-                max_seq_len=8192,
             ),
         ),
         # ****** common ******
@@ -389,12 +381,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time, batch_timestep = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num > 1:
-            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num == 4:
+            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
@@ -411,8 +403,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         else:
             action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
                 -1).long()  # For discrete action space
-        batch_timestep = torch.from_numpy(batch_timestep).to(self._cfg.device).unsqueeze(
-            -1).long() 
         data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
                      weights]
         [mask_batch, target_reward, target_value, target_policy,
@@ -447,8 +437,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['timestep'] = batch_timestep.squeeze(-1)
-
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
@@ -654,8 +642,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.array = None,
-            timestep: List = [0]
+            ready_env_id: np.array = None
     ) -> Dict:
         """
         Overview:
@@ -667,7 +654,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - timestep (:obj:`list`): The step index of the env in one episode
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -677,7 +663,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
             - ready_env_id: None
-            - timestep: :math:`(N, 1)`, where N is the number of collect_env.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -692,7 +677,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -727,7 +712,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -779,7 +764,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
                 }
                 batch_action.append(action)
 
@@ -815,8 +799,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
-                      ready_env_id: np.array = None, timestep: int = 0) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -844,7 +828,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -874,7 +858,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -914,7 +898,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
                 }
                 batch_action.append(action)
 

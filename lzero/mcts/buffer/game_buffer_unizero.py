@@ -11,6 +11,7 @@ from .game_buffer_muzero import MuZeroGameBuffer
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
+from line_profiler import line_profiler
 
 
 @BUFFER_REGISTRY.register('game_buffer_unizero')
@@ -48,6 +49,19 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         self.game_segment_game_pos_look_up = []
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
 
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+            try:
+                self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
+            except Exception as e:
+                self.action_space_size = self._cfg.model.action_space_size
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
+            self.action_space_size = self._cfg.model.action_space_size
+
+    #@profile
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -68,17 +82,16 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             batch_size, self._cfg.reanalyze_ratio
         )
 
-        # current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        # current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list]
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2], current_batch[-1]  # current_batch[2] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[2]  # current_batch[2] is batch_target_action
         )
-
         # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1]) # current_batch[1] is batch_action
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1]) # current_batch[1] is batch_action
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-            policy_non_re_context, self._cfg.model.action_space_size
+            policy_non_re_context, self.action_space_size
         )
 
         # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
@@ -95,6 +108,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         train_data = [current_batch, target_batch]
         return train_data
 
+    #@profile
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -118,7 +132,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
-        timestep_list = []
         bootstrap_action_list = []
 
         # prepare the inputs of a batch
@@ -128,8 +141,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-            timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
-                                                                  self._cfg.num_unroll_steps].tolist()
+            
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             # mask_tmp = [1. for i in range(len(actions_tmp))]
             # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
@@ -139,15 +151,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
+            # TODO: original buffer mask
+            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
             # pad random action
             actions_tmp += [
                 np.random.randint(0, game.action_space_size)
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
-            ]
-            # TODO: check the effect
-            timestep_tmp += [
-                0
-                for _ in range(self._cfg.num_unroll_steps - len(timestep_tmp))
             ]
 
             # obtain the current observations sequence
@@ -159,7 +170,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             action_list.append(actions_tmp)
 
             mask_list.append(mask_tmp)
-            timestep_list.append(timestep_tmp)
 
             # NOTE: for unizero
             bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
@@ -176,7 +186,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 
@@ -235,7 +246,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # obtain the current_batch and prepare target context
         policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size)
         # target policy
-        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1])
+        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
 
     def _make_batch_for_reanalyze(self, batch_size: int) -> Tuple[Any]:
         """
@@ -260,8 +271,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
         bootstrap_action_list = []
-        timestep_list = []
-
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_segment_list[i]
@@ -273,8 +282,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-            timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
-                                                                  self._cfg.num_unroll_steps].tolist()
+
             # TODO: original buffer mask
             # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
@@ -285,12 +293,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
 
-            # TODO: check the effect
-            timestep_tmp += [
-                0
-                for _ in range(self._cfg.num_unroll_steps - len(timestep_tmp))
-            ]
-
             # obtain the current observations sequence
             obs_list.append(
                 game_segment_list[i].get_unroll_obs(
@@ -299,8 +301,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             )
             action_list.append(actions_tmp)
             mask_list.append(mask_tmp)
-
-            timestep_list.append(timestep_tmp)
 
             # NOTE: for unizero
             bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
@@ -316,7 +316,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 
@@ -355,7 +355,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             rewards, child_visits, game_segment_lens = [], [], []
             # for board games
             action_mask_segment, to_play_segment = [], []
-            timestep_segment = []
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
                 game_segment_len = len(game_segment)
                 game_segment_lens.append(game_segment_len)
@@ -363,7 +362,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 # for board games
                 action_mask_segment.append(game_segment.action_mask_segment)
                 to_play_segment.append(game_segment.to_play_segment)
-                timestep_segment.append(game_segment.timestep_segment)
+
                 child_visits.append(game_segment.child_visit_segment)
                 # prepare the corresponding observations
                 game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
@@ -381,11 +380,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         policy_re_context = [
             policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens,
-            action_mask_segment, to_play_segment, timestep_segment
+            action_mask_segment, to_play_segment
         ]
         return policy_re_context
 
-    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, batch_action, batch_timestep = None) -> np.ndarray:
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, batch_action) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -400,11 +399,10 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
-            to_play_segment, timestep_segment = policy_re_context  # noqa
+            to_play_segment = policy_re_context  # noqa
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
 
-        # TODO: timestep_segment
         to_play, action_mask = self._preprocess_to_play_and_action_mask(
             game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
         )
@@ -412,16 +410,16 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         if self._cfg.model.continuous_action_space is True:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+                list(np.ones(self.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
-        # NOTE: check the effect of reanalyze_phase
+        # NOTE: TODO
         model.world_model.reanalyze_phase = True
 
         with torch.no_grad():
@@ -432,18 +430,23 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
-            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+
+            if self.task_id is not None:
+                m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
+            else:
+                m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+
             # =======================================================================
 
-            if not model.training:
-                # if not in training, obtain the scalars of the value/reward
-                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                    [
-                        m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                        m_output.policy_logits
-                    ]
-                )
+            # if not model.training:
+            # if not in training, obtain the scalars of the value/reward
+            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                [
+                    m_output.latent_state,
+                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    m_output.policy_logits
+                ]
+            )
 
             network_output.append(m_output)
 
@@ -451,7 +454,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
             ]
             if self._cfg.mcts_ctree:
@@ -459,13 +462,19 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep[:self.reanalyze_num])
+                if self.task_id is not None:
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep[:self.reanalyze_num])
+                if self.task_id is not None:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
@@ -476,7 +485,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     distributions = roots_distributions[policy_index]
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
-                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
+                        target_policies.append([0 for _ in range(self.action_space_size)])
                     else:
                         # NOTE: It is very important to use the latest MCTS visit count distribution.
                         sum_visits = sum(distributions)
@@ -485,7 +494,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
-                                list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
+                                list(np.ones(self.action_space_size) / self.action_space_size)
                             )
                         else:
                             if self._cfg.env_type == 'not_board_games':
@@ -495,7 +504,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                                 target_policies.append(policy)
                             else:
                                 # for board games that have two players and legal_actions is dy
-                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                policy_tmp = [0 for _ in range(self.action_space_size)]
                                 # to make sure target_policies have the same dimension
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
@@ -514,7 +523,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -540,9 +549,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
-            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
+            if self.task_id is not None:
+                m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
+            else:
+                m_output = model.initial_inference(batch_obs, batch_action)
+
             # ======================================================================
 
+            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
@@ -551,6 +565,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     m_output.policy_logits
                 ]
             )
+
             network_output.append(m_output)
 
             if self._cfg.use_root_value:

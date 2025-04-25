@@ -19,9 +19,9 @@ class EfficientZeroModelMLP(nn.Module):
         action_space_size: int = 6,
         lstm_hidden_size: int = 512,
         latent_state_dim: int = 256,
-        reward_head_hidden_channels: SequenceType = [32],
-        value_head_hidden_channels: SequenceType = [32],
-        policy_head_hidden_channels: SequenceType = [32],
+        fc_reward_layers: SequenceType = [32],
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -52,9 +52,9 @@ class EfficientZeroModelMLP(nn.Module):
             - action_space_size: (:obj:`int`): Action space size, e.g. 4 for Lunarlander.
             - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict value_prefix.
             - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -113,7 +113,7 @@ class EfficientZeroModelMLP(nn.Module):
             num_channels=latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
             lstm_hidden_size=lstm_hidden_size,
-            reward_head_hidden_channels=reward_head_hidden_channels,
+            fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type,
@@ -123,8 +123,8 @@ class EfficientZeroModelMLP(nn.Module):
         self.prediction_network = PredictionNetworkMLP(
             action_space_size=action_space_size,
             num_channels=latent_state_dim,
-            value_head_hidden_channels=value_head_hidden_channels,
-            policy_head_hidden_channels=policy_head_hidden_channels,
+            fc_value_layers=fc_value_layers,
+            fc_policy_layers=fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type
@@ -345,7 +345,7 @@ class DynamicsNetworkMLP(nn.Module):
         action_encoding_dim: int = 2,
         num_channels: int = 64,
         common_layer_num: int = 2,
-        reward_head_hidden_channels: SequenceType = [32],
+        fc_reward_layers: SequenceType = [32],
         output_support_size: int = 601,
         lstm_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
@@ -362,7 +362,7 @@ class DynamicsNetworkMLP(nn.Module):
             - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_channels (:obj:`int`): The num of channels in latent states.
             - common_layer_num (:obj:`int`): The number of common layers in dynamics network.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy head, default sets it to True.
@@ -426,7 +426,7 @@ class DynamicsNetworkMLP(nn.Module):
 
         self.fc_reward_head = MLP(
             in_channels=self.lstm_hidden_size,
-            hidden_channels=reward_head_hidden_channels[0],
+            hidden_channels=fc_reward_layers[0],
             layer_num=2,
             out_channels=output_support_size,
             activation=self.activation,

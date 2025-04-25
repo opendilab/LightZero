@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2025.04.09 LightZero-v0.2.0
+最近更新于 2024.12.10 LightZero-v0.1.0
 
 [English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [文档](https://opendilab.github.io/LightZero) | [LightZero 论文](https://arxiv.org/abs/2310.08348) | [🔥UniZero 论文](https://arxiv.org/abs/2406.10667) | [🔥ReZero 论文](https://arxiv.org/abs/2404.16364)
 
@@ -52,37 +52,25 @@
 **LightZero** 的目标是**标准化 MCTS 算法族，以加速相关研究和应用。** [Benchmark](#benchmark) 中介绍了目前所有已实现算法的性能比较。
 
 ### 导航
-- [LightZero](#lightzero)
-  - [🔍 背景](#-背景)
-  - [🎨 概览](#-概览)
+- [概览](#概览)
     - [导航](#导航)
-    - [💥 特点](#-特点)
-    - [🧩 框架结构](#-框架结构)
-    - [🎁 集成算法](#-集成算法)
-  - [⚙️ 安装方法](#️-安装方法)
-    - [使用 Docker 进行安装](#使用-docker-进行安装)
-  - [🚀 快速开始](#-快速开始)
-  - [📚 文档](#-文档)
-  - [📊 基线算法比较](#-基线算法比较)
-  - [📝 MCTS 相关笔记](#-mcts-相关笔记)
+    - [特点](#特点)
+    - [框架结构](#框架结构)
+    - [集成算法](#集成算法)
+- [安装方法](#安装方法)
+- [快速开始](#快速开始)
+- [文档](#文档)
+- [基线算法比较](#基线算法比较)
+- [MCTS相关笔记](#MCTS-相关笔记)
     - [论文笔记](#论文笔记)
     - [算法框架图](#算法框架图)
-  - [MCTS 相关论文](#mcts-相关论文)
+- [MCTS相关论文](#MCTS-相关论文)
     - [重要论文](#重要论文)
-      - [LightZero Implemented series](#lightzero-implemented-series)
-      - [AlphaGo series](#alphago-series)
-      - [MuZero series](#muzero-series)
-      - [MCTS Analysis](#mcts-analysis)
-      - [MCTS Application](#mcts-application)
     - [其他论文](#其他论文)
-      - [ICML](#icml)
-      - [ICLR](#iclr)
-      - [NeurIPS](#neurips)
-      - [Other Conference or Journal](#other-conference-or-journal)
-  - [💬 反馈意见和贡献](#-反馈意见和贡献)
-  - [🌏 引用](#-引用)
-  - [💓 致谢](#-致谢)
-  - [🏷️ 许可证](#️-许可证)
+- [反馈意见和贡献](#反馈意见和贡献)
+- [引用](#引用)
+- [致谢](#致谢)
+- [许可证](#许可证)
 
 ### 💥 特点
 **轻量**：LightZero 中集成了多种 MCTS 族算法，能够在同一框架下轻量化地解决多种属性的决策问题。
@@ -346,7 +334,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 - [2021 Sampled MuZero: Learning and Planning in Complex Action Spaces](https://arxiv.org/abs/2104.06303)
 - [2022 Stochastic MuZero: Plannig in Stochastic Environments with A Learned Model](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [2022 Gumbel MuZero: Policy Improvement by Planning with Gumbel](https://openreview.net/pdf?id=bERaNdoegnO&)
-- [2024 UniZero: Generalized and Efficient Planning with Scalable Latent World Models](https://arxiv.org/abs/2406.10667)
+
 
 #### AlphaGo series
 
@@ -383,22 +371,6 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 <summary>(点击查看)</summary>
 
 #### ICML
-- [Language Agent Tree Search Unifies Reasoning, Acting, and Planning in Language Models](https://icml.cc/virtual/2024/poster/33107) 2024  
-  - Andy Zhou, Kai Yan, Michal Shlapentokh-Rothman, Haohan Wang, Yu-Xiong Wang  
-  - Key: language models, decision-making, Monte Carlo Tree Search, reasoning, acting, planning  
-  - ExpEnv: HumanEval, WebShop, interactive QA, programming, math
-- [Efficient Adaptation in Mixed-Motive Environments via Hierarchical Opponent Modeling and Planning](https://proceedings.mlr.press/v235/huang24p.html) 2024  
-  - Yizhe Huang, Anji Liu, Fanqi Kong, Yaodong Yang, Song-Chun Zhu, Xue Feng  
-  - Key: multi-agent reinforcement learning, hierarchical opponent modeling, Monte Carlo Tree Search, few-shot adaptation, mixed-motive environments  
-  - ExpEnv: multi-agent decision-making scenarios, self-play, mixed-motive interactions
-- [Accelerating Look-ahead in Bayesian Optimization: Multilevel Monte Carlo is All you Need](https://openreview.net/forum?id=46vXhZn7lN) 2024  
-  - Shangda Yang, Vitaly Zankin, Maximilian Balandat, Stefan Scherer, Kevin Thomas Carlberg, Neil Walton, Kody J. H. Law  
-  - Key: Bayesian optimization, multilevel Monte Carlo, nested expectations, acquisition functions  
-  - ExpEnv: Benchmark examples
-- [Accelerated Speculative Sampling Based on Tree Monte Carlo](https://openreview.net/forum?id=stMhi1Sn2G) 2024  
-  - Zhengmian Hu, Heng Huang  
-  - Key: speculative sampling, large language models, tree Monte Carlo, inference acceleration  
-  - ExpEnv: Not specified
 - [Scalable Safe Policy Improvement via Monte Carlo Tree Search](https://openreview.net/pdf?id=tevbBSzSfK) 2023
   - Alberto Castellini, Federico Bianchi, Edoardo Zorzi, Thiago D. Simão, Alessandro Farinelli, Matthijs T. J. Spaan
   - Key: safe policy improvement online using a MCTS based strategy, Safe Policy Improvement with Baseline Bootstrapping
@@ -427,22 +399,6 @@ and internal state transition dynamics,
   - ExpEnv: USPTO datasets
   - [Code](https://github.com/binghong-ml/retro_star)
 #### ICLR
-- [OptionZero: Planning with Learned Options](https://openreview.net/forum?id=3IFRygQKGL) 2025  
-  - Po-Wei Huang, Pei-Chiun Peng, Hung Guei, Ti-Rong Wu  
-  - Key: Option, Semi-MDP, MuZero, MCTS, Planning, Reinforcement Learning  
-  - ExpEnv: 26 Atari games
-- [Monte Carlo Planning with Large Language Model for Text-Based Games](https://openreview.net/forum?id=r1KcapkzCt) 2025  
-  - Zijing Shi, Meng Fang, Ling Chen  
-  - Key: Large language model, Monte Carlo tree search, Text-based games  
-  - ExpEnv: Jericho benchmark
-- [Epistemic Monte Carlo Tree Search](https://openreview.net/forum?id=Tb8RiXOc3N) 2025  
-  - Yaniv Oren, Viliam Vadocz, Matthijs T. J. Spaan, Wendelin Boehmer  
-  - Key: model based, epistemic uncertainty, exploration, planning, alphazero, muzero  
-  - ExpEnv: SUBLEQ (Assembly language), Deep Sea
-- [Enhancing Software Agents with Monte Carlo Tree Search and Hindsight Feedback](https://openreview.net/forum?id=G7sIFXugTX) 2025  
-  - Antonis Antoniades, Albert Örwall, Kexun Zhang, Yuxi Xie, Anirudh Goyal, William Yang Wang  
-  - Key: agents, LLM, SWE-agents, SWE-bench, search, planning, reasoning, self-improvement, open-ended  
-  - ExpEnv: SWE-bench
 - [The Update Equivalence Framework for Decision-Time Planning](https://openreview.net/forum?id=JXGph215fL) 2024
   - Samuel Sokota, Gabriele Farina, David J Wu, Hengyuan Hu, Kevin A. Wang, J Zico Kolter, Noam Brown
   - Key: imperfect-information games, search, decision-time planning, update equivalence

@@ -24,9 +24,9 @@ class StochasticMuZeroModel(nn.Module):
             reward_head_channels: int = 16,
             value_head_channels: int = 16,
             policy_head_channels: int = 16,
-            reward_head_hidden_channels: SequenceType = [32],
-            value_head_hidden_channels: SequenceType = [32],
-            policy_head_hidden_channels: SequenceType = [32],
+            fc_reward_layers: SequenceType = [32],
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
             reward_support_size: int = 601,
             value_support_size: int = 601,
             proj_hid: int = 1024,
@@ -58,9 +58,9 @@ class StochasticMuZeroModel(nn.Module):
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -101,17 +101,17 @@ class StochasticMuZeroModel(nn.Module):
         self.state_norm = state_norm
         self.downsample = downsample
 
-        flatten_input_size_for_reward_head = (
+        flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_input_size_for_value_head = (
+        flatten_output_size_for_value_head = (
             (value_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_input_size_for_policy_head = (
+        flatten_output_size_for_policy_head = (
             (policy_head_channels * math.ceil(observation_shape[1] / 16) *
              math.ceil(observation_shape[2] / 16)) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
@@ -131,9 +131,9 @@ class StochasticMuZeroModel(nn.Module):
             num_res_blocks,
             num_channels + 1,
             reward_head_channels,
-            reward_head_hidden_channels,
+            fc_reward_layers,
             self.reward_support_size,
-            flatten_input_size_for_reward_head,
+            flatten_output_size_for_reward_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
         )
         self.prediction_network = PredictionNetwork(
@@ -143,11 +143,11 @@ class StochasticMuZeroModel(nn.Module):
             num_channels,
             value_head_channels,
             policy_head_channels,
-            value_head_hidden_channels,
-            policy_head_hidden_channels,
+            fc_value_layers,
+            fc_policy_layers,
             self.value_support_size,
-            flatten_input_size_for_value_head,
-            flatten_input_size_for_policy_head,
+            flatten_output_size_for_value_head,
+            flatten_output_size_for_policy_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
         )
 
@@ -155,9 +155,9 @@ class StochasticMuZeroModel(nn.Module):
             num_res_blocks,
             num_channels + 1,
             reward_head_channels,
-            reward_head_hidden_channels,
+            fc_reward_layers,
             self.reward_support_size,
-            flatten_input_size_for_reward_head,
+            flatten_output_size_for_reward_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
         )
         self.afterstate_prediction_network = AfterstatePredictionNetwork(
@@ -166,11 +166,11 @@ class StochasticMuZeroModel(nn.Module):
             num_channels,
             value_head_channels,
             policy_head_channels,
-            value_head_hidden_channels,
-            policy_head_hidden_channels,
+            fc_value_layers,
+            fc_policy_layers,
             self.value_support_size,
-            flatten_input_size_for_value_head,
-            flatten_input_size_for_policy_head,
+            flatten_output_size_for_value_head,
+            flatten_output_size_for_policy_head,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
         )
 
@@ -485,9 +485,9 @@ class DynamicsNetwork(nn.Module):
             num_res_blocks: int,
             num_channels: int,
             reward_head_channels: int,
-            reward_head_hidden_channels: SequenceType,
+            fc_reward_layers: SequenceType,
             output_support_size: int,
-            flatten_input_size_for_reward_head: int,
+            flatten_output_size_for_reward_head: int,
             last_linear_layer_init_zero: bool = True,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
     ):
@@ -499,9 +499,9 @@ class DynamicsNetwork(nn.Module):
             - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
             - num_channels (:obj:`int`): The channels of input, including obs and action encoding.
             - reward_head_channels (:obj:`int`): The channels of reward head.
-            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
-            - flatten_input_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
+            - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
                 the input size of reward head.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
                 reward mlp, default set it to True.
@@ -510,7 +510,7 @@ class DynamicsNetwork(nn.Module):
         """
         super().__init__()
         self.num_channels = num_channels
-        self.flatten_input_size_for_reward_head = flatten_input_size_for_reward_head
+        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
 
         self.conv = nn.Conv2d(num_channels, num_channels - 1, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn = nn.BatchNorm2d(num_channels - 1)
@@ -525,9 +525,9 @@ class DynamicsNetwork(nn.Module):
         self.conv1x1_reward = nn.Conv2d(num_channels - 1, reward_head_channels, 1)
         self.bn_reward = nn.BatchNorm2d(reward_head_channels)
         self.fc_reward_head = MLP(
-            self.flatten_input_size_for_reward_head,
-            hidden_channels=reward_head_hidden_channels[0],
-            layer_num=len(reward_head_hidden_channels) + 1,
+            self.flatten_output_size_for_reward_head,
+            hidden_channels=fc_reward_layers[0],
+            layer_num=len(fc_reward_layers) + 1,
             out_channels=output_support_size,
             activation=activation,
             norm_type='BN',
@@ -565,7 +565,7 @@ class DynamicsNetwork(nn.Module):
         x = self.conv1x1_reward(next_latent_state)
         x = self.bn_reward(x)
         x = self.activation(x)
-        x = x.view(-1, self.flatten_input_size_for_reward_head)
+        x = x.view(-1, self.flatten_output_size_for_reward_head)
 
         # use the fully connected layer to predict reward
         reward = self.fc_reward_head(x)
@@ -591,11 +591,11 @@ class AfterstatePredictionNetwork(nn.Module):
             num_channels: int,
             value_head_channels: int,
             policy_head_channels: int,
-            value_head_hidden_channels: int,
-            policy_head_hidden_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
             output_support_size: int,
-            flatten_input_size_for_value_head: int,
-            flatten_input_size_for_policy_head: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
     ) -> None:
@@ -609,13 +609,13 @@ class AfterstatePredictionNetwork(nn.Module):
             - num_channels (:obj:`int`): The channels of hidden states.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_input_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the value head.
-            - flatten_input_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the policy head.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initialization for the last layer of \
                 dynamics/prediction mlp, default set it to True.
@@ -633,15 +633,15 @@ class AfterstatePredictionNetwork(nn.Module):
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
         self.bn_value = nn.BatchNorm2d(value_head_channels)
         self.bn_policy = nn.BatchNorm2d(policy_head_channels)
-        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
-        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
         self.activation = activation
 
         self.fc_value = MLP(
-            in_channels=self.flatten_input_size_for_value_head,
-            hidden_channels=value_head_hidden_channels[0],
+            in_channels=self.flatten_output_size_for_value_head,
+            hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
-            layer_num=len(value_head_hidden_channels) + 1,
+            layer_num=len(fc_value_layers) + 1,
             activation=self.activation,
             norm_type='BN',
             output_activation=False,
@@ -649,10 +649,10 @@ class AfterstatePredictionNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
-            in_channels=self.flatten_input_size_for_policy_head,
-            hidden_channels=policy_head_hidden_channels[0],
+            in_channels=self.flatten_output_size_for_policy_head,
+            hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
-            layer_num=len(policy_head_hidden_channels) + 1,
+            layer_num=len(fc_policy_layers) + 1,
             activation=self.activation,
             norm_type='BN',
             output_activation=False,
@@ -681,8 +681,8 @@ class AfterstatePredictionNetwork(nn.Module):
         policy = self.bn_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1, self.flatten_input_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
+        value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
         afterstate_value = self.fc_value(value)
         afterstate_policy_logits = self.fc_policy(policy)

@@ -70,10 +70,59 @@ class Cache:
             - x (:obj:`torch.Tensor`): The new values to update the cache with.
             - tokens (:obj:`int`): The number of tokens to update.
         """
-        # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
-        # assert self._size + tokens <= self._cache.shape[2]  # TODO
-        self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
-        self._size += tokens
+        try:
+            # Calculate the required capacity after adding the new tokens
+            required_capacity = self._size + tokens
+            # print(f'self._size:{self._size}, tokens:{tokens}')
+
+            # Check if the cache has enough space to accommodate the new tokens, 
+            #  kv_cache, z/a, register_token
+            # 这样修复后kv_cache的位置编码不是从0开始的, 那后面按照从零开始矫正也就是错误的,
+            # 但是由于self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1,所以不会矫正
+            # 但是在_add_position_embeddings时，prev_steps是错误的，导致新增的z/a的位置编码索引与前面的kv不连续
+            if required_capacity > self._cache.shape[2]: 
+                # Shift existing cache data by removing the oldest entries
+                shift_amount = required_capacity - self._cache.shape[2]
+                # =======TODO: 应该去掉偶数个（z,a）以保证 head 输出pattern保持不变=======
+                if shift_amount % 2 != 0:
+                    shift_amount = shift_amount + 1
+                # print(f'required_capacity:{required_capacity}, self._cache.shape[2]:{self._cache.shape[2]}, shift_amount:{shift_amount}')
+                if shift_amount >= self._size:
+                    # If the shift amount exceeds or equals the current size, just reset the cache
+                    print("Cache too small; resetting the entire cache")
+                    self._cache = torch.zeros_like(self._cache)  # Reset cache to zeros
+                    self._size = 0  # Reset size
+                else:
+                    # Shift the cache to make room for new data
+                    self._cache[:, :, :self._size - shift_amount, :] = self._cache[:, :, shift_amount:self._size, :]
+                    self._size -= shift_amount  # Update the size after shifting
+
+            # Update the cache with new values
+            self._cache = AssignWithoutInplaceCheck.apply(
+                self._cache, x, 2, self._size, self._size + tokens
+            )
+            self._size += tokens  # Update the size after adding new values
+
+        except Exception as e:
+            print(f"An error occurred during cache update: {e}")
+
+    # def update(self, x: torch.Tensor, tokens: int) -> None:
+    #     """
+    #     Overview:
+    #         Update the cache with new values.
+    #     Arguments:
+    #         - x (:obj:`torch.Tensor`): The new values to update the cache with.
+    #         - tokens (:obj:`int`): The number of tokens to update.
+    #     """
+    #     # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
+    #     # assert self._size + tokens <= self._cache.shape[2]  # TODO
+    #     try:
+    #         self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
+    #         self._size += tokens
+    #     except Exception as e:
+    #         print(e)
+    #         # import ipdb; ipdb.set_trace()
+
 
 
 class KVCache:
@@ -90,6 +139,12 @@ class KVCache:
         """
         self._k_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
         self._v_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
+
+    #     self.register_token_num = 2  # Number of register tokens TODO======
+
+    # def set_register_token_num(self, num: int) -> None:
+    #     """Set the number of register tokens."""
+    #     self.register_token_num = num
 
     @property
     def shape(self) -> Tuple[int, int, int, int]:
@@ -133,13 +188,10 @@ class KVCache:
         """
         Overview:
             Update both key and value caches with new values.
-        Arguments:
-            - k (:obj:`torch.Tensor`): The new values to update the key cache with.
-            - v (:obj:`torch.Tensor`): The new values to update the value cache with.
+            If `is_register_token` is True, prepend the register tokens to the cache.
         """
         self._k_cache.update(k, k.size(2))
         self._v_cache.update(v, v.size(2))
-
 
 class KeysValues:
     def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, num_layers: int, device: torch.device) -> None:
@@ -203,6 +255,18 @@ class KeysValues:
         """
         for kv_cache in self._keys_values:
             kv_cache.prune(mask)
+
+    def remove_register_tokens(self, register_token_num: int):
+        """
+        Overview:
+            移除所有层 KV 缓存开头的 Register Token。
+            在推理结束后调用，保证外层看到的 KV 不包含 Register Token。
+        """
+        # import ipdb; ipdb.set_trace()
+        for kv_cache in self._keys_values:
+            # 移除 KVCache 中后面的 register_token_num 个 token
+            kv_cache._k_cache._size -= register_token_num
+            kv_cache._v_cache._size -= register_token_num
 
 
 class AssignWithoutInplaceCheck(torch.autograd.Function):

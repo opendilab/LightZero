@@ -695,7 +695,6 @@ class MuZeroPolicy(Policy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
-            **kwargs,
     ) -> Dict:
         """
         Overview:
@@ -854,8 +853,8 @@ class MuZeroPolicy(Policy):
         #     self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
         #     self.last_batch_action = [-1 for _ in range(3)]
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
-                      ready_env_id: np.array = None, **kwargs) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None, ) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -940,7 +939,7 @@ class MuZeroPolicy(Policy):
 
         return output
 
-    def _reset_collect(self, data_id: Optional[List[int]] = None) -> None:
+    def _reset_collect(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
         """
         Overview:
             Reset the observation and action for the collector environment.
@@ -955,7 +954,7 @@ class MuZeroPolicy(Policy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
-    def _reset_eval(self, data_id: Optional[List[int]] = None) -> None:
+    def _reset_eval(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
         """
         Overview:
             Reset the observation and action for the evaluator environment.
@@ -969,6 +968,7 @@ class MuZeroPolicy(Policy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+    
     def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:

@@ -9,15 +9,15 @@ Overview:
     For more details, you can refer to: https://github.com/int8/monte-carlo-tree-search.
 """
 
-import copy
-import os
 import time
+import copy
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from graphviz import Digraph
+import os
 
 import numpy as np
-from graphviz import Digraph
-
+import copy
 
 class MCTSNode(ABC):
     """

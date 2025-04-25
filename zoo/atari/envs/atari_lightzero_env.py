@@ -1,7 +1,7 @@
 import copy
-from ditk import logging
 from typing import List
 
+# import gymnasium as gym
 import gym 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -24,6 +24,8 @@ class AtariEnvLightZero(BaseEnv):
         _reward_space, obs, _eval_episode_return, has_reset, _seed, _dynamic_seed
     """
     config = dict(
+        # (bool) Whether to use the full action space of the environment. Default is False. If set to True, the action space size is 18 for Atari.
+        full_action_space=False,
         # (int) The number of environment instances used for data collection.
         collector_env_num=8,
         # (int) The number of environment instances used for evaluator.
@@ -49,9 +51,6 @@ class AtariEnvLightZero(BaseEnv):
         replay_path=None,
         # (bool) If set to True, the game screen is converted to grayscale, reducing the complexity of the observation space.
         gray_scale=True,
-        # (int) Specifies the number of consecutive frames to stack after collecting environment data. 
-        # The stacking process is applied within the collector and evaluator modules.
-        frame_stack_num=1,
         # (int) The number of frames to skip between each action. Higher values result in faster simulation.
         frame_skip=4,
         # (bool) If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.
@@ -102,7 +101,6 @@ class AtariEnvLightZero(BaseEnv):
         self.channel_last = cfg.channel_last
         self.clip_rewards = cfg.clip_rewards
         self.episode_life = cfg.episode_life
-        self._timestep = 0
 
     def reset(self) -> dict:
         """
@@ -114,28 +112,7 @@ class AtariEnvLightZero(BaseEnv):
         if not self._init_flag:
             # Create and return the wrapped environment for Atari LightZero.
             self._env = wrap_lightzero(self.cfg, episode_life=self.cfg.episode_life, clip_rewards=self.cfg.clip_rewards)
-
-            observation_space_before_stack = (
-                int(self.cfg.observation_shape[0] / self.cfg.frame_stack_num),
-                self.cfg.observation_shape[1],
-                self.cfg.observation_shape[2]
-            )
-
-            self._observation_space = gym.spaces.Dict({
-                'observation': gym.spaces.Box(
-                    low=0, high=1, shape=observation_space_before_stack, dtype=np.float32
-                ),
-                'action_mask': gym.spaces.Box(
-                    low=0, high=1, shape=(self._env.env.action_space.n,), dtype=np.int8
-                ),
-                'to_play': gym.spaces.Box(
-                    low=-1, high=2, shape=(), dtype=np.int8
-                ),
-                'timestep': gym.spaces.Box(
-                    low=0, high=self.cfg.collect_max_episode_steps, shape=(), dtype=np.int32
-                ),
-            })
-
+            self._observation_space = self._env.env.observation_space
             self._action_space = self._env.env.action_space
             self._reward_space = gym.spaces.Box(
                 low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
@@ -157,8 +134,10 @@ class AtariEnvLightZero(BaseEnv):
 
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
-        self._timestep = 0
+        self.timestep = 0
+
         obs = self.observe()
+
         return obs
 
     def step(self, action: int) -> BaseEnvTimestep:
@@ -174,12 +153,13 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
-        self._timestep += 1
-        # logging.info(f'self._timestep: {self._timestep}')
+        self.timestep += 1
+        # print(f'self.timestep: {self.timestep}')
         observation = self.observe()
         if done:
-            logging.info(f'one episode done! total episode length is: {self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
+            print(f'one episode of {self.cfg.env_id} done')
+
         return BaseEnvTimestep(observation, self.reward, done, info)
 
     def observe(self) -> dict:
@@ -197,10 +177,8 @@ class AtariEnvLightZero(BaseEnv):
             observation = np.transpose(observation, (2, 0, 1))
 
         action_mask = np.ones(self._action_space.n, 'int8')
+        return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
 
-        return {'observation': observation, 'action_mask': action_mask, 'to_play': np.array(-1), 'timestep': np.array(self._timestep)}
-
-        
     @property
     def legal_actions(self):
         return np.arange(self._action_space.n)

@@ -13,7 +13,7 @@ from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack_for_unizero
+    prepare_obs_stack4_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
@@ -80,8 +80,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 device='cpu',
                 # (bool) Whether to analyze simulation normalization.
                 analysis_sim_norm=False,
-                # (bool) Whether to analyze dormant ratio.
-                analysis_dormant_ratio=False,
+                # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
+                analysis_dormant_ratio_weight_rank=False,
                 # (int) The shape of the action space.
                 action_space_size=6,
                 # (int) The size of the group, related to simulation normalization.
@@ -119,16 +119,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (float) The discount factor for future rewards.
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
-                dormant_threshold=0.025,
-                # (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.
-                # If False, nn.Embedding is used for absolute position encoding.
-                # For more details on RoPE, refer to the author's blog: https://spaces.ac.cn/archives/8265/
-                # TODO: If you want to use rotary_emb in an environment, you need to include the timestep as a return key from the environment.
-                rotary_emb=False,
-                # (int) The base value for calculating RoPE angles. Commonly set to 10000.
-                rope_theta=10000,
-                # (int) The maximum sequence length for position encoding.
-                max_seq_len=8192,
+                dormant_threshold=0.01,
+                lora_r= 0,
             ),
         ),
         # ****** common ******
@@ -164,7 +156,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
         # (int) The evaluation frequency.
-        eval_freq=int(2e3),
+        eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
         # ****** observation ******
@@ -229,8 +221,6 @@ class UniZeroPolicy(MuZeroPolicy):
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
-        # (bool) Whether to use the cosine learning rate decay.
-        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         piecewise_decay_lr_scheduler=False,
@@ -245,8 +235,6 @@ class UniZeroPolicy(MuZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
-        # (int) The number of steps to accumulate gradients before performing an optimization step.
-        accumulation_steps=1,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -313,11 +301,6 @@ class UniZeroPolicy(MuZeroPolicy):
             betas=(0.9, 0.95),
         )
 
-        if self._cfg.cos_lr_scheduler:
-            from torch.optim.lr_scheduler import CosineAnnealingLR
-            # TODO: check the total training steps
-            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
-
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         # Ensure that the installed torch version is greater than or equal to 2.0
@@ -353,8 +336,6 @@ class UniZeroPolicy(MuZeroPolicy):
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
 
-        self.accumulation_steps = self._cfg.accumulation_steps
-
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -372,13 +353,13 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, train_iter = data
-        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
+        current_batch, target_batch, _ = data
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num > 1:
-            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num == 4:
+            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
@@ -391,8 +372,6 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
-            -1).long()
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
@@ -417,8 +396,6 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
-
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
@@ -439,6 +416,9 @@ class UniZeroPolicy(MuZeroPolicy):
         )
 
         weighted_total_loss = losses.loss_total
+        # 合并 intermediate_losses 字典，避免重复赋值
+        # self.intermediate_losses.update(losses.intermediate_losses)
+
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -454,53 +434,43 @@ class UniZeroPolicy(MuZeroPolicy):
         middle_step_losses = self.intermediate_losses['middle_step_losses']
         last_step_losses = self.intermediate_losses['last_step_losses']
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
-        dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
+        dormant_ratio_transformer = self.intermediate_losses['dormant_ratio_transformer']
+        dormant_ratio_head = self.intermediate_losses['dormant_ratio_head']
+        avg_weight_mag_encoder = self.intermediate_losses['avg_weight_mag_encoder']
+        avg_weight_mag_transformer = self.intermediate_losses['avg_weight_mag_transformer']
+        avg_weight_mag_head = self.intermediate_losses['avg_weight_mag_head']
+        e_rank_last_linear = self.intermediate_losses['e_rank_last_linear'] 
+        e_rank_sim_norm = self.intermediate_losses['e_rank_sim_norm']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
-        # Core learning model update step
-        # Reset gradients at the start of each accumulation cycle
-        if (train_iter % self.accumulation_steps) == 0:
-            self._optimizer_world_model.zero_grad()
-
-        # Scale the loss by the number of accumulation steps
-        weighted_total_loss = weighted_total_loss / self.accumulation_steps
+        # Core learn model update step
+        self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
 
-        # Check if the current iteration completes an accumulation cycle
-        if (train_iter + 1) % self.accumulation_steps == 0:
-            # Analyze gradient norms if simulation normalization analysis is enabled
-            if self._cfg.analysis_sim_norm:
-                # Clear previous analysis results to prevent memory overflow
-                del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
-                self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-                self._target_model.encoder_hook.clear_data()
-            
-            # Clip gradients to prevent exploding gradients
-            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
-                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
-            )
+        #  ========== for debugging ==========
+        # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
+        #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
+        #     if param.requires_grad:
+        #         print(name, param.grad.norm())
 
-            # Synchronize gradients across multiple GPUs if enabled
-            if self._cfg.multi_gpu:
-                self.sync_gradients(self._learn_model)
+        if self._cfg.analysis_sim_norm:
+            del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
+            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+            self._target_model.encoder_hook.clear_data()
 
-            # Update model parameters
-            self._optimizer_world_model.step()
+        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
+                                                                        self._cfg.grad_clip_value)
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
 
-            # Clear CUDA cache if using gradient accumulation
-            if self.accumulation_steps > 1:
-                torch.cuda.empty_cache()
-        else:
-            total_grad_norm_before_clip_wm = torch.tensor(0.)
-
-        # Update learning rate scheduler if applicable
-        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
+        self._optimizer_world_model.step()
+        if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
-        # Update the target model with the current model's parameters
+        # Core target model update step
         self._target_model.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():
@@ -550,8 +520,16 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder, #.item(),
+            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,#.item(),
+            'analysis/dormant_ratio_head': dormant_ratio_head,#.item(),
+
+            'analysis/avg_weight_mag_encoder': avg_weight_mag_encoder,
+            'analysis/avg_weight_mag_transformer': avg_weight_mag_transformer,
+            'analysis/avg_weight_mag_head': avg_weight_mag_head,
+            'analysis/e_rank_last_linear': e_rank_last_linear,
+            'analysis/e_rank_sim_norm':  e_rank_sim_norm,
+
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
@@ -599,12 +577,12 @@ class UniZeroPolicy(MuZeroPolicy):
     def _forward_collect(
             self,
             data: torch.Tensor,
-            action_mask: List = None,
+            action_mask: list = None,
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.ndarray = None,
-            timestep: List = [0]
+            ready_env_id: np.array = None,
+            task_id: int = None,
     ) -> Dict:
         """
         Overview:
@@ -616,7 +594,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - timestep (:obj:`list`): The step index of the env in one episode.
+            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -626,7 +604,6 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
             - ready_env_id: None
-            - timestep: :math:`(N, 1)`, where N is the number of collect_env.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -641,7 +618,7 @@ class UniZeroPolicy(MuZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -662,7 +639,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -704,7 +681,6 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
                 }
                 batch_action.append(action)
 
@@ -713,6 +689,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # ========= TODO: for muzero_segment_collector now =========
             if active_collect_env_num < self.collector_env_num:
+                # 当collect_env中有一个环境先done时，传回的self.last_batch_obs的长度会减少1, transformer在检索kv_cache时需要知道env_id，实现比较复杂
+                # 因此直接《self.collector_env_num》个环境的self.last_batch_action全部重置为-1，让transformer从0开始，避免检索错误
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True)
@@ -740,8 +718,8 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
-                      ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None, task_id: int = None,) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -750,18 +728,16 @@ class UniZeroPolicy(MuZeroPolicy):
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
-            - ready_env_id (:obj:`list`): The id of the env that is ready to eval.
-            - timestep (:obj:`list`): The step index of the env in one episode.
+            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of eval_env, C is the number of channels, \
+                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of eval_env, O is the observation space size.
-            - action_mask: :math:`(N, action_space_size)`, where N is the number of eval_env.
-            - to_play: :math:`(N, 1)`, where N is the number of eval_env.
+                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
+            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
+            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
             - ready_env_id: None
-            - timestep: :math:`(N, 1)`, where N is the number of eval_env.
-
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -772,13 +748,14 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            # if not in training, obtain the scalars of the value/reward
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-            latent_state_roots = latent_state_roots.detach().cpu().numpy()
-            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            if not self._eval_model.training:
+                # if not in training, obtain the scalars of the value/reward
+                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+                latent_state_roots = latent_state_roots.detach().cpu().numpy()
+                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
@@ -788,7 +765,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -818,16 +795,15 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs = data
+            self.last_batch_obs_eval = data
             self.last_batch_action = batch_action
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -871,7 +847,7 @@ class UniZeroPolicy(MuZeroPolicy):
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -884,11 +860,22 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
-                self._cfg.model.observation_shape,
-                self._cfg.evaluator_env_num,
-                self._cfg.device
-            )
+            if task_id is not None:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
+            else:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
         # Return immediately if env_id is None or a list
@@ -923,7 +910,15 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return [
             'analysis/dormant_ratio_encoder',
-            'analysis/dormant_ratio_world_model',
+            'analysis/dormant_ratio_transformer',
+            'analysis/dormant_ratio_head',
+
+            'analysis/avg_weight_mag_encoder',
+            'analysis/avg_weight_mag_transformer',
+            'analysis/avg_weight_mag_head',
+            'analysis/e_rank_last_linear',
+            'analysis/e_rank_sim_norm',
+
             'analysis/latent_state_l2_norms',
             'analysis/l2_norm_before',
             'analysis/l2_norm_after',
@@ -1002,8 +997,6 @@ class UniZeroPolicy(MuZeroPolicy):
             Clear the caches and precompute positional embedding matrices in the model.
         """
         for model in [self._collect_model, self._target_model]:
-            if not self._cfg.model.world_model_cfg.rotary_emb:
-                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
-                model.world_model.precompute_pos_emb_diff_kv()
+            model.world_model.precompute_pos_emb_diff_kv()
             model.world_model.clear_caches()
         torch.cuda.empty_cache()
