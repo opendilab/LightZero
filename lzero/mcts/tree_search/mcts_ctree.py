@@ -75,7 +75,7 @@ class UniZeroMCTSCtree(object):
     #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], timestep: Union[int, List[Any]], task_id=None
+            List[Any]], timestep: Union[int, List[Any]]=None, task_id=None
     ) -> None:
         """
         Overview:
@@ -167,13 +167,22 @@ class UniZeroMCTSCtree(object):
                 # search_depth is used for rope in UniZero
                 search_depth = results.get_search_len()
                 # print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')
-                # for UniZero
-                if task_id is not None:
-                    # multi task setting
-                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id)
+                if timestep is None:
+                    # for UniZero
+                    if task_id is not None:
+                        # multi task setting
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                    else:
+                        # single task setting
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth)
                 else:
-                    # single task setting
-                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
+                    # for UniZero
+                    if task_id is not None:
+                        # multi task setting
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id)
+                    else:
+                        # single task setting
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

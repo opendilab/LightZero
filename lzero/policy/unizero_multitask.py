@@ -10,7 +10,7 @@ from ding.utils import POLICY_REGISTRY
 from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
-from lzero.policy import prepare_obs_stack4_for_unizero
+from lzero.policy import prepare_obs_stack_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
@@ -521,12 +521,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
             # current_batch, target_batch, _ = data
-            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
+            # TODO: multitask适配rope（timestep_batch）
+            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch  = current_batch
             target_reward, target_value, target_policy = target_batch
 
             # Prepare observations based on frame stack number
             if self._cfg.model.frame_stack_num == 4:
-                obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+                obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
             else:
                 obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 

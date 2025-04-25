@@ -1000,7 +1000,7 @@ class WorldModelMT(WorldModel):
                  enumerate(past_keys_values)]
             return torch.cat(x, dim=0)
         else:
-            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths, task_id=task_id)
+            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
 
     #@profile
     @torch.no_grad()

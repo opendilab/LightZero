@@ -112,7 +112,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            update_per_collect=80, # TODO
+            update_per_collect=2, # TODO: ===== only for debug =====
+            # update_per_collect=80, # TODO
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',

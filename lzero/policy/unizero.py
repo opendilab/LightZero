@@ -622,7 +622,7 @@ class UniZeroPolicy(MuZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
-            timestep: List = [0]
+            timestep: List = [0],
             task_id: int = None,
     ) -> Dict:
         """

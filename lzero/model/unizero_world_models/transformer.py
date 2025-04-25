@@ -1,13 +1,9 @@
 """
-<<<<<<< HEAD
-The following code is modified from https://github.com/karpathy/nanoGPT.
-=======
 Modified from https://github.com/karpathy/nanoGPT
 
 在原 transformer.py 基础上增加 LoRA 微调相关代码，
 并通过传入配置参数控制 LoRA 微调的模块（默认是 attention 中的 k, q, v, proj 和 feed_forward）
 保持原有代码的可扩展性。
->>>>>>> dev-multitask-clean
 """
 
 import numpy as np
@@ -243,7 +239,6 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
-<<<<<<< HEAD
         if self.config.rotary_emb:
             freqs_cis = precompute_freqs_cis(
                 self.config.embed_dim // self.config.num_heads,
@@ -251,7 +246,6 @@ class Transformer(nn.Module):
                 self.config.rope_theta,
             )
             self.register_buffer("freqs_cis", freqs_cis)
-=======
         self.task_embed = task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
         self.register_token_shared = True
@@ -317,7 +311,6 @@ class Transformer(nn.Module):
         if past_keys_values is None:
             return
         past_keys_values.remove_register_tokens(self.register_token_num)
->>>>>>> dev-multitask-clean
 
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
         """
@@ -333,40 +326,20 @@ class Transformer(nn.Module):
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
-<<<<<<< HEAD
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0) -> torch.Tensor:
-=======
-
-    #@profile
-    def forward(
-        self,
-        sequences: torch.Tensor,         # (B, T, C)
-        past_keys_values: Optional[KeysValues] = None,
-        valid_context_lengths: Optional[torch.Tensor] = None,
-        task_id: int = 0
-    ) -> torch.Tensor:
->>>>>>> dev-multitask-clean
         """
         Forward pass of the Transformer model.
 
         Arguments:
-<<<<<<< HEAD
             - sequences (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
             - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
             - start_pos (:obj:`int`): Starting position for rotary embeddings (default: 0).
-=======
-            - sequences (:obj:`torch.Tensor`): (B, T, C)
-            - past_keys_values (:obj:`Optional[KeysValues]`): 缓存，用于推理时加速
-            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): 某些场景下可用的有效上下文长度
-            - task_id (:obj:`int`): 任务 ID
->>>>>>> dev-multitask-clean
 
         Returns:
             - 输出张量 (B, T + register_token_num, C) 或 (B, T, C)，视是否添加 Register Token 而定
         """
-<<<<<<< HEAD
         seqlen = sequences.shape[1]
         # If using Rotary Position Embeddings (RoPE), slice the frequency components accordingly
         if self.config.rotary_emb:
@@ -411,23 +384,6 @@ class Transformer(nn.Module):
         for i, block in enumerate(self.blocks):
             x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, freqs_cis)
         # Apply final layer normalization
-=======
-        # 若使用 Register Token，则将其拼到序列最前面
-        # 训练阶段和推理阶段都统一处理
-        if self.use_register_token:
-            sequences = self.add_register_tokens(sequences, task_id)
-
-        # 接入 dropout
-        x = self.drop(sequences)
-
-        # 逐层调用
-        for i, block in enumerate(self.blocks):
-            x = block(x,
-                      None if past_keys_values is None else past_keys_values[i],
-                      valid_context_lengths)
-
-        # 最后层 LN
->>>>>>> dev-multitask-clean
         x = self.ln_f(x)
 
         # 如果 past_keys_values 不为 None，说明是推理阶段，此时我们需要把 KV 缓存中
@@ -608,11 +564,7 @@ class SelfAttention(nn.Module):
 
     #@profile
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
-<<<<<<< HEAD
                 valid_context_lengths: Optional[torch.Tensor] = None,  freqs_cis: torch.Tensor = None) -> torch.Tensor:
-=======
-                valid_context_lengths: Optional[torch.Tensor] = None, ) -> torch.Tensor:
->>>>>>> dev-multitask-clean
         """
         Forward pass for the self-attention mechanism.
 
