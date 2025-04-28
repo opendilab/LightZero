@@ -1,6 +1,5 @@
 from .eval_alphazero import eval_alphazero
 from .eval_muzero import eval_muzero
-from .eval_muzero_v2 import eval_muzero_v2
 
 from .eval_muzero_with_gym_env import eval_muzero_with_gym_env
 from .train_alphazero import train_alphazero

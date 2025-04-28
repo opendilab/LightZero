@@ -11,6 +11,7 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
+from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -65,6 +66,10 @@ class UniZeroModel(nn.Module):
                 - analysis_sim_norm (:obj:`bool`): Whether to analyze the similarity of the norm.
         """
         super(UniZeroModel, self).__init__()
+        # Get current world size and rank for distributed setups.
+        self.world_size: int = get_world_size()
+        self.rank: int = get_rank()
+
         self.action_space_size = action_space_size
         self.activation = activation
         self.downsample = downsample
@@ -93,7 +98,15 @@ class UniZeroModel(nn.Module):
         elif world_model_cfg.obs_type == 'text':
             self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
             # print(self.representation_network.model.encoder.layer[0].attention.output.LayerNorm.weight)
-            self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small").decoder
+
+            if self.rank == 0:
+                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small").decoder
+            if self.world_size > 1:
+                # Wait until rank 0 finishes loading the tokenizer
+                torch.distributed.barrier()
+            if self.rank != 0:
+                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small").decoder
+
             self.decoder_network.lm_head = nn.Linear(512, 30522)
             projection = [self.representation_network.pretrained_model.config.hidden_size, self.decoder_network.config.d_model]
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, with_lpips=False, projection=projection)

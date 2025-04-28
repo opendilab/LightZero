@@ -698,7 +698,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #     distribuxxtions, temperature=self._collect_mcts_temperature, deterministic=True
+                #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
                 # )
                 # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 # ============== TODO: only for visualize ==============
@@ -820,7 +820,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 # 通过选中的action和policy预测得到下一个latent state
                 next_latent_state = next_latent_state_with_env[i][action]
-                predicted_ids = self._eval_model.tokenizer.decode_to_language_logits_for_inference( embeddings=next_latent_state,
+                predicted_ids = self._eval_model.tokenizer.decode_to_language_logits_for_inference(embeddings=next_latent_state,
                                                                                                     max_length=256,
                                                                                                     pad_token_id=0,
                                                                                                     eos_token_id=102)

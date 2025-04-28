@@ -1358,9 +1358,26 @@ class WorldModel(nn.Module):
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=torch.float32)
             # # Reconstruct observations from latent state representations
-            reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings, batch['observations'])
-            # # Calculate reconstruction loss
-            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits, ignore_index=0)
+            # reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings, batch['observations'])
+            # # # Calculate reconstruction loss
+            # latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits, ignore_index=0)
+            
+            pad_id    = self.tokenizer.decoder_network.config.pad_token_id            # ==0 for t5-small
+            start_id  = self.tokenizer.decoder_network.config.decoder_start_token_id  # ==0 for t5-small
+
+            reconstructed_logits = self.tokenizer.decode_to_language_logits(
+                obs_embeddings,
+                batch['observations'],
+                pad_token_id          = pad_id,
+                decoder_start_token_id= start_id,
+            )
+
+            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(
+                batch['observations'],
+                reconstructed_logits,
+                ignore_index = pad_id,     # 仍然忽略 <pad>
+            )
+
             # latent_recon_loss = self.latent_recon_loss
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations

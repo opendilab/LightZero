@@ -119,13 +119,13 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(5e
                 model_type="mlp",
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    # final_norm_option_in_obs_head='LayerNorm',
-                    # final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
                                         
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
-                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    # final_norm_option_in_obs_head='SimNorm',
+                    # final_norm_option_in_encoder='SimNorm',
+                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     policy_entropy_weight=5e-2,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -196,7 +196,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(5e
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_lz/data_unizero_jericho_20250407/bge-base-en-v1.5/uz_{env_id[:8]}_final-simnorm-true_ms{max_steps}_ass-{action_space_size}_rr{replay_ratio}_"
+        f"data_lz/data_unizero_jericho_20250428/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_rr{replay_ratio}_"
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )

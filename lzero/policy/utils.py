@@ -11,10 +11,12 @@ from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
 import nltk
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+
+# try:
+#     nltk.data.find('tokenizers/punkt')
+# except LookupError:
+#     nltk.download('punkt')
+# nltk.download('punkt')
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 def compute_bleu(reference: str, prediction: str) -> float:
