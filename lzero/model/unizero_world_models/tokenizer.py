@@ -123,11 +123,12 @@ class Tokenizer(nn.Module):
             encoder_hidden_states=embeddings,
         )
         logits = self.decoder_network.lm_head(outputs.last_hidden_state)
+        return logits
     
     @torch.no_grad() 
     def decode_to_language_logits_for_inference(self, embeddings: torch.Tensor, max_length: int = 512, pad_token_id: int = 0, eos_token_id: int = 102) -> torch.Tensor:
-        
         self.decoder_network.eval()
+        self.projection_layer.eval()
         
         if not isinstance(embeddings, torch.Tensor):
             embeddings = torch.tensor(embeddings, dtype=torch.float32) 
@@ -142,36 +143,56 @@ class Tokenizer(nn.Module):
         embeddings = self.projection_layer(embeddings)
 
         batch_size = embeddings.shape[0]
+        
         device = embeddings.device
-        decoder_input_ids = torch.full(
+        current_input_ids = torch.full(
             (batch_size, 1),
             pad_token_id,
             dtype=torch.long,
             device=device
         )
 
-        generated_ids = []
+        # generated_ids = [1, 2, 3, 4]
+        generated_ids = [current_input_ids]
+        past_key_values = None
 
-        for _ in range(max_length):
+        is_finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
+
+        for step in range(max_length):
             outputs = self.decoder_network(
-                input_ids=decoder_input_ids,
+                input_ids=current_input_ids,
                 encoder_hidden_states=embeddings,
+                past_key_values=past_key_values,
+                use_cache=True,
                 return_dict=True
             )
+
             hidden_states = outputs.last_hidden_state      
             logits = self.decoder_network.lm_head(hidden_states)  
 
             next_token_logits = logits[:, -1, :]            
-            next_token = next_token_logits.argmax(dim=-1, keepdim=True)  
+            next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True) 
 
-            decoder_input_ids = torch.cat([decoder_input_ids, next_token], dim=1)
+            past_key_values = outputs.past_key_values
+
+            next_token = torch.where(is_finished.unsqueeze(-1),
+                                     torch.full_like(next_token, pad_token_id),
+                                     next_token)
             generated_ids.append(next_token)
-            if (next_token == eos_token_id).all():
+
+            just_finished = ~is_finished & (next_token.squeeze(-1) == eos_token_id)
+            is_finished |= just_finished
+            current_input_ids = next_token
+
+            if is_finished.all():
                 break
 
-        generated_ids = torch.cat(generated_ids, dim=1).cpu().tolist()     
-   
-        return generated_ids
+        all_generated_ids = torch.cat(generated_ids, dim=1)
+
+        return all_generated_ids.cpu().tolist()
+    
+    # def decode_to_language_logits_for_inference(self, embeddings: torch.Tensor, max_length: int = 512, pad_token_id: int = 0, eos_token_id: int = 102) -> torch.Tensor:
+    #     return [0]
 
     @staticmethod
     def reconstruction_loss(original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:

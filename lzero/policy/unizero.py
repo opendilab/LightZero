@@ -664,10 +664,11 @@ class UniZeroPolicy(MuZeroPolicy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
 
             next_latent_state_with_env = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
-
+            
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
+
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -691,12 +692,13 @@ class UniZeroPolicy(MuZeroPolicy):
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                next_latent_state = next_latent_state_with_env[env_id][action]
-                predicted_ids = self._collect_model.tokenizer.decode_to_language_logits_for_inference(        embeddings=next_latent_state, max_length=512,  pad_token_id=0, eos_token_id=102)
+                next_latent_state = next_latent_state_with_env[i][action]
+
+                predicted_ids = self._collect_model.tokenizer.decode_to_language_logits_for_inference(embeddings=next_latent_state, max_length=256,  pad_token_id=0, eos_token_id=102)
 
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                #     distribuxxtions, temperature=self._collect_mcts_temperature, deterministic=True
                 # )
                 # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 # ============== TODO: only for visualize ==============
@@ -817,9 +819,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 # 通过选中的action和policy预测得到下一个latent state
-                next_latent_state = next_latent_state_with_env[env_id][action]
+                next_latent_state = next_latent_state_with_env[i][action]
                 predicted_ids = self._eval_model.tokenizer.decode_to_language_logits_for_inference( embeddings=next_latent_state,
-                                                                                                    max_length=512,
+                                                                                                    max_length=256,
                                                                                                     pad_token_id=0,
                                                                                                     eos_token_id=102)
                 output[env_id] = {
