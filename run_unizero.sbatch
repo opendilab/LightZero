@@ -1,10 +1,9 @@
-# (see 'man sbatch' for more information on setting these parameters)
-
-#SBATCH --account=education-eemcs-bsc-ti
+#!/bin/bash
+#SBATCH --account=education-eemcs-courses-cse3000
 #SBATCH --partition=gpu-a100,gpu-v100
 
 # The default run4
-#SBATCH --time=1:00:00
+#SBATCH --time=4:00:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
