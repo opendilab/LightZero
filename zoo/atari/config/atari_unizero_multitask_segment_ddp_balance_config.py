@@ -18,8 +18,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             collect_max_episode_steps=int(5e3),
             eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(20),
-            # eval_max_episode_steps=int(20),
+            # collect_max_episode_steps=int(40),
+            # eval_max_episode_steps=int(40),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -82,8 +82,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_heads=24,
 
                     num_layers=8,
-                    # num_layers=12, # todo
-
                     num_heads=24,
 
                     # ===== only for debug =====
@@ -121,8 +119,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
-            # train_start_after_envsteps=int(0), # TODO: DEBUG
-            train_start_after_envsteps=int(2000),
+            train_start_after_envsteps=int(0), # TODO: DEBUG
+            # train_start_after_envsteps=int(2000),
             use_priority=False,
             print_task_priority_logs=False,
             cuda=True,
@@ -130,6 +128,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
             update_per_collect=80, # TODO
+            # update_per_collect=2, # TODO
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -155,7 +154,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250415/atari_{len(env_id_list)}games_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_tbs1536_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250428/atari_{len(env_id_list)}games_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_tbs1536_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     
@@ -199,7 +198,7 @@ if __name__ == "__main__":
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_banlance_20250415.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250428/uz_mt_atari26_banlance_20250428.log
     """
 
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -235,33 +234,33 @@ if __name__ == "__main__":
         """
         human_scores = {
             # 8games
-            'PongNoFrameskip-v4': 14.6,
-            'MsPacmanNoFrameskip-v4': 6951.6,
-            'SeaquestNoFrameskip-v4': 42054.7,
-            'BoxingNoFrameskip-v4': 12.1,
-            'AlienNoFrameskip-v4': 7127.7,
-            'ChopperCommandNoFrameskip-v4': 7387.8,
-            'HeroNoFrameskip-v4': 30826.4,
-            'RoadRunnerNoFrameskip-v4': 7845.0,
+            'PongNoFrameskip-v4': 14.6, # 0
+            'MsPacmanNoFrameskip-v4': 6951.6, # 1
+            'SeaquestNoFrameskip-v4': 42054.7, # 2
+            'BoxingNoFrameskip-v4': 12.1, # 3
+            'AlienNoFrameskip-v4': 7127.7, # 4
+            'ChopperCommandNoFrameskip-v4': 7387.8, # 5
+            'HeroNoFrameskip-v4': 30826.4, # 6
+            'RoadRunnerNoFrameskip-v4': 7845.0, # 7
             # 后续 Atari 26games 的额外项
-            'AmidarNoFrameskip-v4': 1719.5,
-            'AssaultNoFrameskip-v4': 742.0,
-            'AsterixNoFrameskip-v4': 8503.3,
-            'BankHeistNoFrameskip-v4': 753.1,
-            'BattleZoneNoFrameskip-v4': 37187.5,
-            'CrazyClimberNoFrameskip-v4': 35829.4,
-            'DemonAttackNoFrameskip-v4': 1971.0,
-            'FreewayNoFrameskip-v4': 29.6,
-            'FrostbiteNoFrameskip-v4': 4334.7,
-            'GopherNoFrameskip-v4': 2412.5,
-            'JamesbondNoFrameskip-v4': 302.8,
-            'KangarooNoFrameskip-v4': 3035.0,
-            'KrullNoFrameskip-v4': 2665.5,
-            'KungFuMasterNoFrameskip-v4': 22736.3,
-            'PrivateEyeNoFrameskip-v4': 69571.3,
-            'UpNDownNoFrameskip-v4': 11693.2,
-            'QbertNoFrameskip-v4': 13455.0,
-            'BreakoutNoFrameskip-v4': 30.5,
+            'AmidarNoFrameskip-v4': 1719.5, # 8
+            'AssaultNoFrameskip-v4': 742.0, # 9
+            'AsterixNoFrameskip-v4': 8503.3, # 10
+            'BankHeistNoFrameskip-v4': 753.1, # 11
+            'BattleZoneNoFrameskip-v4': 37187.5, # 12
+            'CrazyClimberNoFrameskip-v4': 35829.4, # 13
+            'DemonAttackNoFrameskip-v4': 1971.0,  # 14
+            'FreewayNoFrameskip-v4': 29.6, # 15
+            'FrostbiteNoFrameskip-v4': 4334.7, # 16
+            'GopherNoFrameskip-v4': 2412.5, # 17
+            'JamesbondNoFrameskip-v4': 302.8, # 18
+            'KangarooNoFrameskip-v4': 3035.0, # 19
+            'KrullNoFrameskip-v4': 2665.5, # 20
+            'KungFuMasterNoFrameskip-v4': 22736.3, # 21
+            'PrivateEyeNoFrameskip-v4': 69571.3, # 22
+            'UpNDownNoFrameskip-v4': 11693.2, # 23
+            'QbertNoFrameskip-v4': 13455.0, # 24
+            'BreakoutNoFrameskip-v4': 30.5, # 25
         }
         # 计算每个游戏的 target_return
         return {env: int(round(score * ratio)) for env, score in human_scores.items()}
@@ -284,34 +283,34 @@ if __name__ == "__main__":
         'RoadRunnerNoFrameskip-v4',
     ]
 
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4',
-    #     'AssaultNoFrameskip-v4',
-    #     'AsterixNoFrameskip-v4',
-    #     'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4',
-    #     'CrazyClimberNoFrameskip-v4',
-    #     'DemonAttackNoFrameskip-v4',
-    #     'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4',
-    #     'GopherNoFrameskip-v4',
-    #     'JamesbondNoFrameskip-v4',
-    #     'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4',
-    #     'KungFuMasterNoFrameskip-v4',
-    #     'PrivateEyeNoFrameskip-v4',
-    #     'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4',
-    #     'BreakoutNoFrameskip-v4',
-    # ]
+    env_id_list = [
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
+        'AmidarNoFrameskip-v4',
+        'AssaultNoFrameskip-v4',
+        'AsterixNoFrameskip-v4',
+        'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4',
+        'CrazyClimberNoFrameskip-v4',
+        'DemonAttackNoFrameskip-v4',
+        'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4',
+        'GopherNoFrameskip-v4',
+        'JamesbondNoFrameskip-v4',
+        'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4',
+        'KungFuMasterNoFrameskip-v4',
+        'PrivateEyeNoFrameskip-v4',
+        'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4',
+        'BreakoutNoFrameskip-v4',
+    ]
 
     action_space_size = 18
     collector_env_num = 8
@@ -332,8 +331,8 @@ if __name__ == "__main__":
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    buffer_reanalyze_freq = 1 / 50
-    # buffer_reanalyze_freq = 1 / 1000000
+    # buffer_reanalyze_freq = 1 / 50
+    buffer_reanalyze_freq = 1 / 1000000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 

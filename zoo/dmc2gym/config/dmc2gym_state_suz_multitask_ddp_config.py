@@ -275,11 +275,11 @@ if __name__ == "__main__":
         'acrobot-swingup': 500,
         'cartpole-balance':950,
         'cartpole-balance_sparse':950,
-        'cartpole-swingup': 800,
-        'cartpole-swingup_sparse': 750,
-        'cheetah-run': 650,
-        "ball_in_cup-catch": 950,
-        "finger-spin": 800,
+        'cartpole-swingup': 800, # 3
+        'cartpole-swingup_sparse': 750, # 4
+        'cheetah-run': 650, # 5
+        "ball_in_cup-catch": 950, # 6
+        "finger-spin": 800, # 7
         "finger-turn_easy": 950, # 8 波动
         "finger-turn_hard": 950,  # 9 波动
         'hopper-hop': 150,  # 10 bad 

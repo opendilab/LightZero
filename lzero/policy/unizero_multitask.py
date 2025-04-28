@@ -475,7 +475,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
     #@profile
-    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning policy in learn mode, which is the core of the learning process.
@@ -703,7 +703,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
-        
+        if ignore_grad:
+            #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
+            self._optimizer_world_model.zero_grad()
+            # print(f"ignore_grad")
+
         # if self._cfg.multi_gpu:
         #     # Very important to sync gradients before updating the model
         #     # rank = get_rank()

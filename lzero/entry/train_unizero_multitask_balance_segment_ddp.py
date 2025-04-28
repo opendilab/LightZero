@@ -650,6 +650,7 @@ def train_unizero_multitask_balance_segment_ddp(
 
                     train_data.append(cfg.policy.task_id)
                     train_data_multi_task.append(train_data)
+                
                 if train_data_multi_task:
                     # TODO
                     learn_kwargs = {'task_weights': None, "ignore_grad": True}
