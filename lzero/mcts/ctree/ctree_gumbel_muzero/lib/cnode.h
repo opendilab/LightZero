@@ -12,6 +12,11 @@
 #include <cmath>
 #include <sys/timeb.h>
 #include <sys/time.h>
+//#ifdef _WIN32
+//  #include <windows.h>
+//#else
+//  #include <sys/time.h>
+//#endif
 #include <map>
 
 const int DEBUG_MODE = 0;

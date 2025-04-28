@@ -1,0 +1,56 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Author Daniel De Dios Allegue
+    Version 1.0
+
+# Copy the entire repository into /workspace in the container
+%files
+    .  /workspace
+
+%post
+    # avoid prompts
+    export DEBIAN_FRONTEND=noninteractive
+
+    # system deps
+    apt-get update \
+      && apt-get install -y --no-install-recommends \
+         build-essential \
+         python3.11 python3.11-venv python3.11-dev \
+         git wget ca-certificates \
+         libgl1-mesa-glx libglib2.0-0 \
+         libssl-dev zlib1g-dev libbz2-dev \
+         libreadline-dev libsqlite3-dev libncursesw5-dev \
+         libffi-dev liblzma-dev \
+      && rm -rf /var/lib/apt/lists/*
+
+    # set python default
+    ln -sf /usr/bin/python3.11 /usr/bin/python
+    ln -sf /usr/bin/pip3         /usr/bin/pip
+
+    # create & activate venv
+    python -m venv /opt/venv
+    . /opt/venv/bin/activate
+
+    # upgrade core tooling
+    pip install --upgrade pip setuptools wheel cython numpy
+
+    # install all Python dependencies
+    pip install -r /workspace/requirements.txt
+
+    # install your code in editable mode
+    pip install --no-build-isolation -e /workspace
+
+    # compile the C-trees in-place
+    cd /workspace && python setup.py build_ext --inplace
+
+%environment
+    # activate venv on exec
+    export VIRTENV=/opt/venv
+    export PATH="$VIRTENV/bin:$PATH"
+
+%runscript
+    # default entrypoint: pass all args to python
+    exec python -m "$@"
+

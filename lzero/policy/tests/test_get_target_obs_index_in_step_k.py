@@ -22,6 +22,7 @@ def test_get_target_obs_index_in_step_k(test_mode_type):
         from lzero.policy.tests.config.atari_muzero_config_for_test import atari_muzero_config as cfg
         from lzero.policy.tests.config.atari_muzero_config_for_test import atari_muzero_create_config as create_cfg
 
+
     elif test_mode_type == 'mlp':
         from lzero.policy.tests.config.cartpole_muzero_config_for_test import cartpole_muzero_config as cfg
         from lzero.policy.tests.config.cartpole_muzero_config_for_test import \
