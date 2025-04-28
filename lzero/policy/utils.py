@@ -10,7 +10,21 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
+import nltk
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
+def compute_bleu(reference: str, prediction: str) -> float:
+    """
+    Compute BLEU score between reference and prediction (both are plain strings).
+    """
+    reference_tokens = reference.strip().split()
+    prediction_tokens = prediction.strip().split()
+    smoothing = SmoothingFunction().method1
+    return sentence_bleu([reference_tokens], prediction_tokens, smoothing_function=smoothing)
 
 def pad_and_get_lengths(inputs, num_of_sampled_actions):
     """
