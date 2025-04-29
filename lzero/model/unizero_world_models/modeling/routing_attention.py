@@ -102,7 +102,7 @@ def split_at_index(dim, index, t):
 def distribution(dists, window_size):
     _, topk_indices = dists.topk(k = window_size, dim=-2)
     indices = topk_indices.transpose(-2, -1)
-    return indices.reshape(*indices.shape()[:2], -1)
+    return indices.reshape(*indices.shape[:2], -1)
 
 class RoutingAttention(Attention):
     """
@@ -114,7 +114,7 @@ class RoutingAttention(Attention):
     """
 
     def __init__(self, config : TransformerConfig, use_local : bool = False):
-        super.__init__(config)
+        super().__init__(config)
         self.use_local = use_local
 
         # Initialize attributes
@@ -130,6 +130,7 @@ class RoutingAttention(Attention):
         self.update_interval = config.routing_update_interval or 1 # recompute centroids every forward
         self.top_k = config.routing_topk
         self.window_size = config.local_window_size if self.use_local else default_clusters
+        self.context_window_size = config.routing_context_window_size or self.window_size
         self.causal = True
         self.shared_qk = False
         self.receives_context = False
@@ -149,7 +150,7 @@ class RoutingAttention(Attention):
         # projections
         self.query = nn.Linear(config.embed_dim, config.embed_dim)
         self.key = nn.Linear(config.embed_dim, config.embed_dim)
-        self.mem_value = nn.Linear(config.embed_dim, config.embed_dim)
+        self.value = nn.Linear(config.embed_dim, config.embed_dim)
 
         self.attn_drop = nn.Dropout(config.attn_pdrop)
         self.resid_drop = nn.Dropout(config.resid_pdrop)
@@ -190,9 +191,9 @@ class RoutingAttention(Attention):
             key_mask = query_mask
 
         concat_qk = torch.cat((q, k), dim=2) # (B, H, 2T, D)
-        dists, aux_loss = self.kmeans(concat_qk, update=self.training)
+        dists, aux_loss = self.kmeans(concat_qk, update_means=self.training)
         # split distances into q and k
-        q_dists, k_dists = split_at_index(dists, index = T, dim=2)
+        q_dists, k_dists = split_at_index(2, T, dists)
 
         wsz = min(self.window_size, T)
         c_wsz = min(self.context_window_size, k.shape[2])
@@ -266,7 +267,7 @@ class RoutingAttention(Attention):
 
         # combine heads + project
         out = rearrange(out, 'b h t d -> b t (h d)')
-        return self.resid_drop(self.proj(out)), aux_loss
+        return self.resid_drop(self.proj(out))
 
 
 
@@ -287,13 +288,13 @@ class KMeans(nn.Module):
 
     @torch.no_grad()
     def init(self, x):
-        if self.innitted:
+        if self.initted:
             return
 
         _, h, _, d, device, dtype = *x.shape, x.device, x.dtype
 
         num_clusters = self.means.shape[1]
-        means = x.tranpose(0, 1).contiguous().view(h, -1, d)
+        means = x.transpose(0, 1).contiguous().view(h, -1, d)
         num_samples = means.shape[1]
 
         if num_samples >= num_clusters:

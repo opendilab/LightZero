@@ -17,11 +17,6 @@
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
 #SBATCH --mem-per-cpu=3072
 
-#PLACEHOLDER1
-#PLACEHOLDER2
-#PLACEHOLDER3
-#PLACEHOLDER4
-#PLACEHOLDER5
 
 module load apptainer
 

@@ -9,8 +9,9 @@ import torch.nn as nn
 from torch.nn import functional as F
 from einops import rearrange
 from .kv_caching import KeysValues
-from .transformer import apply_rotary_emb, TransformerConfig
+from .transformer import apply_rotary_emb
 from .attention import Attention
+from .transformer_config import TransformerConfig
 
 
 class GlobalAttention(Attention):

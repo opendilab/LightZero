@@ -2,7 +2,7 @@
 Config Dataclass for the Transformer backbone.
 """
 from typing import Optional
-from attr import dataclass
+from dataclasses import dataclass
 
 
 @dataclass

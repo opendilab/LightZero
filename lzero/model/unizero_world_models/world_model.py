@@ -1221,8 +1221,13 @@ class WorldModel(nn.Module):
                     matched_value = None
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                if matched_value is None: # TODO: Check this case
+                    # matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    idx = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    if idx is not None and 0 <= idx < len(self.shared_pool_recur_infer):
+                        matched_value = self.shared_pool_recur_infer[idx]
+                    else:
+                        matched_value = None
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists

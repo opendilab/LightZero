@@ -3,8 +3,6 @@ Attention module factory class.
 """
 
 import torch.nn as nn
-from .global_attention import GlobalAttention
-from .routing_attention import RoutingAttention
 from .transformer_config import TransformerConfig
 
 class Attention(nn.Module):
@@ -31,14 +29,17 @@ def build_attention(config: TransformerConfig) -> Attention:
     """
     attention_mode = config.attention.lower()
     if attention_mode == 'global':
+        from .global_attention import GlobalAttention
         return GlobalAttention(config)
     elif attention_mode == 'routing':
+        from .routing_attention import RoutingAttention
         return RoutingAttention(
             config,
             use_local=False
         )
     elif attention_mode == 'local+routing':
         # Combines routing and local (sliding-window) attention
+        from .routing_attention import RoutingAttention
         return RoutingAttention(
             config,
             use_local=True

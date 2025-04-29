@@ -239,7 +239,7 @@ class Block(nn.Module):
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.mlp(self.ln2(x)))
         else:
-            x = x + x_attn
+            x = x + x_attn # TODO: Consider what to do about the loss
             x = x + self.mlp(self.ln2(x))
 
         return x
