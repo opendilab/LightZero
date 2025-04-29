@@ -1,5 +1,44 @@
 from easydict import EasyDict
 
+import math
+
+def compute_batch_config(env_id_list, effective_batch_size):
+    n = len(env_id_list)
+    
+    # 根据环境数量设定有效 batch size 和每个环境的最大微 batch size
+    gpu_num = 8
+    max_micro_batch_one_gpu = 400
+    max_micro_batch = int(max_micro_batch_one_gpu / (n // gpu_num))
+
+    
+    # 计算每个环境理论上应该分得的 batch size
+    theoretical_env_batch = effective_batch_size / n
+    
+    if theoretical_env_batch > max_micro_batch:
+        # 当每个环境按均分的 batch 大于允许的最大微 batch 时，
+        # 则令每个环境的实际微 batch size 固定为 max_micro_batch
+        micro_batch_size = max_micro_batch
+        # 梯度累计步数 = ceil(每个环境理论 batch size / 最大微 batch size)
+        grad_accumulate_steps = math.ceil(theoretical_env_batch / max_micro_batch)
+    else:
+        # 否则直接使用计算出的理论 batch size（这里向下取整以保证整数）
+        micro_batch_size = int(theoretical_env_batch)
+        grad_accumulate_steps = 1
+    
+    # 为每个环境分配相同的微 batch size
+    batch_size = [micro_batch_size for _ in range(n)]
+    
+    # 打印一些调试信息（也可以记录到 log 中）
+    print("环境数量: {}".format(n))
+    print("有效 total batch size: {}".format(effective_batch_size))
+    print("每个环境的理论 batch size: {:.2f}".format(theoretical_env_batch))
+    print("每个环境的微 batch size: {}".format(micro_batch_size))
+    print("梯度累积步数: {}".format(grad_accumulate_steps))
+    
+    return batch_size, grad_accumulate_steps
+
+
+
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
                   num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
@@ -15,11 +54,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
             full_action_space=True,
-            collect_max_episode_steps=int(5e3),
-            eval_max_episode_steps=int(5e3),
+            # collect_max_episode_steps=int(5e3),
+            # eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(40),
-            # eval_max_episode_steps=int(40),
+            collect_max_episode_steps=int(40),
+            eval_max_episode_steps=int(40),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -127,8 +166,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            update_per_collect=80, # TODO
-            # update_per_collect=2, # TODO
+            # update_per_collect=80, # TODO
+            update_per_collect=2, # TODO
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -154,7 +193,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250428/atari_{len(env_id_list)}games_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_tbs1536_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250429_debug/atari_{len(env_id_list)}games_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     
@@ -197,8 +236,10 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250428/uz_mt_atari8_banlance_20250429_debug.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250428/uz_mt_atari26_banlance_20250428.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250428/uz_mt_atari8_banlance_20250429_debug.log
     """
 
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -283,34 +324,34 @@ if __name__ == "__main__":
         'RoadRunnerNoFrameskip-v4',
     ]
 
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-        'AmidarNoFrameskip-v4',
-        'AssaultNoFrameskip-v4',
-        'AsterixNoFrameskip-v4',
-        'BankHeistNoFrameskip-v4',
-        'BattleZoneNoFrameskip-v4',
-        'CrazyClimberNoFrameskip-v4',
-        'DemonAttackNoFrameskip-v4',
-        'FreewayNoFrameskip-v4',
-        'FrostbiteNoFrameskip-v4',
-        'GopherNoFrameskip-v4',
-        'JamesbondNoFrameskip-v4',
-        'KangarooNoFrameskip-v4',
-        'KrullNoFrameskip-v4',
-        'KungFuMasterNoFrameskip-v4',
-        'PrivateEyeNoFrameskip-v4',
-        'UpNDownNoFrameskip-v4',
-        'QbertNoFrameskip-v4',
-        'BreakoutNoFrameskip-v4',
-    ]
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4',
+    #     'ChopperCommandNoFrameskip-v4',
+    #     'HeroNoFrameskip-v4',
+    #     'RoadRunnerNoFrameskip-v4',
+    #     'AmidarNoFrameskip-v4',
+    #     'AssaultNoFrameskip-v4',
+    #     'AsterixNoFrameskip-v4',
+    #     'BankHeistNoFrameskip-v4',
+    #     'BattleZoneNoFrameskip-v4',
+    #     'CrazyClimberNoFrameskip-v4',
+    #     'DemonAttackNoFrameskip-v4',
+    #     'FreewayNoFrameskip-v4',
+    #     'FrostbiteNoFrameskip-v4',
+    #     'GopherNoFrameskip-v4',
+    #     'JamesbondNoFrameskip-v4',
+    #     'KangarooNoFrameskip-v4',
+    #     'KrullNoFrameskip-v4',
+    #     'KungFuMasterNoFrameskip-v4',
+    #     'PrivateEyeNoFrameskip-v4',
+    #     'UpNDownNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4',
+    #     'BreakoutNoFrameskip-v4',
+    # ]
 
     action_space_size = 18
     collector_env_num = 8
@@ -320,14 +361,19 @@ if __name__ == "__main__":
     num_simulations = 50
     max_env_step = int(5e5)
     reanalyze_ratio = 0.0
-
-    # total_batch_size = 512
-    # # batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    # batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-
-    total_batch_size = int(512*3)
-    batch_size = [int(min(int(64*4), total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     
+    if len(env_id_list) == 8:
+        effective_batch_size = 512
+    elif len(env_id_list) == 26:
+        effective_batch_size = 512 * 3  # 1536
+    elif len(env_id_list) == 18:
+        effective_batch_size = 512 * 3  # 1536 
+    else:
+        raise ValueError("不支持的环境数量: {}".format(n))
+
+    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size)
+    total_batch_size =  effective_batch_size # 当前无效
+
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
@@ -337,21 +383,21 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 1
-    # reanalyze_batch_size = 2
-    # num_unroll_steps = 5
-    # infer_context_length = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 1
+    reanalyze_batch_size = 2
+    num_unroll_steps = 5
+    infer_context_length = 2
+    batch_sizes = [4 for _ in range(len(env_id_list))]
 
     from lzero.entry import train_unizero_multitask_balance_segment_ddp
 
     for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                                   num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                                    num_segments, total_batch_size)
 

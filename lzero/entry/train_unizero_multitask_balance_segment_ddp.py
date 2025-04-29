@@ -566,10 +566,10 @@ def train_unizero_multitask_balance_segment_ddp(
                 unsolved_buffers.append(replay_buffer)
 
         # 检查是否有足够的数据进行训练
-        not_enough_data = any(
-            replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size / world_size
-            for replay_buffer in game_buffers
-        )
+        # not_enough_data = any(
+        #     replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size / world_size
+        #     for replay_buffer in game_buffers
+        # )
 
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
