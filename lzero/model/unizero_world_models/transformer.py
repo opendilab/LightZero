@@ -364,7 +364,8 @@ class Transformer(nn.Module):
         sequences: torch.Tensor,         # (B, T, C)
         past_keys_values: Optional[KeysValues] = None,
         valid_context_lengths: Optional[torch.Tensor] = None,
-        task_id: int = 0
+        task_id: int = 0,
+        start_pos: int = 0
     ) -> torch.Tensor:
         """
         Forward pass of the Transformer model.
@@ -551,7 +552,7 @@ class SelfAttention(nn.Module):
 
         if config.lora_r > 0 and ("attn" in config.lora_target_modules):
             self.key = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
-            print("key type:", type(self.key))  # 期望返回 CurriculumLoRALinear
+            # print("key type:", type(self.key))  # 期望返回 CurriculumLoRALinear
             self.query = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
             self.value = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
             self.proj = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
@@ -589,10 +590,10 @@ class SelfAttention(nn.Module):
         B, T, C = x.size()
         if kv_cache is not None:
             b, nh, L, c = kv_cache.shape
-            try:
-                assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
-            except Exception as e:
-                print('debug')
+            # try:
+            assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
+            # except Exception as e:
+            #     print('debug')
         else:
             L = 0
 
@@ -641,7 +642,6 @@ class SelfAttention(nn.Module):
             # else:
             #     import ipdb; ipdb.set_trace()
 
-
         # att.shape: (B, num_heads, T, L + T)
         att = att.masked_fill(mask == 0, float('-inf'))
 
@@ -653,8 +653,6 @@ class SelfAttention(nn.Module):
 
         y = rearrange(y, 'b h t e -> b t (h e)')  # Combine the heads back together (B, T, embed_dim)
         y = self.resid_drop(self.proj(y))
-
-
 
         return y
 

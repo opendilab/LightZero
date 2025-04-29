@@ -10,7 +10,7 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
-
+from .vit import ViT
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroModel')
@@ -98,16 +98,29 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
-            self.representation_network = RepresentationNetworkUniZero(
-                observation_shape,
-                num_res_blocks,
-                num_channels,
-                self.downsample,
-                activation=self.activation,
-                norm_type=norm_type,
-                embedding_dim=world_model_cfg.embed_dim,
-                group_size=world_model_cfg.group_size,
-                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+            # self.representation_network = RepresentationNetworkUniZero(
+            #     observation_shape,
+            #     num_res_blocks,
+            #     num_channels,
+            #     self.downsample,
+            #     activation=self.activation,
+            #     norm_type=norm_type,
+            #     embedding_dim=world_model_cfg.embed_dim,
+            #     group_size=world_model_cfg.group_size,
+            #     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+            # )
+
+            self.representation_network = ViT(
+                image_size =observation_shape[1],
+                # patch_size = 32,
+                patch_size = 8,
+                num_classes = world_model_cfg.embed_dim,
+                dim = 768,
+                depth = 12,
+                heads = 12,
+                mlp_dim = 3072,
+                dropout = 0.1,
+                emb_dropout = 0.1
             )
 
             # ====== for analysis ======

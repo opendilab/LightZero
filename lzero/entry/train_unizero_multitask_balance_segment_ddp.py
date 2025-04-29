@@ -19,9 +19,7 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
 from ding.utils import EasyTimer
 import torch.nn.functional as F
-
 import torch.distributed as dist
-
 import concurrent.futures
 from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer
 
@@ -520,14 +518,20 @@ def train_unizero_multitask_balance_segment_ddp(
             print(f'开始收集 Rank {rank} 的任务_id: {cfg.policy.task_id}...')
             print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
 
-            # 在每次收集之前重置初始数据，这对于多任务设置非常重要
-            collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
-            # 收集数据
-            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+            while replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]:
+                # for ddp training, 避免后面 train 时replay buffer中样本小于batch size 导致ddp hang
 
-            # 更新重放缓冲区
-            replay_buffer.push_game_segments(new_data)
-            replay_buffer.remove_oldest_data_to_fit()
+                # 在每次收集之前重置初始数据，这对于多任务设置非常重要
+                collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
+                # 收集数据
+                new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
+                # 更新重放缓冲区
+                replay_buffer.push_game_segments(new_data)
+                replay_buffer.remove_oldest_data_to_fit()
+
+
+
 
             # # ===== only for debug =====
             # if train_epoch > 2:
@@ -570,6 +574,7 @@ def train_unizero_multitask_balance_segment_ddp(
         #     replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size / world_size
         #     for replay_buffer in game_buffers
         # )
+
 
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
@@ -665,7 +670,7 @@ def train_unizero_multitask_balance_segment_ddp(
                 for cfg, collector, replay_buffer in zip(unsolved_cfgs, unsolved_collectors, unsolved_buffers):
                     envstep_multi_task += collector.envstep
                     batch_size = cfg.policy.batch_size[cfg.policy.task_id]
-                    if replay_buffer.get_num_of_transitions() > batch_size:
+                    if replay_buffer.get_num_of_transitions() >= batch_size:
                         if cfg.policy.buffer_reanalyze_freq >= 1:
                             if i % reanalyze_interval == 0 and \
                                     replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(
