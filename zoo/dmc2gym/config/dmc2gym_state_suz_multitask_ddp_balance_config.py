@@ -241,7 +241,7 @@ if __name__ == "__main__":
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_segment_ddp
+    from lzero.entry import train_unizero_multitask_balance_segment_ddp
     from ding.utils import DDPContext
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
@@ -374,6 +374,6 @@ if __name__ == "__main__":
     )
 
     with DDPContext():
-        train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
         # 如果只想训练部分任务，可以修改 configs，例如:
         # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)

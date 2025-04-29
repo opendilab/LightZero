@@ -10,7 +10,7 @@ from ding.utils import POLICY_REGISTRY
 from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
-from lzero.policy import prepare_obs_stack_for_unizero
+from lzero.policy import prepare_obs_stack4_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
@@ -475,7 +475,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
     #@profile
-    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning policy in learn mode, which is the core of the learning process.
@@ -521,13 +521,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
             # current_batch, target_batch, _ = data
-            # TODO: multitask适配rope（timestep_batch）
-            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch  = current_batch
+            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
             target_reward, target_value, target_policy = target_batch
 
             # Prepare observations based on frame stack number
             if self._cfg.model.frame_stack_num == 4:
-                obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
+                obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
             else:
                 obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
@@ -704,7 +703,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
-        
+        if ignore_grad:
+            #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
+            self._optimizer_world_model.zero_grad()
+            # print(f"ignore_grad")
+
         # if self._cfg.multi_gpu:
         #     # Very important to sync gradients before updating the model
         #     # rank = get_rank()

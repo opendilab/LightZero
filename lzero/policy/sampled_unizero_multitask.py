@@ -29,6 +29,8 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import torch.nn.functional as F
 import torch.distributed as dist
+from ding.utils import set_pkg_seed, get_rank, get_world_size
+
 import sys
 sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
@@ -336,7 +338,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self.grad_correct.rep_grad = False
 
 
-    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
         Forward function for learning policy in learn mode, handling multiple tasks.
         """
@@ -361,6 +363,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         weighted_total_loss = 0.0
         losses_list = []  # 存储每个任务的损失
+
 
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
@@ -414,6 +417,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                     self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape_list[task_id])
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
+
+
+            # print(f'rank:{get_rank()}, task_id:{self.task_id}')
+            # print(f"len(child_sampled_actions_batch):{len(child_sampled_actions_batch)}")
+            # print(f"self._cfg.device:{self._cfg.device}")
+
             batch_for_gpt['child_sampled_actions'] = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)[:, :-1]
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
             batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
@@ -489,6 +498,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            print(f'rank:{get_rank()}, after moco backword')
+
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
@@ -500,11 +511,18 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
+        if ignore_grad:
+            #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
+            self._optimizer_world_model.zero_grad()
+            # print(f"ignore_grad")
+
         if self._cfg.multi_gpu:
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
             #     self.sync_gradients(self._learn_model)
             if not self._cfg.use_moco:
+                dist.barrier() # ================== TODO: ==================
                 self.sync_gradients(self._learn_model)
+                print(f'rank:{get_rank()}, after self.sync_gradients(self._learn_model)')
 
         self._optimizer_world_model.step()
 
