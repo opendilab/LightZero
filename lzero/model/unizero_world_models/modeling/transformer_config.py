@@ -37,6 +37,15 @@ class TransformerConfig:
     # k : attend top-k keys in that cluster for that query
     routing_topk: Optional[int] = None
 
+    # how many extra memory KV slots per cluster
+    routing_num_mem_kv: int = 0
+    # decay for centroid updates
+    routing_decay: float = 0.999
+    # commitment loss weight for KMeans
+    routing_commitment: float = 1e-4
+    # context window size when receives_context=True
+    routing_context_window_size: Optional[int] = None
+
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks

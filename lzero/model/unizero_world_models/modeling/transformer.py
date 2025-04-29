@@ -10,7 +10,8 @@ from ding.torch_utils.network import GRUGatingUnit
 
 from .transformer_config import TransformerConfig
 from .kv_caching import KeysValues
-from .attention import Attention
+from .attention import build_attention, Attention
+
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     """
@@ -211,7 +212,7 @@ class Block(nn.Module):
 
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
-        self.attn = Attention(config) # Implements different attention mechanism
+        self.attn : Attention = build_attention(config) # Implements different attention mechanism
         self.mlp = nn.Sequential(
             nn.Linear(config.embed_dim, 4 * config.embed_dim),
             nn.GELU(approximate='tanh'),
