@@ -10,10 +10,10 @@ from torch.distributions import Categorical, Independent, Normal, TransformedDis
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
-from .kv_caching import KeysValues
+from lzero.model.unizero_world_models.modeling.kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
-from .transformer import Transformer, TransformerConfig
+from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
 
 logging.getLogger().setLevel(logging.DEBUG)
