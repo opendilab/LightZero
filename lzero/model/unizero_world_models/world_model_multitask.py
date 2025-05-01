@@ -11,7 +11,6 @@ from einops import rearrange
 from lzero.model.common import SimNorm
 from lzero.model.unizero_world_models.world_model import WorldModel
 from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
-from .moe import MoeLayer, MultiplicationFeedForward
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
@@ -400,13 +399,15 @@ class WorldModelMT(WorldModel):
         )
     def get_moe(self, name):
         """Get or create a MoE instance"""
+        from .moe import MoELayer, MultiplicationFeedForward
+
         if name not in self.moe_instances:
             # Create multiple FeedForward instances for multiplication-based MoE
             self.experts = nn.ModuleList([
                 MultiplicationFeedForward(self.config) for _ in range(self.config.num_experts_of_moe_in_transformer)
             ])
 
-            self.moe_instances[name] = MoeLayer(
+            self.moe_instances[name] = MoELayer(
                 experts=self.experts,
                 gate=nn.Linear(self.config.embed_dim, self.config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=1,
