@@ -34,7 +34,7 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    attention='routing',  # ← Use routing attention
+                    attention='local',  # ← Use local attention
                     policy_entropy_weight=1e-4,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -57,7 +57,7 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
                     routing_commitment=1e-4,
                     routing_num_mem_kv=0,
                     use_local_attention=False,
-                    local_window_size=None,
+                    local_window_size=32,
                     routing_context_window_size=4,  # optional: match routing window
                 ),
             ),

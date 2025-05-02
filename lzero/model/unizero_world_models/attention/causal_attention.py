@@ -1,5 +1,5 @@
 """
-Standard Self-Attention Module for Transformers (Global Attention)
+Standard Autoregressive Self-Attention Module for Transformers (Causal Attention)
 """
 import math
 from typing import Optional
@@ -14,9 +14,9 @@ from .attention import Attention
 from .transformer_config import TransformerConfig
 
 
-class GlobalAttention(Attention):
+class CausalAttention(Attention):
     """
-    Implements self-attention mechanism for transformers.
+    Implements causal self-attention mechanism for transformers.
 
     Arguments:
         config (:obj:`TransformerConfig`): Configuration object containing hyperparameters.
@@ -73,8 +73,7 @@ class GlobalAttention(Attention):
         else:
             L = 0
 
-        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1,
-                                                                                    2)  # (B, num_heads, T, head_size)
+        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1,                                                                          2)  # (B, num_heads, T, head_size)
         k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
         v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1,
                                                                                     2)  # (B, num_heads, T, head_size)

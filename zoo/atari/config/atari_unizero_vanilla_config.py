@@ -57,7 +57,7 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    attention = 'global',
+                    attention = 'causal', # standard autoregressive attention
                     policy_entropy_weight=1e-4,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,

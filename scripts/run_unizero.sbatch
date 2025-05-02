@@ -32,6 +32,6 @@ export WANDB_API_KEY=e8eb27778c68fe84c0d4fd15a0240624895bab3f
 srun apptainer exec --nv \
     --bind "${PROJECT_DIR}:/workspace" \
     "${SIF_FILE}" \
-    python -m zoo.atari.config.atari_unizero_config \
+    python -m zoo.atari.config.atari_unizero_local_config \
       --env BoxingNoFrameskip-v4 \
       --seed 0

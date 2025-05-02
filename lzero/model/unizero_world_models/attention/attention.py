@@ -23,14 +23,15 @@ def build_attention(config: TransformerConfig) -> Attention:
     Factory function to build the attention module based on the configuration.
 
     config.attention must be one of the following:
-        - 'global' : standard dense self-attention in vanilla UniZero
+        - 'causal' : standard dense self-attention in vanilla UniZero
         - 'routing' : content-based sparse routing only
         - 'local+routing' : sliding-window local attention + routing
+        - 'local' : local attention only
     """
     attention_mode = config.attention.lower()
-    if attention_mode == 'global':
-        from .global_attention import GlobalAttention
-        return GlobalAttention(config)
+    if attention_mode == 'causal':
+        from .causal_attention import CausalAttention
+        return CausalAttention(config)
     elif attention_mode == 'routing':
         from .routing_attention import RoutingAttention
         return RoutingAttention(
@@ -44,5 +45,8 @@ def build_attention(config: TransformerConfig) -> Attention:
             config,
             use_local=True
         )
+    elif attention_mode == 'local':
+        from .local_attention import LocalAttention
+        return LocalAttention(config)
     else:
         raise ValueError(f"Unknown attention type: {config.attention}")
