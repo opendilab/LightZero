@@ -1,12 +1,10 @@
-import hashlib
 import xxhash
 from dataclasses import dataclass
 
-import numpy as np
 import torch
 import torch.nn as nn
 import time
-from .kv_caching import KeysValues
+from lzero.model.unizero_world_models.modeling.kv_caching import KeysValues
 
 
 def custom_copy_kv_cache_to_dict_speed(src_kv: KeysValues, dst_dict: dict, cache_key: str, reuse_cache: bool = True) -> None:

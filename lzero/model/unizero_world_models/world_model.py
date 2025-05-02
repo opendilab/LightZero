@@ -10,10 +10,10 @@ from torch.distributions import Categorical, Independent, Normal, TransformedDis
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
-from .kv_caching import KeysValues
+from lzero.model.unizero_world_models.modeling.kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
-from .transformer import Transformer, TransformerConfig
+from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -1221,8 +1221,13 @@ class WorldModel(nn.Module):
                     matched_value = None
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                if matched_value is None: # TODO: Check this case
+                    # matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    idx = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    if idx is not None and 0 <= idx < len(self.shared_pool_recur_infer):
+                        matched_value = self.shared_pool_recur_infer[idx]
+                    else:
+                        matched_value = None
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists

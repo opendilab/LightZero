@@ -7,50 +7,64 @@ From: ubuntu:22.04
 
 # Copy the entire repository into /workspace in the container
 %files
-    .  /workspace
+    . /workspace
 
 %post
-    # avoid prompts
     export DEBIAN_FRONTEND=noninteractive
 
-    # system deps
-    apt-get update \
-      && apt-get install -y --no-install-recommends \
-         build-essential \
-         python3.11 python3.11-venv python3.11-dev \
-         git wget ca-certificates \
-         libgl1-mesa-glx libglib2.0-0 \
-         libssl-dev zlib1g-dev libbz2-dev \
-         libreadline-dev libsqlite3-dev libncursesw5-dev \
-         libffi-dev liblzma-dev \
-      && rm -rf /var/lib/apt/lists/*
+    # System dependencies
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential curl git wget ca-certificates \
+        libgl1-mesa-glx libglib2.0-0 \
+        libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
+        libsqlite3-dev libncursesw5-dev libffi-dev liblzma-dev \
+        make gcc \
+        && rm -rf /var/lib/apt/lists/*
 
-    # set python default
-    ln -sf /usr/bin/python3.11 /usr/bin/python
-    ln -sf /usr/bin/pip3         /usr/bin/pip
+    # Install pyenv
+    curl https://pyenv.run | bash
 
-    # create & activate venv
+    # Add pyenv to path
+    export PYENV_ROOT="/root/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"
+    eval "$(pyenv virtualenv-init -)"
+
+    # Install Python 3.11.5
+    pyenv install 3.11.5
+    pyenv global 3.11.5
+
+    # Confirm
+    python --version
+
+    # Create virtualenv
     python -m venv /opt/venv
     . /opt/venv/bin/activate
 
-    # upgrade core tooling
+    # Upgrade pip tooling
     pip install --upgrade pip setuptools wheel cython numpy
 
-    # install all Python dependencies
+    # Install dependencies
     pip install -r /workspace/requirements.txt
 
-    # install your code in editable mode
+    pip install opencv-python-headless
+
+    pip install autorom[accept-rom-license]
+
+    # Download ROMs into /workspace/ROMS
+    AutoROM --accept-license
+    mkdir -p ~/.gym/ROMs
+    cp -r /opt/venv/lib/python3.11/site-packages/AutoROM/roms/* ~/.gym/ROMs/
+    ale-import-roms ~/.gym/ROMs
+    # Install repo in editable mode
     pip install --no-build-isolation -e /workspace
 
-    # compile the C-trees in-place
+    # Build C extensions
     cd /workspace && python setup.py build_ext --inplace
 
 %environment
-    # activate venv on exec
     export VIRTENV=/opt/venv
     export PATH="$VIRTENV/bin:$PATH"
 
 %runscript
-    # default entrypoint: pass all args to python
     exec python -m "$@"
-

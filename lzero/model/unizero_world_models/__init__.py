@@ -1,1 +1,1 @@
-from .transformer import Transformer, TransformerConfig
+from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
