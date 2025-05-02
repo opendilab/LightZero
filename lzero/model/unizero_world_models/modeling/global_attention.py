@@ -34,7 +34,7 @@ class GlobalAttention(Attention):
     """
 
     def __init__(self, config: TransformerConfig) -> None:
-        super().__init__()
+        super().__init__(config)
         assert config.embed_dim % config.num_heads == 0, "Embedding dimension must be divisible by number of heads."
 
         self.config = config
