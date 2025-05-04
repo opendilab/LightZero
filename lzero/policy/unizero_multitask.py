@@ -17,7 +17,8 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-sys.path.append('/fs-computility/ai-shen/puyuan/code/LibMTL')
+# sys.path.append('/fs-computility/ai-shen/puyuan/code/LibMTL')
+sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
@@ -395,7 +396,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             if self._cfg.cos_lr_scheduler:
                 self.lr_scheduler = CosineAnnealingLR(
-                    self._optimizer_world_model, T_max=int(2e5), eta_min=0, last_epoch=-1
+                    self._optimizer_world_model, T_max=int(1e5), eta_min=0, last_epoch=-1
                 ) # TODO
             elif self._cfg.piecewise_decay_lr_scheduler:
                 # Example step scheduler, adjust milestones and gamma as needed
@@ -472,8 +473,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.grad_correct.rep_grad = False
 
 
-
-
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
         """
@@ -545,13 +544,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                     self._cfg.device)
 
-            
-            # rank = get_rank()
-            # print(f'Rank {rank}: cfg.policy.task_id : {self._cfg.task_id}, self._cfg.batch_size {self._cfg.batch_size}')
-
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
-
             target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
             target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
@@ -564,7 +556,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # Convert to categorical distributions
             target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
             target_value_categorical = phi_transform(self.value_support, transformed_target_value)
-
+  
             # Prepare batch for a transformer-based world model
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
@@ -588,6 +580,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
             target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
             average_target_policy_entropy = target_policy_entropy.mean().item()
+
 
             # Update world model
             intermediate_losses = defaultdict(float)
@@ -664,7 +657,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             avg_weight_mag_head_multi_task.append(avg_weight_mag_head)
             e_rank_last_linear_multi_task.append(e_rank_last_linear)
             e_rank_sim_norm_multi_task.append(e_rank_sim_norm)
-
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
@@ -872,7 +864,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         if num_tasks is not None:
             for var in task_specific_vars:
                 for task_idx in range(num_tasks):
-                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
+                    print(f"learner policy Rank, self.task_id: {self.task_id+task_idx}")
                     monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
         else:
             # If num_tasks is not provided, we assume there's only one task and keep the original variable names
