@@ -84,13 +84,13 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 world_model_cfg=dict(
                     use_global_pooling=False,
 
-                    # final_norm_option_in_obs_head='LayerNorm',
-                    # final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
                                         
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
-                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    # final_norm_option_in_obs_head='SimNorm',
+                    # final_norm_option_in_encoder='SimNorm',
+                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                    
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     # share_head=True, # TODO
@@ -139,7 +139,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_of_moe_in_transformer=4,
 
                     # LoRA 参数：
-                    # curriculum_stage_num=3,
                     curriculum_stage_num=curriculum_stage_num,
                     lora_target_modules=["attn", "feed_forward"],
                     # lora_r= 8,
@@ -179,6 +178,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
             eval_freq=int(2e4),
+            # eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -193,7 +193,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250501/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_final-simnorm_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250505/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250505/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_cnn-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -224,8 +225,9 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_cnn-encoder_totalstage9_banlance20250505.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8-simnorm_totalstage8_banlance_20250501.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_banlance_20250501_debug.log
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_vit-large-encoder-ps8-simnorm_totalstage5_banlance20250501.log
 
     """
@@ -260,36 +262,36 @@ if __name__ == "__main__":
         返回：
             包含 Atari 游戏 target_return 的字典，key 为环境名称，value 为计算后的目标分数（整数）。
         """
-        # human_scores = {
-        #     # 8games
-        #     'PongNoFrameskip-v4': 14.6, # 0
-        #     'MsPacmanNoFrameskip-v4': 6951.6, # 1
-        #     'SeaquestNoFrameskip-v4': 42054.7, # 2
-        #     'BoxingNoFrameskip-v4': 12.1, # 3
-        #     'AlienNoFrameskip-v4': 7127.7, # 4
-        #     'ChopperCommandNoFrameskip-v4': 7387.8, # 5
-        #     'HeroNoFrameskip-v4': 30826.4, # 6
-        #     'RoadRunnerNoFrameskip-v4': 7845.0, # 7
-        #     # 后续 Atari 26games 的额外项
-        #     'AmidarNoFrameskip-v4': 1719.5, # 8
-        #     'AssaultNoFrameskip-v4': 742.0, # 9
-        #     'AsterixNoFrameskip-v4': 8503.3, # 10
-        #     'BankHeistNoFrameskip-v4': 753.1, # 11
-        #     'BattleZoneNoFrameskip-v4': 37187.5, # 12
-        #     'CrazyClimberNoFrameskip-v4': 35829.4, # 13
-        #     'DemonAttackNoFrameskip-v4': 1971.0,  # 14
-        #     'FreewayNoFrameskip-v4': 29.6, # 15
-        #     'FrostbiteNoFrameskip-v4': 4334.7, # 16
-        #     'GopherNoFrameskip-v4': 2412.5, # 17
-        #     'JamesbondNoFrameskip-v4': 302.8, # 18
-        #     'KangarooNoFrameskip-v4': 3035.0, # 19
-        #     'KrullNoFrameskip-v4': 2665.5, # 20
-        #     'KungFuMasterNoFrameskip-v4': 22736.3, # 21
-        #     'PrivateEyeNoFrameskip-v4': 69571.3, # 22
-        #     'UpNDownNoFrameskip-v4': 11693.2, # 23
-        #     'QbertNoFrameskip-v4': 13455.0, # 24
-        #     'BreakoutNoFrameskip-v4': 30.5, # 25
-        # }
+        human_scores = {
+            # 8games
+            'PongNoFrameskip-v4': 14.6, # 0
+            'MsPacmanNoFrameskip-v4': 6951.6, # 1
+            'SeaquestNoFrameskip-v4': 42054.7, # 2
+            'BoxingNoFrameskip-v4': 12.1, # 3
+            'AlienNoFrameskip-v4': 7127.7, # 4
+            'ChopperCommandNoFrameskip-v4': 7387.8, # 5
+            'HeroNoFrameskip-v4': 30826.4, # 6
+            'RoadRunnerNoFrameskip-v4': 7845.0, # 7
+            # 后续 Atari 26games 的额外项
+            'AmidarNoFrameskip-v4': 1719.5, # 8
+            'AssaultNoFrameskip-v4': 742.0, # 9
+            'AsterixNoFrameskip-v4': 8503.3, # 10
+            'BankHeistNoFrameskip-v4': 753.1, # 11
+            'BattleZoneNoFrameskip-v4': 37187.5, # 12
+            'CrazyClimberNoFrameskip-v4': 35829.4, # 13
+            'DemonAttackNoFrameskip-v4': 1971.0,  # 14
+            'FreewayNoFrameskip-v4': 29.6, # 15
+            'FrostbiteNoFrameskip-v4': 4334.7, # 16
+            'GopherNoFrameskip-v4': 2412.5, # 17
+            'JamesbondNoFrameskip-v4': 302.8, # 18
+            'KangarooNoFrameskip-v4': 3035.0, # 19
+            'KrullNoFrameskip-v4': 2665.5, # 20
+            'KungFuMasterNoFrameskip-v4': 22736.3, # 21
+            'PrivateEyeNoFrameskip-v4': 69571.3, # 22
+            'UpNDownNoFrameskip-v4': 11693.2, # 23
+            'QbertNoFrameskip-v4': 13455.0, # 24
+            'BreakoutNoFrameskip-v4': 30.5, # 25
+        }
 
         # target score
         target_scores = {
@@ -348,41 +350,40 @@ if __name__ == "__main__":
         'RoadRunnerNoFrameskip-v4',
     ]
 
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-        'AmidarNoFrameskip-v4',
-        'AssaultNoFrameskip-v4',
-        'AsterixNoFrameskip-v4',
-        'BankHeistNoFrameskip-v4',
-        'BattleZoneNoFrameskip-v4',
-        'CrazyClimberNoFrameskip-v4',
-        'DemonAttackNoFrameskip-v4',
-        'FreewayNoFrameskip-v4',
-        'FrostbiteNoFrameskip-v4',
-        'GopherNoFrameskip-v4',
-        'JamesbondNoFrameskip-v4',
-        'KangarooNoFrameskip-v4',
-        'KrullNoFrameskip-v4',
-        'KungFuMasterNoFrameskip-v4',
-        'PrivateEyeNoFrameskip-v4',
-        'UpNDownNoFrameskip-v4',
-        'QbertNoFrameskip-v4',
-        'BreakoutNoFrameskip-v4',
-    ]
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4',
+    #     'ChopperCommandNoFrameskip-v4',
+    #     'HeroNoFrameskip-v4',
+    #     'RoadRunnerNoFrameskip-v4',
+    #     'AmidarNoFrameskip-v4',
+    #     'AssaultNoFrameskip-v4',
+    #     'AsterixNoFrameskip-v4',
+    #     'BankHeistNoFrameskip-v4',
+    #     'BattleZoneNoFrameskip-v4',
+    #     'CrazyClimberNoFrameskip-v4',
+    #     'DemonAttackNoFrameskip-v4',
+    #     'FreewayNoFrameskip-v4',
+    #     'FrostbiteNoFrameskip-v4',
+    #     'GopherNoFrameskip-v4',
+    #     'JamesbondNoFrameskip-v4',
+    #     'KangarooNoFrameskip-v4',
+    #     'KrullNoFrameskip-v4',
+    #     'KungFuMasterNoFrameskip-v4',
+    #     'PrivateEyeNoFrameskip-v4',
+    #     'UpNDownNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4',
+    #     'BreakoutNoFrameskip-v4',
+    # ]
 
     global curriculum_stage_num
-    # curriculum_stage_num=8
 
-    curriculum_stage_num=3
-    curriculum_stage_num=5
-    # curriculum_stage_num=9
+    # curriculum_stage_num=3
+    # curriculum_stage_num=5
+    curriculum_stage_num=9
 
 
     action_space_size = 18
@@ -396,10 +397,10 @@ if __name__ == "__main__":
     
     if len(env_id_list) == 8:
         effective_batch_size = 512
-        # effective_batch_size = 400 # 如果 8gpu 2个atari8的任务
     elif len(env_id_list) == 26:
-        # effective_batch_size = 512 * 3  # 1536
-        effective_batch_size = 512 * 2  # 1536
+        # effective_batch_size = 512 * 3  # 1536 cnn-encoder
+        effective_batch_size = 832  # base-vit-encoder cnn-encoder
+        # effective_batch_size = 256   # 1536 large-vit-encoder
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
     else:

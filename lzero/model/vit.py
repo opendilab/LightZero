@@ -134,7 +134,7 @@ class ViT(nn.Module):
         
         x = self.mlp_head(x)
 
-        x = self.final_norm(x)
+        # x = self.final_norm(x)
 
         return x
         # return self.mlp_head(x)

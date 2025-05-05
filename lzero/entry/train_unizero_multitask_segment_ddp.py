@@ -23,7 +23,41 @@ import torch.nn.functional as F
 import torch.distributed as dist
 
 import concurrent.futures
+# ====== UniZero-MT 归一化所需基准分数 (26 Atari100k task_id 对应索引) ======
+RANDOM_SCORES = np.array([
+    227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
+    152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
+    -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
+])
+HUMAN_SCORES = np.array([
+    7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
+    1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
+    14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
+])
 
+# 保存最近一次评估回报：{task_id: eval_episode_return_mean}
+from collections import defaultdict
+GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
+def compute_unizero_mt_normalized_stats(
+        eval_returns: dict[int, float]
+) -> tuple[Optional[float], Optional[float]]:
+    """
+    由 eval_returns 计算 Human-Normalized Mean 和 Median。
+    若暂无样本，返回 (None, None)。
+    """
+    normalized = []
+    for tid, ret in eval_returns.items():
+        if ret is None:
+            continue
+        denom = HUMAN_SCORES[tid] - RANDOM_SCORES[tid]
+        if denom == 0:
+            continue
+        normalized.append((ret - RANDOM_SCORES[tid]) / denom)
+
+    if not normalized:
+        return None, None
+    arr = np.asarray(normalized, dtype=np.float32)
+    return float(arr.mean()), float(np.median(arr))
 
 # 设置超时时间 (秒)
 TIMEOUT = 12000  # 例如200分钟
@@ -155,7 +189,7 @@ GLOBAL_MAX = -float('inf')
 GLOBAL_MIN = float('inf')
 
 def compute_task_weights(
-    task_rewards: dict,
+    task_returns: dict,
     option: str = "symlog",
     epsilon: float = 1e-6,
     temperature: float = 1.0,
@@ -168,7 +202,7 @@ def compute_task_weights(
     改进后的任务权重计算函数，支持多种标准化方式、Softmax 和正反比权重计算，并增加权重范围裁剪功能。
 
     Args:
-        task_rewards (dict): 每个任务的字典，键为 task_id，值为评估奖励或损失。
+        task_returns (dict): 每个任务的字典，键为 task_id，值为评估奖励或损失。
         option (str): 标准化方式，可选值为 "symlog", "max-min", "run-max-min", "rank", "none"。
         epsilon (float): 避免分母为零的小值。
         temperature (float): 控制权重分布的温度系数。
@@ -186,48 +220,48 @@ def compute_task_weights(
     global GLOBAL_MAX, GLOBAL_MIN
 
     # 如果输入为空字典，直接返回空结果
-    if not task_rewards:
+    if not task_returns:
         return {}
 
-    # Step 1: 对 task_rewards 的值构造张量
-    task_ids = list(task_rewards.keys())
-    rewards_tensor = torch.tensor(list(task_rewards.values()), dtype=torch.float32)
+    # Step 1: 对 task_returns 的值构造张量
+    task_ids = list(task_returns.keys())
+    returns_tensor = torch.tensor(list(task_returns.values()), dtype=torch.float32)
 
     if option == "symlog":
         # 使用 symlog 标准化
-        scaled_rewards = symlog(rewards_tensor)
+        scaled_returns = symlog(returns_tensor)
     elif option == "max-min":
         # 使用最大最小值归一化
-        max_reward = rewards_tensor.max().item()
-        min_reward = rewards_tensor.min().item()
-        scaled_rewards = (rewards_tensor - min_reward) / (max_reward - min_reward + epsilon)
+        max_reward = returns_tensor.max().item()
+        min_reward = returns_tensor.min().item()
+        scaled_returns = (returns_tensor - min_reward) / (max_reward - min_reward + epsilon)
     elif option == "run-max-min":
         # 使用全局最大最小值归一化
-        GLOBAL_MAX = max(GLOBAL_MAX, rewards_tensor.max().item())
-        GLOBAL_MIN = min(GLOBAL_MIN, rewards_tensor.min().item())
-        scaled_rewards = (rewards_tensor - GLOBAL_MIN) / (GLOBAL_MAX - GLOBAL_MIN + epsilon)
+        GLOBAL_MAX = max(GLOBAL_MAX, returns_tensor.max().item())
+        GLOBAL_MIN = min(GLOBAL_MIN, returns_tensor.min().item())
+        scaled_returns = (returns_tensor - GLOBAL_MIN) / (GLOBAL_MAX - GLOBAL_MIN + epsilon)
     elif option == "rank":
         # 使用 rank 标准化
         # Rank 是基于值大小的排名，1 表示最小值，越大排名越高
-        sorted_indices = torch.argsort(rewards_tensor)
-        scaled_rewards = torch.empty_like(rewards_tensor)
-        rank_values = torch.arange(1, len(rewards_tensor) + 1, dtype=torch.float32)  # 1 到 N
-        scaled_rewards[sorted_indices] = rank_values
+        sorted_indices = torch.argsort(returns_tensor)
+        scaled_returns = torch.empty_like(returns_tensor)
+        rank_values = torch.arange(1, len(returns_tensor) + 1, dtype=torch.float32)  # 1 到 N
+        scaled_returns[sorted_indices] = rank_values
     elif option == "none":
         # 不进行标准化
-        scaled_rewards = rewards_tensor
+        scaled_returns = returns_tensor
     else:
         raise ValueError(f"Unsupported option: {option}")
 
     # Step 2: 根据 reverse 确定权重是正比还是反比
     if not reverse:
         # 正比：权重与值正相关
-        raw_weights = scaled_rewards
+        raw_weights = scaled_returns
     else:
         # 反比：权重与值负相关
-        # 避免 scaled_rewards 为负数或零
-        scaled_rewards = torch.clamp(scaled_rewards, min=epsilon)
-        raw_weights = 1.0 / scaled_rewards
+        # 避免 scaled_returns 为负数或零
+        scaled_returns = torch.clamp(scaled_returns, min=epsilon)
+        raw_weights = 1.0 / scaled_returns
 
     # Step 3: 根据是否使用 Softmax 进行权重计算
     if use_softmax:
@@ -424,7 +458,7 @@ def train_unizero_multitask_segment_ddp(
     task_exploitation_weight = None
 
     # 创建任务奖励字典
-    task_rewards = {}  # {task_id: reward}
+    task_returns = {}  # {task_id: reward}
 
     while True:
         # 动态调整batch_size
@@ -465,8 +499,8 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
@@ -479,30 +513,42 @@ def train_unizero_multitask_segment_ddp(
                 # 判断评估是否成功
                 if stop is None or reward is None:
                     print(f"Rank {rank} 在评估过程中遇到问题，继续训练...")
-                    task_rewards[cfg.policy.task_id] = float('inf')  # 如果评估失败，将任务难度设为最大值
+                    task_returns[cfg.policy.task_id] = float('inf')  # 如果评估失败，将任务难度设为最大值
                 else:
                     # 确保从评估结果中提取 `eval_episode_return_mean` 作为奖励值
                     try:
                         eval_mean_reward = reward.get('eval_episode_return_mean', float('inf'))
                         print(f"任务 {cfg.policy.task_id} 的评估奖励: {eval_mean_reward}")
-                        task_rewards[cfg.policy.task_id] = eval_mean_reward
+                        task_returns[cfg.policy.task_id] = eval_mean_reward
                     except Exception as e:
                         print(f"提取评估奖励时发生错误: {e}")
-                        task_rewards[cfg.policy.task_id] = float('inf')  # 出现问题时，将奖励设为最大值
+                        task_returns[cfg.policy.task_id] = float('inf')  # 出现问题时，将奖励设为最大值
 
 
             print('=' * 20)
             print(f'开始收集 Rank {rank} 的任务_id: {cfg.policy.task_id}...')
             print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
 
-            # 在每次收集之前重置初始数据，这对于多任务设置非常重要
-            collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
-            # 收集数据
-            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-            # 更新重放缓冲区
-            replay_buffer.push_game_segments(new_data)
-            replay_buffer.remove_oldest_data_to_fit()
+            while replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]:
+                # for ddp training, 避免后面 train 时replay buffer中样本小于batch size 导致ddp hangs
+
+                # 在每次收集之前重置初始数据，这对于多任务设置非常重要
+                collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
+                # 收集数据
+                new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
+                # 更新重放缓冲区
+                replay_buffer.push_game_segments(new_data)
+                replay_buffer.remove_oldest_data_to_fit()
+
+            # # 在每次收集之前重置初始数据，这对于多任务设置非常重要
+            # collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
+            # # 收集数据
+            # new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+            # # 更新重放缓冲区
+            # replay_buffer.push_game_segments(new_data)
+            # replay_buffer.remove_oldest_data_to_fit()
 
             # # ===== only for debug =====
             # if train_epoch > 2:
@@ -538,33 +584,45 @@ def train_unizero_multitask_segment_ddp(
 
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
-        # collector._policy._task_weight_temperature = current_temperature_task_weight
-        # policy.collect_mode.get_attribute('task_weight_temperature') = current_temperature_task_weight
 
         # 计算任务权重
         try:
             # 汇聚任务奖励
             dist.barrier()
-            if cfg.policy.task_complexity_weight:
-                all_task_rewards = [None for _ in range(world_size)]
-                dist.all_gather_object(all_task_rewards, task_rewards)
-                # 合并任务奖励
-                merged_task_rewards = {}
-                for rewards in all_task_rewards:
-                    if rewards:
-                        merged_task_rewards.update(rewards)
-                
-                
-                logging.warning(f"Rank {rank}: merged_task_rewards: {merged_task_rewards}")
+            # if cfg.policy.task_complexity_weight:
+            all_task_returns = [None for _ in range(world_size)]
+            dist.all_gather_object(all_task_returns, task_returns)
+            # 合并任务奖励
+            merged_task_returns = {}
+            for returns in all_task_returns:
+                if returns:
+                    merged_task_returns.update(returns)
+            
+            logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
 
-                # 计算全局任务权重
-                task_weights = compute_task_weights(merged_task_rewards, temperature=current_temperature_task_weight)
-                
-                # 同步任务权重
-                dist.broadcast_object_list([task_weights], src=0)
-                print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
+            # 计算全局任务权重
+            task_weights = compute_task_weights(merged_task_returns, temperature=current_temperature_task_weight)
+            
+            # ---------- 维护 UniZero-MT 全局评估结果 ----------
+            for tid, ret in merged_task_returns.items():
+                GLOBAL_EVAL_RETURNS[tid] = ret   # solved 的任务同样更新
+
+            # 计算 Human-Normalized Mean / Median
+            uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+
+            if uni_mean is not None:            # 至少评估过 1 个任务
+                if rank == 0:                   # 仅在 rank0 写 TensorBoard，防止重复
+                    tb_logger.add_scalar('UniZero-MT/NormalizedMean',   uni_mean,   global_step=learner.train_iter)
+                    tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
+                logging.info(f"Rank {rank}: UniZero-MT Norm Mean={uni_mean:.4f}, Median={uni_median:.4f}")
             else:
-                task_weights = None
+                logging.info(f"Rank {rank}: 暂无数据计算 UniZero-MT 归一化指标")
+
+            # 同步任务权重
+            dist.broadcast_object_list([task_weights], src=0)
+            print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
+            # else:
+            #     task_weights = None
         except Exception as e:
             logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
             break

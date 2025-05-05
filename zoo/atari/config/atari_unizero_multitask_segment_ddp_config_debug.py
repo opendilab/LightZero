@@ -7,10 +7,13 @@ def compute_batch_config(env_id_list, effective_batch_size):
     
     # 根据环境数量设定有效 batch size 和每个环境的最大微 batch size
     gpu_num = 8
-    max_micro_batch_one_gpu = 400
+    if n<=8:
+        max_micro_batch_one_gpu = 400
+    else:
+        max_micro_batch_one_gpu = 400
+
     max_micro_batch = int(max_micro_batch_one_gpu / (n // gpu_num))
 
-    
     # 计算每个环境理论上应该分得的 batch size
     theoretical_env_batch = effective_batch_size / n
     
@@ -37,8 +40,6 @@ def compute_batch_config(env_id_list, effective_batch_size):
     
     return batch_size, grad_accumulate_steps
 
-
-
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
                   num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
@@ -57,8 +58,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # collect_max_episode_steps=int(5e3),
             # eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            collect_max_episode_steps=int(40),
-            eval_max_episode_steps=int(40),
+            collect_max_episode_steps=int(20),
+            eval_max_episode_steps=int(20),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -82,6 +83,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 # num_channels=512, # ==============TODO==============
                 continuous_action_space=False,
                 world_model_cfg=dict(
+                    # use_global_pooling=True,
                     use_global_pooling=False,
 
                     final_norm_option_in_obs_head='LayerNorm',
@@ -99,8 +101,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # analysis_dormant_ratio_weight_rank=True, # TODO
                     analysis_dormant_ratio_weight_rank=False, # TODO
                     dormant_threshold=0.025,
-                    continuous_action_space=False,
 
+                    continuous_action_space=False,
+                                        
                     task_embed_option=None,   # ==============TODO: none ==============
                     use_task_embed=False, # ==============TODO==============
 
@@ -130,32 +133,27 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
+
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
+
                     moe_in_transformer=False,
                     multiplication_moe_in_transformer=False,
-                    num_experts_of_moe_in_transformer=4,
+                    # multiplication_moe_in_transformer=True,
+                    n_shared_experts=1,
+                    num_experts_per_tok=1,
+                    num_experts_of_moe_in_transformer=8,
 
                     # LoRA 参数：
-                    # curriculum_stage_num=3,
-                    curriculum_stage_num=curriculum_stage_num,
-                    lora_target_modules=["attn", "feed_forward"],
-                    # lora_r= 8,
-                    lora_r=64,
-                    lora_alpha=1,
-                    lora_dropout=0.0,
+                    lora_r= 0,
+                    lora_alpha =1,
+                    lora_dropout= 0.0,
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
-            # use_task_exploitation_weight=True, # TODO
-
-            target_return =target_return_dict[env_id],
-            balance_pipeline=True,
-            # task_complexity_weight=False, # TODO
-            task_complexity_weight=True, # TODO
-
+            task_complexity_weight=False, # TODO
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0), # TODO: DEBUG
@@ -194,7 +192,12 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_debug/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_final-simnorm_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501_debug/atari_{len(env_id_list)}games_vit-encoder-ps8-simnorm_tran-nlayer8-moe8-newgate_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501/atari_{len(env_id_list)}games_vit-large-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501_debug/atari_{len(env_id_list)}games_vit-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_tbs1536_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -225,10 +228,10 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8-debug.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config_debug.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_banlance_20250501_debug.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_vit-large-encoder-ps8-simnorm_totalstage5_banlance20250501.log
 
+        torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -236,11 +239,11 @@ if __name__ == "__main__":
     import os
 
 
-    # env_id_list = [
-    #     'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
-    # ]
-    # # List of Atari games used for multi-task learning
+    env_id_list = [
+        'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+    ]
+    # List of Atari games used for multi-task learning
     # env_id_list = [
     #     'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
     #     'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
@@ -251,141 +254,6 @@ if __name__ == "__main__":
     #     'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
     # ]
 
-    def get_atari_target_return_dict(ratio=1.0):
-        """
-        根据 Human 分数和传入的比例参数 ratio 计算每个 Atari 游戏的 target_return。
-        
-        参数：
-            ratio: 控制 target_return 大小的比例因子，默认为 1.0
-        
-        返回：
-            包含 Atari 游戏 target_return 的字典，key 为环境名称，value 为计算后的目标分数（整数）。
-        """
-        human_scores = {
-            # 8games
-            'PongNoFrameskip-v4': 14.6, # 0
-            'MsPacmanNoFrameskip-v4': 6951.6, # 1
-            'SeaquestNoFrameskip-v4': 42054.7, # 2
-            'BoxingNoFrameskip-v4': 12.1, # 3
-            'AlienNoFrameskip-v4': 7127.7, # 4
-            'ChopperCommandNoFrameskip-v4': 7387.8, # 5
-            'HeroNoFrameskip-v4': 30826.4, # 6
-            'RoadRunnerNoFrameskip-v4': 7845.0, # 7
-            # 后续 Atari 26games 的额外项
-            'AmidarNoFrameskip-v4': 1719.5, # 8
-            'AssaultNoFrameskip-v4': 742.0, # 9
-            'AsterixNoFrameskip-v4': 8503.3, # 10
-            'BankHeistNoFrameskip-v4': 753.1, # 11
-            'BattleZoneNoFrameskip-v4': 37187.5, # 12
-            'CrazyClimberNoFrameskip-v4': 35829.4, # 13
-            'DemonAttackNoFrameskip-v4': 1971.0,  # 14
-            'FreewayNoFrameskip-v4': 29.6, # 15
-            'FrostbiteNoFrameskip-v4': 4334.7, # 16
-            'GopherNoFrameskip-v4': 2412.5, # 17
-            'JamesbondNoFrameskip-v4': 302.8, # 18
-            'KangarooNoFrameskip-v4': 3035.0, # 19
-            'KrullNoFrameskip-v4': 2665.5, # 20
-            'KungFuMasterNoFrameskip-v4': 22736.3, # 21
-            'PrivateEyeNoFrameskip-v4': 69571.3, # 22
-            'UpNDownNoFrameskip-v4': 11693.2, # 23
-            'QbertNoFrameskip-v4': 13455.0, # 24
-            'BreakoutNoFrameskip-v4': 30.5, # 25
-        }
-
-        # target score
-        target_scores = {
-            # 8games
-            'PongNoFrameskip-v4': 14.6, # 0
-            'MsPacmanNoFrameskip-v4': 1500.6, # 1
-            'SeaquestNoFrameskip-v4': 1000.7, # 2
-            'BoxingNoFrameskip-v4': 12.1, # 3
-            'AlienNoFrameskip-v4': 1000.7, # 4
-            'ChopperCommandNoFrameskip-v4': 3000.8, # 5
-            'HeroNoFrameskip-v4': 3082.4, # 6
-            'RoadRunnerNoFrameskip-v4': 7845.0, # 7
-            # 后续 Atari 26games 的额外项
-            'AmidarNoFrameskip-v4': 100.5, # 8
-            'AssaultNoFrameskip-v4': 742.0, # 9
-            'AsterixNoFrameskip-v4': 1503.3, # 10
-            'BankHeistNoFrameskip-v4': 753.1, # 11
-            'BattleZoneNoFrameskip-v4': 12187.5, # 12
-            'CrazyClimberNoFrameskip-v4': 15829.4, # 13
-            'DemonAttackNoFrameskip-v4': 1971.0,  # 14
-            'FreewayNoFrameskip-v4': 29.6, # 15
-            'FrostbiteNoFrameskip-v4': 334.7, # 16
-            'GopherNoFrameskip-v4': 2412.5, # 17
-            'JamesbondNoFrameskip-v4': 302.8, # 18
-            'KangarooNoFrameskip-v4': 3035.0, # 19
-            'KrullNoFrameskip-v4': 2665.5, # 20
-            'KungFuMasterNoFrameskip-v4': 12736.3, # 21
-            'PrivateEyeNoFrameskip-v4': 1001.3, # 22
-            'UpNDownNoFrameskip-v4': 11693.2, # 23
-            'QbertNoFrameskip-v4': 13455.0, # 24
-            'BreakoutNoFrameskip-v4': 30.5, # 25
-        }
-
-
-        # 计算每个游戏的 target_return
-        # return {env: int(round(score * ratio)) for env, score in human_scores.items()}
-        return {env: int(round(score * ratio)) for env, score in target_scores.items()}
-
-
-    global target_return_dict 
-
-    # 示例：以 ratio=1 使用
-    target_return_dict = get_atari_target_return_dict(ratio=1)
-    # target_return_dict = get_atari_target_return_dict(ratio=0.5)
-
-
-    # 分别定义 Atari 游戏列表（8games 和 26games）
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-    ]
-
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4',
-    #     'AssaultNoFrameskip-v4',
-    #     'AsterixNoFrameskip-v4',
-    #     'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4',
-    #     'CrazyClimberNoFrameskip-v4',
-    #     'DemonAttackNoFrameskip-v4',
-    #     'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4',
-    #     'GopherNoFrameskip-v4',
-    #     'JamesbondNoFrameskip-v4',
-    #     'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4',
-    #     'KungFuMasterNoFrameskip-v4',
-    #     'PrivateEyeNoFrameskip-v4',
-    #     'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4',
-    #     'BreakoutNoFrameskip-v4',
-    # ]
-
-    global curriculum_stage_num
-    # curriculum_stage_num=8
-
-    curriculum_stage_num=3
-    # curriculum_stage_num=5
-    # curriculum_stage_num=9
-
-
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -394,13 +262,14 @@ if __name__ == "__main__":
     num_simulations = 50
     max_env_step = int(5e5)
     reanalyze_ratio = 0.0
-    
+
     if len(env_id_list) == 8:
         effective_batch_size = 512
-        # effective_batch_size = 400 # 如果 8gpu 2个atari8的任务
     elif len(env_id_list) == 26:
         # effective_batch_size = 512 * 3  # 1536
         effective_batch_size = 512 * 2  # 1536
+        # effective_batch_size = 512  # for large encoder
+
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
     else:
@@ -428,7 +297,6 @@ if __name__ == "__main__":
     infer_context_length = 2
     batch_sizes = [4 for _ in range(len(env_id_list))]
 
-    from lzero.entry import train_unizero_multitask_balance_segment_ddp
 
     for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
@@ -437,6 +305,6 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks

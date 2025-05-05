@@ -23,6 +23,44 @@ import torch.distributed as dist
 import concurrent.futures
 from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer
 
+# ===== 新增依赖 =====
+import numpy as np                    # 计算均值
+from collections import defaultdict   # 保存所有任务最近一次评估分数
+
+# ====== UniZero-MT 需要用到的基准分数（与 26 个 Atari100k 任务 id 一一对应）======
+RANDOM_SCORES = np.array([
+    227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
+    152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
+    -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
+])
+HUMAN_SCORES = np.array([
+    7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
+    1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
+    14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
+])
+
+# 保存“当前所有任务最近一次评估得到的 return”
+GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
+
+def compute_unizero_mt_normalized_stats(eval_returns: dict[int, float]) -> tuple[float | None, float | None]:
+    """
+    根据当前所有任务的最近一次评估回报，计算 Human-Normalized
+    Mean 与 Median。若样本为空则返回 (None, None)。
+    """
+    normalized = []
+    for tid, ret in eval_returns.items():
+        if ret is None:
+            continue
+        diff = HUMAN_SCORES[tid] - RANDOM_SCORES[tid]
+        if diff == 0:
+            continue
+        normalized.append((ret - RANDOM_SCORES[tid]) / diff)
+
+    if not normalized:
+        return None, None
+    arr = np.asarray(normalized, dtype=np.float32)
+    return float(arr.mean()), float(np.median(arr))
+
 # 设置超时时间 (秒)
 TIMEOUT = 12000  # 例如200分钟
 
@@ -531,8 +569,6 @@ def train_unizero_multitask_balance_segment_ddp(
                 replay_buffer.remove_oldest_data_to_fit()
 
 
-
-
             # # ===== only for debug =====
             # if train_epoch > 2:
             #     with timer:
@@ -594,6 +630,24 @@ def train_unizero_multitask_balance_segment_ddp(
 
                 logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
                 task_weights = compute_task_weights(merged_task_returns, option="rank", temperature=current_temperature_task_weight)
+
+
+                # only for atari
+                # ---------- 维护全局 eval return ----------
+                for tid, ret in merged_task_returns.items():
+                    GLOBAL_EVAL_RETURNS[tid] = ret   # solved 任务也更新
+
+                # ---------- 计算 Mean & Median ----------
+                uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+
+                if uni_mean is not None:  # 至少有一个任务评估过
+                    if rank == 0:         # 只在 rank0 写 TensorBoard，避免重复
+                        tb_logger.add_scalar('UniZero-MT/NormalizedMean',   uni_mean,   global_step=learner.train_iter)
+                        tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
+                    logging.info(f"Rank {rank}: UniZero-MT Normalized Mean={uni_mean:.4f}, Median={uni_median:.4f}")
+                else:
+                    logging.info(f"Rank {rank}: 尚无足够数据计算 UniZero-MT 归一化指标")
+
                 dist.broadcast_object_list([task_weights], src=0)
                 print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
             else:
