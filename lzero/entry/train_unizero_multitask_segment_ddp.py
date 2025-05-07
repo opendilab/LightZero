@@ -26,16 +26,24 @@ import concurrent.futures
 # ====== UniZero-MT 归一化所需基准分数 (26 Atari100k task_id 对应索引) ======
 # 原始的 RANDOM_SCORES 和 HUMAN_SCORES
 
-RANDOM_SCORES = np.array([
-    227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
-    152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
-    -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
-])
-HUMAN_SCORES = np.array([
-    7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
-    1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
-    14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
-])
+
+global BENCHMARK_NAME
+# BENCHMARK_NAME = "atari"
+BENCHMARK_NAME = "dmc" # TODO
+if BENCHMARK_NAME == "atari":
+    RANDOM_SCORES = np.array([
+        227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
+        152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
+        -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
+    ])
+    HUMAN_SCORES = np.array([
+        7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
+        1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
+        14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
+    ])
+elif BENCHMARK_NAME == "dmc":
+    RANDOM_SCORES = np.array([0]*26)
+    HUMAN_SCORES = np.array([1000]*26)
 
 
 # 新顺序对应的原始索引列表
@@ -548,6 +556,8 @@ def train_unizero_multitask_segment_ddp(
 
             # 判断是否需要进行评估
             if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter > 0 and learner.train_iter % cfg.policy.eval_freq == 0 :
+
             # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
@@ -629,6 +639,8 @@ def train_unizero_multitask_segment_ddp(
 
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
         if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter > 0 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        
             # 计算任务权重
             try:
                 # 汇聚任务奖励

@@ -23,7 +23,7 @@ from lzero.policy import (
     mz_network_output_unpack,
     select_action,
     prepare_obs,
-    prepare_obs_stack4_for_unizero
+    prepare_obs_stack_for_unizero
 )
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
@@ -366,12 +366,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
-            obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
+            obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
             target_reward, target_value, target_policy = target_batch
 
             # Prepare observations based on frame stack number
             if self._cfg.model.frame_stack_num == 4:
-                obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+                obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
             else:
                 obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg, task_id)
 
@@ -680,6 +680,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
+            timestep: List = [0],
             task_id: int = None,
     ) -> Dict:
         """
@@ -733,7 +734,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             
             # try:
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
                 # print("latent_state_roots.shape:", latent_state_roots.shape)
             # except Exception as e:
             #     print("="*20)
@@ -816,7 +817,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, task_id: int = None) -> Dict:
+                      ready_env_id: np.array = None, timestep: List = [0], task_id: int = None) -> Dict:
         """
         Forward function for evaluating the current policy in eval mode, handling multiple tasks.
         """
@@ -864,7 +865,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             # print(f'policy_logits: {policy_logits}')
 
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
 
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()

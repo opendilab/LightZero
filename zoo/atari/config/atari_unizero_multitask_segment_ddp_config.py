@@ -104,13 +104,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     continuous_action_space=False,
                                         
-                    task_embed_option=None,   # ==============TODO: none ==============
-                    use_task_embed=False, # ==============TODO==============
+                    # task_embed_option=None,   # ==============TODO: none ==============
+                    # use_task_embed=False, # ==============TODO==============
 
-                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    # use_task_embed=True, # ==============TODO==============
-                    # task_embed_dim=128,
-                    # # task_embed_dim=96,
+                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    use_task_embed=True, # ==============TODO==============
+                    task_embed_dim=128,
 
                     use_shared_projection=False,
                     max_blocks=num_unroll_steps,
@@ -135,8 +134,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
-                    # encoder_type='vit',
-                    encoder_type='resnet',
+                    encoder_type='vit',
+                    # encoder_type='resnet',
 
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -144,8 +143,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False,
-                    # multiplication_moe_in_transformer=True, # TODO=======
+                    # multiplication_moe_in_transformer=False,
+                    multiplication_moe_in_transformer=True, # TODO: moe8=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
@@ -180,7 +179,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            eval_freq=int(1e4), # TODO: 
+            # eval_freq=int(1e4), # TODO: 
+            eval_freq=int(2e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -195,8 +195,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_taskembed128_vit-encoder_tran-nlayer8-moe8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_taskembed128_vit-encoder_tran-nlayer8-moe8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
 
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_vit-encoder_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
@@ -237,7 +237,7 @@ if __name__ == "__main__":
         Run the following command to launch the script:
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_orig_20250507.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_taskembed128_vit-encoder_tran-moe8_20250507.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_taskembed128_vit-encoder_tran-moe8_20250508.log
 
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari8_cnn-encoder_moco_20250507.log
 
@@ -273,6 +273,10 @@ if __name__ == "__main__":
         'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
     ]
 
+    # global BENCHMARK_NAME
+
+    # BENCHMARK_NAME='atari'
+
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -285,9 +289,9 @@ if __name__ == "__main__":
     if len(env_id_list) == 8:
         effective_batch_size = 512
     elif len(env_id_list) == 26:
-        # effective_batch_size = 512 * 3  # 1536 cnn-encoder
-        effective_batch_size = 832  # base-vit-encoder cnn-encoder
-        # effective_batch_size = 256   # 1536 large-vit-encoder
+        # effective_batch_size = 832  # cnn-encoder
+        effective_batch_size = 512  # base-vit-encoder
+        # effective_batch_size = 256   # large-vit-encoder
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
     else:

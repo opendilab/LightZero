@@ -66,9 +66,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     
                     share_head=False, # TODO
                     use_shared_projection=False,
-                    # analysis_dormant_ratio_weight_rank=True, # TODO
-                    analysis_dormant_ratio_weight_rank=False, # TODO
-                    dormant_threshold=0.025,
+
+                    analysis_dormant_ratio_weight_rank=True, # TODO
+                    # analysis_dormant_ratio_weight_rank=False, # TODO
+                    analysis_dormant_ratio_interval=100,
+                    # analysis_dormant_ratio_interval=20,
                     
                     task_embed_option=None,   # ==============TODO: none ==============
                     use_task_embed=False, # ==============TODO==============
@@ -101,16 +103,23 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
                     task_num=len(env_id_list),
+                    
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
+
                     moe_in_transformer=False,
                     multiplication_moe_in_transformer=False,
-                    num_experts_of_moe_in_transformer=4,
+                    # multiplication_moe_in_transformer=True,
+                    n_shared_experts=1,
+                    num_experts_per_tok=1,
+                    num_experts_of_moe_in_transformer=8,
                     
                     # LoRA 参数：
-                    curriculum_stage_num=3,
+                    # curriculum_stage_num=3,
+                    curriculum_stage_num=curriculum_stage_num,
+
                     lora_target_modules=["attn", "feed_forward"],
                     # lora_r= 8,
                     lora_r=64,
@@ -146,7 +155,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             n_episode=n_episode,
             replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
-            eval_freq=int(4e3),
+            # eval_freq=int(4e3),
+            eval_freq=int(2e4),
             grad_clip_value=5,
             learning_rate=1e-4,
             discount_factor=0.99,
@@ -182,7 +192,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250413/dmc_{len(env_id_list)}tasks_curriculum-stage-num{3}_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250508/dmc_{len(env_id_list)}tasks_balance-stage-total-{curriculum_stage_num}_orig_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -237,7 +247,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc18_banlance_20250415.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_dmc18_balance_orig_stage9_20250508.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -246,6 +256,14 @@ if __name__ == "__main__":
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
+    global BENCHMARK_NAME
+    BENCHMARK_NAME='dmc'
+    
+    global curriculum_stage_num
+
+    # curriculum_stage_num=3
+    curriculum_stage_num=5
+    curriculum_stage_num=9
 
     global target_return_dict 
     target_return_dict = {

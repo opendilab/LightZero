@@ -182,7 +182,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            eval_freq=int(1e4),
+            # eval_freq=int(1e4),
+            eval_freq=int(2e4),
             # eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -340,6 +341,8 @@ if __name__ == "__main__":
 
 
     global target_return_dict 
+    # global BENCHMARK_NAME
+    # BENCHMARK_NAME='atari'
 
     # 示例：以 ratio=1 使用
     target_return_dict = get_atari_target_return_dict(ratio=1)
@@ -406,7 +409,8 @@ if __name__ == "__main__":
     if len(env_id_list) == 8:
         effective_batch_size = 512
     elif len(env_id_list) == 26:
-        effective_batch_size = 832  # cnn-encoder
+        # effective_batch_size = 832  # cnn-encoder
+        effective_batch_size = 512   # base-vit-encoder 
         # effective_batch_size = 256   # base-vit-encoder  large-vit-encoder
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
