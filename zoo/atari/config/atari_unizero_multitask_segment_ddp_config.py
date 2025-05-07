@@ -64,8 +64,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         policy=dict(
             multi_gpu=True,  # Very important for ddp
             only_use_moco_stats=False,
-            # use_moco=False,  # ==============TODO==============
-            use_moco=True,  # ==============TODO==============
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
@@ -94,13 +94,13 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # final_norm_option_in_encoder='SimNorm',
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                    
-                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     # share_head=True, # TODO
                     share_head=False, # TODO
 
-                    analysis_dormant_ratio_weight_rank=True, # ==============  TODO  ==============
+                    analysis_dormant_ratio_weight_rank=True, # TODO
                     # analysis_dormant_ratio_weight_rank=False, # TODO
-                    dormant_threshold=0.025,
+                    analysis_dormant_ratio_interval=100,
+                    # analysis_dormant_ratio_interval=20,
 
                     continuous_action_space=False,
                                         
@@ -135,6 +135,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
+                    # encoder_type='vit',
+                    encoder_type='resnet',
 
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -193,15 +195,16 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250505/atari_{len(env_id_list)}games_vit-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507/atari_{len(env_id_list)}games_vit-encoder_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507/atari_{len(env_id_list)}games_cnn-encoder_tran-nlayer8-moe8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507/atari_{len(env_id_list)}games_cnn-encoder_tran-nlayer8_moco_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_taskembed128_vit-encoder_tran-nlayer8-moe8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
 
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507/atari_{len(env_id_list)}games_cnn-encoder_taskembed128_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_vit-encoder_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_cnn-encoder_tran-nlayer8-moe8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_cnn-encoder_tran-nlayer8_moco_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_cnn-encoder_taskembed128_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507_fix/atari_{len(env_id_list)}games_cnn-encoder_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250507/atari_{len(env_id_list)}games_vit-large-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -232,7 +235,9 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-encoder_20250507.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_orig_20250507.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_taskembed128_vit-encoder_tran-moe8_20250507.log
 
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari8_cnn-encoder_moco_20250507.log
 
@@ -258,15 +263,15 @@ if __name__ == "__main__":
         'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
     ]
     # List of Atari games used for multi-task learning
-    # env_id_list = [
-    #     'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
-    # ]
+    env_id_list = [
+        'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+        'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+    ]
 
     action_space_size = 18
     collector_env_num = 8

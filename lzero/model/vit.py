@@ -111,7 +111,8 @@ class ViT(nn.Module):
         self.pool = pool
         self.to_latent = nn.Identity()
 
-        self.mlp_head = nn.Linear(dim, num_classes)
+        # self.mlp_head = nn.Linear(dim, num_classes)
+        self.last_linear = nn.Linear(dim, num_classes)
 
         group_size = 8
         self.final_norm = SimNorm(simnorm_dim=group_size)
@@ -132,7 +133,8 @@ class ViT(nn.Module):
 
         x = self.to_latent(x)
         
-        x = self.mlp_head(x)
+        # x = self.mlp_head(x)
+        x = self.last_linear(x)
 
         # x = self.final_norm(x)
 

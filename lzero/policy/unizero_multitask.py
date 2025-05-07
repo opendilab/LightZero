@@ -763,6 +763,36 @@ class UniZeroMTPolicy(UniZeroPolicy):
         }
 
         # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
+        # multi_task_loss_dicts = {
+        #     **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(perceptual_loss_multi_task, 'noreduce_perceptual_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'noreduce_latent_state_l2_norms_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
+            
+        #     # 关于网络可塑性的指标
+        #     **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'noreduce_dormant_ratio_encoder_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(dormant_ratio_transformer_multi_task, 'noreduce_dormant_ratio_transformer_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(avg_weight_mag_encoder_multi_task, 'noreduce_avg_weight_mag_encoder_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(avg_weight_mag_transformer_multi_task, 'noreduce_avg_weight_mag_transformer_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(avg_weight_mag_head_multi_task, 'noreduce_avg_weight_mag_head_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(e_rank_last_linear_multi_task, 'noreduce_e_rank_last_linear_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
+
+        #     **generate_task_loss_dict(policy_loss_multi_task, 'noreduce_policy_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(orig_policy_loss_multi_task, 'noreduce_orig_policy_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(policy_entropy_multi_task, 'noreduce_policy_entropy_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(reward_loss_multi_task, 'noreduce_reward_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(value_loss_multi_task, 'noreduce_value_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'noreduce_target_policy_entropy_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(lambd, 'noreduce_lambd_task{}', task_id=self.task_id), 
+        #     **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
+        # }
+
+
+        # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
         multi_task_loss_dicts = {
             **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
@@ -770,16 +800,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'noreduce_latent_state_l2_norms_task{}', task_id=self.task_id),
             **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
             
-            # 关于网络可塑性的指标
-            **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'noreduce_dormant_ratio_encoder_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(dormant_ratio_transformer_multi_task, 'noreduce_dormant_ratio_transformer_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(avg_weight_mag_encoder_multi_task, 'noreduce_avg_weight_mag_encoder_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(avg_weight_mag_transformer_multi_task, 'noreduce_avg_weight_mag_transformer_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(avg_weight_mag_head_multi_task, 'noreduce_avg_weight_mag_head_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(e_rank_last_linear_multi_task, 'noreduce_e_rank_last_linear_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
-
             **generate_task_loss_dict(policy_loss_multi_task, 'noreduce_policy_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(orig_policy_loss_multi_task, 'noreduce_orig_policy_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(policy_entropy_multi_task, 'noreduce_policy_entropy_task{}', task_id=self.task_id),
@@ -790,8 +810,23 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
             **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
         }
-        # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
+
+
+        if self._learn_model.world_model.do_analysis:
+            multi_task_loss_dicts = {
+                        # 关于网络可塑性的指标
+                **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'noreduce_dormant_ratio_encoder_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(dormant_ratio_transformer_multi_task, 'noreduce_dormant_ratio_transformer_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(avg_weight_mag_encoder_multi_task, 'noreduce_avg_weight_mag_encoder_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(avg_weight_mag_transformer_multi_task, 'noreduce_avg_weight_mag_transformer_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(avg_weight_mag_head_multi_task, 'noreduce_avg_weight_mag_head_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(e_rank_last_linear_multi_task, 'noreduce_e_rank_last_linear_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
+            }
+            # 合并两个字典
+            return_loss_dict.update(multi_task_loss_dicts)
         # print(f'return_loss_dict:{return_loss_dict}')
 
         # 返回最终的损失字典
@@ -869,8 +904,59 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'noreduce_avg_weight_mag_head',
             'noreduce_e_rank_last_linear',
             'noreduce_e_rank_sim_norm'
-
         ]
+
+        # if self._learn_model.world_model.do_analysis:
+        #     # rank = get_rank()
+        #     task_specific_vars = [
+        #         'noreduce_obs_loss',
+        #         'noreduce_orig_policy_loss',
+        #         'noreduce_policy_loss',
+        #         'noreduce_latent_recon_loss',
+        #         'noreduce_policy_entropy',
+        #         'noreduce_target_policy_entropy',
+        #         'noreduce_reward_loss',
+        #         'noreduce_value_loss',
+        #         'noreduce_perceptual_loss',
+        #         'noreduce_latent_state_l2_norms',
+        #         'noreduce_lambd',
+        #         'noreduce_value_priority_mean',
+        #         # 关于网络可塑性的指标
+        #         'noreduce_dormant_ratio_encoder',
+        #         'noreduce_dormant_ratio_transformer',
+        #         'noreduce_dormant_ratio_head',
+        #         'noreduce_avg_weight_mag_encoder',
+        #         'noreduce_avg_weight_mag_transformer',
+        #         'noreduce_avg_weight_mag_head',
+        #         'noreduce_e_rank_last_linear',
+        #         'noreduce_e_rank_sim_norm'
+        #     ]
+        # else:
+        #     # rank = get_rank()
+        #     task_specific_vars = [
+        #         'noreduce_obs_loss',
+        #         'noreduce_orig_policy_loss',
+        #         'noreduce_policy_loss',
+        #         'noreduce_latent_recon_loss',
+        #         'noreduce_policy_entropy',
+        #         'noreduce_target_policy_entropy',
+        #         'noreduce_reward_loss',
+        #         'noreduce_value_loss',
+        #         'noreduce_perceptual_loss',
+        #         'noreduce_latent_state_l2_norms',
+        #         'noreduce_lambd',
+        #         'noreduce_value_priority_mean',
+        #         # 关于网络可塑性的指标
+        #         # 'noreduce_dormant_ratio_encoder',
+        #         # 'noreduce_dormant_ratio_transformer',
+        #         # 'noreduce_dormant_ratio_head',
+        #         # 'noreduce_avg_weight_mag_encoder',
+        #         # 'noreduce_avg_weight_mag_transformer',
+        #         # 'noreduce_avg_weight_mag_head',
+        #         # 'noreduce_e_rank_last_linear',
+        #         # 'noreduce_e_rank_sim_norm'
+        #     ]
+
         # self.task_num_for_current_rank 作为当前rank的base_index
         num_tasks = self.task_num_for_current_rank
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables

@@ -98,8 +98,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # share_head=True, # TODO
                     share_head=False, # TODO
 
-                    # analysis_dormant_ratio_weight_rank=True, # TODO
-                    analysis_dormant_ratio_weight_rank=False, # TODO
+                    analysis_dormant_ratio_weight_rank=True, # TODO
+                    # analysis_dormant_ratio_weight_rank=False, # TODO
+                    analysis_dormant_ratio_interval=100,
+                    # analysis_dormant_ratio_interval=20,
+
                     dormant_threshold=0.025,
 
                     continuous_action_space=False,
@@ -165,7 +168,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
             # update_per_collect=80, # TODO
-            update_per_collect=2, # TODO
+            # update_per_collect=2, # TODO
+            update_per_collect=50, # TODO
+
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -177,7 +182,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
             # eval_freq=int(2e4),
-            eval_freq=int(20),
+            eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,

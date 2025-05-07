@@ -106,61 +106,63 @@ class UniZeroMTModel(nn.Module):
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
             self.representation_network = nn.ModuleList()
-            # for task_id in range(self.task_num):  # TODO: N independent encoder
-            for task_id in range(1):  # TODO: one share encoder
-                self.representation_network.append(RepresentationNetworkUniZero(
-                    observation_shape,
-                    num_res_blocks,
-                    num_channels,
-                    self.downsample,
-                    activation=self.activation,
-                    norm_type=norm_type,
-                    embedding_dim=obs_act_embed_dim,
-                    group_size=world_model_cfg.group_size,
-                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                ))
+            if world_model_cfg.encoder_type == "resnet":
+                # for task_id in range(self.task_num):  # TODO: N independent encoder
+                for task_id in range(1):  # TODO: one share encoder
+                    self.representation_network.append(RepresentationNetworkUniZero(
+                        observation_shape,
+                        num_res_blocks,
+                        num_channels,
+                        self.downsample,
+                        activation=self.activation,
+                        norm_type=norm_type,
+                        embedding_dim=obs_act_embed_dim,
+                        group_size=world_model_cfg.group_size,
+                        final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                    ))
+            elif world_model_cfg.encoder_type == "vit":
 
-                # if world_model_cfg.task_num <=8: 
-                #     # vit base
-                #     self.representation_network.append(ViT(
-                #         image_size =observation_shape[1],
-                #         # patch_size = 32,
-                #         patch_size = 8,
-                #         num_classes = world_model_cfg.embed_dim,
-                #         dim = 768,
-                #         depth = 12,
-                #         heads = 12,
-                #         mlp_dim = 3072,
-                #         dropout = 0.1,
-                #         emb_dropout = 0.1
-                #     ))
-                # elif world_model_cfg.task_num > 8: 
-                #     # vit base
-                #     # self.representation_network.append(ViT(
-                #     #     image_size =observation_shape[1],
-                #     #     # patch_size = 32,
-                #     #     patch_size = 8,
-                #     #     num_classes = world_model_cfg.embed_dim,
-                #     #     dim = 768,
-                #     #     depth = 12,
-                #     #     heads = 12,
-                #     #     mlp_dim = 3072,
-                #     #     dropout = 0.1,
-                #     #     emb_dropout = 0.1
-                #     # ))
-                #     # # vit large # TODO======
-                #     self.representation_network.append(ViT(
-                #         image_size =observation_shape[1],
-                #         # patch_size = 32,
-                #         patch_size = 8,
-                #         num_classes = world_model_cfg.embed_dim,
-                #         dim = 1024,
-                #         depth = 24,
-                #         heads = 16,
-                #         mlp_dim = 4096,
-                #         dropout = 0.1,
-                #         emb_dropout = 0.1
-                #     ))
+                if world_model_cfg.task_num <=8: 
+                    # vit base
+                    self.representation_network.append(ViT(
+                        image_size =observation_shape[1],
+                        # patch_size = 32,
+                        patch_size = 8,
+                        num_classes = obs_act_embed_dim,
+                        dim = 768,
+                        depth = 12,
+                        heads = 12,
+                        mlp_dim = 3072,
+                        dropout = 0.1,
+                        emb_dropout = 0.1
+                    ))
+                elif world_model_cfg.task_num > 8: 
+                    # vit base
+                    # self.representation_network.append(ViT(
+                    #     image_size =observation_shape[1],
+                    #     # patch_size = 32,
+                    #     patch_size = 8,
+                    #     num_classes = world_model_cfg.embed_dim,
+                    #     dim = 768,
+                    #     depth = 12,
+                    #     heads = 12,
+                    #     mlp_dim = 3072,
+                    #     dropout = 0.1,
+                    #     emb_dropout = 0.1
+                    # ))
+                    # # vit large # TODO======
+                    self.representation_network.append(ViT(
+                        image_size =observation_shape[1],
+                        # patch_size = 32,
+                        patch_size = 8,
+                        num_classes = obs_act_embed_dim,
+                        dim = 1024,
+                        depth = 24,
+                        heads = 16,
+                        mlp_dim = 4096,
+                        dropout = 0.1,
+                        emb_dropout = 0.1
+                    ))
 
 
             # TODO: we should change the output_shape to the real observation shape

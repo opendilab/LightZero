@@ -664,7 +664,7 @@ def train_unizero_multitask_segment_ddp(
 
                 # 同步任务权重
                 dist.broadcast_object_list([task_weights], src=0)
-                print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
+                # print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
                 # else:
                 #     task_weights = None
             except Exception as e:
