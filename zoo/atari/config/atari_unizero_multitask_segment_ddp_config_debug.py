@@ -177,7 +177,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
             # eval_freq=int(2e4),
-            eval_freq=int(2),
+            eval_freq=int(20),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -192,7 +192,9 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501_debug/atari_{len(env_id_list)}games_vit-encoder-ps8-simnorm_tran-nlayer8-moe8-newgate_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_debug/atari_{len(env_id_list)}games_cnn-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_debug/atari_{len(env_id_list)}games_vit-encoder-ps8_tran-nlayer8-moe8-newgate_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501/atari_{len(env_id_list)}games_vit-large-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250501_debug/atari_{len(env_id_list)}games_vit-encoder-ps8_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
@@ -228,7 +230,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8-debug.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_atari8_debug.log
 
 
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py

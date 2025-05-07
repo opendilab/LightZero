@@ -24,6 +24,8 @@ import torch.distributed as dist
 
 import concurrent.futures
 # ====== UniZero-MT 归一化所需基准分数 (26 Atari100k task_id 对应索引) ======
+# 原始的 RANDOM_SCORES 和 HUMAN_SCORES
+
 RANDOM_SCORES = np.array([
     227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
     152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
@@ -34,6 +36,52 @@ HUMAN_SCORES = np.array([
     1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
     14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
 ])
+
+
+# 新顺序对应的原始索引列表
+# 新顺序： [Pong, MsPacman, Seaquest, Boxing, Alien, ChopperCommand, Hero, RoadRunner,
+#            Amidar, Assault, Asterix, BankHeist, BattleZone, CrazyClimber, DemonAttack,
+#            Freeway, Frostbite, Gopher, Jamesbond, Kangaroo, Krull, KungFuMaster,
+#            PrivateEye, UpNDown, Qbert, Breakout]
+# 映射为原始数组中的索引（注意：索引均从0开始）
+new_order = [
+    20,  # Pong
+    19,  # MsPacman
+    24,  # Seaquest
+    6,   # Boxing
+    0,   # Alien
+    8,   # ChopperCommand
+    14,  # Hero
+    23,  # RoadRunner
+    1,   # Amidar
+    2,   # Assault
+    3,   # Asterix
+    4,   # BankHeist
+    5,   # BattleZone
+    9,   # CrazyClimber
+    10,  # DemonAttack
+    11,  # Freeway
+    12,  # Frostbite
+    13,  # Gopher
+    15,  # Jamesbond
+    16,  # Kangaroo
+    17,  # Krull
+    18,  # KungFuMaster
+    21,  # PrivateEye
+    25,  # UpNDown
+    22,  # Qbert
+    7    # Breakout
+]
+
+# 根据 new_order 生成新的数组
+new_RANDOM_SCORES = RANDOM_SCORES[new_order]
+new_HUMAN_SCORES = HUMAN_SCORES[new_order]
+
+# 查看重排后的结果
+print("重排后的 RANDOM_SCORES:")
+print(new_RANDOM_SCORES)
+print("\n重排后的 HUMAN_SCORES:")
+print(new_HUMAN_SCORES)
 
 # 保存最近一次评估回报：{task_id: eval_episode_return_mean}
 from collections import defaultdict
@@ -49,10 +97,10 @@ def compute_unizero_mt_normalized_stats(
     for tid, ret in eval_returns.items():
         if ret is None:
             continue
-        denom = HUMAN_SCORES[tid] - RANDOM_SCORES[tid]
+        denom = new_HUMAN_SCORES[tid] - new_RANDOM_SCORES[tid]
         if denom == 0:
             continue
-        normalized.append((ret - RANDOM_SCORES[tid]) / denom)
+        normalized.append((ret - new_RANDOM_SCORES[tid]) / denom)
 
     if not normalized:
         return None, None
@@ -530,25 +578,18 @@ def train_unizero_multitask_segment_ddp(
             print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
 
 
-            while replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]:
-                # for ddp training, 避免后面 train 时replay buffer中样本小于batch size 导致ddp hangs
+            # while replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]:
+            # for ddp training, 避免后面 train 时replay buffer中样本小于batch size 导致ddp hangs
 
-                # 在每次收集之前重置初始数据，这对于多任务设置非常重要
-                collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
-                # 收集数据
-                new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+            # 在每次收集之前重置初始数据，这对于多任务设置非常重要
+            collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
+            # 收集数据
+            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-                # 更新重放缓冲区
-                replay_buffer.push_game_segments(new_data)
-                replay_buffer.remove_oldest_data_to_fit()
+            # 更新重放缓冲区
+            replay_buffer.push_game_segments(new_data)
+            replay_buffer.remove_oldest_data_to_fit()
 
-            # # 在每次收集之前重置初始数据，这对于多任务设置非常重要
-            # collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
-            # # 收集数据
-            # new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-            # # 更新重放缓冲区
-            # replay_buffer.push_game_segments(new_data)
-            # replay_buffer.remove_oldest_data_to_fit()
 
             # # ===== only for debug =====
             # if train_epoch > 2:
@@ -585,47 +626,50 @@ def train_unizero_multitask_segment_ddp(
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
-        # 计算任务权重
-        try:
-            # 汇聚任务奖励
-            dist.barrier()
-            # if cfg.policy.task_complexity_weight:
-            all_task_returns = [None for _ in range(world_size)]
-            dist.all_gather_object(all_task_returns, task_returns)
-            # 合并任务奖励
-            merged_task_returns = {}
-            for returns in all_task_returns:
-                if returns:
-                    merged_task_returns.update(returns)
-            
-            logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
 
-            # 计算全局任务权重
-            task_weights = compute_task_weights(merged_task_returns, temperature=current_temperature_task_weight)
-            
-            # ---------- 维护 UniZero-MT 全局评估结果 ----------
-            for tid, ret in merged_task_returns.items():
-                GLOBAL_EVAL_RETURNS[tid] = ret   # solved 的任务同样更新
+        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+            # 计算任务权重
+            try:
+                # 汇聚任务奖励
+                dist.barrier()
+                # if cfg.policy.task_complexity_weight:
+                all_task_returns = [None for _ in range(world_size)]
+                dist.all_gather_object(all_task_returns, task_returns)
+                # 合并任务奖励
+                merged_task_returns = {}
+                for returns in all_task_returns:
+                    if returns:
+                        merged_task_returns.update(returns)
+                
+                logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
 
-            # 计算 Human-Normalized Mean / Median
-            uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+                # 计算全局任务权重
+                task_weights = compute_task_weights(merged_task_returns, temperature=current_temperature_task_weight)
+                
+                # ---------- 维护 UniZero-MT 全局评估结果 ----------
+                for tid, ret in merged_task_returns.items():
+                    GLOBAL_EVAL_RETURNS[tid] = ret   # solved 的任务同样更新
 
-            if uni_mean is not None:            # 至少评估过 1 个任务
-                if rank == 0:                   # 仅在 rank0 写 TensorBoard，防止重复
-                    tb_logger.add_scalar('UniZero-MT/NormalizedMean',   uni_mean,   global_step=learner.train_iter)
-                    tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
-                logging.info(f"Rank {rank}: UniZero-MT Norm Mean={uni_mean:.4f}, Median={uni_median:.4f}")
-            else:
-                logging.info(f"Rank {rank}: 暂无数据计算 UniZero-MT 归一化指标")
+                # 计算 Human-Normalized Mean / Median
+                uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
 
-            # 同步任务权重
-            dist.broadcast_object_list([task_weights], src=0)
-            print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
-            # else:
-            #     task_weights = None
-        except Exception as e:
-            logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
-            break
+                if uni_mean is not None:            # 至少评估过 1 个任务
+                    if rank == 0:                   # 仅在 rank0 写 TensorBoard，防止重复
+                        tb_logger.add_scalar('UniZero-MT/NormalizedMean',   uni_mean,   global_step=learner.train_iter)
+                        tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
+                    logging.info(f"Rank {rank}: UniZero-MT Norm Mean={uni_mean:.4f}, Median={uni_median:.4f}")
+                else:
+                    logging.info(f"Rank {rank}: 暂无数据计算 UniZero-MT 归一化指标")
+
+                # 同步任务权重
+                dist.broadcast_object_list([task_weights], src=0)
+                print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
+                # else:
+                #     task_weights = None
+            except Exception as e:
+                logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
+                break
 
 
         # 学习策略
@@ -659,8 +703,10 @@ def train_unizero_multitask_segment_ddp(
 
                 if train_data_multi_task:
                     # learn_kwargs = {'task_exploitation_weight':task_exploitation_weight, 'task_weights':task_weights, }
-                    learn_kwargs = {'task_weights': task_weights, }
+                    # learn_kwargs = {'task_weights': task_weights, }
                     # learn_kwargs = {'task_weights':task_exploitation_weight}
+                    learn_kwargs = {'task_weights': None, }
+
 
                     # 在训练时，DDP会自动同步梯度和参数
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)

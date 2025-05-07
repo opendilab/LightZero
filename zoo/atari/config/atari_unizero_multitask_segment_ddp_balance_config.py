@@ -130,13 +130,18 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
+
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
+
                     moe_in_transformer=False,
                     multiplication_moe_in_transformer=False,
-                    num_experts_of_moe_in_transformer=4,
+                    # multiplication_moe_in_transformer=True, # TODO=======
+                    n_shared_experts=1,
+                    num_experts_per_tok=1,
+                    num_experts_of_moe_in_transformer=8,
 
                     # LoRA 参数：
                     curriculum_stage_num=curriculum_stage_num,
@@ -177,7 +182,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            eval_freq=int(2e4),
+            eval_freq=int(1e4),
             # eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -194,7 +199,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     configs = []
     # ===== only for debug =====
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250505/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250505/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_cnn-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250507/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_cnn-encoder_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -225,6 +230,9 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_banlance_atari26_cnn-encoder_totalstage5_20250507.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_banlance_atari8_cnn-encoder_totalstage9_20250507.log
+
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_cnn-encoder_totalstage9_banlance20250505.log
 
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_banlance_20250501_debug.log
@@ -350,40 +358,40 @@ if __name__ == "__main__":
         'RoadRunnerNoFrameskip-v4',
     ]
 
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4',
-    #     'AssaultNoFrameskip-v4',
-    #     'AsterixNoFrameskip-v4',
-    #     'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4',
-    #     'CrazyClimberNoFrameskip-v4',
-    #     'DemonAttackNoFrameskip-v4',
-    #     'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4',
-    #     'GopherNoFrameskip-v4',
-    #     'JamesbondNoFrameskip-v4',
-    #     'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4',
-    #     'KungFuMasterNoFrameskip-v4',
-    #     'PrivateEyeNoFrameskip-v4',
-    #     'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4',
-    #     'BreakoutNoFrameskip-v4',
-    # ]
+    env_id_list = [
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
+        'AmidarNoFrameskip-v4',
+        'AssaultNoFrameskip-v4',
+        'AsterixNoFrameskip-v4',
+        'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4',
+        'CrazyClimberNoFrameskip-v4',
+        'DemonAttackNoFrameskip-v4',
+        'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4',
+        'GopherNoFrameskip-v4',
+        'JamesbondNoFrameskip-v4',
+        'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4',
+        'KungFuMasterNoFrameskip-v4',
+        'PrivateEyeNoFrameskip-v4',
+        'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4',
+        'BreakoutNoFrameskip-v4',
+    ]
 
     global curriculum_stage_num
 
     # curriculum_stage_num=3
-    # curriculum_stage_num=5
-    curriculum_stage_num=9
+    curriculum_stage_num=5
+    # curriculum_stage_num=9
 
 
     action_space_size = 18
@@ -392,15 +400,14 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
+    max_env_step = int(4e5)
     reanalyze_ratio = 0.0
     
     if len(env_id_list) == 8:
         effective_batch_size = 512
     elif len(env_id_list) == 26:
-        # effective_batch_size = 512 * 3  # 1536 cnn-encoder
-        effective_batch_size = 832  # base-vit-encoder cnn-encoder
-        # effective_batch_size = 256   # 1536 large-vit-encoder
+        effective_batch_size = 832  # cnn-encoder
+        # effective_batch_size = 256   # base-vit-encoder  large-vit-encoder
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
     else:

@@ -28,6 +28,8 @@ import numpy as np                    # 计算均值
 from collections import defaultdict   # 保存所有任务最近一次评估分数
 
 # ====== UniZero-MT 需要用到的基准分数（与 26 个 Atari100k 任务 id 一一对应）======
+# 原始的 RANDOM_SCORES 和 HUMAN_SCORES
+
 RANDOM_SCORES = np.array([
     227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
     152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
@@ -39,22 +41,70 @@ HUMAN_SCORES = np.array([
     14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
 ])
 
-# 保存“当前所有任务最近一次评估得到的 return”
-GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
 
-def compute_unizero_mt_normalized_stats(eval_returns: dict[int, float]) -> tuple[float | None, float | None]:
+# 新顺序对应的原始索引列表
+# 新顺序： [Pong, MsPacman, Seaquest, Boxing, Alien, ChopperCommand, Hero, RoadRunner,
+#            Amidar, Assault, Asterix, BankHeist, BattleZone, CrazyClimber, DemonAttack,
+#            Freeway, Frostbite, Gopher, Jamesbond, Kangaroo, Krull, KungFuMaster,
+#            PrivateEye, UpNDown, Qbert, Breakout]
+# 映射为原始数组中的索引（注意：索引均从0开始）
+new_order = [
+    20,  # Pong
+    19,  # MsPacman
+    24,  # Seaquest
+    6,   # Boxing
+    0,   # Alien
+    8,   # ChopperCommand
+    14,  # Hero
+    23,  # RoadRunner
+    1,   # Amidar
+    2,   # Assault
+    3,   # Asterix
+    4,   # BankHeist
+    5,   # BattleZone
+    9,   # CrazyClimber
+    10,  # DemonAttack
+    11,  # Freeway
+    12,  # Frostbite
+    13,  # Gopher
+    15,  # Jamesbond
+    16,  # Kangaroo
+    17,  # Krull
+    18,  # KungFuMaster
+    21,  # PrivateEye
+    25,  # UpNDown
+    22,  # Qbert
+    7    # Breakout
+]
+
+# 根据 new_order 生成新的数组
+new_RANDOM_SCORES = RANDOM_SCORES[new_order]
+new_HUMAN_SCORES = HUMAN_SCORES[new_order]
+
+# 查看重排后的结果
+print("重排后的 RANDOM_SCORES:")
+print(new_RANDOM_SCORES)
+print("\n重排后的 HUMAN_SCORES:")
+print(new_HUMAN_SCORES)
+
+# 保存最近一次评估回报：{task_id: eval_episode_return_mean}
+from collections import defaultdict
+GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
+def compute_unizero_mt_normalized_stats(
+        eval_returns: dict[int, float]
+) -> tuple[Optional[float], Optional[float]]:
     """
-    根据当前所有任务的最近一次评估回报，计算 Human-Normalized
-    Mean 与 Median。若样本为空则返回 (None, None)。
+    由 eval_returns 计算 Human-Normalized Mean 和 Median。
+    若暂无样本，返回 (None, None)。
     """
     normalized = []
     for tid, ret in eval_returns.items():
         if ret is None:
             continue
-        diff = HUMAN_SCORES[tid] - RANDOM_SCORES[tid]
-        if diff == 0:
+        denom = new_HUMAN_SCORES[tid] - new_RANDOM_SCORES[tid]
+        if denom == 0:
             continue
-        normalized.append((ret - RANDOM_SCORES[tid]) / diff)
+        normalized.append((ret - new_RANDOM_SCORES[tid]) / denom)
 
     if not normalized:
         return None, None
@@ -556,17 +606,17 @@ def train_unizero_multitask_balance_segment_ddp(
             print(f'开始收集 Rank {rank} 的任务_id: {cfg.policy.task_id}...')
             print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
 
-            while replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]:
+            # while replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]:
                 # for ddp training, 避免后面 train 时replay buffer中样本小于batch size 导致ddp hang
 
-                # 在每次收集之前重置初始数据，这对于多任务设置非常重要
-                collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
-                # 收集数据
-                new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+            # 在每次收集之前重置初始数据，这对于多任务设置非常重要
+            collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
+            # 收集数据
+            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-                # 更新重放缓冲区
-                replay_buffer.push_game_segments(new_data)
-                replay_buffer.remove_oldest_data_to_fit()
+            # 更新重放缓冲区
+            replay_buffer.push_game_segments(new_data)
+            replay_buffer.remove_oldest_data_to_fit()
 
 
             # # ===== only for debug =====
@@ -615,46 +665,48 @@ def train_unizero_multitask_balance_segment_ddp(
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
-        # 计算任务权重时，只考虑未解决任务
-        try:
-            dist.barrier()
-            if cfg.policy.task_complexity_weight:
-                all_task_returns = [None for _ in range(world_size)]
-                dist.all_gather_object(all_task_returns, task_returns)
-                merged_task_returns = {}
-                for rewards in all_task_returns:
-                    if rewards:
-                        for tid, r in rewards.items():
-                            if tid not in solved_task_pool:
-                                merged_task_returns[tid] = r
+        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+            # 计算任务权重时，只考虑未解决任务
+            try:
+                dist.barrier()
+                if cfg.policy.task_complexity_weight:
+                    all_task_returns = [None for _ in range(world_size)]
+                    dist.all_gather_object(all_task_returns, task_returns)
+                    merged_task_returns = {}
+                    for rewards in all_task_returns:
+                        if rewards:
+                            for tid, r in rewards.items():
+                                if tid not in solved_task_pool:
+                                    merged_task_returns[tid] = r
 
-                logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
-                task_weights = compute_task_weights(merged_task_returns, option="rank", temperature=current_temperature_task_weight)
+                    logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
+                    task_weights = compute_task_weights(merged_task_returns, option="rank", temperature=current_temperature_task_weight)
 
 
-                # only for atari
-                # ---------- 维护全局 eval return ----------
-                for tid, ret in merged_task_returns.items():
-                    GLOBAL_EVAL_RETURNS[tid] = ret   # solved 任务也更新
+                    # only for atari
+                    # ---------- 维护全局 eval return ----------
+                    for tid, ret in merged_task_returns.items():
+                        GLOBAL_EVAL_RETURNS[tid] = ret   # solved 任务也更新
 
-                # ---------- 计算 Mean & Median ----------
-                uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+                    # ---------- 计算 Mean & Median ----------
+                    uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
 
-                if uni_mean is not None:  # 至少有一个任务评估过
-                    if rank == 0:         # 只在 rank0 写 TensorBoard，避免重复
-                        tb_logger.add_scalar('UniZero-MT/NormalizedMean',   uni_mean,   global_step=learner.train_iter)
-                        tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
-                    logging.info(f"Rank {rank}: UniZero-MT Normalized Mean={uni_mean:.4f}, Median={uni_median:.4f}")
+                    if uni_mean is not None:  # 至少有一个任务评估过
+                        if rank == 0:         # 只在 rank0 写 TensorBoard，避免重复
+                            tb_logger.add_scalar('UniZero-MT/NormalizedMean',   uni_mean,   global_step=learner.train_iter)
+                            tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
+                        logging.info(f"Rank {rank}: UniZero-MT Normalized Mean={uni_mean:.4f}, Median={uni_median:.4f}")
+                    else:
+                        logging.info(f"Rank {rank}: 尚无足够数据计算 UniZero-MT 归一化指标")
+
+                    dist.broadcast_object_list([task_weights], src=0)
+                    print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
                 else:
-                    logging.info(f"Rank {rank}: 尚无足够数据计算 UniZero-MT 归一化指标")
-
-                dist.broadcast_object_list([task_weights], src=0)
-                print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
-            else:
-                task_weights = None
-        except Exception as e:
-            logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
-            break
+                    task_weights = None
+            except Exception as e:
+                logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
+                break
 
 
         # ddp 同步全局已解决任务数量，更新 curriculum_stage
