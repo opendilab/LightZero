@@ -6,13 +6,13 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
 
     collector_env_num = 8
     game_segment_length = 400
-    evaluator_env_num = 4
+    evaluator_env_num = 3
     num_simulations = 50
     max_env_step = int(1e5)
     batch_size = 64
     num_unroll_steps = 10
     infer_context_length = 4
-    num_layers = 2 # Might change it to 4
+    num_layers = 2
     replay_ratio = 0.25
 
     atari_unizero_config = dict(
@@ -34,7 +34,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    attention='causal',  # ← Fallback when aha = False
+                    attention='adaptive',  # ← Use adaptive attention
                     policy_entropy_weight=1e-4,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -48,15 +48,17 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     rotary_emb=False,
-
-                    # === Hybrid Attention Parameters ===
+                    # Set Hybrid to False
                     aha = False,
-                    # hybrid_local_layers=4,
-                    # init_adaptive_span=64.0,
-                    # max_adaptive_span=128,
-                    adaptive_span_regularization=0,
-                    local_window_size = 8, # must be set
-                    interleave_local_causal = True,
+                    # Set window size
+                    local_window_size=8,
+                    interleave_local_causal=False,
+                    hybrid_local_layers= 0,
+
+                    # Adaptive span parameters
+                    init_adaptive_span=20.0, # Start with full causal attention
+                    max_adaptive_span=20.0,
+                    adaptive_span_regularization=1e-3,
 
                     # === Routing Transformer Parameters ===
                     # routing_num_clusters=4,  # sqrt(20) ≈ 4–5
@@ -66,7 +68,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     # routing_commitment=1e-4,
                     # routing_num_mem_kv=0,
                     # use_local_attention=False,
-                    # local_window_size=None,
                     # routing_context_window_size=4,  # optional: match routing window
                 ),
             ),

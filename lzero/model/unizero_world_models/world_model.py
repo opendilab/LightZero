@@ -14,6 +14,7 @@ from lzero.model.unizero_world_models.modeling.kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
+from lzero.model.unizero_world_models.modeling.adaptive_attention import AdaptiveSpanAttention
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -1364,7 +1365,8 @@ class WorldModel(nn.Module):
             act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
         # Forward pass to obtain predictions for observations, rewards, and policies
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)},
+                               start_pos=start_pos)
 
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
@@ -1512,6 +1514,17 @@ class WorldModel(nn.Module):
         discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
+
+        # Adaptive-span regularization
+        span_reg = 0.0
+        for block in self.transformer.blocks:
+            attn = block.attn
+            if isinstance(attn, AdaptiveSpanAttention):
+                span_reg += F.softplus(attn.span_p).sum()
+
+        reg_loss = self.config.adaptive_span_regularization * span_reg
+        discounted_loss_policy = discounted_loss_policy + reg_loss
+
 
         if self.continuous_action_space:
             return LossWithIntermediateLosses(

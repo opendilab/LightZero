@@ -3,7 +3,7 @@
 #SBATCH --partition=gpu-a100,gpu-v100
 
 # The default run4
-#SBATCH --time=5:30:00
+#SBATCH --time=3:30:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
@@ -32,6 +32,6 @@ export WANDB_API_KEY=e8eb27778c68fe84c0d4fd15a0240624895bab3f
 srun apptainer exec --nv \
     --bind "${PROJECT_DIR}:/workspace" \
     "${SIF_FILE}" \
-    python -m zoo.atari.config.atari_unizero_local_config \
-      --env BoxingNoFrameskip-v4 \
+    python -m zoo.atari.config.atari_unizero_adaptive_config \
+      --env PongNoFrameskip-v4 \
       --seed 0

@@ -48,5 +48,8 @@ def build_attention(config: TransformerConfig) -> Attention:
     elif attention_mode == 'local':
         from .local_attention import LocalAttention
         return LocalAttention(config)
+    elif attention_mode == 'adaptive':
+        from .adaptive_attention import AdaptiveSpanAttention
+        return AdaptiveSpanAttention(config)
     else:
         raise ValueError(f"Unknown attention type: {config.attention}")

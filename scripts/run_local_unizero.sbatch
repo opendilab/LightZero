@@ -15,7 +15,7 @@
 #SBATCH --gpus-per-task=1
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem-per-cpu=5120
+#SBATCH --mem-per-cpu=4096
 
 #SBATCH --mail-type=BEGIN,END,FAIL
 
@@ -32,6 +32,6 @@ export WANDB_API_KEY=e8eb27778c68fe84c0d4fd15a0240624895bab3f
 srun apptainer exec --nv \
     --bind "${PROJECT_DIR}:/workspace" \
     "${SIF_FILE}" \
-    python -m zoo.atari.config.atari_unizero_vanilla_config\
+    python -m zoo.atari.config.atari_unizero_local_config \
       --env PongNoFrameskip-v4 \
       --seed 1

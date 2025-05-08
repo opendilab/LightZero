@@ -3,21 +3,20 @@ from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
-# def main(env_id='PongNoFrameskip-v4', seed=0):
-def main(env_id='BoxingNoFrameskip-v4', seed=0):
+def main(env_id='PongNoFrameskip-v4', seed=0):
     action_space_size = atari_env_action_space_map[env_id]
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
-    game_segment_length = 20
+    game_segment_length = 400
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(1e5) # 100k steps for now
+    max_env_step = int(1e5)
     batch_size = 64
     num_unroll_steps = 10
-    infer_context_length = 4 # H?
+    infer_context_length = 4 # H
     num_layers = 2
     replay_ratio = 0.25
 
@@ -71,6 +70,10 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     rotary_emb=False,
+                    aha = False,
+                    interleave_local_causal = False,
+                    local_window_size = 8,
+                    adaptive_span_regularization=0,
                 ),
             ),
             model_path=None,

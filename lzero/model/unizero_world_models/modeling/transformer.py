@@ -1,6 +1,7 @@
 """
 The following code is modified from https://github.com/karpathy/nanoGPT.
 """
+import copy
 
 import numpy as np
 from typing import Optional, Tuple
@@ -96,7 +97,10 @@ class Transformer(nn.Module):
         super().__init__()
         self.config = config
         self.drop = nn.Dropout(config.embed_pdrop)
-        self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
+        self.blocks = nn.ModuleList([
+            Block(config, layer_idx=i)
+            for i in range(config.num_layers)
+        ])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
         if self.config.rotary_emb:
@@ -201,18 +205,34 @@ class Block(nn.Module):
         - mlp (:obj:`nn.Sequential`): Multi-layer perceptron.
     """
 
-    def __init__(self, config: TransformerConfig) -> None:
+    def __init__(self, config: TransformerConfig, layer_idx : int) -> None:
         super().__init__()
+        self.layer_idx = layer_idx
         # NOTE: GRU gating as in GTrXL
         self.gru_gating = config.gru_gating
-        self.gru_bias = 2.0
+        self.gru_bias = 1.0 # Fallback to 2.0
         if self.gru_gating:
             self.gate1 = GRUGatingUnit(config.embed_dim, self.gru_bias)
             self.gate2 = GRUGatingUnit(config.embed_dim, self.gru_bias)
 
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
-        self.attn : Attention = build_attention(config) # Implements different attention mechanism
+
+        # Hybrid self-attention module
+        if config.aha:
+            if layer_idx < config.hybrid_local_layers:
+                mode = 'local'
+            else:
+                mode = 'adaptive'
+        elif config.interleave_local_causal:
+            # even layers → local window, odd → full causal
+            mode = 'local' if (layer_idx % 2 == 0) else 'causal'
+        else:
+            mode = config.attention
+
+        cfg = copy.copy(config)
+        cfg.attention = mode
+        self.attn : Attention = build_attention(cfg) # Implements different attention mechanism
         self.mlp = nn.Sequential(
             nn.Linear(config.embed_dim, 4 * config.embed_dim),
             nn.GELU(approximate='tanh'),
@@ -237,9 +257,14 @@ class Block(nn.Module):
         x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, freqs_cis)
         if self.gru_gating:
             x = self.gate1(x, x_attn)
-            x = self.gate2(x, self.mlp(self.ln2(x)))
         else:
-            x = x + x_attn # TODO: Consider what to do about the loss
-            x = x + self.mlp(self.ln2(x))
+            x = x + x_attn
+
+        mlp_out = self.mlp(self.ln2(x))
+
+        if self.gru_gating:
+            x = self.gate2(x, mlp_out)
+        else:
+            x = x + mlp_out
 
         return x
