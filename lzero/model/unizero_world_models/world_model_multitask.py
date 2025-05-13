@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import torch 
+import math
 
 
 class WorldModelMT(WorldModel):
@@ -57,6 +58,21 @@ class WorldModelMT(WorldModel):
         super().__init__(config, tokenizer)
         self.tokenizer = tokenizer
         self.config = config
+
+        self.continuous_action_space = self.config.continuous_action_space
+        self.task_num = config.task_num
+
+        # TODO: 26games share encoder, sclae the grad of encoder
+        # if not self.continuous_action_space:
+        #     # atari共享encoder
+        #     encoder_index = 0
+        #     encoder = self.tokenizer.encoder[encoder_index]
+
+        #     # 给 encoder 所有参数注册 hook
+        #     for p in encoder.parameters():
+        #         p.register_hook(self._scale_grad)
+
+
         self.share_head = config.share_head  # 新增参数
 
         if self.config.device == 'cpu':
@@ -79,7 +95,6 @@ class WorldModelMT(WorldModel):
         # Task embedding setup
         self.use_task_embed = config.use_task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
-        self.task_num = config.task_num
         self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         
@@ -162,7 +177,6 @@ class WorldModelMT(WorldModel):
 
         self.hidden_size = config.embed_dim // config.num_heads
 
-        self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
         if self.continuous_action_space:
@@ -304,6 +318,11 @@ class WorldModelMT(WorldModel):
 
         self.reanalyze_phase = False
         self._rank = get_rank()
+
+    def _scale_grad(self, grad: torch.Tensor) -> torch.Tensor:
+        # ① 1/k 缩放；若想更保守可用 1/√k
+        # return grad / self.task_num
+        return grad / math.sqrt(self.task_num)
 
     def _generate_colors(self, num_colors):
         """

@@ -18,6 +18,13 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                  total_batch_size):
     domain_name = env_id.split('-')[0]
     task_name = env_id.split('-')[1]
+
+    if domain_name == "pendulum":
+        frame_skip=8
+    else:
+        # frame_skip=2
+        frame_skip=8
+
     return EasyDict(dict(
         env=dict(
             stop_value=int(5e5),
@@ -27,7 +34,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             observation_shape_list=observation_shape_list,
             action_space_size_list=action_space_size_list,
             from_pixels=False,
-            frame_skip=2,
+            frame_skip=frame_skip,
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -67,8 +74,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     share_head=False, # TODO
                     use_shared_projection=False,
 
-                    analysis_dormant_ratio_weight_rank=True, # TODO
-                    # analysis_dormant_ratio_weight_rank=False, # TODO
+                    # analysis_dormant_ratio_weight_rank=True, # TODO: dmc encoder需要修正analysis_dormant_ratio
+                    analysis_dormant_ratio_weight_rank=False, # TODO
                     analysis_dormant_ratio_interval=100,
                     # analysis_dormant_ratio_interval=20,
                     
@@ -98,7 +105,10 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     context_length=2 * infer_context_length,
                     device='cuda',
                     # num_layers=1, # TODO: debug config
-                    num_layers=8,
+
+                    num_layers=4, # ==============TODO==============
+                    # num_layers=8,
+
                     num_heads=24,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -110,13 +120,15 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False,
-                    # multiplication_moe_in_transformer=True,
+                    # multiplication_moe_in_transformer=False,
+                    multiplication_moe_in_transformer=True,
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
                     
                     # LoRA 参数：
+                    moe_use_lora=False, # TODO
+
                     # curriculum_stage_num=3,
                     curriculum_stage_num=curriculum_stage_num,
 
@@ -155,8 +167,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             n_episode=n_episode,
             replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
-            # eval_freq=int(4e3),
-            eval_freq=int(2e4),
+            eval_freq=int(4e3),
+            # eval_freq=int(1e4),
             grad_clip_value=5,
             learning_rate=1e-4,
             discount_factor=0.99,
@@ -191,8 +203,9 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
+    # ========= TODO: global BENCHMARK_NAME =========
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250508/dmc_{len(env_id_list)}tasks_balance-stage-total-{curriculum_stage_num}_orig_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250509/dmc_{len(env_id_list)}tasks_frameskip8_balance-stage-total-{curriculum_stage_num}_moe8_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -247,7 +260,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_dmc18_balance_orig_stage9_20250508.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_dmc18_ln_balance_moe8_stage9_nlayer4.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -342,7 +355,7 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
+    max_env_step = int(4e5)
     reanalyze_ratio = 0.0
 
     # nlayer=8

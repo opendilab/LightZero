@@ -32,8 +32,8 @@ from collections import defaultdict   # 保存所有任务最近一次评估分�
 
 
 global BENCHMARK_NAME
-# BENCHMARK_NAME = "atari"
-BENCHMARK_NAME = "dmc" # TODO
+BENCHMARK_NAME = "atari"
+# BENCHMARK_NAME = "dmc" # TODO
 if BENCHMARK_NAME == "atari":
     RANDOM_SCORES = np.array([
         227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
@@ -578,8 +578,8 @@ def train_unizero_multitask_balance_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
@@ -673,7 +673,9 @@ def train_unizero_multitask_balance_segment_ddp(
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        
             # 计算任务权重时，只考虑未解决任务
             try:
                 dist.barrier()
@@ -772,7 +774,7 @@ def train_unizero_multitask_balance_segment_ddp(
                     # TODO
                     learn_kwargs = {'task_weights': None, "ignore_grad": True}
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
-                    print(f"Rank {rank}: in unsolved_cfgs learner.train(train_data_multi_task) after iter {i} sync_gradients。")
+                    # print(f"Rank {rank}: in unsolved_cfgs learner.train(train_data_multi_task) after iter {i} sync_gradients。")
         
         else:
             print(f"Rank {rank}: 本 GPU 上 len(unsolved_cfgs):{len(unsolved_cfgs)}")

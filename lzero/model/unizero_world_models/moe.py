@@ -6,16 +6,24 @@ import torch.nn.functional as F
 from simple_parsing.helpers import Serializable
 from torch import nn
 
+from .transformer import _maybe_wrap_linear
+
+# _maybe_wrap_linear(nn.Linear(config.embed_dim, 4 * config.embed_dim), config, "feed_forward")
+
 # https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/moe.py
 # https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/transformer_layers.py#L149
 # Modified from https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/transformer.py#L108
 class MultiplicationFeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
-
-        self.w1 = nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False)
-        self.w2 = nn.Linear(4 * config.embed_dim, config.embed_dim, bias=False)
-        self.w3 = nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False)
+        if config.moe_use_lora:
+            self.w1 = _maybe_wrap_linear(nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False), config, "feed_forward")
+            self.w2 = _maybe_wrap_linear(nn.Linear(4 * config.embed_dim, config.embed_dim, bias=False), config, "feed_forward")
+            self.w3 = _maybe_wrap_linear(nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False), config, "feed_forward")
+        else:
+            self.w1 = nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False)
+            self.w2 = nn.Linear(4 * config.embed_dim, config.embed_dim, bias=False)
+            self.w3 = nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))  # type: ignore

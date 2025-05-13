@@ -119,7 +119,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=12,
                     # num_heads=24,
 
-                    num_layers=8,
+                    num_layers=4,  # TODO=======
+                    # num_layers=8,
+
                     num_heads=24,
 
                     # ===== only for debug =====
@@ -131,19 +133,24 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     env_num=8,
                     task_num=len(env_id_list),
 
+                    encoder_type='vit',
+                    # encoder_type='resnet',
+
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False,
-                    # multiplication_moe_in_transformer=True, # TODO=======
+                    # multiplication_moe_in_transformer=False,
+                    multiplication_moe_in_transformer=True, # TODO=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
 
                     # LoRA 参数：
+                    # moe_use_lora=True, # TDO
+                    moe_use_lora=False, # TODO
                     curriculum_stage_num=curriculum_stage_num,
                     lora_target_modules=["attn", "feed_forward"],
                     # lora_r= 8,
@@ -183,7 +190,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
             # eval_freq=int(1e4),
-            eval_freq=int(2e4),
+            eval_freq=int(1.5e4),
             # eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -199,8 +206,9 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250505/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250507/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_cnn-encoder_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -231,13 +239,18 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_banlance_atari26_cnn-encoder_totalstage5_20250507.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_banlance_atari8_cnn-encoder_totalstage9_20250507.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_nlayer4_atari26_vit-ln_moe8_balance-totalstage9.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_cnn-encoder_totalstage9_banlance20250505.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_balance_atari26_vit-ln_moe8_totalstage5.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_nlayer8_atari8_vit-ln_moe8_balance-totalstage5.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_banlance_20250501_debug.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_vit-large-encoder-ps8-simnorm_totalstage5_banlance20250501.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_balance_atari8_no-encoder-grad-scale_cnn-encoder_moe8_totalstage5_20250509.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_cnn-encoder_totalstage9_balance20250505.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_balance_20250501_debug.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_vit-large-encoder-ps8-simnorm_totalstage5_balance20250501.log
 
     """
 
@@ -392,9 +405,9 @@ if __name__ == "__main__":
 
     global curriculum_stage_num
 
-    # curriculum_stage_num=3
-    curriculum_stage_num=5
-    # curriculum_stage_num=9
+    curriculum_stage_num=3
+    # curriculum_stage_num=5
+    curriculum_stage_num=9
 
 
     action_space_size = 18

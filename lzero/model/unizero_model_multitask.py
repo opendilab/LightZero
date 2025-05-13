@@ -134,7 +134,8 @@ class UniZeroMTModel(nn.Module):
                             heads = 12,
                             mlp_dim = 3072,
                             dropout = 0.1,
-                            emb_dropout = 0.1
+                            emb_dropout = 0.1,
+                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
                         ))
                     elif world_model_cfg.task_num > 8: 
                         # vit base
@@ -148,7 +149,9 @@ class UniZeroMTModel(nn.Module):
                             heads = 12,
                             mlp_dim = 3072,
                             dropout = 0.1,
-                            emb_dropout = 0.1
+                            emb_dropout = 0.1,
+                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+
                         ))
                         # # vit large # TODO======
                         # self.representation_network.append(ViT(

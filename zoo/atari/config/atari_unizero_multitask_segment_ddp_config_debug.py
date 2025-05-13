@@ -137,6 +137,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     env_num=8,
                     task_num=len(env_id_list),
 
+                    # encoder_type='vit',
+                    encoder_type='resnet',
+
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,

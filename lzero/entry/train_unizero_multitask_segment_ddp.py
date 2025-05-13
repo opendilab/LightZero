@@ -28,8 +28,8 @@ import concurrent.futures
 
 
 global BENCHMARK_NAME
-# BENCHMARK_NAME = "atari"
-BENCHMARK_NAME = "dmc" # TODO
+BENCHMARK_NAME = "atari"
+# BENCHMARK_NAME = "dmc" # TODO
 if BENCHMARK_NAME == "atari":
     RANDOM_SCORES = np.array([
         227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
@@ -555,10 +555,9 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            # if learner.train_iter > 0 and learner.train_iter % cfg.policy.eval_freq == 0 :
-
-            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
@@ -636,10 +635,8 @@ def train_unizero_multitask_segment_ddp(
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
-
-        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
-        # if learner.train_iter > 0 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
         
             # 计算任务权重
             try:

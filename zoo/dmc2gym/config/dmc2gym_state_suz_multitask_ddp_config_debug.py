@@ -156,7 +156,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
             # eval_freq=int(4e3),
-            eval_freq=int(2e4),
+            eval_freq=int(1e4),
             grad_clip_value=5,
             learning_rate=1e-4,
             discount_factor=0.99,

@@ -84,7 +84,7 @@ class Transformer(nn.Module):
         return self.norm(x)
 
 class ViT(nn.Module):
-    def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0.):
+    def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0., final_norm_option_in_encoder='SimNorm'):
         super().__init__()
         image_height, image_width = pair(image_size)
         patch_height, patch_width = pair(patch_size)
@@ -115,7 +115,15 @@ class ViT(nn.Module):
         self.last_linear = nn.Linear(dim, num_classes)
 
         group_size = 8
-        self.final_norm = SimNorm(simnorm_dim=group_size)
+
+        # 最后归一化层，根据 final_norm_option_in_encoder 进行选择
+        if final_norm_option_in_encoder == 'LayerNorm':
+            self.final_norm = nn.LayerNorm(num_classes, eps=1e-5)
+        elif final_norm_option_in_encoder == 'SimNorm':
+            self.final_norm = SimNorm(simnorm_dim=group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {final_norm_option_in_encoder}")
+
 
 
     def forward(self, img):
@@ -136,7 +144,7 @@ class ViT(nn.Module):
         # x = self.mlp_head(x)
         x = self.last_linear(x)
 
-        # x = self.final_norm(x)
+        x = self.final_norm(x)
 
         return x
         # return self.mlp_head(x)
