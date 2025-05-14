@@ -64,8 +64,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         policy=dict(
             multi_gpu=True,  # Very important for ddp
             only_use_moco_stats=False,
-            use_moco=False,  # ==============TODO==============
-            # use_moco=True,  # ==============TODO==============
+            # use_moco=False,  # ==============TODO==============
+            use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
@@ -97,8 +97,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # share_head=True, # TODO
                     share_head=False, # TODO
 
-                    analysis_dormant_ratio_weight_rank=True, 
-                    # analysis_dormant_ratio_weight_rank=False, # TODO
+                    # analysis_dormant_ratio_weight_rank=True, 
+                    analysis_dormant_ratio_weight_rank=False, # TODO
                     # analysis_dormant_ratio_interval=100,
                     analysis_dormant_ratio_interval=1000,
                     # analysis_dormant_ratio_interval=20,
@@ -122,7 +122,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=12,
                     # num_heads=24,
 
-                    num_layers=8,
+                    num_layers=4, # ==============TODO==============
+                    # num_layers=8,
 
                     # num_layers=12, # todo
                     num_heads=24,
@@ -135,8 +136,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
-                    encoder_type='vit',
-                    # encoder_type='resnet',
+                    # encoder_type='vit',
+                    encoder_type='resnet',
 
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -181,8 +182,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            # eval_freq=int(1e4), # TODO: 
-            eval_freq=int(2e4),
+            eval_freq=int(1e4), # TODO: 
+            # eval_freq=int(2e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -198,9 +199,9 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     configs = []
     # ===== only for debug =====
     # ========= TODO: global BENCHMARK_NAME =========
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_orig_vit-ln_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_orig_vit-ln_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_orig-ln_moco_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_orig-ln_moco_tran-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250508/atari_{len(env_id_list)}games_orig_simnorm_tran-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
@@ -254,7 +255,10 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/20250509/uz_mt_atari8_orig-ln_moco_nlayer4.log
+
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/20250509/uz_mt_atari8_orig_vit-ln.log
+
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari8_orig-simnorm.log
 
 
@@ -355,6 +359,6 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name= "atari" )
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
