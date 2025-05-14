@@ -190,7 +190,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
             # eval_freq=int(1e4),
-            eval_freq=int(1.5e4),
+            eval_freq=int(1e4),
             # eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -208,7 +208,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # ===== only for debug =====
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -404,11 +404,10 @@ if __name__ == "__main__":
     ]
 
     global curriculum_stage_num
-
+    # TODO ==============
     curriculum_stage_num=3
-    # curriculum_stage_num=5
-    curriculum_stage_num=9
-
+    curriculum_stage_num=5
+    # curriculum_stage_num=9
 
     action_space_size = 18
     collector_env_num = 8
@@ -461,6 +460,6 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="atari")
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks

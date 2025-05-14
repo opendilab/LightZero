@@ -205,7 +205,7 @@ def generate_configs(env_id_list: List[str],
     configs = []
     # ========= TODO: global BENCHMARK_NAME =========
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250509/dmc_{len(env_id_list)}tasks_frameskip8_balance-stage-total-{curriculum_stage_num}_moe8_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250514/dmc_{len(env_id_list)}tasks_frameskip8_balance-stage-total-{curriculum_stage_num}_moe8_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -269,8 +269,6 @@ if __name__ == "__main__":
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-    global BENCHMARK_NAME
-    BENCHMARK_NAME='dmc'
     
     global curriculum_stage_num
 
@@ -303,9 +301,9 @@ if __name__ == "__main__":
     ]
 
     target_return_dict = {
-        'acrobot-swingup': 500,
-        'cartpole-balance':950,
-        'cartpole-balance_sparse':950,
+        'acrobot-swingup': 500, # 0
+        'cartpole-balance':950, # 1
+        'cartpole-balance_sparse':950, # 2
         'cartpole-swingup': 800, # 3
         'cartpole-swingup_sparse': 750, # 4
         'cheetah-run': 650, # 5
@@ -405,6 +403,6 @@ if __name__ == "__main__":
     )
 
     with DDPContext():
-        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
         # 如果只想训练部分任务，可以修改 configs，例如:
         # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)

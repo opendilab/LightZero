@@ -28,8 +28,8 @@ import concurrent.futures
 
 
 global BENCHMARK_NAME
-BENCHMARK_NAME = "atari"
-# BENCHMARK_NAME = "dmc" # TODO
+# BENCHMARK_NAME = "atari"
+BENCHMARK_NAME = "dmc" # TODO
 if BENCHMARK_NAME == "atari":
     RANDOM_SCORES = np.array([
         227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,

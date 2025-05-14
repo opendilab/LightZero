@@ -27,72 +27,6 @@ from lzero.model.unizero_world_models.transformer import set_curriculum_stage_fo
 import numpy as np                    # 计算均值
 from collections import defaultdict   # 保存所有任务最近一次评估分数
 
-# ====== UniZero-MT 需要用到的基准分数（与 26 个 Atari100k 任务 id 一一对应）======
-# 原始的 RANDOM_SCORES 和 HUMAN_SCORES
-
-
-global BENCHMARK_NAME
-BENCHMARK_NAME = "atari"
-# BENCHMARK_NAME = "dmc" # TODO
-if BENCHMARK_NAME == "atari":
-    RANDOM_SCORES = np.array([
-        227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
-        152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
-        -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
-    ])
-    HUMAN_SCORES = np.array([
-        7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
-        1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
-        14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
-    ])
-elif BENCHMARK_NAME == "dmc":
-    RANDOM_SCORES = np.array([0]*26)
-    HUMAN_SCORES = np.array([1000]*26)
-
-# 新顺序对应的原始索引列表
-# 新顺序： [Pong, MsPacman, Seaquest, Boxing, Alien, ChopperCommand, Hero, RoadRunner,
-#            Amidar, Assault, Asterix, BankHeist, BattleZone, CrazyClimber, DemonAttack,
-#            Freeway, Frostbite, Gopher, Jamesbond, Kangaroo, Krull, KungFuMaster,
-#            PrivateEye, UpNDown, Qbert, Breakout]
-# 映射为原始数组中的索引（注意：索引均从0开始）
-new_order = [
-    20,  # Pong
-    19,  # MsPacman
-    24,  # Seaquest
-    6,   # Boxing
-    0,   # Alien
-    8,   # ChopperCommand
-    14,  # Hero
-    23,  # RoadRunner
-    1,   # Amidar
-    2,   # Assault
-    3,   # Asterix
-    4,   # BankHeist
-    5,   # BattleZone
-    9,   # CrazyClimber
-    10,  # DemonAttack
-    11,  # Freeway
-    12,  # Frostbite
-    13,  # Gopher
-    15,  # Jamesbond
-    16,  # Kangaroo
-    17,  # Krull
-    18,  # KungFuMaster
-    21,  # PrivateEye
-    25,  # UpNDown
-    22,  # Qbert
-    7    # Breakout
-]
-
-# 根据 new_order 生成新的数组
-new_RANDOM_SCORES = RANDOM_SCORES[new_order]
-new_HUMAN_SCORES = HUMAN_SCORES[new_order]
-
-# 查看重排后的结果
-print("重排后的 RANDOM_SCORES:")
-print(new_RANDOM_SCORES)
-print("\n重排后的 HUMAN_SCORES:")
-print(new_HUMAN_SCORES)
 
 # 保存最近一次评估回报：{task_id: eval_episode_return_mean}
 from collections import defaultdict
@@ -354,6 +288,7 @@ def train_unizero_multitask_balance_segment_ddp(
         model_path: Optional[str] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
+        benchmark_name: str = "atari"    
 ) -> 'Policy':
     """
     Overview:
@@ -378,6 +313,73 @@ def train_unizero_multitask_balance_segment_ddp(
     Returns:
         - policy (:obj:`Policy`): 收敛的策略。
     """
+
+    # ---------------------------------------------------------------
+    # ====== UniZero-MT 需要用到的基准分数（与 26 个 Atari100k 任务 id 一一对应）======
+    #   原始的 RANDOM_SCORES 和 HUMAN_SCORES
+    if benchmark_name == "atari":
+        RANDOM_SCORES = np.array([
+            227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
+            152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
+            -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
+        ])
+        HUMAN_SCORES = np.array([
+            7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
+            1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
+            14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
+        ])
+    elif benchmark_name == "dmc":
+        # RANDOM_SCORES = np.array([0]*26)
+        # HUMAN_SCORES = np.array([1000]*26)
+        RANDOM_SCORES = np.zeros(26)
+        HUMAN_SCORES  = np.ones(26) * 1000
+    else:
+        raise ValueError(f"Unsupported BENCHMARK_NAME: {BENCHMARK_NAME}")
+
+    # 新顺序对应的原始索引列表
+    # 新顺序： [Pong, MsPacman, Seaquest, Boxing, Alien, ChopperCommand, Hero, RoadRunner,
+    #            Amidar, Assault, Asterix, BankHeist, BattleZone, CrazyClimber, DemonAttack,
+    #            Freeway, Frostbite, Gopher, Jamesbond, Kangaroo, Krull, KungFuMaster,
+    #            PrivateEye, UpNDown, Qbert, Breakout]
+    # 映射为原始数组中的索引（注意：索引均从0开始）
+    new_order = [
+        20,  # Pong
+        19,  # MsPacman
+        24,  # Seaquest
+        6,   # Boxing
+        0,   # Alien
+        8,   # ChopperCommand
+        14,  # Hero
+        23,  # RoadRunner
+        1,   # Amidar
+        2,   # Assault
+        3,   # Asterix
+        4,   # BankHeist
+        5,   # BattleZone
+        9,   # CrazyClimber
+        10,  # DemonAttack
+        11,  # Freeway
+        12,  # Frostbite
+        13,  # Gopher
+        15,  # Jamesbond
+        16,  # Kangaroo
+        17,  # Krull
+        18,  # KungFuMaster
+        21,  # PrivateEye
+        25,  # UpNDown
+        22,  # Qbert
+        7    # Breakout
+    ]
+    # 根据 new_order 生成新的数组
+    new_RANDOM_SCORES = RANDOM_SCORES[new_order]
+    new_HUMAN_SCORES = HUMAN_SCORES[new_order]
+    # 查看重排后的结果
+    print("重排后的 RANDOM_SCORES:")
+    print(new_RANDOM_SCORES)
+    print("\n重排后的 HUMAN_SCORES:")
+    print(new_HUMAN_SCORES)
+    # ---------------------------------------------------------------
+
     # 初始化温度调度器
     initial_temperature = 10.0
     final_temperature = 1.0
@@ -552,7 +554,8 @@ def train_unizero_multitask_balance_segment_ddp(
             # TODO: ============
             # cfg.policy.target_return = 10
             #  ==================== 如果任务已解决，则不参与后续评估和采集 TODO: ddp ====================
-            if task_id in solved_task_pool:
+            # if task_id in solved_task_pool:
+            if cfg.policy.task_id in solved_task_pool:
                 continue
 
             # 记录缓冲区内存使用情况
@@ -601,8 +604,10 @@ def train_unizero_multitask_balance_segment_ddp(
 
                         # 如果达到目标奖励，将任务移入 solved_task_pool
                         if eval_mean_reward >= cfg.policy.target_return:
-                            print(f"任务 {task_id} 达到了目标奖励 {cfg.policy.target_return}, 移入 solved_task_pool.")
-                            solved_task_pool.add(task_id)
+                            cur_task_id = cfg.policy.task_id
+                            print(f"任务 {cur_task_id} 达到了目标奖励 {cfg.policy.target_return}, 移入 solved_task_pool.")
+                            solved_task_pool.add(cur_task_id)
+
 
                     except Exception as e:
                         print(f"提取评估奖励时发生错误: {e}")
