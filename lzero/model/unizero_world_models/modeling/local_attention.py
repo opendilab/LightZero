@@ -136,32 +136,56 @@ class LocalAttention(Attention):
         y = rearrange(y, 'b h t d -> b t (h d)')
         return self.resid_drop(self.proj(y))
 
-
     @torch.no_grad()
-    def get_attention_map(self,
-                          x: torch.Tensor,
-                          kv_cache: Optional[KeysValues] = None,
-                          valid_ctx_lengths: Optional[torch.Tensor] = None
-                          ) -> torch.Tensor:
-        B, T, C = x.shape
+    def get_attention_map(
+            self,
+            x: torch.Tensor,
+            kv_cache: Optional[KeysValues] = None,
+            valid_context_lengths: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        """
+        Compute the attention map for the input sequence (B, T, C), reusing an existing kv_cache
+        only to determine how much past context to mask, without mutating it.
+        Returns attn weights of shape (B, nh, T, L+T).
+        """
+        B, T, C = x.size()
+        device = x.device
+
+        # 1) project Q and fresh K
+        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+        k_fresh = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+
         if kv_cache is not None:
-            b, nh, L, c = kv_cache.shape
-            kv_cache.update(*[t.view(B, nh, T, C // nh).transpose(1, 2)
-                              for t in (self.query(x), self.key(x), self.value(x))][:2])
-            k, v = kv_cache.get()
+            k_old, _ = kv_cache.get()  # shape (B, nh, L, head_dim)
+            k = torch.cat([k_old, k_fresh], dim=2)  # (B, nh, L+T, head_dim)
+            L = k_old.shape[2]
         else:
+            k = k_fresh
             L = 0
 
-        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-        k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+        total_len = L + T
 
-        # raw scores
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        # 4) raw scores
+        scores = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))  # (B, nh, T, total_len)
 
-        # local mask
-        mask = self.mask[L:L + T, :L + T]
-        mask = mask.unsqueeze(0).unsqueeze(1).expand(B, self.num_heads, T, L + T).to(att.device)
-        att = att.masked_fill(~mask, float('-inf'))
-        att = F.softmax(att, dim=-1)
+        # 5) build mask exactly as in forward
+        if valid_context_lengths is not None:
+            mask_bt = torch.zeros(B, T, total_len, device=device, dtype=torch.bool)
+            for i in range(B):
+                valid = int(valid_context_lengths[i].item())
+                stale = L - valid
+                sub = self.mask[L:L + T, :L + T].clone()  # (T, total_len)
+                if stale > 0:
+                    sub[:, :stale] = False
+                mask_bt[i] = sub
+            mask = mask_bt.unsqueeze(1).expand(-1, self.num_heads, -1, -1)  # (B, nh, T, total_len)
+        else:
+            mask = self.mask[L:L + T, :L + T]  # (T, total_len)
+            mask = mask.unsqueeze(0).unsqueeze(1)  # (1,1, T, total_len)
+            mask = mask.expand(B, self.num_heads, T, total_len)
 
-        return att
+        # 6) apply mask & softmax
+        scores = scores.masked_fill(~mask, float('-inf'))
+        attn = F.softmax(scores, dim=-1)
+
+        return attn

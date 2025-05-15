@@ -16,6 +16,7 @@ from .tokenizer import Tokenizer
 from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
 from lzero.model.unizero_world_models.modeling.adaptive_attention import AdaptiveSpanAttention
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
+from .attention_map import visualize_attention_maps
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -260,6 +261,7 @@ class WorldModel(nn.Module):
         self.num_layers = self.config.num_layers
         self.obs_per_embdding_dim = self.config.embed_dim
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
+        self.attn_plotted = False
 
     def _initialize_patterns(self) -> None:
         """Initialize patterns for block masks."""
@@ -1269,6 +1271,21 @@ class WorldModel(nn.Module):
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
+        # visualize attention maps
+        if not self.attn_plotted:
+            visualize_attention_maps(
+                model=self.transformer,
+                input_embeddings=obs_embeddings,  # (B, T, C)
+                kv_cache=None,  # full-context
+                valid_context_lengths=None,
+                suffix='compute_loss_initial_attention',
+                nhead_each_row=4
+            )
+
+            # Only plot once
+            self.attn_plotted = True
+
+
         # ========= for visual analysis =========
         # Uncomment the lines below for visual analysis in Pong
         # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
@@ -1525,6 +1542,14 @@ class WorldModel(nn.Module):
         reg_loss = self.config.adaptive_span_regularization * span_reg
         discounted_loss_policy = discounted_loss_policy + reg_loss
 
+        # log span
+        span_metrics = {}
+        for ℓ, block in enumerate(self.transformer.blocks):
+            attn = block.attn
+            if isinstance(attn, AdaptiveSpanAttention):
+                spans = F.softplus(attn.span_p).detach()  # tensor (nh,)
+                span_metrics[f"span_layer_{ℓ}"] = spans.cpu()
+
 
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
@@ -1548,6 +1573,7 @@ class WorldModel(nn.Module):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
+                span_metrics = span_metrics
             )
         else:
             return LossWithIntermediateLosses(
@@ -1568,6 +1594,7 @@ class WorldModel(nn.Module):
                 dormant_ratio_encoder=dormant_ratio_encoder,
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
+                span_metrics = span_metrics
             )
 
     # TODO: test correctness

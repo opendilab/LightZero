@@ -137,41 +137,63 @@ class AdaptiveSpanAttention(Attention):
         return self.resid_drop(self.proj(y))
 
     @torch.no_grad()
-    def get_attention_map(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
-                          valid_context_lengths: Optional[torch.Tensor] = None):
+    def get_attention_map(
+            self,
+            x: torch.Tensor,
+            kv_cache: Optional[KeysValues] = None,
+            valid_context_lengths: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
-        Returns the attention weight maps for visualization.
+        Compute the adaptive-span attention map for the input sequence, reusing kv_cache
+        only to know how much past context to mask—without updating it.
+        Returns attn weights of shape (B, nh, T, total_len).
         """
         B, T, C = x.shape
         device = x.device
 
-        # same projection steps as forward, but only compute scores & mask
+        # 1) project Q and fresh K
         q = self.query(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.key(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
-        if getattr(self.config, 'rotary_emb', False):
-            q, k = apply_rotary_emb(q, k, freqs_cis=None)
+        k_fresh = self.key(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 
+        # 3) read-only cache usage
         if kv_cache is not None:
-            kv_cache.update(k, self.value(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2))
             k, _ = kv_cache.get()
-            L = k.size(-2) - T
+            L = k.shape[2] - T
         else:
+            k = k_fresh
             L = 0
-
         total_len = L + T
+
+        # 4) raw scores
         scores = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
 
-        # build same mask as in forward
-        spans = F.softplus(self.span_p)
-        spans_int = spans.floor().clamp(max=self.max_len).long()
-        query_pos = torch.arange(L, L + T, device=device).unsqueeze(1)
-        key_pos = torch.arange(0, total_len, device=device).unsqueeze(0)
-        distances = (query_pos - key_pos).abs()
-        d_exp = distances.unsqueeze(0).expand(self.num_heads, -1, -1)
-        spans_e = spans_int.unsqueeze(1).unsqueeze(2)
-        head_mask = d_exp <= spans_e
-        mask = head_mask.unsqueeze(0).expand(B, -1, -1, -1)
+        # 5) causal + stale mask
+        causal = self.causal_mask[L:L + T, :L + T]
+        if valid_context_lengths is not None:
+            base = torch.zeros(B, T, total_len, device=device, dtype=torch.bool)
+            for i in range(B):
+                valid = int(valid_context_lengths[i].item())
+                stale = L - valid
+                sub = causal.clone()
+                if stale > 0:
+                    sub[:, :stale] = False
+                base[i] = sub
+            causal_mask = base.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
+        else:
+            causal_mask = causal.unsqueeze(0).unsqueeze(1).expand(B, self.num_heads, T, total_len)
 
-        scores = scores.masked_fill(~mask, float("-inf"))
+        # 6) adaptive-span mask
+        spans = F.softplus(self.span_p).floor().clamp(max=self.max_len).long()
+        qpos = torch.arange(L, L + T, device=device).unsqueeze(1)
+        kpos = torch.arange(0, total_len, device=device).unsqueeze(0)
+        dist = (qpos - kpos).abs()
+        d_exp = dist.unsqueeze(0).expand(self.num_heads, -1, -1)
+        s_exp = spans.unsqueeze(1).unsqueeze(2)
+        adapt_mask = (d_exp <= s_exp).unsqueeze(0).expand(B, -1, -1, -1)
+
+        # 7) combine & softmax
+        final_mask = causal_mask & adapt_mask
+        scores = scores.masked_fill(~final_mask, float('-inf'))
         attn = F.softmax(scores, dim=-1)
+
         return attn
