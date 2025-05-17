@@ -34,15 +34,6 @@ class TransformerConfig:
     # k : attend top-k keys in that cluster for that query
     routing_topk: Optional[int] = None
 
-    # how many extra memory KV slots per cluster
-    routing_num_mem_kv: Optional[int] = 0
-    # decay for centroid updates
-    routing_decay: Optional[float] = 0.999
-    # commitment loss weight for KMeans
-    routing_commitment: Optional[float] = 1e-4
-    # context window size when receives_context=True
-    routing_context_window_size: Optional[int] = None
-
     # Adaptive Hybrid Params
     init_adaptive_span: Optional[float] = 64.0
     max_adaptive_span: Optional[int] = None
@@ -52,6 +43,15 @@ class TransformerConfig:
     hybrid_local_layers: Optional[int] = 4
     interleave_local_causal : bool = False
 
+    # GAAM Params
+    init_adaptive_mu: Optional[float] = 4.0  # where to initialize each head’s mean offset
+    init_adaptive_sigma: Optional[float] = 1.0  # where to initialize each head’s variance (before softplus)
+    gaam_span_diversity_coeff: float = 0.0 # diversity regularization for GAAM
+
+    # MGK Params
+    num_mixtures: Optional[int] = 2
+    init_mgk_sigma: Optional[float] = 1.0 # intializes sigma before softplus
+    mgk_pi_entropy_coeff : float = 0.0 # entropy regularization for mixture weights
 
     @property
     def max_tokens(self):

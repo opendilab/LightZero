@@ -115,7 +115,6 @@ class CausalAttention(Attention):
 
         return y
 
-
     @torch.no_grad()
     def get_attention_map(
             self,
@@ -135,17 +134,14 @@ class CausalAttention(Attention):
         q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
         k_fresh = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
 
-        # 2) rotary embeddings if used
-        #    forward only applies it to Q/K, not V
+        # 2) rotary embeddings if used (not supported here)
         if getattr(self.config, 'rotary_emb', False):
-            # forward passes freqs_cis, but here we don’t have it—so user must supply it if needed
-            # you can add freqs_cis param if you like
             raise RuntimeError("Rotary embedding case not supported in this helper; pass freqs_cis.")
 
-        # 3) determine L via cache (read‐only)
+        # 3) determine L via cache (read-only)
         if kv_cache is not None:
-            k_old, _ = kv_cache.get()  # shape (B, nh, L, head_dim)
-            k = torch.cat([k_old, k_fresh], dim=2)  # (B, nh, L+T, head_dim)
+            k_old, _ = kv_cache.get()
+            k = torch.cat([k_old, k_fresh], dim=2)
             L = k_old.shape[2]
         else:
             k = k_fresh
@@ -154,27 +150,25 @@ class CausalAttention(Attention):
         total_len = L + T
 
         # 4) raw scores
-        scores = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))  # (B, nh, T, total_len)
+        scores = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
-        # 5) build mask exactly as in forward
+        # 5) build the same float mask and apply it
         if valid_context_lengths is not None:
-            # per‐batch mask tensor
-            mask_bt = torch.zeros(B, T, total_len, device=device, dtype=torch.bool)
+            mask_bt = torch.zeros(B, T, total_len, device=device, dtype=self.mask.dtype)
             for i in range(B):
                 valid = int(valid_context_lengths[i].item())
                 stale = L - valid
-                sub = self.mask[L:L + T, :L + T].clone()  # (T, total_len)
+                sub = self.mask[L:L + T, :L + T].clone()  # float tensor
                 if stale > 0:
-                    sub[:, :stale] = False
+                    sub[:, :stale] = 0.0
                 mask_bt[i] = sub
-            mask = mask_bt.unsqueeze(1).expand(-1, self.num_heads, -1, -1)  # (B, nh, T, total_len)
+            mask = mask_bt.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
         else:
-            mask = self.mask[L:L + T, :L + T]  # (T, total_len)
-            mask = mask.unsqueeze(0).unsqueeze(1)  # (1,1, T, total_len)
-            mask = mask.expand(B, self.num_heads, T, total_len)
+            raw = self.mask[L:L + T, :L + T]  # float tensor
+            mask = raw.unsqueeze(0).unsqueeze(1).expand(B, self.num_heads, T, total_len)
 
-        # 6) apply mask & softmax
-        scores = scores.masked_fill(~mask, float('-inf'))
+        # 6) apply mask and softmax just like forward
+        scores = scores.masked_fill(mask == 0, float('-inf'))
         attn = F.softmax(scores, dim=-1)
 
         return attn

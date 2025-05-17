@@ -19,6 +19,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from ..model.unizero_world_models.modeling.adaptive_attention import AdaptiveSpanAttention
+from ..model.unizero_world_models.modeling.gaam import GAAM
 
 
 @POLICY_REGISTRY.register('unizero')
@@ -455,19 +456,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         weighted_total_loss = losses.loss_total
 
-        span_vals = []
-        for block in self._learn_model.world_model.transformer.blocks:
-            attn = block.attn
-            if isinstance(attn, AdaptiveSpanAttention):
-                span_vals.append(F.softplus(attn.span_p).mean())
-        if span_vals:
-            span_reg = torch.stack(span_vals).mean()
-        else:
-            span_reg = torch.tensor(0.0, device=weighted_total_loss.device)
-
-        reg_loss = self._cfg.model.world_model_cfg.adaptive_span_regularization * span_reg
-        weighted_total_loss = weighted_total_loss + reg_loss
-
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -597,7 +585,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 for head_id, span in enumerate(spans):
                     return_log_dict[f"adaptive_span/layer_{layer_id}/head_{head_id}"] = float(span)
 
+        # Adds learned params for GAAM
+        for layer_id, block in enumerate(self._learn_model.world_model.transformer.blocks):
+            attn = block.attn
+            if isinstance(attn, GAAM):
+                sigmas = F.softplus(attn.sigma_p).detach().cpu().tolist()
+                mus = F.softplus(attn.mu_p_raw).clamp(max=attn.max_len).detach().cpu().tolist()
+                return_log_dict[f"gaam_sigma/layer_{layer_id}"] = sigmas
+                return_log_dict[f"gaam_mu/layer_{layer_id}"] = mus
+
         # Log attention map to wandb
+        self.attn_logged = True # TODO: Remove eventually
         if not self.attn_logged and self.attn_plotted:
             cfg = self._cfg.model.world_model_cfg
             cfg_id = (

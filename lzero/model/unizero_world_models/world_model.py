@@ -11,6 +11,7 @@ from torch.distributions import Categorical, Independent, Normal, TransformedDis
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
 from lzero.model.unizero_world_models.modeling.kv_caching import KeysValues
+from .modeling.gaam import GAAM
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
@@ -1272,6 +1273,7 @@ class WorldModel(nn.Module):
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # visualize attention maps
+        self.attn_plotted = True #TODO: Remove eventually
         if not self.attn_plotted:
             visualize_attention_maps(
                 model=self.transformer,
@@ -1534,6 +1536,7 @@ class WorldModel(nn.Module):
 
         # Adaptive-span regularization
         span_vals = []
+        span_reg = 0.0
         for block in self.transformer.blocks:
             attn = block.attn
             if isinstance(attn, AdaptiveSpanAttention):
@@ -1545,8 +1548,31 @@ class WorldModel(nn.Module):
         else:
             span_reg = torch.tensor(0.0, device=discounted_loss_policy.device)
 
-        reg_loss = self.config.adaptive_span_regularization * span_reg
+        reg_loss = self.config.adaptive_span_regularization * span_reg # O if not used
         discounted_loss_policy = discounted_loss_policy + reg_loss
+
+        # GAAM span diversity regularization
+        if self.config.gaam_span_diversity_coeff > 0:
+            div_reg = 0.0
+            for block in self.transformer.blocks:
+                attn = block.attn
+                if isinstance(attn, GAAM):
+                    sigmas = F.softplus(attn.sigma_p)  # (nh,)
+                    mus = F.softplus(attn.mu_p_raw).clamp(max=attn.max_len)  # (nh,)
+                    H = sigmas.size(0)
+                    for i in range(H):
+                        for j in range(i + 1, H):
+                            s_i, s_j = sigmas[i], sigmas[j]
+                            m_i, m_j = mus[i], mus[j]
+                            # KL[N(m_i,s_i²) || N(m_j,s_j²)]
+                            kl_ij = 0.5 * (
+                                    (s_i ** 2) / (s_j ** 2)
+                                    + ((m_j - m_i) ** 2) / (s_j ** 2)
+                                    - 1
+                                    + 2 * (torch.log(s_j) - torch.log(s_i))
+                            )
+                            div_reg += kl_ij
+            discounted_loss_policy += self.config.gaam_span_diversity_coeff * div_reg
 
         # log span
         span_metrics = {}
@@ -1555,7 +1581,12 @@ class WorldModel(nn.Module):
             if isinstance(attn, AdaptiveSpanAttention):
                 spans = F.softplus(attn.span_p).detach()  # tensor (nh,)
                 span_metrics[f"span_layer_{ℓ}"] = spans.cpu()
-
+            elif isinstance(attn, GAAM):
+                # only log them if the layers are GAAM
+                sigmas = F.softplus(attn.sigma_p).detach().cpu()
+                mus = F.softplus(attn.mu_p_raw).clamp(max=attn.max_len).detach().cpu()
+                span_metrics[f"gaam_sigma_layer_{ℓ}"] = sigmas
+                span_metrics[f"gaam_mu_layer_{ℓ}"] = mus
 
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
