@@ -1,7 +1,7 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-def main(env_id='PongNoFrameskip-v4', seed=0):
+def main(env_id='PongNoFrameskip-v4', seed=0, local_window_size = 4):
     action_space_size = atari_env_action_space_map[env_id]
 
     collector_env_num = 8
@@ -55,7 +55,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     # init_adaptive_span=64.0,
                     # max_adaptive_span=128,
                     adaptive_span_regularization=0,
-                    local_window_size = 8, # must be set
+                    local_window_size = local_window_size, # must be set
                     interleave_local_causal = True,
 
                     # === Routing Transformer Parameters ===
@@ -79,7 +79,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
-            eval_freq=int(5e3),
+            eval_freq=10000,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             use_wandb=True,

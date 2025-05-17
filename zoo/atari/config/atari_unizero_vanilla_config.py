@@ -86,7 +86,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             # train_start_after_envsteps=0, # TODO: only for debug
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
-            eval_freq=int(5e3),
+            eval_freq=10000,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             use_wandb=True,

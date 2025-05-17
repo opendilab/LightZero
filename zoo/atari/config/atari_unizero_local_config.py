@@ -1,7 +1,7 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-def main(env_id='PongNoFrameskip-v4', seed=0):
+def main(env_id='PongNoFrameskip-v4', seed=0, local_window_size = 4):
     action_space_size = atari_env_action_space_map[env_id]
 
     collector_env_num = 8
@@ -51,19 +51,9 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     # Set Hybrid to False
                     aha = False,
                     # Set window size
-                    local_window_size=8,
+                    local_window_size=local_window_size,
                     interleave_local_causal=False,
                     adaptive_span_regularization=0.0,
-
-                    # === Routing Transformer Parameters ===
-                    # routing_num_clusters=4,  # sqrt(20) ≈ 4–5
-                    # routing_update_interval=1,
-                    # routing_topk=32,
-                    # routing_decay=0.999,
-                    # routing_commitment=1e-4,
-                    # routing_num_mem_kv=0,
-                    # use_local_attention=False,
-                    # routing_context_window_size=4,  # optional: match routing window
                 ),
             ),
             model_path=None,
@@ -75,7 +65,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
-            eval_freq=int(5e3),
+            eval_freq=10000,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             use_wandb=True,
@@ -110,5 +100,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some environment.')
     parser.add_argument('--env', type=str, help='The environment to use', default='BoxingNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
+    parser.add_argument('--local_window_size', type=int, help='The local window size', default=4)
     args = parser.parse_args()
-    main(args.env, args.seed)
+    main(args.env, args.seed, args.local_window_size)

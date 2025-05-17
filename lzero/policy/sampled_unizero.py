@@ -2,6 +2,7 @@ import copy
 import logging
 from collections import defaultdict
 from typing import List, Dict, Tuple, Union
+import os
 
 import numpy as np
 import torch
@@ -9,6 +10,7 @@ import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
+from torch.nn import functional as F
 from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
@@ -17,6 +19,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from lzero.entry.utils import initialize_zeros_batch
+from ..model.unizero_world_models.modeling.adaptive_attention import AdaptiveSpanAttention
 
 
 def get_action(roots_sampled_actions, i, action):
@@ -470,7 +473,25 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
         )
 
+        # Attention is plotted in compute_loss
+        if not self.attn_plotted:
+            self.attn_plotted = True
+
         weighted_total_loss = losses.loss_total
+
+        span_vals = []
+        for block in self._learn_model.world_model.transformer.blocks:
+            attn = block.attn
+            if isinstance(attn, AdaptiveSpanAttention):
+                span_vals.append(F.softplus(attn.span_p).mean())
+        if span_vals:
+            span_reg = torch.stack(span_vals).mean()
+        else:
+            span_reg = torch.tensor(0.0, device=weighted_total_loss.device)
+
+        reg_loss = self._cfg.model.world_model_cfg.adaptive_span_regularization * span_reg
+        weighted_total_loss = weighted_total_loss + reg_loss
+
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -607,6 +628,34 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 'target_sampled_actions_min': target_sampled_actions_min,
                 'target_sampled_actions_mean': target_sampled_actions_mean
             })
+
+            # Adds learned spans
+            for layer_id, block in enumerate(self._learn_model.world_model.transformer.blocks):
+                attn = block.attn
+                if isinstance(attn, AdaptiveSpanAttention):
+                    spans = F.softplus(attn.span_p).detach().cpu().tolist()
+                    for head_id, span in enumerate(spans):
+                        return_log_dict[f"adaptive_span/layer_{layer_id}/head_{head_id}"] = float(span)
+
+            # Log attention map to wandb
+            if not self.attn_logged and self.attn_plotted:
+                base_dir = '/home/ddediosallegue/projects/UniZero'
+                suffix = 'compute_loss_initial_attention'
+                # nhead_each_row was 4 in your call above
+                fn = f'{suffix}/attn_maps_4-each-row.png'
+                file_path = os.path.join(base_dir, fn)
+
+                # Creates artifact
+                art = wandb.Artifact(
+                    name="attn_maps_initial_attention",
+                    type="attention-maps",
+                    description="Attention maps (all heads & layers) for the initial compute_loss batch"
+                )
+
+                art.add_file(file_path)
+                wandb.log_artifact(art)
+
+                self._attn_uploaded = True  # Only once
 
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)

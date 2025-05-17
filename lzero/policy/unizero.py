@@ -453,6 +453,24 @@ class UniZeroPolicy(MuZeroPolicy):
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
+        weighted_total_loss = losses.loss_total
+
+        span_vals = []
+        for block in self._learn_model.world_model.transformer.blocks:
+            attn = block.attn
+            if isinstance(attn, AdaptiveSpanAttention):
+                span_vals.append(F.softplus(attn.span_p).mean())
+        if span_vals:
+            span_reg = torch.stack(span_vals).mean()
+        else:
+            span_reg = torch.tensor(0.0, device=weighted_total_loss.device)
+
+        reg_loss = self._cfg.model.world_model_cfg.adaptive_span_regularization * span_reg
+        weighted_total_loss = weighted_total_loss + reg_loss
+
+        for loss_name, loss_value in losses.intermediate_losses.items():
+            self.intermediate_losses[f"{loss_name}"] = loss_value
+
         obs_loss = self.intermediate_losses['loss_obs']
         reward_loss = self.intermediate_losses['loss_rewards']
         policy_loss = self.intermediate_losses['loss_policy']
@@ -575,28 +593,41 @@ class UniZeroPolicy(MuZeroPolicy):
         for layer_id, block in enumerate(self._learn_model.world_model.transformer.blocks):
             attn = block.attn
             if isinstance(attn, AdaptiveSpanAttention):
-                spans = F.softplus(attn.span_p).detach().cpu().tolist()  # one float per head
-                return_log_dict[f"adaptive_span/layer_{layer_id}"] = spans
+                spans = F.softplus(attn.span_p).detach().cpu().tolist()
+                for head_id, span in enumerate(spans):
+                    return_log_dict[f"adaptive_span/layer_{layer_id}/head_{head_id}"] = float(span)
 
         # Log attention map to wandb
         if not self.attn_logged and self.attn_plotted:
+            cfg = self._cfg.model.world_model_cfg
+            cfg_id = (
+                f"{cfg.attention}"
+                f"_L{cfg.num_layers}"
+                f"_H{cfg.num_heads}"
+                f"_E{cfg.embed_dim}"
+                f"_{cfg.tokens_per_block}x{cfg.max_blocks}"
+            )
+
             base_dir = '/home/ddediosallegue/projects/UniZero'
             suffix = 'compute_loss_initial_attention'
-            # nhead_each_row was 4 in your call above
-            fn = f'{suffix}/attn_maps_4-each-row.png'
+            nhead_each_row = 4  # keep this in sync with your plotting call
+
+            # now include cfg_id in the filename
+            fn = f'{suffix}/attn_maps_{cfg_id}_{nhead_each_row}-each-row.png'
             file_path = os.path.join(base_dir, fn)
 
             # Creates artifact
             art = wandb.Artifact(
                 name="attn_maps_initial_attention",
                 type="attention-maps",
-                description="Attention maps (all heads & layers) for the initial compute_loss batch"
+                description=(
+                    "Attention maps (all heads & layers) for the initial "
+                    f"compute_loss batch [{cfg_id}]"
+                )
             )
 
             art.add_file(file_path)
             wandb.log_artifact(art)
-
-            self._attn_uploaded = True # Only once
         
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)

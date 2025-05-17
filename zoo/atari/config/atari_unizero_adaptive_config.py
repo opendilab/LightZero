@@ -1,7 +1,7 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-def main(env_id='PongNoFrameskip-v4', seed=0):
+def main(env_id='PongNoFrameskip-v4', seed=0, init_span = 4):
     action_space_size = atari_env_action_space_map[env_id]
 
     collector_env_num = 8
@@ -56,7 +56,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     hybrid_local_layers= 0,
 
                     # Adaptive span parameters
-                    init_adaptive_span=20.0, # Start with full causal attention
+                    init_adaptive_span=init_span,
                     max_adaptive_span=20.0,
                     adaptive_span_regularization=1e-3,
 
@@ -80,7 +80,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
-            eval_freq=int(5e3),
+            eval_freq=10000,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             use_wandb=True,
@@ -115,5 +115,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some environment.')
     parser.add_argument('--env', type=str, help='The environment to use', default='BoxingNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
+    parser.add_argument('--init_span', type=int, help='The intial adaptive span', default=2)
     args = parser.parse_args()
-    main(args.env, args.seed)
+    main(args.env, args.seed, args.init_span)
