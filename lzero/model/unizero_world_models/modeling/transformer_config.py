@@ -42,6 +42,7 @@ class TransformerConfig:
     gru_gating : Optional[bool] = True
     hybrid_local_layers: Optional[int] = 4
     interleave_local_causal : bool = False
+    adaptive_regularization : Optional[str] = "l1"
 
     # GAAM Params
     init_adaptive_mu: Optional[float] = 4.0  # where to initialize each head’s mean offset

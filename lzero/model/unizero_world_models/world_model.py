@@ -1535,18 +1535,15 @@ class WorldModel(nn.Module):
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
 
         # Adaptive-span regularization
-        span_vals = []
-        span_reg = 0.0
+        span_reg = torch.zeros((), device=discounted_loss_policy.device)
         for block in self.transformer.blocks:
             attn = block.attn
             if isinstance(attn, AdaptiveSpanAttention):
-                # F.softplus yields the continuous span per head; .mean() averages across heads
-                span_vals.append(F.softplus(attn.span_p).mean())
-
-        if span_vals:
-            span_reg = torch.stack(span_vals).mean()
-        else:
-            span_reg = torch.tensor(0.0, device=discounted_loss_policy.device)
+                # sum over all heads in this block
+                if self.config.adaptive_regularization == "l1":
+                    span_reg = span_reg + F.softplus(attn.span_p).sum()
+                elif self.config.adaptive_regularization == "l2":
+                    span_reg = span_reg + (F.softplus(attn.span_p) ** 2).sum()
 
         reg_loss = self.config.adaptive_span_regularization * span_reg # O if not used
         discounted_loss_policy = discounted_loss_policy + reg_loss
