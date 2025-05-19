@@ -591,8 +591,8 @@ class UniZeroPolicy(MuZeroPolicy):
             if isinstance(attn, GAAM):
                 sigmas = F.softplus(attn.sigma_p).detach().cpu().tolist()
                 mus = F.softplus(attn.mu_p_raw).clamp(max=attn.max_len).detach().cpu().tolist()
-                return_log_dict[f"gaam_sigma/layer_{layer_id}"] = sigmas
-                return_log_dict[f"gaam_mu/layer_{layer_id}"] = mus
+                return_log_dict[f"gaam_sigma/layer_{layer_id}"] = wandb.Histogram(sigmas)
+                return_log_dict[f"gaam_mu/layer_{layer_id}"] = wandb.Histogram(mus)
 
         # Log attention map to wandb
         self.attn_logged = True # TODO: Remove eventually
