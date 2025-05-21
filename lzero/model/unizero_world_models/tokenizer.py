@@ -9,6 +9,7 @@ import torch.nn as nn
 from einops import rearrange
 from torch.nn import functional as F
 from typing import Optional, List
+from transformers.modeling_outputs import BaseModelOutput
 
 class LossWithIntermediateLosses:
     def __init__(self, **kwargs):
@@ -35,14 +36,19 @@ class Tokenizer(nn.Module):
     """
     Overview:
         Tokenizer model that encodes and decodes observations.
+        Can operate on visual or textual data, supporting optional LPIPS perceptual loss.
+        It optionally includes a linear projection layer and can be paired with a decoder tokenizer.
     """
-    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False, projection: list = None) -> None:
+    def __init__(self, encoder=None, decoder_network=None, decoder_network_tokenizer=None, with_lpips: bool = False, projection: list = None) -> None:
         """Initialize the Tokenizer.
 
         Arguments:
-            encoder (nn.Module, optional): Encoder network. Defaults to None.
-            decoder_network (nn.Module, optional): Decoder network. Defaults to None.
-            with_lpips (bool, optional): Whether to use LPIPS for perceptual loss. Defaults to False.
+            encoder (nn.Module, optional): Encoder network to transform raw inputs into embeddings.
+            decoder_network (nn.Module, optional): Decoder network used for observation reconstruction or text generation.
+            decoder_network_tokenizer (PreTrainedTokenizer, optional): Tokenizer compatible with the decoder network (e.g., T5 tokenizer).
+            with_lpips (bool, optional): If True, enable perceptual loss computation via LPIPS. Defaults to False.
+            projection (list[int], optional): If provided, defines a linear projection layer from projection[0] → projection[1]. 
+                                              If None, an identity layer is used.
         """
         super().__init__()
         if with_lpips:
@@ -53,18 +59,33 @@ class Tokenizer(nn.Module):
 
         self.encoder = encoder
         self.decoder_network = decoder_network
+        self.decoder_network_tokenizer = decoder_network_tokenizer 
 
         # ---- weight tying ----
-        vocab_size = self.decoder_network.embed_tokens.weight.size(0)
-        self.decoder_network.lm_head = nn.Linear(
-            self.decoder_network.config.d_model, vocab_size, bias=False
-        )
-        self.decoder_network.lm_head.weight = self.decoder_network.embed_tokens.weight
+        # vocab_size = self.decoder_network.embed_tokens.weight.size(0)
+        # self.decoder_network.lm_head = nn.Linear(
+        #     self.decoder_network.config.d_model, vocab_size, bias=False
+        # )
+        # self.decoder_network.lm_head.weight = self.decoder_network.embed_tokens.weight
 
         if projection is None:
             self.projection_layer = nn.Identity()
         else:
             self.projection_layer = nn.Linear(projection[0], projection[1])
+
+
+    def decode_to_plain_text(self, x) -> str:
+        """
+        Decode the input tensor to plain text.
+
+        Arguments:
+            x (torch.Tensor): Input tensor of shape (B, ...).
+
+        Returns:
+            str: Decoded plain text.
+        """
+        # Convert the input tensor to a numpy array and decode it
+        return self.encoder.tokenizer.batch_decode(x, skip_special_tokens=True)
 
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -112,20 +133,16 @@ class Tokenizer(nn.Module):
         """
         return self.decoder_network(embeddings)
 
-    @staticmethod
-    def _shift_right(labels: torch.LongTensor,
-                     pad_token_id: int,
-                     start_token_id: int) -> torch.LongTensor:
-        shifted = labels.new_zeros(labels.shape)
-        shifted[:, 1:] = labels[:, :-1].clone()
-        shifted[:, 0] = start_token_id
-        shifted.masked_fill_(shifted == -100, pad_token_id)
-        return shifted
-
-    def decode_to_language_logits(
-        self, embeddings: torch.Tensor, target_ids: torch.Tensor,
-        pad_token_id: int = 0, decoder_start_token_id: int = 0) -> torch.Tensor:
-
+    def decode_to_reconstruction_outputs(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        """
+        Overview:
+            Decode embeddings and compute LM reconstruction outputs (logits + loss).
+        Arguments:
+            embeddings (torch.Tensor): Input embeddings of shape (B, E), (B, L, E), or (B*T, 1, E).
+            target_ids (torch.Tensor): Ground-truth token IDs of shape (B, L) or (B*T, L).
+        Returns:
+            torch.Tensor: Decoder output including loss, logits, hidden states (if return_dict=True).
+        """
         if embeddings.dim() == 2:
             embeddings = embeddings.unsqueeze(1)
         elif embeddings.dim() == 3:
@@ -133,70 +150,46 @@ class Tokenizer(nn.Module):
             embeddings = embeddings.reshape(B*T,1,E)
             target_ids = target_ids.reshape(B*T, -1)
 
+        text_list = self.decode_to_plain_text(target_ids)
+        t5_target_ids = self.decoder_network_tokenizer(text_list, 
+                                                       padding="max_length",
+                                                       truncation=True, 
+                                                       max_length=512, 
+                                                       return_tensors="pt")
+        labels = t5_target_ids.input_ids
+        labels[labels == self.decoder_network_tokenizer.pad_token_id] = -100 
+
+
         embeddings = self.projection_layer(embeddings)     # (B',1,E)
-
-        # shift-right
-        decoder_input_ids = self._shift_right(
-            target_ids, pad_token_id, decoder_start_token_id
+        encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
+        encoder_attention_mask = torch.ones(
+            embeddings.size(0), embeddings.size(1),
+            device=embeddings.device, dtype=torch.long
         )
-        dec_attn_mask = decoder_input_ids.ne(pad_token_id)
-        enc_attn_mask = torch.ones(embeddings.size(0),1,
-                                   dtype=torch.long, device=embeddings.device)
 
-        outputs = self.decoder_network(
-            input_ids = decoder_input_ids,
-            attention_mask = dec_attn_mask,
-            encoder_hidden_states = embeddings,
-            encoder_attention_mask = enc_attn_mask,
-        )
-        logits = self.decoder_network.lm_head(outputs.last_hidden_state)
-        return logits
+        labels = labels.to(embeddings.device)
 
-    # for Train
-    # def decode_to_language_logits(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
-    #     # embeddings: [B, T, H] -> [B * T, 1, H]
-    #     if embeddings.dim() == 3:
-    #         embeddings = embeddings.reshape(embeddings.shape[0] * embeddings.shape[1], 1, -1)
-    #     elif embeddings.dim() == 2:
-    #         embeddings = embeddings.unsqueeze(1)
-    #     # target_ids: [B, T, L] -> [B * T, L]
-    #     target_ids = target_ids.reshape(target_ids.shape[0] * target_ids.shape[1], -1)
-    #     # For each decision transformer token (encoding for one observation),
-    #     # the embedding serves as the initial hidden state for t5 to decode.
-    #     # Hence, the sequence dimension can be paralleled, i.e. should be merged to the batch dimension.
-    #     embeddings = self.projection_layer(embeddings)
-    #     outputs = self.decoder_network(
-    #         input_ids=target_ids,
-    #         encoder_hidden_states=embeddings,
-    #     )
-    #     logits = self.decoder_network.lm_head(outputs.last_hidden_state)
-    #     return logits
+        outputs = self.decoder_network(encoder_outputs=encoder_outputs_tuple,
+                                       attention_mask=encoder_attention_mask,
+                                       labels=labels,
+                                       return_dict=True)
+        
+        return outputs
     
-    def decode_to_language_logits_for_inference(
+    def decode_to_plain_text_for_decoder(
             self, embeddings: torch.Tensor,
-            max_length: int = 512,
-            pad_token_id: int = 0,
-            decoder_start_token_id: int = 0,
-            eos_token_id: int = 1,
-            sampling: bool = False,         # 是否采用采样解码（True 为采样解码，False 为贪心解码）
-            top_k: Optional[int] = None,      # 采样时采用 top-k 过滤（可选）
-            top_p: Optional[float] = None     # 采样时采用 nucleus 过滤（可选）
+            max_length: int = 512
         ) -> List[List[int]]:
         """
-        将给定的编码器或嵌入表示 embeddings 翻译成 token 序列。
-        
-        参数:
-            embeddings (torch.Tensor): 编码器或其他隐层表示，形状可能为 (B, E) 或 (B, L, E)。
-            max_length (int): 最大解码步数。
-            pad_token_id (int): 当序列生成结束后，用此 token 补全剩下的位置。
-            decoder_start_token_id (int): 解码时的起始 token id。
-            eos_token_id (int): 序列结束 token 的 id。
-            sampling (bool): 是否采用采样解码；默认 False，采用贪心解码。
-            top_k (Optional[int]): 使用 top-k 采样时的 k 值，如果提供则会对 logits 进行 top-k 过滤。
-            top_p (Optional[float]): 使用 nucleus（top-p）采样时的 p 值，如果提供则会对 logits 进行 top-p 过滤。
-        
-        返回:
-            List[List[int]]: 生成的 token 序列，每个子列表代表一个 batch 内序列 (剔除起始 token)。
+        Overview:
+            Decode embeddings into plain text using decoder's generate method.
+        Arguments:
+            embeddings (torch.Tensor): Latent embeddings, shape (B, E) or (B, L, E).
+            max_length (int, optional): Max token length for generation. Defaults to 512.
+        Returns:
+            List[List[int]]: List of decoded strings, one per input in batch.
+        Raises:
+            AssertionError: If the number of generated outputs does not match input batch size.
         """
         
         # 设置 decoder_network 与 projection_layer 为评估模式，关闭 dropout 等训练行为
@@ -217,141 +210,29 @@ class Tokenizer(nn.Module):
         embeddings = embeddings.to(device)
 
         with torch.no_grad():  # 在推理过程中关闭梯度计算，节约显存和计算
-            # 如果 embeddings 是二维 (B, E)，则在第2维扩展，变成 (B, 1, E)
+
             if embeddings.dim() == 2:
                 embeddings = embeddings.unsqueeze(1)
 
-            # 通过 projection_layer 投影得到新的 embeddings 表示，预期输出形状 (B, 1, E)
             embeddings = self.projection_layer(embeddings)
-            B = embeddings.size(0)  # 获取 batch 大小
 
-            # 初始化生成序列，每个序列第一个 token 为 decoder_start_token_id
-            generated = torch.full(
-                (B, 1), decoder_start_token_id, dtype=torch.long, device=device
+            encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
+            encoder_attention_mask = torch.ones(
+                embeddings.size(0), embeddings.size(1),
+                device=device, dtype=torch.long
             )
-            # 用于标记每个序列是否已经生成 EOS token 的标志向量
-            is_finished = torch.zeros(B, dtype=torch.bool, device=device)
-            past_key_values = None  # 初始化过去状态，用于加速自回归解码
-
-            # 开始逐步生成 token，最大不超过 max_length 步
-            for _ in range(max_length):
-                # 调用 decoder_network，只输入生成序列的最后一个 token，
-                # 同时将 encoder 隐层表示以及 past_key_values 传入，并开启缓存
-                outputs = self.decoder_network(
-                    input_ids=generated[:, -1:],  # 仅传入最后一个 token
-                    encoder_hidden_states=embeddings,
-                    past_key_values=past_key_values,
-                    use_cache=True,
-                )
-
-                # 获取 decoder 输出的最后隐藏状态
-                hidden_states = outputs.last_hidden_state
-                # 通过语言模型头计算 logits（注意：这里假设 decoder_network 有 lm_head 属性）
-                logits = self.decoder_network.lm_head(hidden_states)
-                # 取出当前时间步的 logits，形状为 (B, vocab_size)
-                next_token_logits = logits[:, -1, :]
-
-                # 判断是否采用采样解码
-                if sampling:
-                    # 若配置了 top_k 或 top_p，则可以基于 logits 做过滤再采样；
-                    # 这里简单示范使用 softmax 后的采样
-                    probs = torch.softmax(next_token_logits, dim=-1)
-                    next_token = torch.multinomial(probs, num_samples=1)
-                else:
-                    # 贪心解码，直接选择概率最高的 token
-                    next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-
-                # 更新 past_key_values，供下一步解码时使用
-                past_key_values = outputs.past_key_values
-
-                # 对于已经结束生成（即之前生成了 EOS）的序列，设置当前 token 为 pad_token_id
-                next_token = torch.where(
-                    is_finished.unsqueeze(-1),
-                    torch.full_like(next_token, pad_token_id),
-                    next_token
-                )
-                
-                # 将新生成的 token 拼接到当前生成序列上
-                generated = torch.cat([generated, next_token], dim=1)
-                
-                # 更新 is_finished 标志：若当前 token 为 eos_token_id，则标记该序列结束
-                is_finished |= next_token.squeeze(-1).eq(eos_token_id)
-                
-                # 如果所有序列均已生成 EOS，则提前退出循环
-                if is_finished.all():
-                    break
-
+            generated_t5_ids = self.decoder_network.generate(
+                encoder_outputs=encoder_outputs_tuple,
+                attention_mask=encoder_attention_mask,
+                max_length=max_length
+            )
+            generated_text = self.decoder_network_tokenizer.batch_decode(
+                generated_t5_ids, skip_special_tokens=True)
+            
             # 返回结果时去掉起始的 decoder_start_token_id，并将结果转换为 CPU 上的 list 类型
-            return generated[:, 1:].cpu().tolist()
-
-    # @torch.no_grad() 
-    # def decode_to_language_logits_for_inference(self, embeddings: torch.Tensor, max_length: int = 512, pad_token_id: int = 0, eos_token_id: int = 102) -> torch.Tensor:
-    #     self.decoder_network.eval()
-    #     self.projection_layer.eval()
-        
-    #     if not isinstance(embeddings, torch.Tensor):
-    #         embeddings = torch.tensor(embeddings, dtype=torch.float32) 
-
-    #     embeddings = embeddings.to(self.decoder_network.device)
-
-    #     if embeddings.dim() == 3:
-    #         embeddings = embeddings.reshape(embeddings.shape[0] * embeddings.shape[1], 1, -1)
-    #     elif embeddings.dim() == 2:
-    #         embeddings = embeddings.unsqueeze(1)
-
-    #     embeddings = self.projection_layer(embeddings)
-
-    #     batch_size = embeddings.shape[0]
-        
-    #     device = embeddings.device
-    #     current_input_ids = torch.full(
-    #         (batch_size, 1),
-    #         pad_token_id,
-    #         dtype=torch.long,
-    #         device=device
-    #     )
-
-    #     # generated_ids = [1, 2, 3, 4]
-    #     generated_ids = [current_input_ids]
-    #     past_key_values = None
-
-    #     is_finished = torch.zeros(batch_size, dtype=torch.bool, device=device)
-
-    #     for step in range(max_length):
-    #         outputs = self.decoder_network(
-    #             input_ids=current_input_ids,
-    #             encoder_hidden_states=embeddings,
-    #             past_key_values=past_key_values,
-    #             use_cache=True,
-    #             return_dict=True
-    #         )
-
-    #         hidden_states = outputs.last_hidden_state      
-    #         logits = self.decoder_network.lm_head(hidden_states)  
-
-    #         next_token_logits = logits[:, -1, :]            
-    #         next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True) 
-
-    #         past_key_values = outputs.past_key_values
-
-    #         next_token = torch.where(is_finished.unsqueeze(-1),
-    #                                  torch.full_like(next_token, pad_token_id),
-    #                                  next_token)
-    #         generated_ids.append(next_token)
-
-    #         just_finished = ~is_finished & (next_token.squeeze(-1) == eos_token_id)
-    #         is_finished |= just_finished
-    #         current_input_ids = next_token
-
-    #         if is_finished.all():
-    #             break
-
-    #     all_generated_ids = torch.cat(generated_ids, dim=1)
-
-    #     return all_generated_ids.cpu().tolist()
-    
-    # def decode_to_language_logits_for_inference(self, embeddings: torch.Tensor, max_length: int = 512, pad_token_id: int = 0, eos_token_id: int = 102) -> torch.Tensor:
-    #     return [0]
+            assert len(generated_text) == 1, f"Expected 1 generated text, got {len(generated_text)}"
+            
+            return generated_text[0]
 
     @staticmethod
     def reconstruction_loss(original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
@@ -370,18 +251,6 @@ class Tokenizer(nn.Module):
         else:
             # For Atari image environment
             loss = torch.abs(original_images - reconstructed_images).mean()  # L1 loss
-        return loss
-
-    def lm_reconstruction_loss(self, labels: torch.Tensor, logits: torch.Tensor, ignore_index: int) -> torch.Tensor:
-        total_dims = 1
-        for i in labels.shape:
-            total_dims *= i
-        logits = logits.reshape(total_dims, -1)
-        labels = labels.reshape(total_dims).long()
-        if ignore_index is None:
-            loss = F.cross_entropy(logits, labels)
-        else:
-            loss = F.cross_entropy(logits, labels, ignore_index=ignore_index)
         return loss
 
     def perceptual_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:

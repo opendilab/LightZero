@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
-from transformers import T5ForConditionalGeneration
+from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
@@ -100,16 +100,18 @@ class UniZeroModel(nn.Module):
             # print(self.representation_network.model.encoder.layer[0].attention.output.LayerNorm.weight)
 
             if self.rank == 0:
-                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small").decoder
+                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
+                self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
             if self.world_size > 1:
                 # Wait until rank 0 finishes loading the tokenizer
                 torch.distributed.barrier()
             if self.rank != 0:
-                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small").decoder
+                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
+                self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
 
-            self.decoder_network.lm_head = nn.Linear(512, 30522)
+            # self.decoder_network.lm_head = nn.Linear(512, 30522)
             projection = [self.representation_network.pretrained_model.config.hidden_size, self.decoder_network.config.d_model]
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, with_lpips=False, projection=projection)
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, with_lpips=False, projection=projection)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)

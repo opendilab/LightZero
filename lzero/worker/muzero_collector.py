@@ -450,7 +450,7 @@ class MuZeroCollector(ISerialCollector):
                 # print(f'ready_env_id:{ready_env_id}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
                 
-                pred_next_ids_with_env_id = {k: v['predicted_next_ids'] for k, v in policy_output.items()}
+                pred_next_text_with_env_id = {k: v['predicted_next_text'] for k, v in policy_output.items()}
                     
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -481,7 +481,6 @@ class MuZeroCollector(ISerialCollector):
                 value_dict = {}
                 pred_value_dict = {}
                 timestep_dict = {}
-                pred_next_ids = {}
                 pred_next_text = {}
 
                 if not collect_with_pure_policy:
@@ -501,10 +500,7 @@ class MuZeroCollector(ISerialCollector):
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
                     timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
-
-                    pred_next_ids[env_id] = pred_next_ids_with_env_id.pop(env_id)
-                    pred_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(pred_next_ids[env_id][0], skip_special_tokens=True)
-
+                    pred_next_text[env_id] = pred_next_text_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -546,6 +542,12 @@ class MuZeroCollector(ISerialCollector):
                     groundtrut_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(valid_input_ids, skip_special_tokens=True)
                         
                     text_bleu = compute_bleu(reference=groundtrut_next_text[env_id], prediction=pred_next_text[env_id])
+                    
+                    # 是否输出高bleu的文本比较结果，用来检验decode下一latent的效果
+                    # if text_bleu > 0.85:
+                    #     print('='*30)
+                    #     print(f"pred_text={pred_next_text[env_id]}\ngroundtruth_text={groundtrut_next_text[env_id]}\ntext_bleu={text_bleu:.4f}")
+
                     pred_text.append(pred_next_text[env_id])
                     groundtruth_text.append(groundtrut_next_text[env_id])
                     
@@ -654,7 +656,7 @@ class MuZeroCollector(ISerialCollector):
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
-                        'text_bleu': self._env_info[env_id]['text_bleu']
+                        'text_bleu': self._env_info[env_id]['text_bleu'] / self._env_info[env_id]['step'] # 用来归一化，得到每一步的平均bleu
                     }
                     if not collect_with_pure_policy:
                         info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id]

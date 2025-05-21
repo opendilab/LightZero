@@ -15,7 +15,6 @@ from easydict import EasyDict
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
-from lzero.policy.utils import compute_bleu
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -270,7 +269,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             remain_episode = n_episode
             eps_steps_lst = np.zeros(env_nums)
             
-            text_bleu = []
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Get current ready env obs.
@@ -298,8 +296,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
                     
-                    pred_next_ids_with_env_id = {k: v['predicted_next_ids'] for k, v in policy_output.items()}
-                    
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                     if self.policy_config.sampled_algo:
@@ -326,8 +322,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                     pred_value_dict = {}
                     timestep_dict = {}
                     visit_entropy_dict = {}
-                    pred_next_ids = {}
-                    pred_next_text = {}
 
                     for index, env_id in enumerate(ready_env_id):
                         actions[env_id] = actions_with_env_id.pop(env_id)
@@ -338,16 +332,12 @@ class MuZeroEvaluator(ISerialEvaluator):
                         pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
                         timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
                         visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
-                        
-                        pred_next_ids[env_id] = pred_next_ids_with_env_id.pop(env_id)
-                        pred_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(pred_next_ids[env_id][0], skip_special_tokens=True)
 
                     # ==============================================================
                     # Interact with env.
                     # ==============================================================
                     timesteps = self._env.step(actions)
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
-                    groundtrut_next_text = {}
 
                     for env_id, episode_timestep in timesteps.items():
                         obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
@@ -355,10 +345,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                         obs_input_ids = obs['observation'].long()
                         obs_attn_mask = obs['obs_attn_mask'][0].long()
                         valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
-                        groundtrut_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(valid_input_ids, skip_special_tokens=True)
-                        
-                        text_bleu.append(compute_bleu(reference=groundtrut_next_text[env_id],
-                                                    prediction=pred_next_text[env_id]))
 
                         eps_steps_lst[env_id] += 1
                         if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
@@ -458,8 +444,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 'reward_mean': np.mean(episode_return),
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
-                'reward_min': np.min(episode_return),
-                'avg_text_bleu': np.mean(text_bleu)
+                'reward_min': np.min(episode_return)
                 # 'each_reward': episode_return,
             }
             episode_info = eval_monitor.get_episode_info()
