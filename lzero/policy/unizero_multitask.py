@@ -17,8 +17,7 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-# sys.path.append('/fs-computility/ai-shen/puyuan/code/LibMTL')
-sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
+# TODO need to install the LibMTL package from the following link: https://github.com/puyuan1996/LibMTL
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
@@ -40,7 +39,6 @@ def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
         except Exception as e:
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
-
 
 
 class WrappedModel:
@@ -581,7 +579,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
             average_target_policy_entropy = target_policy_entropy.mean().item()
 
-
             # Update world model
             intermediate_losses = defaultdict(float)
             losses = self._learn_model.world_model.compute_loss(
@@ -861,6 +858,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # self.task_num_for_current_rank 作为当前rank的base_index
         num_tasks = self.task_num_for_current_rank
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
+        # TODO xiongjyu: 以下代码感觉有问题，如果num_tasks != 1（例如2）, 4个任务的self.task_id分别是0， 1， 2， 3；
+        # ！！！ 那么 self.task_id+task_idx 的结果将是（0， 1， 2， 3， 4， 5），结果很奇怪 ！！！
         if num_tasks is not None:
             for var in task_specific_vars:
                 for task_idx in range(num_tasks):

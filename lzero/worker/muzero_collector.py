@@ -753,7 +753,7 @@ class MuZeroCollector(ISerialCollector):
 
         collected_duration = sum([d['time'] for d in self._episode_info])
         # TODO: for multitask new ddp pipeline
-        # reduce data when enables DDP
+        # 再多任务情况下，只有多个进程处理同一个任务的时候才需要allreduce， 单进程处理1～多任务的时候不需要allreduce
         # if self._world_size > 1:
         #     collected_step = allreduce_data(collected_step, 'sum')
         #     collected_episode = allreduce_data(collected_episode, 'sum')
@@ -774,7 +774,7 @@ class MuZeroCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
-        # TODO: for multitask new ddp pipeline
+        # TODO: for multitask new ddp pipeline，since each process has different tasks to handle, each process needs to output logs
         # if self._rank != 0:
         #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:

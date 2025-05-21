@@ -418,6 +418,7 @@ def train_unizero_multitask_ddp(
     buffer_reanalyze_count = 0
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+    update_per_collect = cfg.policy.update_per_collect
 
     task_complexity_weight = cfg.policy.task_complexity_weight
     use_task_exploitation_weight = cfg.policy.use_task_exploitation_weight
@@ -442,7 +443,6 @@ def train_unizero_multitask_ddp(
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                 zip(cfgs, collectors, evaluators, game_buffers)):
 
-            policy_config = cfg.policy
             # 记录缓冲区内存使用情况
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger, cfg.policy.task_id)
 
@@ -455,11 +455,18 @@ def train_unizero_multitask_ddp(
                 ),
                 'epsilon': 0.0
             }
-            update_per_collect = policy_config.update_per_collect
-            print(f'Rank {rank} 任务_id: {cfg.policy.task_id} 的每次收集数据训练迭代次数: {update_per_collect}')
+
+            if policy_config.eps.eps_greedy_exploration_in_collect:
+                epsilon_greedy_fn = get_epsilon_greedy_fn(
+                    start=policy_config.eps.start,
+                    end=policy_config.eps.end,
+                    decay=policy_config.eps.decay,
+                    type_=policy_config.eps.type
+                )
+                collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
+
             # 判断是否需要进行评估
-            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            if learner.train_iter ==0 or evaluator.should_eval(learner.train_iter): # only for debug
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
                 # =========TODO=========

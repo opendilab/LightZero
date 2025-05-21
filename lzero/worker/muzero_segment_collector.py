@@ -59,6 +59,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             - exp_name (:obj:`str`): Name of the experiment, used for logging and saving purposes.
             - instance_name (:obj:`str`): Unique identifier for this collector instance.
             - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.
+            - task_id (:obj:`int`): Unique identifier for the task. If None, that means we are in the single task mode.
         """
         self.task_id = task_id
 
@@ -71,7 +72,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         self._rank = get_rank()
 
         print(f'rank {self._rank}, self.task_id: {self.task_id}')
-
 
         self._world_size = get_world_size()
         if self._rank == 0:
@@ -128,7 +128,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-
             self._default_num_segments = _policy.get_attribute('cfg').get('num_segments', None)
             self._logger.debug(
                 'Set default num_segments mode(num_segments({}), env_num({}))'.format(self._default_num_segments, self._env_num)
@@ -367,11 +366,10 @@ class MuZeroSegmentCollector(ISerialCollector):
         collected_episode = 0
         collected_step = 0
         env_nums = self._env_num
-
+        retry_waiting_time = 0.05
         # initializations
         init_obs = self._env.ready_obs
 
-        retry_waiting_time = 0.05
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -481,7 +479,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # ==============================================================
                 # Key policy forward step
                 # ==============================================================
-                # print(f'ready_env_id:{ready_env_id}')
+                
                 if self.task_id is None:
                     # single task setting
                     policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
@@ -754,7 +752,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
-        # TODO: for atari multitask new ddp pipeline
+        # TODO: for multitask new ddp pipeline
         # reduce data when enables DDP
         # if self._world_size > 1:
         #     collected_step = allreduce_data(collected_step, 'sum')
@@ -776,7 +774,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
-        # TODO: for atari multitask new ddp pipeline
+        # TODO: for multitask new ddp pipeline
         # if self._rank != 0:
         #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
@@ -819,8 +817,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 if self.task_id is None:
                     self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
                 else:
-                    self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v,
-                                               train_iter)
+                    self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v, train_iter)
                 if k in ['total_envstep_count']:
                     continue
                 if self.task_id is None:

@@ -61,6 +61,7 @@ class Tokenizer(nn.Module):
 
         Arguments:
             - x (torch.Tensor): Input tensor of shape (B, ...).
+            - task_id (int, optional): Task ID for multitask settings. Defaults to None.
 
         Returns:
             - torch.Tensor: Encoded embeddings of shape (B, 1, E).

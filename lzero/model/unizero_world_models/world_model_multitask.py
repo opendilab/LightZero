@@ -3,15 +3,14 @@ import logging
 from typing import Any, Tuple
 from typing import Optional
 from typing import Union, Dict
-from .kv_caching import KeysValues
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
+from .kv_caching import KeysValues
 from lzero.model.common import SimNorm
 from lzero.model.unizero_world_models.world_model import WorldModel
 from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
-from .moe import MoeLayer, MultiplicationFeedForward
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
@@ -20,7 +19,7 @@ from .utils import WorldModelOutput, hash_state
 
 logging.getLogger().setLevel(logging.DEBUG)
 from ding.utils import get_rank
-import torch.distributed as dist
+import torch.distributed as dist 
 from sklearn.manifold import TSNE
 import os
 import numpy as np
@@ -31,6 +30,7 @@ import torch
 
 # TODO xjy： 继承容易出问题
 # class WorldModelMT(WorldModel):
+
 class WorldModelMT(nn.Module):
     """
     Overview:
@@ -56,7 +56,6 @@ class WorldModelMT(nn.Module):
                 - "concat_task_embed": Concatenates task embeddings with observation embeddings.
                 - "register_task_embed": Uses task embeddings as additional input tokens.
         """
-        # super().__init__(config, tokenizer)
         super().__init__()
         self.tokenizer = tokenizer
         self.config = config
@@ -124,20 +123,8 @@ class WorldModelMT(nn.Module):
             # 遍历 env_id_list，提取短名称
             for env_id in self.config.env_id_list:
                 # 提取 'NoFrameskip-v4' 之前的部分作为短名称
-                short_name = env_id.replace('NoFrameskip-v4', '')
+                short_name = env_id.replace('.z5', '')
                 self.env_short_names[env_id] = short_name
-            # 映射环境 ID 到简写名称
-            # self.env_short_names = {
-            #     'PongNoFrameskip-v4': 'Pong',
-            #     'MsPacmanNoFrameskip-v4': 'MsPacman',
-            #     'SeaquestNoFrameskip-v4': 'Seaquest',
-            #     'BoxingNoFrameskip-v4': 'Boxing',
-            #     'AlienNoFrameskip-v4': 'Alien',
-            #     'ChopperCommandNoFrameskip-v4': 'Chopper',
-            #     'HeroNoFrameskip-v4': 'Hero',
-            #     'RoadRunnerNoFrameskip-v4': 'RoadRunner'
-            # }
-            # 颜色映射，确保每个任务有固定的颜色
             self.num_tasks = len(self.env_id_list)
             
             # 生成足够多的颜色
@@ -427,15 +414,18 @@ class WorldModelMT(nn.Module):
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
+    
     def get_moe(self, name):
         """Get or create a MoE instance"""
+        from .moe import MoELayer, MultiplicationFeedForward
+
         if name not in self.moe_instances:
             # Create multiple FeedForward instances for multiplication-based MoE
             self.experts = nn.ModuleList([
                 MultiplicationFeedForward(self.config) for _ in range(self.config.num_experts_of_moe_in_transformer)
             ])
 
-            self.moe_instances[name] = MoeLayer(
+            self.moe_instances[name] = MoELayer(
                 experts=self.experts,
                 gate=nn.Linear(self.config.embed_dim, self.config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=1,

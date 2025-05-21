@@ -3,7 +3,7 @@ from easydict import EasyDict
 def create_config(env_id, max_steps, max_action_num, action_space_size, collector_env_num, evaluator_env_num, n_episode,
                   num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                   buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, total_batch_size,
-                  num_layers, model_name, replay_ratio, norm_type, update_per_collect):
+                  num_layers, model_name, replay_ratio, norm_type, update_per_collect, num_segments):
     return EasyDict(dict(
         env=dict(
             stop_value=int(1e6),
@@ -71,7 +71,7 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
 
-                    moe_in_transformer=False, 
+                    moe_in_transformer=False,
                     multiplication_moe_in_transformer=False, # Whether to use moe in transformers
                     n_shared_experts=1,
                     num_experts_per_tok=1,
@@ -81,7 +81,6 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                     lora_r= 0,
                     lora_alpha =1,
                     lora_dropout= 0.0,
-
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
@@ -97,8 +96,10 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
             action_type="varied_action_space",
             replay_ratio=replay_ratio,
             batch_size=batch_size,
+            num_segments=num_segments,
             reanalyze_ratio=reanalyze_ratio,
             learning_rate=0.0001,
+            game_segment_length=50,
             cos_lr_scheduler=False,
             fixed_temperature_value=0.25,
             manual_temperature_decay=False,
@@ -119,17 +120,17 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
 def generate_configs(env_id_list, env_configurations, collector_env_num, n_episode, evaluator_env_num,
                      num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                      seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
-                     total_batch_size, num_layers, model_name, replay_ratio, norm_type):
+                     total_batch_size, num_layers, model_name, replay_ratio, norm_type, num_segments):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_jericho_mt_20250513/jericho_moe8_{len(env_id_list)}games_tbs{total_batch_size}-nlayer{num_layers}-rr{replay_ratio}_not-share-head_encoder-final-ln_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_jericho_mt_20250512/jericho_{len(env_id_list)}games_tbs{total_batch_size}-nlayer{num_layers}-rr{replay_ratio}_not-share-head_encoder-final-ln_seed{seed}/'
 
     action_space_size_list = [v[0] for _, v in env_configurations.items()]
     max_steps_list = [v[1] for _, v in env_configurations.items()]   
 
     for task_id, env_id in enumerate(env_id_list):
-        max_action_num, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
-        update_per_collect = 40  # Ensure at least one update per collect
+        max_action_num, max_steps = env_configurations.get(env_id, (10, 50))  
+        update_per_collect = 40  # Ensure that all environments are updated at the same time
 
         config = create_config(
             env_id=env_id, max_steps=max_steps, max_action_num=max_action_num, action_space_size=action_space_size_list,
@@ -138,7 +139,7 @@ def generate_configs(env_id_list, env_configurations, collector_env_num, n_episo
             num_unroll_steps=num_unroll_steps, infer_context_length=infer_context_length, buffer_reanalyze_freq=buffer_reanalyze_freq,
             reanalyze_batch_size=reanalyze_batch_size, reanalyze_partition=reanalyze_partition, total_batch_size=total_batch_size,
             num_layers=num_layers, model_name=model_name, replay_ratio=replay_ratio,
-            norm_type=norm_type, update_per_collect=update_per_collect
+            norm_type=norm_type, update_per_collect=update_per_collect, num_segments=num_segments
         )
         config.policy.task_id = task_id
         config.exp_name = exp_name_prefix + f"{env_id.split('.z5')[0]}_seed{seed}"
@@ -164,10 +165,10 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        torchrun --nproc_per_node=4 ./zoo/jericho/config/jericho_unizero_multitask_ddp_config.py
+        torchrun --nproc_per_node=4 ./zoo/jericho/config/jericho_unizero_multitask_segment_ddp_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_ddp
+    from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     import os
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -187,12 +188,13 @@ if __name__ == "__main__":
 
     collector_env_num = 4
     n_episode = 4
+    num_segments = 4
     evaluator_env_num = 2
     num_simulations = 50
     max_env_step = int(5e5)
     reanalyze_ratio = 0.0
 
-    total_batch_size =int(64*4)
+    total_batch_size =int(128*4)
     batch_size = [int(total_batch_size / len(env_id_list)) for _ in range(len(env_id_list))]
 
     num_layers=2
@@ -212,7 +214,7 @@ if __name__ == "__main__":
                                     reanalyze_batch_size=reanalyze_batch_size, reanalyze_partition=reanalyze_partition,
                                     total_batch_size=total_batch_size, num_layers=num_layers, 
                                     model_name=model_name, replay_ratio=replay_ratio,
-                                    norm_type=norm_type)
+                                    norm_type=norm_type, num_segments=num_segments)
 
         with DDPContext():
-            train_unizero_multitask_ddp(configs, seed=seed, max_env_step=max_env_step) 
+            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step) 

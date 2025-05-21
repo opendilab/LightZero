@@ -1,50 +1,46 @@
-"""
-Modified from https://github.com/karpathy/nanoGPT
-
-在原 transformer.py 基础上增加 LoRA 微调相关代码，
-并通过传入配置参数控制 LoRA 微调的模块（默认是 attention 中的 k, q, v, proj 和 feed_forward）
-保持原有代码的可扩展性。
-"""
-
-import numpy as np
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn as nn
-from torch.nn import functional as F
 from ding.torch_utils.network import GRUGatingUnit
 from einops import rearrange
+from torch.nn import functional as F
 
 from .kv_caching import KeysValues
-from .moe import MoeLayer, MultiplicationFeedForward
+
 from line_profiler import line_profiler
 from lzero.model.common import SimNorm
+import logging
 
+##############################################
+# CurriculumLoRALinear 实现
+##############################################
 
-#############################################
-# 新增：LoRA 微调相关代码
-#############################################
-class LoRALinear(nn.Module):
+class CurriculumLoRALinear(nn.Module):
     """
-    LoRA 适配器包装的线性层。
-
-    原理：
-      使用冻结的原始 nn.Linear 层，并添加两个小型低秩矩阵，
-      计算公式为：y = x @ W^T + scaling * ((drop(x) @ A^T) @ B^T)
-      其中 A 和 B 为低秩参数，scaling = lora_alpha / r.
+    CurriculumLoRALinear 对标准的线性映射进行了扩展：
+    
+    - 内部保存了基础的 W 和 bias 参数（基础 transformer 部分）。
+    - 同时初始化了多个 LoRA adapter 参数（数量 = curriculum_stage_num - 1）。
+    - 前向计算：
+        如果 curriculum_stage == 0：
+            输出 = F.linear(x, W, bias)
+        如果 curriculum_stage >= 1：
+            输出 = 基础输出 + sum_{i=0}^{curriculum_stage-1} scaling * adapter_i(x)
+             其中，仅当前阶段 adapter（即 index == curriculum_stage - 1）参与更新，其它 adapter 使用 detach() 保证前向贡献但不传递梯度。
+    
+    注意：
+        - 外部在阶段切换时调用 set_curriculum_stage(stage) 来更新状态。
+        - 每次调用时，通过 log 信息展示当前模块的维度信息以及冻结/激活状态。
     """
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        r: int = 0,
-        lora_alpha: int = 1,
-        lora_dropout: float = 0.0
-    ):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0.0,
+                 curriculum_stage_num: int = 1):
+        """
+        如果 curriculum_stage_num > 1，则初始化 (curriculum_stage_num - 1) 个 LoRA adapter。
+        """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -52,65 +48,161 @@ class LoRALinear(nn.Module):
         self.lora_alpha = lora_alpha
         self.scaling = lora_alpha / r if r > 0 else 1.0
         self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
+        self.curriculum_stage_num = curriculum_stage_num  # 总阶段数
+        self.curriculum_stage = 0  # 初始阶段 0
 
-        # 原始权重（冻结参数，不更新）
+        # 初始化基础权重（基础 transformer 部分），默认参与训练
         self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        self.bias = nn.Parameter(torch.empty(out_features)) if bias else None
+        if bias:
+            self.bias = nn.Parameter(torch.empty(out_features))
+        else:
+            self.bias = None
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if bias:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in)
             nn.init.uniform_(self.bias, -bound, bound)
 
-        # 低秩矩阵参数（仅在 r > 0 时添加）
-        if r > 0:
-            # A 将 in_features 映射到低秩 r；B 从低秩 r 映射回 out_features
-            self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.01)
-            self.lora_B = nn.Parameter(torch.zeros(out_features, r))
+        # 初始化 LoRA adapter，只有在 r > 0 且 curriculum_stage_num > 1 时才存在
+        self.adapters = nn.ModuleList()
+        if r > 0 and (curriculum_stage_num - 1) > 0:
+            for i in range(curriculum_stage_num - 1):
+                adapter = nn.ParameterDict({
+                    'lora_A': nn.Parameter(torch.randn(r, in_features) * 0.01),
+                    'lora_B': nn.Parameter(torch.zeros(out_features, r))
+                })
+                self.adapters.append(adapter)
         else:
-            self.lora_A = None
-            self.lora_B = None
+            self.adapters = None
 
-        # 冻结原始权重参数，保证仅更新 LoRA 参数
-        self.weight.requires_grad = False
+        # 初始时：stage==0，基础层参与更新，adapter 均冻结
+        self.weight.requires_grad = True
         if self.bias is not None:
-            self.bias.requires_grad = False
+            self.bias.requires_grad = True
+        if self.adapters is not None:
+            for adapter in self.adapters:
+                adapter['lora_A'].requires_grad = False
+                adapter['lora_B'].requires_grad = False
+
+    def set_curriculum_stage(self, stage: int):
+        """
+        设置当前阶段 stage，取值范围 [0, curriculum_stage_num-1]，并同步冻结/激活各部分参数。
+        
+        - stage == 0：基础层参与前向和更新，所有 adapter 均冻结；
+        - stage >= 1：冻结基础层（只用于前向），仅当前 adapter（index == stage - 1）参与更新，
+          前面 adapter 虽然前向贡献，但通过 detach() 不传导梯度。
+          
+        同时将 log 出模块信息和状态变化。
+        """
+        assert 0 <= stage < self.curriculum_stage_num, f"stage 必须在 [0, {self.curriculum_stage_num-1}] 范围内"
+        self.curriculum_stage = stage
+
+        # 输出 log 信息，展示当前模块（可结合 in_features, out_features 标识）
+        module_id = f"({self.in_features}x{self.out_features})"
+        if stage == 0:
+            self.weight.requires_grad = True
+            if self.bias is not None:
+                self.bias.requires_grad = True
+            if self.adapters is not None:
+                for idx, adapter in enumerate(self.adapters):
+                    adapter['lora_A'].requires_grad = False
+                    adapter['lora_B'].requires_grad = False
+            logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: 基础层可训练，所有 adapter 均冻结。")
+        else:
+            # 阶段大于 0，冻结基础层
+            self.weight.requires_grad = False
+            if self.bias is not None:
+                self.bias.requires_grad = False
+            for idx, adapter in enumerate(self.adapters):
+                if idx == stage - 1:
+                    adapter['lora_A'].requires_grad = True
+                    adapter['lora_B'].requires_grad = True
+                    logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: 激活 adapter {idx} (可训练)。")
+                else:
+                    adapter['lora_A'].requires_grad = False
+                    adapter['lora_B'].requires_grad = False
+                    logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: 冻结 adapter {idx} (仅前向不更新)。")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # 原始线性输出（冻结部分）
-        result = F.linear(x, self.weight, self.bias)
-        # 如启用了 LoRA，则加上低秩部分
-        if self.r > 0:
-            lora_out = F.linear(self.lora_dropout(x), self.lora_A)  # (…, r)
-            lora_out = F.linear(lora_out, self.lora_B)                # (…, out_features)
-            result = result + self.scaling * lora_out
-        return result
+        baseline_out = F.linear(x, self.weight, self.bias)
+        if self.curriculum_stage == 0 or self.adapters is None:
+            return baseline_out
 
+        adapter_out = 0
+        # 对于前 curriculum_stage 个 adapter，只有最后一个正常反向传播，其它用 detach() 保证仅前向效果
+        for idx in range(self.curriculum_stage):
+            if idx >= len(self.adapters):
+                break
+            adapter = self.adapters[idx]
+            out = F.linear(self.lora_dropout(x), adapter['lora_A'])
+            out = F.linear(out, adapter['lora_B'])
+            if idx == self.curriculum_stage - 1:
+                adapter_out = adapter_out + self.scaling * out  # 当前 adapter参与更新
+            else:
+                adapter_out = adapter_out + self.scaling * out.detach()
+        return baseline_out + adapter_out
 
+##############################################
+# 修改 _maybe_wrap_linear 辅助函数
+##############################################
 def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Module:
     """
-    辅助函数：当 config.lora_r > 0 且 module_label 存在于 config.lora_target_modules 时，
-    将传入的线性层替换为 LoRALinear，并复制原始权重数据。
-
-    module_label 的取值含义由上层逻辑定义，例如：
-      - 若 module_label 为 "attn"，表示在 SelfAttention 中替换 k, q, v, proj 等层。
-      - 若 module_label 为 "feed_forward"，表示在 Transformer Block 的 MLP 中替换线性层。
+    辅助函数：当满足以下条件时，将传入的 nn.Linear 层替换为
+    CurriculumLoRALinear：
+      - config.lora_r > 0
+      - module_label 在 config.lora_target_modules 中
+      - 并且 config 中配置了 curriculum_stage_num > 1
+    否则，若仅满足基础 LoRA 条件，则返回原有 LoRALinear；否则返回原始的线性层。
     """
-    if config.lora_r > 0 and module_label in config.lora_target_modules:
-        new_linear = LoRALinear(
+    if config.lora_r > 0 and (module_label in config.lora_target_modules) and getattr(config, "curriculum_stage_num", 1) > 1:
+        new_linear = CurriculumLoRALinear(
             in_features=linear.in_features,
             out_features=linear.out_features,
             bias=(linear.bias is not None),
             r=config.lora_r,
             lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout
+            lora_dropout=config.lora_dropout,
+            curriculum_stage_num=config.curriculum_stage_num
         )
         new_linear.weight.data.copy_(linear.weight.data)
         if linear.bias is not None:
             new_linear.bias.data.copy_(linear.bias.data)
         return new_linear
+    # elif config.lora_r > 0 and (module_label in config.lora_target_modules):
+    #     # 若不使用课程学习，则调用原有 LoRALinear 实现（未展示，此处假设其已定义）
+    #     new_linear = LoRALinear(
+    #         in_features=linear.in_features,
+    #         out_features=linear.out_features,
+    #         bias=(linear.bias is not None),
+    #         r=config.lora_r,
+    #         lora_alpha=config.lora_alpha,
+    #         lora_dropout=config.lora_dropout
+    #     )
+    #     new_linear.weight.data.copy_(linear.weight.data)
+    #     if linear.bias is not None:
+    #         new_linear.bias.data.copy_(linear.bias.data)
+    #     return new_linear
     else:
         return linear
+    
+def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
+    """
+    遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
+    并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
+    """
+    count = 0
+    for module in transformer.modules():
+        # logging.info(f"[Transformer] module {module}.")
+
+        if isinstance(module, CurriculumLoRALinear):
+            module.set_curriculum_stage(stage)
+            count += 1
+    logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
+
+
+##############################################
+# TransformerConfig 示例（增加 curriculum_stage_num）
+##############################################
 
 @dataclass
 class TransformerConfig:
@@ -125,25 +217,22 @@ class TransformerConfig:
     embed_pdrop: float
     resid_pdrop: float
     attn_pdrop: float
-    
-    # for RoPE
-    rope_theta: float
-    max_seq_len: int
-    rotary_emb: bool = False
 
     # LoRA 参数：
     lora_r: int = 0
     lora_alpha: int = 1
     lora_dropout: float = 0.0
-    # 指定哪些模块应用 LoRA，默认：attention 中的 k, q, v, proj 和 feed_forward 层（当非 moe 模型时）
     lora_target_modules: list = None
 
-    # Register Token 相关
+    # 课程学习相关参数：
+    # curriculum_stage_num 表示总阶段数（例如 3 表示阶段 0,1,2）
+    curriculum_stage_num: int = 1
+
+    # 其它配置项（略）
     task_embed_option: str = "none"
     register_token_num: int = 4
     register_token_shared: bool = True
 
-    # 其它配置项
     gru_gating: bool = False
     moe_in_transformer: bool = False
     multiplication_moe_in_transformer: bool = False
@@ -153,77 +242,12 @@ class TransformerConfig:
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks
 
-
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    """
-    Precompute the frequency components for the rotary positional embeddings.
-
-    Arguments:
-        - dim (int): The dimension of the embedding.
-        - end (int): The length of the sequence for which frequencies are computed.
-        - theta (float): A scaling factor for the frequencies, default is 10000.0.
-
-    Returns:
-        - freqs_cis (torch.Tensor): A tensor of complex numbers representing the precomputed frequencies.
-    """
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
-    freqs = torch.outer(t, freqs)
-    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
-    return freqs_cis
-
-
-def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
-    """
-    Reshape the frequency components for broadcasting with the input tensor.
-
-    Arguments:
-        - freqs_cis (torch.Tensor): The frequency components tensor.
-        - x (torch.Tensor): The input tensor to which the frequencies will be applied.
-
-    Returns:
-        - torch.Tensor: The reshaped frequency components tensor.
-    """
-    # Reference: https://github.com/meta-llama/llama3/blob/main/llama/model.py#L61
-    ndim = x.ndim
-    shape = [d if i in (0, 2, ndim - 1) else 1 for i, d in enumerate(x.shape)]
-    return freqs_cis.view(*shape)
-
-
-def apply_rotary_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
-    freqs_cis: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Apply rotary positional embeddings to the query and key tensors.
-
-    Arguments:
-        - xq (torch.Tensor): The query tensor.
-        - xk (torch.Tensor): The key tensor.
-        - freqs_cis (torch.Tensor): The precomputed frequency components.
-
-    Returns:
-        - Tuple[torch.Tensor, torch.Tensor]: The transformed query and key tensors.
-    
-    Note:
-        For more information on rotary positional embeddings, refer to the blog post:
-        https://spaces.ac.cn/archives/8265/ or paper https://arxiv.org/abs/2104.09864
-    """
-    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
-    return xq_out.type_as(xq), xk_out.type_as(xk)
-
-
 class Transformer(nn.Module):
     """
     Transformer model class.
 
     Arguments:
-        - config (:obj:`TransformerConfig`): Configuration for the Transformer model.
+        config (:obj:`TransformerConfig`): Configuration for the Transformer model.
 
     Attributes:
         - config (:obj:`TransformerConfig`): Configuration object.
@@ -239,13 +263,6 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
-        if self.config.rotary_emb:
-            freqs_cis = precompute_freqs_cis(
-                self.config.embed_dim // self.config.num_heads,
-                self.config.max_seq_len * 2,
-                self.config.rope_theta,
-            )
-            self.register_buffer("freqs_cis", freqs_cis)
         self.task_embed = task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
         self.register_token_shared = True
@@ -326,64 +343,43 @@ class Transformer(nn.Module):
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
-    def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0) -> torch.Tensor:
+
+    #@profile
+    def forward(
+        self,
+        sequences: torch.Tensor,         # (B, T, C)
+        past_keys_values: Optional[KeysValues] = None,
+        valid_context_lengths: Optional[torch.Tensor] = None,
+        task_id: int = 0,
+        start_pos: int = 0
+    ) -> torch.Tensor:
         """
         Forward pass of the Transformer model.
 
         Arguments:
-            - sequences (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
-            - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
-            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
-            - start_pos (:obj:`int`): Starting position for rotary embeddings (default: 0).
+            - sequences (:obj:`torch.Tensor`): (B, T, C)
+            - past_keys_values (:obj:`Optional[KeysValues]`): 缓存，用于推理时加速
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): 某些场景下可用的有效上下文长度
+            - task_id (:obj:`int`): 任务 ID
 
         Returns:
             - 输出张量 (B, T + register_token_num, C) 或 (B, T, C)，视是否添加 Register Token 而定
         """
-        seqlen = sequences.shape[1]
-        # If using Rotary Position Embeddings (RoPE), slice the frequency components accordingly
-        if self.config.rotary_emb:
-            if isinstance(start_pos, (int, float, np.integer)):
-                # In the reanalyze_phase or reset stage in collection/evaluation phase, create a tensor filled with start_pos, expanded to match the batch size, and adjust for sequence type,  e.g., start_pos=2.
-                start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device)
-            elif isinstance(start_pos, (list, np.ndarray, torch.Tensor)):
-                if isinstance(start_pos[0], (np.ndarray, torch.Tensor, list)):
-                    # In the training phase, flatten start_pos, take the first element, convert to tensor, e.g., start_pos=[array([ 8, 10, 12, 14, 16]), array([12, 14, 16, 18, 20])]
-                    start_pos_tensor = torch.as_tensor(
-                    [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
-                        device=sequences.device
-                    )
-                elif isinstance(start_pos[0], (int, float, np.integer)):
-                    # In the collection/evaluation phase, e.g., start_pos = [0, 0, 0, 0, 0, 0, 0, 0]
-                    start_pos_tensor = torch.as_tensor([int(x) for x in start_pos], device=sequences.device)
-            else:
-                raise ValueError("start_pos must be an int, float, list, numpy array or torch.Tensor.")
+        # 若使用 Register Token，则将其拼到序列最前面
+        # 训练阶段和推理阶段都统一处理
+        if self.use_register_token:
+            sequences = self.add_register_tokens(sequences, task_id)
 
-            # TODO: Determine how to handle cases when episode length exceeds max_seq_len
-            # Use modulo operation to ensure start_pos does not exceed max_seq_len
-            start_pos_tensor = torch.remainder(start_pos_tensor, self.config.max_seq_len)
-            # Convert each sample's start_pos to a list
-            start_pos_list = start_pos_tensor.tolist()
-            # For each sample, slice the corresponding range of freqs_cis based on start_pos
-            freqs_cis_slices = [self.freqs_cis[int(pos): int(pos) + seqlen] for pos in start_pos_list]
-            freqs_cis = torch.stack(freqs_cis_slices)
-
-            if freqs_cis.ndim == 3 and freqs_cis.shape[1] == 1:
-                # Convert shape [seq_len, 1, num_pairs] to [seq_len, num_pairs]
-                freqs_cis = freqs_cis.squeeze(1)
-        else:
-            freqs_cis = None
-
-        # print(f"freqs_cis.shape:{freqs_cis.shape}")
-
-        # Ensure past keys and values match the number of transformer blocks
-        assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
-        # Apply dropout to the input sequences
+        # 接入 dropout
         x = self.drop(sequences)
-        # Pass through each transformer block
+
+        # 逐层调用
         for i, block in enumerate(self.blocks):
-            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, freqs_cis)
-        # Apply final layer normalization
+            x = block(x,
+                      None if past_keys_values is None else past_keys_values[i],
+                      valid_context_lengths)
+
+        # 最后层 LN
         x = self.ln_f(x)
 
         # 如果 past_keys_values 不为 None，说明是推理阶段，此时我们需要把 KV 缓存中
@@ -434,6 +430,7 @@ class Block(nn.Module):
         self.attn = SelfAttention(config)
 
         if config.moe_in_transformer:
+            from .moe import MoELayer, MultiplicationFeedForward
             # 创Create multiple independent MLP instances
             self.experts = nn.ModuleList([
                 nn.Sequential(
@@ -443,27 +440,40 @@ class Block(nn.Module):
                     nn.Dropout(config.resid_pdrop),
                 ) for _ in range(config.num_experts_of_moe_in_transformer)
             ])
-            self.feed_forward = MoeLayer(
+            self.feed_forward = MoELayer(
+                config,
                 experts=self.experts,
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
-                num_experts_per_tok=1,
+                num_experts_per_tok=config.num_experts_per_tok,
             )
             
             print("="*20)
             print(f'use moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
         elif config.multiplication_moe_in_transformer:
+            # TODO: deepseek-v3
+            # from .moe import MoeConfig,MoELayer
+            # moe_cfg = MoeConfig(
+            #     embed_dim=config.embed_dim,
+            #     num_experts_total=config.num_experts_of_moe_in_transformer,
+            #     num_experts_per_tok=1,
+            # )
+            # self.feed_forward = MoELayer(moe_cfg)
+            # print("=" * 20)
+            # print(f"Use MoE feed_forward, num_experts={moe_cfg.num_experts_total}")
+            # print("=" * 20)
+
+            from .moe import MoELayer, MultiplicationFeedForward
             # Create multiple FeedForward instances for multiplication-based MoE
             self.experts = nn.ModuleList([
                 MultiplicationFeedForward(config) for _ in range(config.num_experts_of_moe_in_transformer)
             ])
-
-            self.feed_forward = MoeLayer(
+            self.feed_forward = MoELayer(
+                config,
                 experts=self.experts,
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
-                num_experts_per_tok=1,
+                num_experts_per_tok=config.num_experts_per_tok,
             )
-
             print("="*20)
             print(f'use multiplication moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
@@ -483,7 +493,7 @@ class Block(nn.Module):
             )
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None, freqs_cis: torch.Tensor = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Forward pass of the Transformer block.
 
@@ -491,12 +501,11 @@ class Block(nn.Module):
             - x (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
             - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
-            - freqs_cis (:obj:`torch.Tensor`): Frequency components for rotary position embeddings, used to modulate the attention mechanism (default: None).
 
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
-        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, freqs_cis)
+        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
         if self.gru_gating:
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.feed_forward(self.ln2(x)))
@@ -543,6 +552,7 @@ class SelfAttention(nn.Module):
 
         if config.lora_r > 0 and ("attn" in config.lora_target_modules):
             self.key = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
+            # print("key type:", type(self.key))  # 期望返回 CurriculumLoRALinear
             self.query = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
             self.value = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
             self.proj = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
@@ -564,7 +574,7 @@ class SelfAttention(nn.Module):
 
     #@profile
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None,  freqs_cis: torch.Tensor = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None, ) -> torch.Tensor:
         """
         Forward pass for the self-attention mechanism.
 
@@ -573,7 +583,6 @@ class SelfAttention(nn.Module):
                                         T is sequence length, and C is embedding dimension.
             - kv_cache (:obj:`Optional[KeysValues]`): Optional key-value cache for faster inference.
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Optional tensor containing valid context lengths.
-            - freqs_cis (:obj:`torch.Tensor`): Frequency components for rotary position embeddings, used to modulate the attention mechanism (default: None).
 
         Returns:
             - torch.Tensor: Output tensor of shape (B, T, C).
@@ -581,19 +590,16 @@ class SelfAttention(nn.Module):
         B, T, C = x.size()
         if kv_cache is not None:
             b, nh, L, c = kv_cache.shape
-            try:
-                assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
-            except Exception as e:
-                print('debug')
+            # try:
+            assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
+            # except Exception as e:
+            #     print('debug')
         else:
             L = 0
 
         q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
         k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
         v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
-        
-        if self.config.rotary_emb:
-            q, k = apply_rotary_emb(q, k, freqs_cis=freqs_cis)
 
         if kv_cache is not None:
             # import ipdb; ipdb.set_trace()
@@ -611,8 +617,8 @@ class SelfAttention(nn.Module):
             for i in range(B):
                 mask[i] = self.mask[L:L + T, :L + T].clone()
                 mask[i, :, :(L - valid_context_lengths[i])] = 0  # Set invalid parts to 0.
-                # Adjust mask dimensions to match the last two dimensions of att.
-                # (B, T, L + T) -> (B, 1, T, L + T) -> (B, num_heads, T, L + T)
+            # Adjust mask dimensions to match the last two dimensions of att.
+            # (B, T, L + T) -> (B, 1, T, L + T) -> (B, num_heads, T, L + T)
                 mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
         else:
             # mask.shape: (T, L + T)
@@ -636,7 +642,6 @@ class SelfAttention(nn.Module):
             # else:
             #     import ipdb; ipdb.set_trace()
 
-
         # att.shape: (B, num_heads, T, L + T)
         att = att.masked_fill(mask == 0, float('-inf'))
 
@@ -648,8 +653,6 @@ class SelfAttention(nn.Module):
 
         y = rearrange(y, 'b h t e -> b t (h e)')  # Combine the heads back together (B, T, embed_dim)
         y = self.resid_drop(self.proj(y))
-
-
 
         return y
 

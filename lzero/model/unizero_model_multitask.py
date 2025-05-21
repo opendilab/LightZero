@@ -42,7 +42,7 @@ class UniZeroMTModel(nn.Module):
                 - and heads, which generate the logits for observations, rewards, policy, and value.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[3, 64, 64] for Atari.
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - action_space_size: (:obj:`[int, list]`): Action space size. For discrete or fixed action spaces, this is usually an integer. For multi-task environments where the action spaces are different, this is a list.
             - num_res_blocks (:obj:`int`): The number of res blocks in UniZero model.
             - num_channels (:obj:`int`): The channels of hidden states in representation network.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \

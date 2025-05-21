@@ -30,7 +30,7 @@ from .utils import configure_optimizers_nanogpt
 import torch.nn.functional as F
 import torch.distributed as dist
 import sys
-sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
+
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
