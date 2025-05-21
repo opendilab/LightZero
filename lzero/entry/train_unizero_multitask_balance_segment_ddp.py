@@ -31,6 +31,7 @@ from collections import defaultdict   # 保存所有任务最近一次评估分�
 # 保存最近一次评估回报：{task_id: eval_episode_return_mean}
 from collections import defaultdict
 GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
+
 def compute_unizero_mt_normalized_stats(
         eval_returns: dict[int, float]
 ) -> tuple[Optional[float], Optional[float]]:
@@ -371,6 +372,7 @@ def train_unizero_multitask_balance_segment_ddp(
         7    # Breakout
     ]
     # 根据 new_order 生成新的数组
+    global new_RANDOM_SCORES, new_HUMAN_SCORES
     new_RANDOM_SCORES = RANDOM_SCORES[new_order]
     new_HUMAN_SCORES = HUMAN_SCORES[new_order]
     # 查看重排后的结果
@@ -581,8 +583,8 @@ def train_unizero_multitask_balance_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
@@ -678,8 +680,8 @@ def train_unizero_multitask_balance_segment_ddp(
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
-        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
         
             # 计算任务权重时，只考虑未解决任务
             try:

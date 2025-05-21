@@ -14,13 +14,15 @@ def main(env_id, seed):
     evaluator_env_num = 3
     num_simulations = 50
     update_per_collect = None
-    replay_ratio = 0.25
+    # replay_ratio = 0.25
+    replay_ratio = 0.1
 
     num_unroll_steps = 5
-    batch_size = 256
+    # batch_size = 256
+    batch_size = 1024
+
     # max_env_step = int(5e5)
     max_env_step = int(100e6)
-
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
@@ -29,7 +31,7 @@ def main(env_id, seed):
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
-    reanalyze_partition=1
+    reanalyze_partition=0.75
 
     # =========== for debug ===========
     # collector_env_num = 2
@@ -62,6 +64,7 @@ def main(env_id, seed):
             analysis_sim_norm=False,
             cal_dormant_ratio=False,
             model=dict(
+                num_res_blocks=4, # TODO
                 observation_shape=(4, 64, 64),
                 image_channel=1,
                 frame_stack_num=4,
@@ -86,6 +89,7 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             update_per_collect=update_per_collect,
             batch_size=batch_size,
+            policy_entropy_weight=5e-3,
             optim_type='SGD',
             td_steps=5,
             piecewise_decay_lr_scheduler=True,
@@ -94,7 +98,8 @@ def main(env_id, seed):
             target_update_freq=100,
             num_simulations=num_simulations,
             ssl_loss_weight=2,
-            eval_freq=int(5e3),
+            # eval_freq=int(5e3),
+            eval_freq=int(1e4),
             replay_buffer_size=int(1e6),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -126,13 +131,13 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_lz/data_muzero/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_muzero/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Process different environments and seeds.')
-    parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
+    parser.add_argument('--env', type=str, help='The environment to use', default='MsPacmanNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 

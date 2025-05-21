@@ -192,7 +192,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250508/dmc_{len(env_id_list)}tasks_orig_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_dmc_mt_20250522/dmc_{len(env_id_list)}tasks_orig_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250508/dmc_{len(env_id_list)}tasks_nlayer8_takembed128_trans-moe8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250507/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
@@ -250,6 +250,11 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+                =========== oss atari26 =========================
+        cd /oss/niuyazhe/puyuan/data/data_lz_202505/
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_oss/uz_mt_atari26_orig_nlayer8_seed01.log
+
+
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc18_orig_20250508.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """

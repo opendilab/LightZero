@@ -17,7 +17,7 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-sys.path.append('/fs-computility/ai-shen/puyuan/code/LibMTL')
+sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
@@ -471,7 +471,40 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.grad_correct.init_param()  
             self.grad_correct.rep_grad = False
 
+        # 用于缓存上一帧的可塑性相关指标
+        self._prev_plasticity_metrics = dict(
+            dormant_ratio_encoder      = 0.0,
+            dormant_ratio_transformer  = 0.0,
+            dormant_ratio_head         = 0.0,
+            avg_weight_mag_encoder     = 0.0,
+            avg_weight_mag_transformer = 0.0,
+            avg_weight_mag_head        = 0.0,
+            e_rank_last_linear         = 0.0,
+            e_rank_sim_norm            = 0.0,
+        )
 
+
+    @staticmethod
+    def _is_zero(x: Union[float, torch.Tensor], eps: float = 1e-8) -> bool:
+        """
+        判断一个标量/0-D tensor 是否可视为 0
+        """
+        if isinstance(x, torch.Tensor):
+            return torch.all(torch.abs(x) < eps).item()
+        return abs(x) < eps
+
+    def _retain_prev_if_zero(self, name: str,
+                             value: Union[float, torch.Tensor]) -> Union[float, torch.Tensor]:
+        """
+        若 value≈0 则返回上一帧缓存值，否则更新缓存并返回当前值
+        """
+        if self._is_zero(value):
+            # 直接返回上一次的值（可能是 float，也可能是 tensor）
+            return self._prev_plasticity_metrics[name]
+        else:
+            # 更新缓存并返回当前值
+            self._prev_plasticity_metrics[name] = value
+            return value
 
 
     #@profile
@@ -633,14 +666,40 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # ============ for value priority  ============ 
 
             # 关于网络可塑性的指标
-            dormant_ratio_encoder = intermediate_losses['dormant_ratio_encoder']
-            dormant_ratio_transformer = intermediate_losses['dormant_ratio_transformer']
-            dormant_ratio_head = intermediate_losses['dormant_ratio_head']
-            avg_weight_mag_encoder = intermediate_losses['avg_weight_mag_encoder']
-            avg_weight_mag_transformer = intermediate_losses['avg_weight_mag_transformer']
-            avg_weight_mag_head = intermediate_losses['avg_weight_mag_head']
-            e_rank_last_linear = intermediate_losses['e_rank_last_linear'] 
-            e_rank_sim_norm = intermediate_losses['e_rank_sim_norm']
+            # dormant_ratio_encoder = intermediate_losses['dormant_ratio_encoder']
+            # dormant_ratio_transformer = intermediate_losses['dormant_ratio_transformer']
+            # dormant_ratio_head = intermediate_losses['dormant_ratio_head']
+            # avg_weight_mag_encoder = intermediate_losses['avg_weight_mag_encoder']
+            # avg_weight_mag_transformer = intermediate_losses['avg_weight_mag_transformer']
+            # avg_weight_mag_head = intermediate_losses['avg_weight_mag_head']
+            # e_rank_last_linear = intermediate_losses['e_rank_last_linear'] 
+            # e_rank_sim_norm = intermediate_losses['e_rank_sim_norm']
+
+            dormant_ratio_encoder  = self._retain_prev_if_zero(
+                                'dormant_ratio_encoder',
+                                            intermediate_losses['dormant_ratio_encoder'])
+            dormant_ratio_transformer  = self._retain_prev_if_zero(
+                                            'dormant_ratio_transformer',
+                                            intermediate_losses['dormant_ratio_transformer'])
+            dormant_ratio_head         = self._retain_prev_if_zero(
+                                            'dormant_ratio_head',
+                                            intermediate_losses['dormant_ratio_head'])
+            avg_weight_mag_encoder     = self._retain_prev_if_zero(
+                                            'avg_weight_mag_encoder',
+                                            intermediate_losses['avg_weight_mag_encoder'])
+            avg_weight_mag_transformer = self._retain_prev_if_zero(
+                                            'avg_weight_mag_transformer',
+                                            intermediate_losses['avg_weight_mag_transformer'])
+            avg_weight_mag_head        = self._retain_prev_if_zero(
+                                            'avg_weight_mag_head',
+                                            intermediate_losses['avg_weight_mag_head'])
+            e_rank_last_linear         = self._retain_prev_if_zero(
+                                            'e_rank_last_linear',
+                                            intermediate_losses['e_rank_last_linear'])
+            e_rank_sim_norm            = self._retain_prev_if_zero(
+                                            'e_rank_sim_norm',
+                                            intermediate_losses['e_rank_sim_norm'])
+
             
             obs_loss_multi_task.append(obs_loss)
             reward_loss_multi_task.append(reward_loss)

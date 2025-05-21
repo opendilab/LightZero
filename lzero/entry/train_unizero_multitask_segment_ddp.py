@@ -426,6 +426,7 @@ def train_unizero_multitask_segment_ddp(
         22,  # Qbert
         7    # Breakout
     ]
+    global new_RANDOM_SCORES, new_HUMAN_SCORES
     # 根据 new_order 生成新的数组
     new_RANDOM_SCORES = RANDOM_SCORES[new_order]
     new_HUMAN_SCORES = HUMAN_SCORES[new_order]
@@ -623,9 +624,9 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
             # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
-            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
@@ -703,8 +704,8 @@ def train_unizero_multitask_segment_ddp(
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
-        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
-        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
         
             # 计算任务权重
             try:

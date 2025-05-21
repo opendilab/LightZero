@@ -98,30 +98,33 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
-            # self.representation_network = RepresentationNetworkUniZero(
-            #     observation_shape,
-            #     num_res_blocks,
-            #     num_channels,
-            #     self.downsample,
-            #     activation=self.activation,
-            #     norm_type=norm_type,
-            #     embedding_dim=world_model_cfg.embed_dim,
-            #     group_size=world_model_cfg.group_size,
-            #     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-            # )
-
-            self.representation_network = ViT(
-                image_size =observation_shape[1],
-                # patch_size = 32,
-                patch_size = 8,
-                num_classes = world_model_cfg.embed_dim,
-                dim = 768,
-                depth = 12,
-                heads = 12,
-                mlp_dim = 3072,
-                dropout = 0.1,
-                emb_dropout = 0.1
-            )
+            if world_model_cfg.encoder_type == "resnet":
+                self.representation_network = RepresentationNetworkUniZero(
+                    observation_shape,
+                    num_res_blocks,
+                    num_channels,
+                    self.downsample,
+                    activation=self.activation,
+                    norm_type=norm_type,
+                    embedding_dim=world_model_cfg.embed_dim,
+                    group_size=world_model_cfg.group_size,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                )
+            elif world_model_cfg.encoder_type == "vit":
+                # vit base
+                self.representation_network = ViT(
+                    image_size =observation_shape[1],
+                    # patch_size = 32,
+                    patch_size = 8,
+                    num_classes = world_model_cfg.embed_dim,
+                    dim = 768,
+                    depth = 12,
+                    heads = 12,
+                    mlp_dim = 3072,
+                    dropout = 0.1,
+                    emb_dropout = 0.1,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                )
 
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:
