@@ -8,7 +8,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     game_segment_length = 400
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(1e5)
+    max_env_step = 115000
     batch_size = 64
     num_unroll_steps = 10
     infer_context_length = 4
@@ -58,7 +58,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     adaptive_span_regularization=0.0,
 
                     # Gaussian Attention Parameters
-                    init_adaptive_mu = 4.0,  # head’s mean offset
+                    init_adaptive_mu = 2.0,  # head’s mean offset
                     init_adaptive_sigma = 1.0,  # head’s variance (before softplus)
                     gaam_span_diversity_coeff = 0.0  # diversity regularization, none for now
                 ),
