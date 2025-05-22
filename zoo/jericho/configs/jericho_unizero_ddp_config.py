@@ -137,6 +137,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     embed_dim=embed_dim,
                     obs_type="text",  # TODO: Modify as needed.
                     env_num=max(collector_env_num, evaluator_env_num),
+                    decode_loss_mode='after_backbone', # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
                     latent_recon_loss_weight=0.1 # TODO: decoder loss weight
                 ),
             ),

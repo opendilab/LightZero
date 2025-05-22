@@ -61,13 +61,6 @@ class Tokenizer(nn.Module):
         self.decoder_network = decoder_network
         self.decoder_network_tokenizer = decoder_network_tokenizer 
 
-        # ---- weight tying ----
-        # vocab_size = self.decoder_network.embed_tokens.weight.size(0)
-        # self.decoder_network.lm_head = nn.Linear(
-        #     self.decoder_network.config.d_model, vocab_size, bias=False
-        # )
-        # self.decoder_network.lm_head.weight = self.decoder_network.embed_tokens.weight
-
         if projection is None:
             self.projection_layer = nn.Identity()
         else:
@@ -136,7 +129,10 @@ class Tokenizer(nn.Module):
     def decode_to_reconstruction_outputs(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
         """
         Overview:
-            Decode embeddings and compute LM reconstruction outputs (logits + loss).
+            This function takes input embeddings and corresponding target token IDs,
+            then uses a seq2seq decoder (like T5) to reconstruct the original text.
+            It handles reshaping, retokenization, projection, and calls the decoder 
+            to compute the reconstruction loss and logits.
         Arguments:
             embeddings (torch.Tensor): Input embeddings of shape (B, E), (B, L, E), or (B*T, 1, E).
             target_ids (torch.Tensor): Ground-truth token IDs of shape (B, L) or (B*T, L).
@@ -150,6 +146,8 @@ class Tokenizer(nn.Module):
             embeddings = embeddings.reshape(B*T,1,E)
             target_ids = target_ids.reshape(B*T, -1)
 
+        # Instead of using raw target_ids, convert them to plain text and re-tokenize using the decoder's tokenizer.
+        # This guarantees alignment with the decoder's vocabulary, special tokens, and tokenization rules.
         text_list = self.decode_to_plain_text(target_ids)
         t5_target_ids = self.decoder_network_tokenizer(text_list, 
                                                        padding="max_length",
@@ -159,8 +157,7 @@ class Tokenizer(nn.Module):
         labels = t5_target_ids.input_ids
         labels[labels == self.decoder_network_tokenizer.pad_token_id] = -100 
 
-
-        embeddings = self.projection_layer(embeddings)     # (B',1,E)
+        embeddings = self.projection_layer(embeddings)     # (B', 1, E) -> (B', 1, E'), B' = B*T
         encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
         encoder_attention_mask = torch.ones(
             embeddings.size(0), embeddings.size(1),
@@ -182,14 +179,13 @@ class Tokenizer(nn.Module):
         ) -> List[List[int]]:
         """
         Overview:
-            Decode embeddings into plain text using decoder's generate method.
+            This function decodes latent embeddings into plain text using the decoder's generate method.
+            It includes projection, prepares encoder outputs and attention mask, and performs autoregressive decoding.
         Arguments:
             embeddings (torch.Tensor): Latent embeddings, shape (B, E) or (B, L, E).
             max_length (int, optional): Max token length for generation. Defaults to 512.
         Returns:
             List[List[int]]: List of decoded strings, one per input in batch.
-        Raises:
-            AssertionError: If the number of generated outputs does not match input batch size.
         """
         
         # 设置 decoder_network 与 projection_layer 为评估模式，关闭 dropout 等训练行为
@@ -221,15 +217,20 @@ class Tokenizer(nn.Module):
                 embeddings.size(0), embeddings.size(1),
                 device=device, dtype=torch.long
             )
+
+            # Use the decoder's generate() method to autoregressively decode text from the input embeddings.
+            # The projected embeddings serve as encoder outputs in a typical encoder-decoder architecture,
+            # where the decoder attends to them via cross-attention at each step until max_length or EOS is reached.
             generated_t5_ids = self.decoder_network.generate(
                 encoder_outputs=encoder_outputs_tuple,
                 attention_mask=encoder_attention_mask,
                 max_length=max_length
             )
+
+            # Convert the generated output to a list of strings on CPU, skipping special tokens.
             generated_text = self.decoder_network_tokenizer.batch_decode(
                 generated_t5_ids, skip_special_tokens=True)
-            
-            # 返回结果时去掉起始的 decoder_start_token_id，并将结果转换为 CPU 上的 list 类型
+
             assert len(generated_text) == 1, f"Expected 1 generated text, got {len(generated_text)}"
             
             return generated_text[0]

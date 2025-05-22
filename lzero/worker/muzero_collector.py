@@ -543,10 +543,10 @@ class MuZeroCollector(ISerialCollector):
                         
                     text_bleu = compute_bleu(reference=groundtrut_next_text[env_id], prediction=pred_next_text[env_id])
                     
-                    # 是否输出高bleu的文本比较结果，用来检验decode下一latent的效果
-                    # if text_bleu > 0.85:
-                    #     print('='*30)
-                    #     print(f"pred_text={pred_next_text[env_id]}\ngroundtruth_text={groundtrut_next_text[env_id]}\ntext_bleu={text_bleu:.4f}")
+                    # Whether to output text comparisons with high BLEU scores to evaluate the effectiveness of decoding the next latent.
+                    if text_bleu > 0.85:
+                        print('='*30)
+                        print(f"pred_text={pred_next_text[env_id]}\ngroundtruth_text={groundtrut_next_text[env_id]}\ntext_bleu={text_bleu:.4f}")
 
                     pred_text.append(pred_next_text[env_id])
                     groundtruth_text.append(groundtrut_next_text[env_id])

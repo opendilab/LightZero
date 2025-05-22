@@ -1358,24 +1358,30 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'text':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=torch.float32)
-            # 重建损失： 预测下一latent的重建损失（经过backbone）
+            decode_loss_mode = self.config.decode_loss_mode 
+
+            # Reconstruction loss for predicting the next latent (via backbone)
             # input -> encoder -> backbone(unizero) -> decoder -> latent_recon_loss
-            next_latent_state = outputs.logits_observations[:, :-1, :]
-            next_target_ids = batch['observations'][:, 1:, :] 
+            if decode_loss_mode == "after_backbone":
+                next_latent_state = outputs.logits_observations[:, :-1, :]
+                next_target_ids = batch['observations'][:, 1:, :] 
 
-            latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
-                embeddings=next_latent_state,
-                target_ids=next_target_ids,
-            ).loss
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=next_latent_state,
+                    target_ids=next_target_ids,
+                ).loss
 
-            # 重建损失： 预测当前latent的重建损失（不经过backbone）
+            #Reconstruction loss for predicting the current latent (without using the backbone)
             # input -> encoder -> decoder -> latent_recon_loss
-            # latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
-            #     embeddings=obs_embeddings,
-            #     target_ids=batch['observations'],
-            # ).loss
-    
-            # latent_recon_loss = self.latent_recon_loss
+            elif decode_loss_mode == "before_backbone":
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=obs_embeddings,
+                    target_ids=batch['observations'],
+                ).loss
+
+            else:
+                latent_recon_loss = self.latent_recon_loss
+
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
@@ -1408,6 +1414,7 @@ class WorldModel(nn.Module):
         else:
             dormant_ratio_world_model = torch.tensor(0.)
 
+        # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
             target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
 
