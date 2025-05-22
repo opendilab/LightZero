@@ -54,6 +54,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0, local_window_size = 4):
                     local_window_size=local_window_size,
                     interleave_local_causal=False,
                     adaptive_span_regularization=0.0,
+                    gaam_span_diversity_coeff = 0.0,
                 ),
             ),
             model_path=None,

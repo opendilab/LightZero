@@ -229,6 +229,16 @@ def train_unizero(
             break
 
     learner.call_hook('after_run')
+
+    # ─── Final evaluation at end of training ─────────────────────────────────────
+    logging.info("Performing final evaluation at end of training...")
+    stop, final_reward = evaluator.eval(
+        learner.save_checkpoint,
+        learner.train_iter,
+        collector.envstep
+    )
+    logging.info(f"Final evaluation done")
+
     if cfg.policy.use_wandb:
         wandb.finish()
     logging.info("===== Training Completed =====")

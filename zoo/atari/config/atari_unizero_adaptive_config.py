@@ -58,8 +58,9 @@ def main(env_id='PongNoFrameskip-v4', seed=0, init_span = 4):
                     # Adaptive span parameters
                     init_adaptive_span=init_span,
                     max_adaptive_span=20.0,
-                    adaptive_span_regularization=1e-3,
+                    adaptive_span_regularization=0.0,
                     adaptive_regularization='l1',
+                    gaam_span_diversity_coeff=0.0,
                 ),
             ),
             model_path=None,

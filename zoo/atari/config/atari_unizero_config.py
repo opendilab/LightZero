@@ -57,17 +57,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0, local_window_size = 4):
                     adaptive_span_regularization=0,
                     local_window_size = local_window_size, # must be set
                     interleave_local_causal = True,
-
-                    # === Routing Transformer Parameters ===
-                    # routing_num_clusters=4,  # sqrt(20) ≈ 4–5
-                    # routing_update_interval=1,
-                    # routing_topk=32,
-                    # routing_decay=0.999,
-                    # routing_commitment=1e-4,
-                    # routing_num_mem_kv=0,
-                    # use_local_attention=False,
-                    # local_window_size=None,
-                    # routing_context_window_size=4,  # optional: match routing window
+                    gaam_span_diversity_coeff=0.0,
                 ),
             ),
             model_path=None,
