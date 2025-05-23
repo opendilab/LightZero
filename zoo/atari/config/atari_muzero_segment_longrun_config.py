@@ -26,8 +26,8 @@ def main(env_id, seed):
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/50
-    # buffer_reanalyze_freq = 1/10000
+    # buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/10000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -60,7 +60,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(50),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000000, ), ), ),  # default is 10000
             analysis_sim_norm=False,
             cal_dormant_ratio=False,
             model=dict(

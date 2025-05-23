@@ -26,11 +26,68 @@ from lzero.model.unizero_world_models.transformer import set_curriculum_stage_fo
 # ===== 新增依赖 =====
 import numpy as np                    # 计算均值
 from collections import defaultdict   # 保存所有任务最近一次评估分数
-
+import math
 
 # 保存最近一次评估回报：{task_id: eval_episode_return_mean}
 from collections import defaultdict
 GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
+
+
+def tasks_per_stage(unsolved: int, remain_lora: int) -> int:
+    """
+    仍未解决的任务数 / 仍未使用的 LoRA adapter 数
+    至少为 1，避免 0 除
+    """
+    return max(1, math.ceil(unsolved / max(remain_lora, 1)))
+
+
+class CurriculumController:
+    def __init__(self, cfg, policy):
+        mc = cfg.policy.model.world_model_cfg
+        self.stage_num        = mc.curriculum_stage_num
+        self.min_stage0_iters = mc.min_stage0_iters
+        self.max_stage_iters  = mc.max_stage_iters
+        self.policy           = policy
+
+        self.stage            = 0
+        self.last_switch_iter = 0
+        self.last_solved      = 0      # 已解决任务数上次快照
+
+    # 每个 train loop 末尾调用
+    def step(self, solved_cnt: int, unsolved_cnt: int, train_iter: int):
+        # ----- stage0 强制训练 -----
+        if self.stage == 0 and train_iter < self.min_stage0_iters:
+            return False
+
+        # ----- 是否需要切换 -----
+        need_switch = False
+
+        # 1. 任务进展触发
+        newly_solved = solved_cnt - self.last_solved
+        remain_lora  = self.stage_num - 1 - (self.stage - 0)  # stage0 不算
+        if remain_lora > 0:
+            tps = tasks_per_stage(unsolved_cnt, remain_lora)
+            if newly_solved >= tps:
+                need_switch = True
+
+        # 2. 迭代数上限触发
+        if train_iter - self.last_switch_iter >= self.max_stage_iters:
+            need_switch = True
+
+        # ----- 执行切换 -----
+        if need_switch and self.stage < self.stage_num - 1:
+            self.stage += 1
+            set_curriculum_stage_for_transformer(
+                self.policy._learn_model.world_model.transformer,
+                self.stage
+            )
+            logging.info(f'[Curriculum] switch to stage {self.stage} '
+                         f'(solved={solved_cnt}, unsolved={unsolved_cnt}, '
+                         f'iter={train_iter})')
+            self.last_solved      = solved_cnt
+            self.last_switch_iter = train_iter
+            return True
+        return False
 
 def compute_unizero_mt_normalized_stats(
         eval_returns: dict[int, float]
@@ -534,6 +591,8 @@ def train_unizero_multitask_balance_segment_ddp(
     # 初始化全局变量，用于课程学习：
     solved_task_pool = set()        # 记录已达到目标奖励的任务 id
     cur_curriculum_stage = 0
+    # 初始化一次（rank0 或各 rank 均可）
+    curr_ctrl = CurriculumController(cfg, policy)
 
     while True:
         last_curriculum_stage = cur_curriculum_stage
@@ -583,8 +642,8 @@ def train_unizero_multitask_balance_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
@@ -675,13 +734,12 @@ def train_unizero_multitask_balance_segment_ddp(
         #     for replay_buffer in game_buffers
         # )
 
-
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
-        # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
         
             # 计算任务权重时，只考虑未解决任务
             try:
@@ -732,13 +790,28 @@ def train_unizero_multitask_balance_segment_ddp(
         global_solved = sum(solved_counts_all)
 
         # 预设阶段数 N=3，每达到 M/N 个任务，即更新阶段（注意：total_tasks 为 M）
-        cur_curriculum_stage = int(global_solved // (total_tasks / cfg.policy.model.world_model_cfg.curriculum_stage_num))
-        print(f"Rank {rank}: cur_curriculum_stage {cur_curriculum_stage}, last_curriculum_stage:{last_curriculum_stage}")
-        
-        if cur_curriculum_stage != last_curriculum_stage:
-            print(f"Rank {rank}: Global curriculum stage 更新为 {cur_curriculum_stage} (全局已解决任务 ={solved_task_pool}, 全局已解决任务数 = {global_solved})")
-            # NOTE: TODO
-            set_curriculum_stage_for_transformer(policy._learn_model.world_model.transformer, cur_curriculum_stage)
+        # cur_curriculum_stage = int(global_solved // (total_tasks / cfg.policy.model.world_model_cfg.curriculum_stage_num))
+        # print(f"Rank {rank}: cur_curriculum_stage {cur_curriculum_stage}, last_curriculum_stage:{last_curriculum_stage}")
+        # if cur_curriculum_stage != last_curriculum_stage and not stage0_flag:
+        #     print(f"Rank {rank}: Global curriculum stage 更新为 {cur_curriculum_stage} (全局已解决任务 ={solved_task_pool}, 全局已解决任务数 = {global_solved})")
+        #     # NOTE: TODO
+        #     set_curriculum_stage_for_transformer(policy._learn_model.world_model.transformer, cur_curriculum_stage)
+        # stage0_flag = last_curriculum_stage == 0 and learner.train_iter < 10000 # TODO: 10k
+        # print(f"Rank {rank}: stage0_flag {stage0_flag}")
+
+
+        # ------ 训练循环尾 ------
+        unsolved_cnt = total_tasks - global_solved
+        switch = curr_ctrl.step(global_solved, unsolved_cnt, learner.train_iter)
+
+        if rank == 0:         # 只在 rank0 写 TensorBoard，避免重复
+            tb_logger.add_scalar('UniZero-MT/stage',   curr_ctrl.stage,   global_step=learner.train_iter)
+            tb_logger.add_scalar('UniZero-MT/last_solved', curr_ctrl.last_solved, global_step=learner.train_iter)
+
+        if switch:
+            dist.broadcast_object_list([curr_ctrl.stage], src=0)
+        else:
+            dist.barrier()          # 保证所有 GPU 同步
 
         # 同步所有Rank，确保所有Rank完成训练
         # try:

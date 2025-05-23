@@ -19,6 +19,28 @@ import sys
 
 sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
+from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
+
+
+import torch.distributed as dist
+
+# ------------------------------------------------------------
+# 1. 额外增加 learner 专用 process-group
+#    (在 main / learner 初始化时调用一次)
+# ------------------------------------------------------------
+def build_learner_group(learner_ranks: list[int]) -> dist.ProcessGroup:
+    """
+    learner_ranks 里只放 **真正执行 backward** 的那些 rank
+      例：CUDA_VISIBLE_DEVICES=0,1  →  learner_ranks=[0,1]
+    返回一个新的 ProcessGroup，后续给 GenericMoCo 使用
+    """
+    world_pg = dist.group.WORLD
+    pg = dist.new_group(ranks=learner_ranks, backend='nccl')
+    if dist.get_rank() in learner_ranks:
+        torch.cuda.set_device(learner_ranks.index(dist.get_rank()))
+    return pg
+
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
@@ -466,10 +488,40 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 将 wrapped_model 作为 share_model 传递给 GradCorrect
             # ========= 初始化 MoCo CAGrad 参数 =========
             # self.grad_correct = GradCorrect(self.wrapped_model, self.task_num_for_current_rank, self._cfg.device)
-            self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+            
+            if self._cfg.moco_version=="v0":
+                self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+                self.grad_correct.init_param()  
+                self.grad_correct.rep_grad = False
+            elif self._cfg.moco_version=="v1":
+                # learner_ranks = [0, 1]          # 只把 learner 的 rank 列出来
+                # learner_pg = build_learner_group(learner_ranks)
 
-            self.grad_correct.init_param()  
-            self.grad_correct.rep_grad = False
+                # cfg_moco = MoCoCfg(beta0=0.9, beta_sigma=0.5,
+                #     gamma0=10,  gamma_sigma=0.5,
+                #     rho=0.01,   stat_interval=5000)
+                cfg_moco = MoCoCfg(
+                    beta0=0.9,  beta_sigma=0.95,
+                    gamma0=0.1, gamma_sigma=0.95,
+                    rho=0.01,   stat_interval=5000)
+                self.grad_correct = FastMoCo(
+                    shared_module=self.wrapped_model,
+                    world_task_num=self._cfg.total_task_num,   # 全局任务数
+                    device=self._cfg.device,
+                    multi_gpu=self._cfg.multi_gpu,
+                    cfg=cfg_moco,
+                )
+                # self.grad_correct._init_state() 
+
+                                # self.grad_correct = GenericMoCo(
+                #     shared_module=self.wrapped_model,
+                #     world_task_num=self._cfg.total_task_num,   # 全局任务数
+                #     device=self._cfg.device,
+                #     multi_gpu=self._cfg.multi_gpu,
+                #     cfg=cfg_moco,
+                #     # pg=learner_pg
+                # )
+                # self.grad_correct.init_param()
 
         # 用于缓存上一帧的可塑性相关指标
         self._prev_plasticity_metrics = dict(
@@ -732,7 +784,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
-            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            if self._cfg.moco_version=="v0":
+                lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            elif self._cfg.moco_version=="v1":
+                lambd, stats = self.grad_correct.backward(losses_list)
+        
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
@@ -781,6 +837,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             #     self.sync_gradients(self._learn_model)
             if not self._cfg.use_moco:
                 self.sync_gradients(self._learn_model)
+            
+            # print(f'Rank {dist.get_rank()} train task_id: {self._cfg.task_id} sync grad end...')
 
         # print("=== Step 前，参数梯度详细信息 ===")
         # for idx, param in enumerate(self.grad_correct.share_model.parameters()):

@@ -46,7 +46,7 @@ class CurriculumLoRALinear(nn.Module):
     """
     def __init__(self, in_features: int, out_features: int, bias: bool = True,
                  r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0.0,
-                 curriculum_stage_num: int = 1):
+                 curriculum_stage_num: int = 1, lora_scale_init=1.0):
         """
         如果 curriculum_stage_num > 1，则初始化 (curriculum_stage_num - 1) 个 LoRA adapter。
         """
@@ -74,6 +74,7 @@ class CurriculumLoRALinear(nn.Module):
 
         # 初始化 LoRA adapter，只有在 r > 0 且 curriculum_stage_num > 1 时才存在
         self.adapters = nn.ModuleList()
+        self.adapter_scales = nn.ParameterList()
         if r > 0 and (curriculum_stage_num - 1) > 0:
             for i in range(curriculum_stage_num - 1):
                 adapter = nn.ParameterDict({
@@ -81,6 +82,10 @@ class CurriculumLoRALinear(nn.Module):
                     'lora_B': nn.Parameter(torch.zeros(out_features, r))
                 })
                 self.adapters.append(adapter)
+
+                self.adapter_scales.append(  #  ← 新增
+                    nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
+                )
         else:
             self.adapters = None
 
@@ -116,6 +121,7 @@ class CurriculumLoRALinear(nn.Module):
                 for idx, adapter in enumerate(self.adapters):
                     adapter['lora_A'].requires_grad = False
                     adapter['lora_B'].requires_grad = False
+                self.adapter_scales[idx].requires_grad = True   #  ← 新增
             logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: 基础层可训练，所有 adapter 均冻结。")
         else:
             # 阶段大于 0，冻结基础层
@@ -123,6 +129,7 @@ class CurriculumLoRALinear(nn.Module):
             if self.bias is not None:
                 self.bias.requires_grad = False
             for idx, adapter in enumerate(self.adapters):
+                self.adapter_scales[idx].requires_grad = True   #  ← 新增
                 if idx == stage - 1:
                     adapter['lora_A'].requires_grad = True
                     adapter['lora_B'].requires_grad = True
@@ -145,10 +152,11 @@ class CurriculumLoRALinear(nn.Module):
             adapter = self.adapters[idx]
             out = F.linear(self.lora_dropout(x), adapter['lora_A'])
             out = F.linear(out, adapter['lora_B'])
+            scale = self.adapter_scales[idx] # TODO
             if idx == self.curriculum_stage - 1:
-                adapter_out = adapter_out + self.scaling * out  # 当前 adapter参与更新
+                adapter_out = adapter_out + self.scaling * out * scale  # 当前 adapter参与更新
             else:
-                adapter_out = adapter_out + self.scaling * out.detach()
+                adapter_out = adapter_out + self.scaling * out.detach() * scale
         return baseline_out + adapter_out
 
 ##############################################
@@ -172,7 +180,8 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
             r=config.lora_r,
             lora_alpha=config.lora_alpha,
             lora_dropout=config.lora_dropout,
-            curriculum_stage_num=config.curriculum_stage_num
+            curriculum_stage_num=config.curriculum_stage_num,
+             lora_scale_init        = config.lora_scale_init # todo
         )
         new_linear.weight.data.copy_(linear.weight.data)
         if linear.bias is not None:
@@ -239,7 +248,10 @@ class TransformerConfig:
 
     # 课程学习相关参数：
     # curriculum_stage_num 表示总阶段数（例如 3 表示阶段 0,1,2）
-    curriculum_stage_num: int = 1
+    curriculum_stage_num: int = 5        # 1 + 可用的 LoRA adapter 数
+    min_stage0_iters:   int = 10_000     # stage0 最少迭代
+    max_stage_iters:    int = 20_000     # 每个 stage 最多迭代
+    lora_scale_init:    float = 1.0      # 每个 adapter 的可学习初值
 
     # 其它配置项（略）
     task_embed_option: str = "none"

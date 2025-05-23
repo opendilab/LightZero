@@ -22,6 +22,22 @@ import torch.nn.functional as F
 
 import torch.distributed as dist
 
+# ------------------------------------------------------------
+# 1. 额外增加 learner 专用 process-group
+#    (在 main / learner 初始化时调用一次)
+# ------------------------------------------------------------
+def build_learner_group(learner_ranks: list[int]) -> dist.ProcessGroup:
+    """
+    learner_ranks 里只放 **真正执行 backward** 的那些 rank
+      例：CUDA_VISIBLE_DEVICES=0,1  →  learner_ranks=[0,1]
+    返回一个新的 ProcessGroup，后续给 GenericMoCo 使用
+    """
+    world_pg = dist.group.WORLD
+    pg = dist.new_group(ranks=learner_ranks, backend='nccl')
+    if dist.get_rank() in learner_ranks:
+        torch.cuda.set_device(learner_ranks.index(dist.get_rank()))
+    return pg
+    
 import concurrent.futures
 # ====== UniZero-MT 归一化所需基准分数 (26 Atari100k task_id 对应索引) ======
 # 原始的 RANDOM_SCORES 和 HUMAN_SCORES
@@ -624,8 +640,8 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
             # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
@@ -701,11 +717,12 @@ def train_unizero_multitask_segment_ddp(
             for replay_buffer in game_buffers
         )
 
+        print(f"not_enough_data:{not_enough_data}")
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
-        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
-        # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
         
             # 计算任务权重
             try:
@@ -750,6 +767,10 @@ def train_unizero_multitask_segment_ddp(
                 break
 
 
+        # ---------------- 采样完成，准备进入反向 ----------------
+        # if dist.is_available() and dist.is_initialized():
+        #     dist.barrier()                 # ★★★ 关键同步 ★★★
+
         # 学习策略
         if not not_enough_data:
             for i in range(update_per_collect):
@@ -783,11 +804,14 @@ def train_unizero_multitask_segment_ddp(
                     # learn_kwargs = {'task_exploitation_weight':task_exploitation_weight, 'task_weights':task_weights, }
                     # learn_kwargs = {'task_weights': task_weights, }
                     # learn_kwargs = {'task_weights':task_exploitation_weight}
-                    learn_kwargs = {'task_weights': None, }
 
+                    learn_kwargs = {'task_weights': None,}
+                    # logging.info(f'Rank {rank}: iter {i} one learn step start')
 
                     # 在训练时，DDP会自动同步梯度和参数
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
+
+                    # logging.error(f'Rank {rank}: one learn step done')
 
                     # 判断是否需要计算task_exploitation_weight
                     if i == 0:
