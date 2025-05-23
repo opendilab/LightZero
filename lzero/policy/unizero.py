@@ -693,8 +693,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 next_latent_state = next_latent_state_with_env[i][action]
-
-                predicted_ids = self._collect_model.tokenizer.decode_to_language_logits_for_inference(embeddings=next_latent_state, max_length=256,  pad_token_id=0, eos_token_id=102)
+                # 输出 decoder 解码下一 latent 的纯文本内容
+                predicted_next = self._collect_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
 
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
@@ -711,7 +711,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                     'timestep': timestep[i],
-                    'predicted_next_ids': predicted_ids,
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 
@@ -820,10 +820,9 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 # 通过选中的action和policy预测得到下一个latent state
                 next_latent_state = next_latent_state_with_env[i][action]
-                predicted_ids = self._eval_model.tokenizer.decode_to_language_logits_for_inference(embeddings=next_latent_state,
-                                                                                                    max_length=256,
-                                                                                                    pad_token_id=0,
-                                                                                                    eos_token_id=102)
+                # 输出 decoder 解码下一 latent 的纯文本内容
+                predicted_next = self._eval_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
@@ -832,7 +831,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                     'timestep': timestep[i],
-                    'predicted_next_ids': predicted_ids,
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 

@@ -16,33 +16,25 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
-    gpu_num = 4
+    gpu_num = 2
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     batch_size = int(8*gpu_num)
+
+    # TODO
+    # batch_size = batch_size * 2
 
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
     # ------------------------------------------------------------------
     # Define environment configurations
 
-    # v1
     env_configurations = {
         'detective.z5': (12, 100),
-        'omniquest.z5': (25, 150),
-        'acorncourt.z5': (30, 50),
-        'zork1.z5': (40, 400),
+        'omniquest.z5': (25, 100),
+        'acorncourt.z5': (45, 50),
+        'zork1.z5': (55, 500),
     }
-
-    # v0
-    # env_configurations = {
-    #     'detective.z5': (10, 50),
-    #     'omniquest.z5': (10, 100),
-    #     'acorncourt.z5': (10, 50),
-    #     'zork1.z5': (10, 400),
-    # }
-
-    # msteps=500 bug
 
     env_id = 'detective.z5'
     # env_id = 'omniquest.z5'
@@ -117,7 +109,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     ),
                 ),
             ),
-            accumulation_steps=1,  # TODO: Accumulated gradient steps (currently default)
+            accumulation_steps=4,  # TODO: Accumulated gradient steps (currently default)
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
@@ -133,7 +125,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     # final_norm_option_in_encoder='SimNorm',
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     policy_entropy_weight=5e-2,
-                    # policy_entropy_weight=0.5,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     # Note: Each timestep contains 2 tokens: observation and action.
@@ -146,10 +137,12 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     embed_dim=embed_dim,
                     obs_type="text",  # TODO: Modify as needed.
                     env_num=max(collector_env_num, evaluator_env_num),
-                    latent_recon_loss_weight=0.1
+                    decode_loss_mode='after_backbone', # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
+                    latent_recon_loss_weight=0.1 # TODO: decoder loss weight
                 ),
             ),
-            update_per_collect=int(collector_env_num*max_steps*replay_ratio),  # Important for DDP
+            # TODO 
+            update_per_collect=int(collector_env_num*max_steps*replay_ratio*4 ),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
             num_unroll_steps=num_unroll_steps,
@@ -161,13 +154,12 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             fixed_temperature_value=0.25,
             manual_temperature_decay=False,
             # manual_temperature_decay=True,
-            # threshold_training_steps_for_final_lr_temperature=3000,
 
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
             replay_buffer_size=int(5e5),
-            eval_freq=int(1e4),
+            eval_freq=int(3e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # Reanalysis key parameters:
@@ -209,7 +201,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho_0428/bge-base-en-v1.5/uz_final-ln_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho_0518/bge-base-en-v1.5/{env_id}/uz_final-ln_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )

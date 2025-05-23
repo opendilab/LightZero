@@ -1297,14 +1297,6 @@ class WorldModel(nn.Module):
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
-        # ========= for visual analysis =========
-        # Uncomment the lines below for visual analysis in Pong
-        # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
-        # Uncomment the lines below for visual analysis in visual match
-        # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
-
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
             # Calculate dormant ratio of the encoder
@@ -1321,6 +1313,15 @@ class WorldModel(nn.Module):
         # Calculate the L2 norm of the latent state roots
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
 
+        # Action tokens
+        if self.continuous_action_space:
+            act_tokens = batch['actions']
+        else:
+            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+
+        # Forward pass to obtain predictions for observations, rewards, and policies
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
+        
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
@@ -1357,28 +1358,30 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'text':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=torch.float32)
-            # # Reconstruct observations from latent state representations
-            # reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings, batch['observations'])
-            # # # Calculate reconstruction loss
-            # latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits, ignore_index=0)
-            
-            pad_id    = self.tokenizer.decoder_network.config.pad_token_id            # ==0 for t5-small
-            start_id  = self.tokenizer.decoder_network.config.decoder_start_token_id  # ==0 for t5-small
+            decode_loss_mode = self.config.decode_loss_mode 
 
-            reconstructed_logits = self.tokenizer.decode_to_language_logits(
-                obs_embeddings,
-                batch['observations'],
-                pad_token_id          = pad_id,
-                decoder_start_token_id= start_id,
-            )
+            # Reconstruction loss for predicting the next latent (via backbone)
+            # input -> encoder -> backbone(unizero) -> decoder -> latent_recon_loss
+            if decode_loss_mode == "after_backbone":
+                next_latent_state = outputs.logits_observations[:, :-1, :]
+                next_target_ids = batch['observations'][:, 1:, :] 
 
-            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(
-                batch['observations'],
-                reconstructed_logits,
-                ignore_index = pad_id,     # 仍然忽略 <pad>
-            )
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=next_latent_state,
+                    target_ids=next_target_ids,
+                ).loss
 
-            # latent_recon_loss = self.latent_recon_loss
+            #Reconstruction loss for predicting the current latent (without using the backbone)
+            # input -> encoder -> decoder -> latent_recon_loss
+            elif decode_loss_mode == "before_backbone":
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=obs_embeddings,
+                    target_ids=batch['observations'],
+                ).loss
+
+            else:
+                latent_recon_loss = self.latent_recon_loss
+
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
@@ -1399,15 +1402,6 @@ class WorldModel(nn.Module):
             latent_recon_loss = self.latent_recon_loss
             perceptual_loss = self.perceptual_loss
 
-        # Action tokens
-        if self.continuous_action_space:
-            act_tokens = batch['actions']
-        else:
-            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
-
-        # Forward pass to obtain predictions for observations, rewards, and policies
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
-
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
             # Calculate dormant ratio of the world model
@@ -1419,19 +1413,6 @@ class WorldModel(nn.Module):
             torch.cuda.empty_cache()
         else:
             dormant_ratio_world_model = torch.tensor(0.)
-
-        #  ========== for visualization ==========
-        # Uncomment the lines below for visualization
-        # predict_policy = outputs.logits_policy
-        # predict_policy = F.softmax(outputs.logits_policy, dim=-1)
-        # predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # import pdb; pdb.set_trace()
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0613')
-
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode')
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
-        #  ========== for visualization ==========
 
         # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
@@ -1599,6 +1580,7 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
+    
     # TODO: test correctness
     def _calculate_policy_loss_cont_simple(self, outputs, batch: dict):
         """
