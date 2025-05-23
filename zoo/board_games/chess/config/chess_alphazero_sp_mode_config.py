@@ -11,15 +11,17 @@ update_per_collect = 200
 batch_size = 512
 max_env_step = int(1e6)
 mcts_ctree = True
+# mcts_ctree = False
+
 
 # TODO: for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 4
-# update_per_collect = 2
-# batch_size = 2
-# max_env_step = int(1e4)
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 4
+update_per_collect = 2
+batch_size = 2
+max_env_step = int(1e4)
 # mcts_ctree = False
 # ==============================================================
 # end of the most frequently changed config specified by the user

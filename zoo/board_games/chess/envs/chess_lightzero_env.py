@@ -57,6 +57,8 @@ class ChessLightZeroEnv(ChessEnv):
             observation = chess_utils.get_observation(self.board, agent_index).astype(float)  # TODO
         except Exception as e:
             print('debug')
+            print(f"self.board:{self.board}")
+
 
         # TODO:
         # observation = np.dstack((observation[:, :, :7], self.board_history))
@@ -109,10 +111,6 @@ class ChessLightZeroEnv(ChessEnv):
         return done, winner
 
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
-        if self.alphazero_mcts_ctree and init_state is not None:
-            # Convert byte string to np.ndarray
-            init_state = np.frombuffer(init_state, dtype=np.int32)
-
         if self.scale:
             self._observation_space = spaces.Dict(
                 {
@@ -131,8 +129,16 @@ class ChessLightZeroEnv(ChessEnv):
         self._reward_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
+        
         if init_state is not None:
-            self.board = chess.Board(init_state)
+            if isinstance(init_state, np.ndarray):
+                # ndarray → bytes → str
+                fen = init_state.tobytes().decode()
+            elif isinstance(init_state, (bytes, bytearray)):
+                fen = init_state.decode()
+            else: # init_state is str
+                fen = init_state
+            self.board = chess.Board(fen)
         else:
             self.board = chess.Board()
 
