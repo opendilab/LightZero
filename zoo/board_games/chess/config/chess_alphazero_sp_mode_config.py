@@ -10,24 +10,22 @@ num_simulations = 400
 update_per_collect = 200
 batch_size = 512
 max_env_step = int(1e6)
-mcts_ctree = True
-# mcts_ctree = False
-
+mcts_ctree = False
 
 # TODO: for debug
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 4
-update_per_collect = 2
-batch_size = 2
-max_env_step = int(1e4)
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 2
+# update_per_collect = 1
+# batch_size = 2
+# max_env_step = int(1e4)
 # mcts_ctree = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 chess_alphazero_config = dict(
-    exp_name='data_az_ctree/chess_sp-mode_alphazero_seed0',
+    exp_name='data_az_ptree/chess_sp-mode_alphazero_seed0',
     env=dict(
         board_size=8,
         battle_mode='self_play_mode',
@@ -58,14 +56,14 @@ chess_alphazero_config = dict(
             observation_shape=(8, 8, 20),
             action_space_size=int(8 * 8 * 73),
             # TODO: for debug
-            num_res_blocks=1,
-            num_channels=1,
-            value_head_hidden_channels=[16],
-            policy_head_hidden_channels=[16],
-            # num_res_blocks=8,
-            # num_channels=256,
-            # value_head_hidden_channels=[256, 256],
-            # policy_head_hidden_channels=[256, 256],
+            # num_res_blocks=1,
+            # num_channels=1,
+            # value_head_hidden_channels=[16],
+            # policy_head_hidden_channels=[16],
+            num_res_blocks=8,
+            num_channels=256,
+            value_head_hidden_channels=[256, 256],
+            policy_head_hidden_channels=[256, 256],
         ),
         cuda=True,
         board_size=8,
