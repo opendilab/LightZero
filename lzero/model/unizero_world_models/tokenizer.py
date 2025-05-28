@@ -188,25 +188,23 @@ class Tokenizer(nn.Module):
             List[List[int]]: List of decoded strings, one per input in batch.
         """
         
-        # 设置 decoder_network 与 projection_layer 为评估模式，关闭 dropout 等训练行为
+        # Set decoder_network and projection_layer to evaluation mode to disable dropout and other training-specific behaviors.
         self.decoder_network.eval()
         self.projection_layer.eval()
 
-        # 如果 embeddings 不是 Tensor，则转换为 torch.Tensor
+        # If embeddings is not a Tensor, convert it to a torch.Tensor.
         if not isinstance(embeddings, torch.Tensor):
             embeddings = torch.tensor(embeddings, dtype=torch.float32)
         
-        # 尝试从 decoder_network 获取设备信息，如果没有则从模型参数中获取
+        # Attempt to retrieve the device information from decoder_network; if unavailable, fall back to the model’s parameters.
         try:
             device = self.decoder_network.device
         except AttributeError:
             device = next(self.decoder_network.parameters()).device
             
-        # 将 embeddings 移动到正确的设备上
         embeddings = embeddings.to(device)
 
-        with torch.no_grad():  # 在推理过程中关闭梯度计算，节约显存和计算
-
+        with torch.no_grad(): 
             if embeddings.dim() == 2:
                 embeddings = embeddings.unsqueeze(1)
 

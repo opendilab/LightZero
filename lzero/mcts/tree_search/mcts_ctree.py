@@ -93,6 +93,8 @@ class UniZeroMCTSCtree(object):
 
             # preparation some constant
             batch_size = roots.num
+
+            # Store the latent state of each possible action at the MCTS root for each environment.
             first_action_latent_map = {env_id: {} for env_id in range(batch_size)} # {env_id: {action: latent_state}} 
 
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
