@@ -693,8 +693,12 @@ class UniZeroPolicy(MuZeroPolicy):
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 next_latent_state = next_latent_state_with_env[i][action]
-                # 输出 decoder 解码下一 latent 的纯文本内容
-                predicted_next = self._collect_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                
+                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._collect_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
 
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
@@ -818,10 +822,14 @@ class UniZeroPolicy(MuZeroPolicy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                # 通过选中的action和policy预测得到下一个latent state
+                # Predict the next latent state based on the selected action and policy
                 next_latent_state = next_latent_state_with_env[i][action]
-                # 输出 decoder 解码下一 latent 的纯文本内容
-                predicted_next = self._eval_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+
+                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._eval_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
 
                 output[env_id] = {
                     'action': action,

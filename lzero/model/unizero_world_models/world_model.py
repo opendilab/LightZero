@@ -97,17 +97,19 @@ class WorldModel(nn.Module):
 
         # print(self.tokenizer.encoder.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
 
-        # 首先，构建需要跳过初始化的模块集合
+        # First, build the set of modules to skip during re-initialization
         skip_modules = set(self.tokenizer.encoder.pretrained_model.modules())
         skip_modules.update(self.tokenizer.decoder_network.modules())
 
         def custom_init(module):
-            # 如果当前 module 属于跳过初始化的模块，则直接返回
+            # If the current module is part of the skip list, return without reinitializing
             if module in skip_modules:
                 return
-            # 否则使用指定的初始化方法
+            # Otherwise, apply the specified initialization method
             init_weights(module, norm_type=self.config.norm_type)
-        # 递归地对模型中所有子模块应用 custom_init 函数
+
+        # Recursively apply `custom_init` to all submodules of the model
+        # NOTE: This step is crucial — without skipping, pretrained modules (e.g., encoder/decoder) would be unintentionally re-initialized
         self.apply(custom_init)
 
         # Apply weight initialization, the order is important
@@ -1413,6 +1415,19 @@ class WorldModel(nn.Module):
             torch.cuda.empty_cache()
         else:
             dormant_ratio_world_model = torch.tensor(0.)
+
+        #  ========== for visualization ==========
+        # Uncomment the lines below for visualization
+        # predict_policy = outputs.logits_policy
+        # predict_policy = F.softmax(outputs.logits_policy, dim=-1)
+        # predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
+        # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
+        # import pdb; pdb.set_trace()
+        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0613')
+
+        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode')
+        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
+        #  ========== for visualization ==========
 
         # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():

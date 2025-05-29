@@ -729,7 +729,6 @@ class RepresentationNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
-        # self.sim_norm = SimNorm(simnorm_dim=group_size)
 
         # # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
