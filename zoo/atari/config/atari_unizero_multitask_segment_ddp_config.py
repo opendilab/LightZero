@@ -6,13 +6,16 @@ def compute_batch_config(env_id_list, effective_batch_size):
     n = len(env_id_list)
     
     # 根据环境数量设定有效 batch size 和每个环境的最大微 batch size
-    gpu_num = 8
+    gpu_num = 8 # TODO：修改
     if n<=8:
         max_micro_batch_one_gpu = 400
     else:
         max_micro_batch_one_gpu = 400
 
-    max_micro_batch = int(max_micro_batch_one_gpu / (n // gpu_num))
+    # max_micro_batch = int(max_micro_batch_one_gpu / (n // gpu_num))
+
+    div = max(1, math.ceil(n / gpu_num))  # 至少分到 1, 否则除 0
+    max_micro_batch = max_micro_batch_one_gpu // div
 
     # 计算每个环境理论上应该分得的 batch size
     theoretical_env_batch = effective_batch_size / n
@@ -86,13 +89,13 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # use_global_pooling=True,
                     use_global_pooling=False,
 
-                    # final_norm_option_in_obs_head='LayerNorm', # ==============TODO:orig==============
-                    # final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    final_norm_option_in_obs_head='LayerNorm', # ==============TODO:orig==============
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
                                         
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
-                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    # final_norm_option_in_obs_head='SimNorm',
+                    # final_norm_option_in_encoder='SimNorm',
+                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                    
                     # share_head=True, # TODO
                     share_head=False, # TODO
@@ -105,12 +108,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     continuous_action_space=False,
                                         
-                    # task_embed_option=None,   # ==============TODO:orig==============
-                    # use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   # ==============TODO:orig==============
+                    use_task_embed=False, # ==============TODO==============
 
-                    task_embed_option='concat_task_embed', 
-                    use_task_embed=True, # ==============TODO: taskembed128==============
-                    task_embed_dim=128,
+                    # task_embed_option='concat_task_embed', 
+                    # use_task_embed=True, # ==============TODO: taskembed128==============
+                    # task_embed_dim=128,
 
                     use_shared_projection=False,
                     max_blocks=num_unroll_steps,
@@ -169,9 +172,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            # # update_per_collect=160, # TODO: replay_ratio=1  20*8*1=160 not-use now
-            # update_per_collect=80, # TODO: replay_ratio=0.5  20*8*0.5=80 atari8-nlayer8 atari26
-            update_per_collect=40, # TODO: replay_ratio=0.25  20*8*0.25=40  atari8-nlayer4
+            # update_per_collect=160, # TODO: replay_ratio=1  20*8*1=160 not-use now
+            update_per_collect=80, # TODO: replay_ratio=0.5  20*8*0.5=80 atari8-nlayer8 atari26
+            # update_per_collect=40, # TODO: replay_ratio=0.25  20*8*0.25=40  atari8-nlayer4
             # update_per_collect=2, # TODO: only for debug
             replay_ratio=0.25,
             batch_size=batch_size,
@@ -203,7 +206,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_atari_mt_20250522/atari_{len(env_id_list)}games_orig_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250522/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    exp_name_prefix = f'data_unizero_atari_mt_20250522/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_taskembed128_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250530/atari_{len(env_id_list)}games_orig_vit_ln-mse_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250521/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_taskembed128_tran-nlayer{num_layers}_rr1_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
@@ -246,6 +249,11 @@ if __name__ == "__main__":
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
 
+        =========== volce atari8 =========================
+        cd /fs-computility/niuyazhe/puyuan/code/LightZero/
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /fs-computility/niuyazhe/puyuan/code/LightZero/log/20250509/uz_mt_atari8_orig_vit_ln-mse_moe8_nlayer8_brf002_seed12.log
+
+
         =========== cpfs atari8 =========================
         cd /cpfs04/user/puyuan/code/LightZero/
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_simnorm-kl_vit_moe8_taskembed128_nlayer4_seed01.log
@@ -286,7 +294,7 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 4 # ==============TODO==============
+    num_layers = 8 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -333,12 +341,12 @@ if __name__ == "__main__":
     total_batch_size =  effective_batch_size # 当前无效
 
     num_unroll_steps = 10
-    # infer_context_length = 4
-    infer_context_length = 5 # ==============TODO==============
+    infer_context_length = 4
+    # infer_context_length = 5 # ==============TODO==============
 
     norm_type = 'LN'
-    # buffer_reanalyze_freq = 1 / 50
-    buffer_reanalyze_freq = 1 / 1000000
+    buffer_reanalyze_freq = 1 / 50
+    # buffer_reanalyze_freq = 1 / 1000000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
@@ -353,8 +361,8 @@ if __name__ == "__main__":
     # infer_context_length = 2
     # batch_sizes = [4 for _ in range(len(env_id_list))]
 
-
-    for seed in [0,1]:
+    import torch.distributed as dist
+    for seed in [1]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
@@ -364,3 +372,6 @@ if __name__ == "__main__":
             train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name= "atari" )
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+
+            dist.destroy_process_group()
+    
