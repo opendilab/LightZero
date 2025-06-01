@@ -184,8 +184,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            eval_freq=int(1e4), # TODO: 
-            # eval_freq=int(2e4),
+            # eval_freq=int(1e4), # TODO: 8games
+            eval_freq=int(2e4),  # TODO: 26games
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -204,12 +204,12 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
 
 
     # ========= TODO: global BENCHMARK_NAME =========
-    exp_name_prefix = f'data_unizero_atari_mt_20250527/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250527/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250522/atari_{len(env_id_list)}games_orig_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250527/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moco-v2_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    exp_name_prefix = f'data_unizero_atari_mt_20250530/atari_{len(env_id_list)}games_orig_vit_ln-mse_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250601/atari_{len(env_id_list)}games_orig_vit_ln-mse_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250521/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_taskembed128_tran-nlayer{num_layers}_rr1_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
@@ -254,7 +254,7 @@ if __name__ == "__main__":
 
         =========== volce atari8 =========================
         cd /fs-computility/niuyazhe/puyuan/code/LightZero/
-        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /fs-computility/niuyazhe/puyuan/code/LightZero/log/20250509/uz_mt_atari8_orig_vit_ln-mse_moe8_nlayer8_brf002_seed12.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /fs-computility/niuyazhe/puyuan/code/LightZero/log/20250509/uz_mt_atari26_orig_vit_ln-mse_moe8_nlayer8_brf002_seed12.log
 
 
         =========== cpfs atari8 =========================
@@ -306,7 +306,7 @@ if __name__ == "__main__":
     import os
 
 
-    num_games = 8 # 26 # 8
+    num_games = 26 # 26 # 8
     num_layers = 8 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
@@ -383,7 +383,7 @@ if __name__ == "__main__":
 
 
     import torch.distributed as dist
-    for seed in [1]:
+    for seed in [1,2]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,

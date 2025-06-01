@@ -17,7 +17,9 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
+# sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
+sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
+
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
 from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
@@ -634,11 +636,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # rank = get_rank()
             # print(f'Rank {rank}: cfg.policy.task_id : {self._cfg.task_id}, self._cfg.batch_size {self._cfg.batch_size}')
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            cur_batch_size = target_reward.size(0)          # run-time batch
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            target_reward = target_reward.view(cur_batch_size, -1)
+            target_value = target_value.view(cur_batch_size, -1)
+
+            # target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            # target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
             # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
@@ -654,10 +658,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape)
+                    cur_batch_size, -1, self._cfg.model.observation_shape)
             elif len(self._cfg.model.observation_shape) == 3:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape)
+                    cur_batch_size, -1, *self._cfg.model.observation_shape)
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
