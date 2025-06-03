@@ -84,7 +84,7 @@ class WorldModel(nn.Module):
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
-                                                    self._get_final_norm(self.final_norm_option_in_obs_head)  # 使用指定的归一化方法
+                                                    self._get_final_norm(self.final_norm_option_in_obs_head)  # using the specified normalization method
                                                 #    self.sim_norm
                                                    )  # NOTE: we add a sim_norm to the head for observations
         if self.continuous_action_space:
@@ -158,7 +158,7 @@ class WorldModel(nn.Module):
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
-        根据指定的归一化选项返回相应的归一化模块。
+        Return the corresponding normalization module based on the specified normalization option.
         """
         if norm_option == 'LayerNorm':
             return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
@@ -1298,6 +1298,15 @@ class WorldModel(nn.Module):
         start_pos = batch['timestep']
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
+
+        # ========= for visual analysis =========
+        # Uncomment the lines below for visual analysis in Pong
+        # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
+        # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
+        # Uncomment the lines below for visual analysis in visual match
+        # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
+        # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
+
 
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
