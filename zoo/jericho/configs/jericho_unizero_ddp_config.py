@@ -52,7 +52,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     infer_context_length: int = 4    # Inference context length
 
     num_layers: int = 2              # Number of layers in the model
-    # replay_ratio: float = 0.25       # Replay ratio for experience replay
     replay_ratio: float = 0.1       # Replay ratio for experience replay
     embed_dim: int = 768             # Embedding dimension
 
@@ -116,7 +115,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                 world_model_cfg=dict(
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    predict_latent_loss_type='mse',
                     policy_entropy_weight=5e-2,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -194,7 +193,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_final-ln_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )

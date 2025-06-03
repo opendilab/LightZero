@@ -364,12 +364,11 @@ class DownSample(nn.Module):
 
 class HFLanguageRepresentationNetwork(nn.Module):
     def __init__(self,
-                 model_path: str = 'google-bert/bert-base-uncased',
-                 embedding_size: int = 768,
-                 group_size: int = 8,
-                 final_norm_option_in_encoder: str = "simnorm",
-                #  final_norm_option_in_encoder: str = "layernorm", # TODO: Why does nan appear in the first step of training?
-                 tokenizer=None):
+                model_path: str = 'google-bert/bert-base-uncased',
+                embedding_size: int = 768,
+                group_size: int = 8,
+                final_norm_option_in_encoder: str = "layernorm",
+                tokenizer=None):
         """
         Overview:
             This class defines a language representation network that utilizes a pretrained Hugging Face model.

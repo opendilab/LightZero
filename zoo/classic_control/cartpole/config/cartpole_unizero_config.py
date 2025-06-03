@@ -15,7 +15,6 @@ reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-
 cartpole_unizero_config = dict(
     exp_name=f'data_unizero/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
@@ -39,8 +38,7 @@ cartpole_unizero_config = dict(
             world_model_cfg=dict(
                 final_norm_option_in_obs_head='LayerNorm',
                 final_norm_option_in_encoder='LayerNorm',
-                predict_latent_loss_type='mse', # TODO: for latent state layer_norm
-
+                predict_latent_loss_type='mse',
                 max_blocks=10,
                 max_tokens=2 * 10,
                 context_length=2 * 4,

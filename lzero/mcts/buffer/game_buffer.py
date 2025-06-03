@@ -153,7 +153,7 @@ class GameBuffer(ABC, object):
             # [0, game_segment_length - num_unroll_steps] to avoid padded data.
             
             if self._cfg.action_type == 'varied_action_space':
-                # For multi-environment training (e.g., Jericho), each environment may have a different discrete action space size.
+                # For some environments (e.g., Jericho), the action space size may be different.
                 # To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),
                 # we avoid sampling from the last `num_unroll_steps` steps of the game segment. 
                 if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:

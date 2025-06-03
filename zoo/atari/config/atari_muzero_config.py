@@ -29,7 +29,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_muzero_shm/{env_id[:-14]}_atari_stack4_muzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
+    exp_name=f'data_muzero/{env_id[:-14]}_atari_stack4_muzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -39,7 +39,7 @@ atari_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        manager=dict(shared_memory=True, ),
+        manager=dict(shared_memory=False, ),
         # TODO: debug
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),

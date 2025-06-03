@@ -78,15 +78,13 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
-        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm')
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
-                                                    self._get_final_norm(self.final_norm_option_in_obs_head)  # using the specified normalization method
-                                                #    self.sim_norm
-                                                   )  # NOTE: we add a sim_norm to the head for observations
+                                                    self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
+                                                   )
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
             self.bound_type = self.config.bound_type
@@ -95,11 +93,15 @@ class WorldModel(nn.Module):
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
-        # print(self.tokenizer.encoder.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
-
-        # First, build the set of modules to skip during re-initialization
-        skip_modules = set(self.tokenizer.encoder.pretrained_model.modules())
-        skip_modules.update(self.tokenizer.decoder_network.modules())
+        # Build the set of modules to skip during re-initialization.
+        # This is compatible with cases where self.tokenizer.encoder does not have 'pretrained_model',
+        # or self.tokenizer does not have 'decoder_network'.
+        # NOTE: This step is crucial — without skipping, pretrained modules (e.g., encoder/decoder) would be unintentionally re-initialized
+        skip_modules = set()
+        if hasattr(self.tokenizer.encoder, 'pretrained_model'):
+            skip_modules.update(self.tokenizer.encoder.pretrained_model.modules())
+        if hasattr(self.tokenizer, 'decoder_network'):
+            skip_modules.update(self.tokenizer.decoder_network.modules())
 
         def custom_init(module):
             # If the current module is part of the skip list, return without reinitializing
@@ -109,7 +111,6 @@ class WorldModel(nn.Module):
             init_weights(module, norm_type=self.config.norm_type)
 
         # Recursively apply `custom_init` to all submodules of the model
-        # NOTE: This step is crucial — without skipping, pretrained modules (e.g., encoder/decoder) would be unintentionally re-initialized
         self.apply(custom_init)
 
         self._initialize_last_layer()

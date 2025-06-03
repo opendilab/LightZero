@@ -533,12 +533,13 @@ class MuZeroCollector(ISerialCollector):
                         continue
                     obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
                     
-                    # TODO
-                    obs_input_ids = torch.tensor(obs['observation'], dtype=torch.long)  # shape: [L]
-                    obs_attn_mask = torch.tensor(obs['obs_attn_mask'][0], dtype=torch.long)
-                    valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
+
                     
                     if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                        obs_input_ids = torch.tensor(obs['observation'], dtype=torch.long)  # shape: [L]
+                        obs_attn_mask = torch.tensor(obs['obs_attn_mask'][0], dtype=torch.long)
+                        valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
+
                         groundtrut_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(valid_input_ids, skip_special_tokens=True)
                         text_bleu = compute_bleu(reference=groundtrut_next_text[env_id], prediction=pred_next_text[env_id])
                         # Whether to output text comparisons with high BLEU scores to evaluate the effectiveness of decoding the next latent.
@@ -640,7 +641,8 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
-                    self._env_info[env_id]['text_bleu'] += text_bleu
+                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                        self._env_info[env_id]['text_bleu'] += text_bleu
 
                     collected_step += 1
 
@@ -651,8 +653,10 @@ class MuZeroCollector(ISerialCollector):
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
-                        'text_bleu': self._env_info[env_id]['text_bleu'] / self._env_info[env_id]['step'] # 用来归一化，得到每一步的平均bleu
                     }
+                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                        info.update({'text_bleu':self._env_info[env_id]['text_bleu'] / self._env_info[env_id]['step']})
+
                     if not collect_with_pure_policy:
                         info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id]
                         if self.policy_config.gumbel_algo:
@@ -793,7 +797,8 @@ class MuZeroCollector(ISerialCollector):
             envstep_count = sum([d['step'] for d in self._episode_info])
             duration = sum([d['time'] for d in self._episode_info])
             episode_reward = [d['reward'] for d in self._episode_info]
-            episode_bleu = [d['text_bleu'] for d in self._episode_info]
+            if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                episode_bleu = [d['text_bleu'] for d in self._episode_info]
 
             if not self.collect_with_pure_policy:
                 visit_entropy = [d['visit_entropy'] for d in self._episode_info]
@@ -817,8 +822,9 @@ class MuZeroCollector(ISerialCollector):
                 'total_episode_count': self._total_episode_count,
                 'total_duration': self._total_duration,
                 'visit_entropy': np.mean(visit_entropy),
-                'text_avg_bleu': np.mean(episode_bleu),
             }
+            if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                info.update({'text_avg_bleu':np.mean(episode_bleu)})
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()

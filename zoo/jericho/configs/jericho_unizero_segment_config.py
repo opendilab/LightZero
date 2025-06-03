@@ -91,7 +91,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                 world_model_cfg=dict(
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    predict_latent_loss_type='mse',
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,

@@ -342,9 +342,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     for env_id, episode_timestep in timesteps.items():
                         obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
 
-                        obs_input_ids = obs['observation'].long()
-                        obs_attn_mask = obs['obs_attn_mask'][0].long()
-                        valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
+                        # obs_input_ids = obs['observation'].long()
+                        # obs_attn_mask = obs['obs_attn_mask'][0].long()
+                        # valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
 
                         eps_steps_lst[env_id] += 1
                         if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
