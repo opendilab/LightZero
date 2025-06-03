@@ -684,7 +684,6 @@ class RepresentationNetworkMLP(nn.Module):
             activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
-            # final_norm_option_in_encoder: str = 'SimNorm',
             final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> torch.Tensor:
         """
