@@ -112,11 +112,6 @@ class WorldModel(nn.Module):
         # NOTE: This step is crucial — without skipping, pretrained modules (e.g., encoder/decoder) would be unintentionally re-initialized
         self.apply(custom_init)
 
-        # Apply weight initialization, the order is important
-        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
-
-        # print(self.tokenizer.encoder.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
-
         self._initialize_last_layer()
 
         # Cache structures

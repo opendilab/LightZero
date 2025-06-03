@@ -109,7 +109,6 @@ class UniZeroModel(nn.Module):
                 self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
                 self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
 
-            # self.decoder_network.lm_head = nn.Linear(512, 30522)
             projection = [self.representation_network.pretrained_model.config.hidden_size, self.decoder_network.config.d_model]
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, with_lpips=False, projection=projection)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)

@@ -1013,9 +1013,6 @@ class UniZeroPolicy(MuZeroPolicy):
         Arguments:
             - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
         """
-        # print(self._learn_model.representation_network.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
-        # print(state_dict['model']["_orig_mod.representation_network.pretrained_model.encoder.layer.0.attention.output.LayerNorm.weight"])
-
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
