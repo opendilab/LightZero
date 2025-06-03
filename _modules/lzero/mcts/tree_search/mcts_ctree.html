@@ -168,7 +168,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span>
             <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">timestep</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. </span>
@@ -186,6 +186,10 @@
 
             <span class="c1"># preparation some constant</span>
             <span class="n">batch_size</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">num</span>
+
+            <span class="c1"># Store the latent state of each possible action at the MCTS root for each environment.</span>
+            <span class="n">first_action_latent_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="p">{}</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)}</span> <span class="c1"># {env_id: {action: latent_state}} </span>
+
             <span class="n">pb_c_base</span><span class="p">,</span> <span class="n">pb_c_init</span><span class="p">,</span> <span class="n">discount_factor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">pb_c_base</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">pb_c_init</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span>
             <span class="c1"># the data storage of latent states: storing the latent state of all the nodes in the search.</span>
             <span class="n">latent_state_batch_in_search_path</span> <span class="o">=</span> <span class="p">[</span><span class="n">latent_state_roots</span><span class="p">]</span>
@@ -249,8 +253,15 @@
                 <span class="n">network_output</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">to_detach_cpu_numpy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inverse_scalar_transform_handle</span><span class="p">(</span><span class="n">network_output</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>
                 <span class="n">network_output</span><span class="o">.</span><span class="n">reward</span> <span class="o">=</span> <span class="n">to_detach_cpu_numpy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inverse_scalar_transform_handle</span><span class="p">(</span><span class="n">network_output</span><span class="o">.</span><span class="n">reward</span><span class="p">))</span>
 
+                <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
+                    <span class="n">depth</span> <span class="o">=</span> <span class="n">search_depth</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">last_actions</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">action</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">first_action_latent_map</span><span class="p">[</span><span class="n">env_id</span><span class="p">]:</span>
+                        <span class="n">first_action_latent_map</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="n">action</span><span class="p">]</span> <span class="o">=</span> <span class="n">network_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                        
                 <span class="n">latent_state_batch_in_search_path</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">network_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">)</span>
-
                 <span class="c1"># tolist() is to be compatible with cpp datatype.</span>
                 <span class="n">reward_batch</span> <span class="o">=</span> <span class="n">network_output</span><span class="o">.</span><span class="n">reward</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
                 <span class="n">value_batch</span> <span class="o">=</span> <span class="n">network_output</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
@@ -266,6 +277,8 @@
                     <span class="n">current_latent_state_index</span><span class="p">,</span> <span class="n">discount_factor</span><span class="p">,</span> <span class="n">reward_batch</span><span class="p">,</span> <span class="n">value_batch</span><span class="p">,</span> <span class="n">policy_logits_batch</span><span class="p">,</span>
                     <span class="n">min_max_stats_lst</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">virtual_to_play_batch</span>
                 <span class="p">)</span>
+            
+            <span class="k">return</span> <span class="n">first_action_latent_map</span>
 
 
 <div class="viewcode-block" id="MuZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">MuZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>

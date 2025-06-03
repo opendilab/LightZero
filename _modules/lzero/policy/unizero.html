@@ -755,11 +755,13 @@
                 <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
 
             <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">reward_roots</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
 
+            <span class="n">next_latent_state_with_env</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+            
             <span class="c1"># list of list, shape: ``{list: batch_size} -&gt; {list: action_space_size}``</span>
             <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
             <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
+
 
             <span class="n">batch_action</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
@@ -783,6 +785,14 @@
                     <span class="c1"># NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.</span>
                     <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
 
+                <span class="n">next_latent_state</span> <span class="o">=</span> <span class="n">next_latent_state_with_env</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">action</span><span class="p">]</span>
+                
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">world_model_cfg</span><span class="o">.</span><span class="n">obs_type</span> <span class="o">==</span> <span class="s1">&#39;text&#39;</span><span class="p">:</span>
+                    <span class="c1"># Output the plain text content decoded by the decoder from the next latent state</span>
+                    <span class="n">predicted_next</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode_to_plain_text_for_decoder</span><span class="p">(</span><span class="n">embeddings</span><span class="o">=</span><span class="n">next_latent_state</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">predicted_next</span> <span class="o">=</span> <span class="kc">None</span>
+
                 <span class="c1"># ============== TODO: only for visualize ==============</span>
                 <span class="c1"># action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(</span>
                 <span class="c1">#     distributions, temperature=self._collect_mcts_temperature, deterministic=True</span>
@@ -797,7 +807,8 @@
                     <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
                     <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
                     <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
-                    <span class="s1">&#39;timestep&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="s1">&#39;timestep&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="s1">&#39;predicted_next_text&#39;</span><span class="p">:</span> <span class="n">predicted_next</span><span class="p">,</span>
                 <span class="p">}</span>
                 <span class="n">batch_action</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
 
@@ -881,14 +892,14 @@
                 <span class="c1"># python mcts_tree</span>
                 <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
             <span class="n">roots</span><span class="o">.</span><span class="n">prepare_no_noise</span><span class="p">(</span><span class="n">reward_roots</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+            <span class="n">next_latent_state_with_env</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
 
             <span class="c1"># list of list, shape: ``{list: batch_size} -&gt; {list: action_space_size}``</span>
             <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
             <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
 
             <span class="n">batch_action</span> <span class="o">=</span> <span class="p">[]</span>
-
+            
             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
                 <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
                 <span class="c1"># print(&quot;roots_visit_count_distributions:&quot;, distributions, &quot;root_value:&quot;, value)</span>
@@ -904,6 +915,15 @@
                 <span class="c1"># entire action set.</span>
                 <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
 
+                <span class="c1"># Predict the next latent state based on the selected action and policy</span>
+                <span class="n">next_latent_state</span> <span class="o">=</span> <span class="n">next_latent_state_with_env</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">action</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">world_model_cfg</span><span class="o">.</span><span class="n">obs_type</span> <span class="o">==</span> <span class="s1">&#39;text&#39;</span><span class="p">:</span>
+                    <span class="c1"># Output the plain text content decoded by the decoder from the next latent state</span>
+                    <span class="n">predicted_next</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode_to_plain_text_for_decoder</span><span class="p">(</span><span class="n">embeddings</span><span class="o">=</span><span class="n">next_latent_state</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">predicted_next</span> <span class="o">=</span> <span class="kc">None</span>
+
                 <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
                     <span class="s1">&#39;visit_count_distributions&#39;</span><span class="p">:</span> <span class="n">distributions</span><span class="p">,</span>
@@ -911,7 +931,8 @@
                     <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
                     <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
                     <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
-                    <span class="s1">&#39;timestep&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="s1">&#39;timestep&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="s1">&#39;predicted_next_text&#39;</span><span class="p">:</span> <span class="n">predicted_next</span><span class="p">,</span>
                 <span class="p">}</span>
                 <span class="n">batch_action</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
 

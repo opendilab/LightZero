@@ -244,14 +244,18 @@
             <span class="c1"># Indices exceeding `game_segment_length` are padded with the next segment and are not updated</span>
             <span class="c1"># in the current implementation. Therefore, we need to sample `pos_in_game_segment` within</span>
             <span class="c1"># [0, game_segment_length - num_unroll_steps] to avoid padded data.</span>
-
-            <span class="c1"># TODO: Consider increasing `self._cfg.game_segment_length` to ensure sampling efficiency.</span>
-            <span class="c1"># if pos_in_game_segment &gt;= self._cfg.game_segment_length - self._cfg.num_unroll_steps:</span>
-            <span class="c1">#     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()</span>
-
-            <span class="c1"># NOTE: Sample the init position from the whole segment, but not from the padded part</span>
-            <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">:</span>
-                <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">&#39;varied_action_space&#39;</span><span class="p">:</span>
+                <span class="c1"># For some environments (e.g., Jericho), the action space size may be different.</span>
+                <span class="c1"># To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),</span>
+                <span class="c1"># we avoid sampling from the last `num_unroll_steps` steps of the game segment. </span>
+                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">:</span>
+                    <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># For environments with a fixed action space (e.g., Atari),</span>
+                <span class="c1"># we can safely sample from the entire game segment range.</span>
+                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">:</span>
+                    <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
 
             <span class="n">pos_in_game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pos_in_game_segment</span><span class="p">)</span>
             
