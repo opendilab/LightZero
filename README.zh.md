@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2025.04.01 LightZero-v0.2.0
+最近更新于 2025.04.09 LightZero-v0.2.0
 
 [English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [文档](https://opendilab.github.io/LightZero) | [LightZero 论文](https://arxiv.org/abs/2310.08348) | [🔥UniZero 论文](https://arxiv.org/abs/2406.10667) | [🔥ReZero 论文](https://arxiv.org/abs/2404.16364)
 
@@ -52,25 +52,37 @@
 **LightZero** 的目标是**标准化 MCTS 算法族，以加速相关研究和应用。** [Benchmark](#benchmark) 中介绍了目前所有已实现算法的性能比较。
 
 ### 导航
-- [概览](#概览)
+- [LightZero](#lightzero)
+  - [🔍 背景](#-背景)
+  - [🎨 概览](#-概览)
     - [导航](#导航)
-    - [特点](#特点)
-    - [框架结构](#框架结构)
-    - [集成算法](#集成算法)
-- [安装方法](#安装方法)
-- [快速开始](#快速开始)
-- [文档](#文档)
-- [基线算法比较](#基线算法比较)
-- [MCTS相关笔记](#MCTS-相关笔记)
+    - [💥 特点](#-特点)
+    - [🧩 框架结构](#-框架结构)
+    - [🎁 集成算法](#-集成算法)
+  - [⚙️ 安装方法](#️-安装方法)
+    - [使用 Docker 进行安装](#使用-docker-进行安装)
+  - [🚀 快速开始](#-快速开始)
+  - [📚 文档](#-文档)
+  - [📊 基线算法比较](#-基线算法比较)
+  - [📝 MCTS 相关笔记](#-mcts-相关笔记)
     - [论文笔记](#论文笔记)
     - [算法框架图](#算法框架图)
-- [MCTS相关论文](#MCTS-相关论文)
+  - [MCTS 相关论文](#mcts-相关论文)
     - [重要论文](#重要论文)
+      - [LightZero Implemented series](#lightzero-implemented-series)
+      - [AlphaGo series](#alphago-series)
+      - [MuZero series](#muzero-series)
+      - [MCTS Analysis](#mcts-analysis)
+      - [MCTS Application](#mcts-application)
     - [其他论文](#其他论文)
-- [反馈意见和贡献](#反馈意见和贡献)
-- [引用](#引用)
-- [致谢](#致谢)
-- [许可证](#许可证)
+      - [ICML](#icml)
+      - [ICLR](#iclr)
+      - [NeurIPS](#neurips)
+      - [Other Conference or Journal](#other-conference-or-journal)
+  - [💬 反馈意见和贡献](#-反馈意见和贡献)
+  - [🌏 引用](#-引用)
+  - [💓 致谢](#-致谢)
+  - [🏷️ 许可证](#️-许可证)
 
 ### 💥 特点
 **轻量**：LightZero 中集成了多种 MCTS 族算法，能够在同一框架下轻量化地解决多种属性的决策问题。

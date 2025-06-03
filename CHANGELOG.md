@@ -1,4 +1,4 @@
-2025.04.01 (v0.2.0)
+2025.04.09 (v0.2.0)
 - env: Add Metadrive environment and configurations (#192)
 - env: Add Sampled MuZero/UniZero and DMC environment with related configurations (#260)
 - env: Polish Chess environment and its render method; add unittests and configurations (#272)
