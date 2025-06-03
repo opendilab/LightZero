@@ -15,3 +15,5 @@ from .train_unizero_multitask_segment_eval import train_unizero_multitask_segmen
 from .train_unizero_multitask_ddp import train_unizero_multitask_ddp
 from .train_unizero_multitask import train_unizero_multitask
 from .utils import *
+
+from .train_unizero_multitask_balance_segment_ddp import train_unizero_multitask_balance_segment_ddp

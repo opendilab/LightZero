@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import torch 
+import math
 
 # TODO xjy： 继承容易出问题
 # class WorldModelMT(WorldModel):
@@ -59,6 +60,21 @@ class WorldModelMT(nn.Module):
         super().__init__()
         self.tokenizer = tokenizer
         self.config = config
+
+        self.continuous_action_space = self.config.continuous_action_space
+        self.task_num = config.task_num
+
+        # TODO: 26games share encoder, sclae the grad of encoder
+        # if not self.continuous_action_space:
+        #     # atari共享encoder
+        #     encoder_index = 0
+        #     encoder = self.tokenizer.encoder[encoder_index]
+
+        #     # 给 encoder 所有参数注册 hook
+        #     for p in encoder.parameters():
+        #         p.register_hook(self._scale_grad)
+
+
         self.share_head = config.share_head  # 新增参数
         # Task embedding setup
         self.use_task_embed = config.use_task_embed
@@ -111,6 +127,10 @@ class WorldModelMT(nn.Module):
         self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
         self.precompute_pos_emb_diff_kv()
+
+        self.analysis_dormant_ratio_interval = self.config.get('analysis_dormant_ratio_interval', 100)  # 每 100 次调用做一次分析
+        self._analysis_step_counter = 0
+        self.do_analysis = self.analysis_dormant_ratio_weight_rank 
 
         # TODO ========
         self.analysis_tsne = self.config.get('analysis_tsne', False)
@@ -317,6 +337,11 @@ class WorldModelMT(nn.Module):
 
         self.reanalyze_phase = False
         self._rank = get_rank()
+
+    def _scale_grad(self, grad: torch.Tensor) -> torch.Tensor:
+        # ① 1/k 缩放；若想更保守可用 1/√k
+        # return grad / self.task_num
+        return grad / math.sqrt(self.task_num)
 
     def _generate_colors(self, num_colors):
         """
@@ -1753,6 +1778,14 @@ class WorldModelMT(nn.Module):
             
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio_weight_rank:
+            self._analysis_step_counter += 1
+            self.do_analysis = (
+                self.analysis_dormant_ratio_weight_rank          # 总开关
+                and self._analysis_step_counter % self.analysis_dormant_ratio_interval == 0
+            )
+
+        # ========= logging for analysis =========
+        if self.do_analysis:
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
@@ -1781,9 +1814,16 @@ class WorldModelMT(nn.Module):
             # representation 层在 model.named_modules() 的名称为 "representation"
             # print(f"self.tokenizer.encoder:{self.tokenizer.encoder}")
 
-            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
+            # e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
+            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="embed_proj_head")
             # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
-            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+            try:
+                # e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+                e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="norm")
+            except Exception as e:
+                e_rank_sim_norm = torch.tensor(0.)
+
+                
             # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
 
             self.past_kv_cache_init_infer.clear()
@@ -1792,6 +1832,13 @@ class WorldModelMT(nn.Module):
             torch.cuda.empty_cache()
         else:
             dormant_ratio_encoder = torch.tensor(0.)
+            avg_weight_mag_encoder = torch.tensor(0.)
+            avg_weight_mag_transformer = torch.tensor(0.)
+            avg_weight_mag_head = torch.tensor(0.)
+            e_rank_last_linear = torch.tensor(0.)
+            e_rank_sim_norm = torch.tensor(0.)
+            # dormant_ratio_encoder   = None
+
 
         # Calculate the L2 norm of the latent state roots
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
@@ -1872,7 +1919,8 @@ class WorldModelMT(nn.Module):
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, task_id=task_id)
 
         # ========= logging for analysis =========
-        if self.analysis_dormant_ratio_weight_rank:
+        # if self.analysis_dormant_ratio_weight_rank:
+        if self.do_analysis:
             # Calculate dormant ratio of the world model
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
@@ -1886,11 +1934,14 @@ class WorldModelMT(nn.Module):
         else:
             dormant_ratio_transformer = torch.tensor(0.)
             dormant_ratio_head = torch.tensor(0.)
-            avg_weight_mag_encoder = torch.tensor(0.)
-            avg_weight_mag_transformer = torch.tensor(0.)
-            avg_weight_mag_head = torch.tensor(0.)
-            e_rank_last_linear = torch.tensor(0.)
-            e_rank_sim_norm = torch.tensor(0.)
+
+            # dormant_ratio_transformer = None
+            # dormant_ratio_head        = None
+            # avg_weight_mag_encoder    = None
+            # avg_weight_mag_transformer= None
+            # avg_weight_mag_head       = None
+            # e_rank_last_linear        = None
+            # e_rank_sim_norm           = None
 
         # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():

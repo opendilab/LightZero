@@ -82,6 +82,8 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                     lora_alpha =1,
                     lora_dropout= 0.0,
 
+                    analysis_dormant_ratio_weight_rank=False, 
+                    analysis_dormant_ratio_interval=5000
                 ),
             ),
             use_task_exploitation_weight=False, # TODO

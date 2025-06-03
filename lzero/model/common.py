@@ -486,8 +486,6 @@ class RepresentationNetworkUniZero(nn.Module):
             group_size: int = 8,
             final_norm_option_in_encoder: str = 'SimNorm',
             use_adaptive_scale: bool = False
-            # use_global_pooling: bool = True  # 新增超参数：是否使用全局平均池化
-            # use_global_pooling: bool = False # 新增超参数：是否使用全局平均池化
     ) -> None:
         """
         Representation network used in UniZero.
@@ -498,8 +496,6 @@ class RepresentationNetworkUniZero(nn.Module):
         # 打印日志信息（可选）
         print(f"Using norm type: {norm_type}")
         print(f"Using activation type: {activation}")
-
-        self.use_global_pooling = False
 
         self.observation_shape = observation_shape
         self.downsample = downsample
@@ -554,27 +550,11 @@ class RepresentationNetworkUniZero(nn.Module):
 
         self.last_linear = nn.Linear(last_linear_in_dim, self.embedding_dim, bias=False)
 
-
-        # 根据是否使用全局平均池化决定 last_linear 前的输入维度以及 norm 的形状
-        if self.use_global_pooling:
-            linear_in_dim = num_channels  # 全局池化后形状: (B, num_channels, 1, 1)
-            self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-            # 对 1D 向量使用 LayerNorm
-            self.norm_before_last_linear = nn.LayerNorm(linear_in_dim, eps=1e-5)
-        else:
-            linear_in_dim = num_channels * spatial_size * spatial_size
-            if use_adaptive_scale:
-                # 若通过 flatten 后进行 adaptive scaling，对 1D 向量归一化
-                self.norm_before_last_linear = nn.LayerNorm(linear_in_dim, eps=1e-5)
-            else:
-                # 保留空间信息时，在 (C, H, W) 上归一化
-                self.norm_before_last_linear = nn.LayerNorm([num_channels, spatial_size, spatial_size], eps=1e-5)
+        linear_in_dim = num_channels * spatial_size * spatial_size
+        # 保留空间信息时，在 (C, H, W) 上归一化
+        self.norm_before_last_linear = nn.LayerNorm([num_channels, spatial_size, spatial_size], eps=1e-5)
 
         self.last_linear = nn.Linear(linear_in_dim, self.embedding_dim, bias=False)
-
-        self.use_adaptive_scale = use_adaptive_scale
-        if self.use_adaptive_scale:
-            self.adaptive_scaler = AdaptiveFeatureScaler(init_scale=0.1, max_scale=1.0)
 
         # 最后归一化层，根据 final_norm_option_in_encoder 进行选择
         if final_norm_option_in_encoder == 'LayerNorm':
@@ -602,22 +582,10 @@ class RepresentationNetworkUniZero(nn.Module):
         for block in self.resblocks:
             x = block(x)
         
-        # 分支1：使用全局平均池化
-        if self.use_global_pooling:
-            x = self.global_pool(x)            # 输出 shape: (B, num_channels, 1, 1)
-            x = x.view(x.size(0), -1)            # 展平为 (B, num_channels)
-            x = self.norm_before_last_linear(x)  # 对 1D 向量做归一化
-        else:
-            # 分支2：不使用全局池化
-            if self.use_adaptive_scale:
-                # 若启用 adaptive scaling：先展平再做 fan-in 缩放
-                x = x.view(x.size(0), -1)        # (B, num_channels * spatial_size^2)
-                x = self.adaptive_scaler(x)
-                x = self.norm_before_last_linear(x)  # 归一化 1D 向量
-            else:
-                # 保持完整空间信息：在 (B, C, H, W) 上归一化后，再展平
-                x = self.norm_before_last_linear(x)
-                x = x.view(x.size(0), -1)
+
+        # 保持完整空间信息：在 (B, C, H, W) 上归一化后，再展平
+        x = self.norm_before_last_linear(x)
+        x = x.view(x.size(0), -1)
 
         # 最后一层全连接映射与归一化
         x = self.last_linear(x)

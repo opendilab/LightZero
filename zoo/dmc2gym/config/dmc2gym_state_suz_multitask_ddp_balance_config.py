@@ -20,13 +20,10 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
     task_name = env_id.split('-')[1]
 
     if domain_name == "pendulum":
-        # frame_skip=8
-        frame_skip=4
-
+        frame_skip=8
     else:
-        # frame_skip=2 # orig
-        # frame_skip=8
-        frame_skip=4
+        # frame_skip=2
+        frame_skip=8
 
     return EasyDict(dict(
         env=dict(
@@ -70,28 +67,25 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                 num_of_sampled_actions=20,
                 model_type='mlp',
                 world_model_cfg=dict(
-                    # final_norm_option_in_obs_head='LayerNorm',
-                    # final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
                     
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
-                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
-
                     share_head=False, # TODO
                     use_shared_projection=False,
 
-                    # analysis_dormant_ratio_weight_rank=True, # TODO 按照atari unizeor_mt的更新一下 ========
+                    # analysis_dormant_ratio_weight_rank=True, # TODO: dmc encoder需要修正analysis_dormant_ratio
                     analysis_dormant_ratio_weight_rank=False, # TODO
                     analysis_dormant_ratio_interval=100,
                     # analysis_dormant_ratio_interval=20,
                     
-                    # task_embed_option=None,   # ==============TODO: none ==============
-                    # use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
 
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    use_task_embed=True, # ==============TODO==============
-                    task_embed_dim=128,
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    # use_task_embed=True, # ==============TODO==============
+                    # task_embed_dim=128,
+                    # task_embed_dim=96,
 
                     observation_shape_list=observation_shape_list,
                     action_space_size_list=action_space_size_list,
@@ -111,12 +105,15 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     context_length=2 * infer_context_length,
                     device='cuda',
                     # num_layers=1, # TODO: debug config
-                    num_layers=8, # TODO: ==========
+
+                    num_layers=4, # ==============TODO==============
+                    # num_layers=8,
+
                     num_heads=24,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
                     task_num=len(env_id_list),
-
+                    
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
@@ -132,11 +129,12 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # LoRA 参数：
                     moe_use_lora=False, # TODO
 
-                    curriculum_stage_num=3,
+                    # curriculum_stage_num=3,
+                    curriculum_stage_num=curriculum_stage_num,
+
                     lora_target_modules=["attn", "feed_forward"],
                     # lora_r= 8,
-                    lora_r= 0,
-                    # lora_r=64,
+                    lora_r=64,
                     lora_alpha=1,
                     lora_dropout=0.0,
                 ),
@@ -159,7 +157,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             # update_per_collect=3,  # TODO: debug config
-            update_per_collect=200,  # TODO: 8*100*0.25=200 replay_ratio=0.25
+            update_per_collect=200,  # TODO: 8*100*0.25=200
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -205,15 +203,9 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
+    # ========= TODO: global BENCHMARK_NAME =========
 
-    exp_name_prefix = f'data_suz_dmc_mt_20250522/dmc_{len(env_id_list)}tasks_frameskip4_simnorm-kl_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
-    # exp_name_prefix = f'data_suz_dmc_mt_20250522/dmc_{len(env_id_list)}tasks_frameskip4_ln-mse_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
-
-    # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250509/dmc_{len(env_id_list)}tasks_orig_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
-
-    # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250508/dmc_{len(env_id_list)}tasks_nlayer8_takembed128_trans-moe8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
-
-    # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250507/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250514/dmc_{len(env_id_list)}tasks_frameskip8_balance-stage-total-{curriculum_stage_num}_moe8_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -268,34 +260,23 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-
-        =========== oss dmc18 =========================
-        cd /oss/niuyazhe/puyuan/data/data_lz_202505/
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_oss/uz_mt_dmc18_frameskip4_ln-mse_nlayer8_trans-moe8.log
-
-        =========== cpfs dmc18 =========================
-        cd /cpfs04/user/puyuan/code/LightZero/
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_dmc18_frameskip4_simnorm-kl_nlayer8_trans-moe8.log
-
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_dmc18_frameskip4_ln-mse_nlayer8_trans-moe8.log
-
-
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/20250518/uz_mt_dmc18_moe8.log
-
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_dmc18_ln_balance_moe8_stage9_nlayer4.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_segment_ddp
+    from lzero.entry import train_unizero_multitask_balance_segment_ddp
     from ding.utils import DDPContext
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
+    
+    global curriculum_stage_num
+
+    # curriculum_stage_num=3
+    curriculum_stage_num=5
+    curriculum_stage_num=9
 
     global target_return_dict 
-    global BENCHMARK_NAME
-
-    BENCHMARK_NAME='dmc'
-
     target_return_dict = {
         'acrobot-swingup': 500,
         'cartpole-balance':950,
@@ -320,9 +301,9 @@ if __name__ == "__main__":
     ]
 
     target_return_dict = {
-        'acrobot-swingup': 500,
-        'cartpole-balance':950,
-        'cartpole-balance_sparse':950,
+        'acrobot-swingup': 500, # 0
+        'cartpole-balance':950, # 1
+        'cartpole-balance_sparse':950, # 2
         'cartpole-swingup': 800, # 3
         'cartpole-swingup_sparse': 750, # 4
         'cheetah-run': 650, # 5
@@ -372,10 +353,10 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(4e5) # frameskip=8
+    max_env_step = int(4e5)
     reanalyze_ratio = 0.0
 
-    # nlayer=4/8
+    # nlayer=8
     total_batch_size = 512
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
@@ -400,29 +381,28 @@ if __name__ == "__main__":
     # batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
 
-    for seed in [0,1]:
-        # You can iterate over multiple seeds if needed
+    seed = 0  # You can iterate over multiple seeds if needed
 
-        configs = generate_configs(
-            env_id_list=env_id_list,
-            collector_env_num=collector_env_num,
-            n_episode=n_episode,
-            evaluator_env_num=evaluator_env_num,
-            num_simulations=num_simulations,
-            reanalyze_ratio=reanalyze_ratio,
-            batch_size=batch_size,
-            num_unroll_steps=num_unroll_steps,
-            infer_context_length=infer_context_length,
-            norm_type=norm_type,
-            seed=seed,
-            buffer_reanalyze_freq=buffer_reanalyze_freq,
-            reanalyze_batch_size=reanalyze_batch_size,
-            reanalyze_partition=reanalyze_partition,
-            num_segments=num_segments,
-            total_batch_size=total_batch_size,
-        )
+    configs = generate_configs(
+        env_id_list=env_id_list,
+        collector_env_num=collector_env_num,
+        n_episode=n_episode,
+        evaluator_env_num=evaluator_env_num,
+        num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
+        batch_size=batch_size,
+        num_unroll_steps=num_unroll_steps,
+        infer_context_length=infer_context_length,
+        norm_type=norm_type,
+        seed=seed,
+        buffer_reanalyze_freq=buffer_reanalyze_freq,
+        reanalyze_batch_size=reanalyze_batch_size,
+        reanalyze_partition=reanalyze_partition,
+        num_segments=num_segments,
+        total_batch_size=total_batch_size,
+    )
 
-        with DDPContext():
-            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name= "dmc" )
-            # 如果只想训练部分任务，可以修改 configs，例如:
-            # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)
+    with DDPContext():
+        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
+        # 如果只想训练部分任务，可以修改 configs，例如:
+        # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)

@@ -1,3 +1,12 @@
+
+"""
+Modified from https://github.com/karpathy/nanoGPT
+
+在原 transformer.py 基础上增加 LoRA 微调相关代码，
+并通过传入配置参数控制 LoRA 微调的模块（默认是 attention 中的 k, q, v, proj 和 feed_forward）
+保持原有代码的可扩展性。
+"""
+
 import math
 from dataclasses import dataclass
 from typing import Optional
@@ -184,7 +193,11 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
     #     return new_linear
     else:
         return linear
-    
+
+##############################################
+# 辅助函数：在 transformer 内部遍历所有 CurriculumLoRALinear 模块，并设置阶段
+##############################################
+
 def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
     """
     遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
@@ -203,7 +216,6 @@ def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
 ##############################################
 # TransformerConfig 示例（增加 curriculum_stage_num）
 ##############################################
-
 @dataclass
 class TransformerConfig:
     tokens_per_block: int
@@ -241,6 +253,7 @@ class TransformerConfig:
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks
+
 
 class Transformer(nn.Module):
     """
@@ -428,6 +441,7 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
+
 
         if config.moe_in_transformer:
             from .moe import MoELayer, MultiplicationFeedForward

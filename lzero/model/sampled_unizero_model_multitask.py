@@ -292,7 +292,7 @@ class SampledUniZeroMTModel(nn.Module):
         )
 
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            latent_state_index_in_search_path=[], task_id=0) -> MZNetworkOutput:
+                            search_depth=[], task_id=0) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of UniZero model. To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
@@ -301,7 +301,7 @@ class SampledUniZeroMTModel(nn.Module):
             - state_action_history (:obj:`torch.Tensor`): The history of states and actions.
             - task_id (:obj:`int`): The ID of the current task.
             - simulation_index (:obj=`int`): The index of the current simulation.
-            - latent_state_index_in_search_path (:obj=`List[int]`): The indices of latent states in the search path.
+            - search_depth (:obj=`List[int]`): The indices of latent states in the search path.
         Returns (MZNetworkOutput):
             - value (:obj=`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
             - reward (:obj=`torch.Tensor`): The predicted reward of input state and selected action.
@@ -318,7 +318,7 @@ class SampledUniZeroMTModel(nn.Module):
             - next_latent_state (:obj=`torch.Tensor`): :math=`(B, H_, W_)`, where B is batch_size, H_ is the height of latent state, W_ is the width of latent state.
          """
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
+            state_action_history, simulation_index, search_depth, task_id=task_id)
         next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)

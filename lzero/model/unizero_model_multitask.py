@@ -12,6 +12,7 @@ from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
 from line_profiler import line_profiler
+from .vit import ViT
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroMTModel')
@@ -104,30 +105,68 @@ class UniZeroMTModel(nn.Module):
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
             self.representation_network = nn.ModuleList()
-            # for task_id in range(self.task_num):  # TODO: N independent encoder
-            for task_id in range(1):  # TODO: one share encoder
-                self.representation_network.append(RepresentationNetworkUniZero(
-                    observation_shape,
-                    num_res_blocks,
-                    num_channels,
-                    self.downsample,
-                    activation=self.activation,
-                    norm_type=norm_type,
-                    embedding_dim=obs_act_embed_dim,
-                    group_size=world_model_cfg.group_size,
-                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                    use_adaptive_scale=world_model_cfg.use_adaptive_scale,
-                ))
-                # self.representation_network = RepresentationNetworkUniZero(
-                #     observation_shape,
-                #     num_res_blocks,
-                #     num_channels,
-                #     self.downsample,
-                #     activation=self.activation,
-                #     norm_type=norm_type,
-                #     embedding_dim=world_model_cfg.embed_dim,
-                #     group_size=world_model_cfg.group_size,
-                # )
+            if world_model_cfg.encoder_type == "resnet":
+                # for task_id in range(self.task_num):  # TODO: N independent encoder
+                for task_id in range(1):  # TODO: one share encoder
+                    self.representation_network.append(RepresentationNetworkUniZero(
+                        observation_shape,
+                        num_res_blocks,
+                        num_channels,
+                        self.downsample,
+                        activation=self.activation,
+                        norm_type=norm_type,
+                        embedding_dim=obs_act_embed_dim,
+                        group_size=world_model_cfg.group_size,
+                        final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                    ))
+            elif world_model_cfg.encoder_type == "vit":
+                for task_id in range(1):  # TODO: one share encoder
+                    if world_model_cfg.task_num <=8: 
+                        # vit base
+                        self.representation_network.append(ViT(
+                            image_size =observation_shape[1],
+                            # patch_size = 32,
+                            patch_size = 8,
+                            num_classes = obs_act_embed_dim,
+                            dim = 768,
+                            depth = 12,
+                            heads = 12,
+                            mlp_dim = 3072,
+                            dropout = 0.1,
+                            emb_dropout = 0.1,
+                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                        ))
+                    elif world_model_cfg.task_num > 8: 
+                        # vit base
+                        self.representation_network.append(ViT(
+                            image_size =observation_shape[1],
+                            # patch_size = 32,
+                            patch_size = 8,
+                            num_classes = obs_act_embed_dim,
+                            dim = 768,
+                            depth = 12,
+                            heads = 12,
+                            mlp_dim = 3072,
+                            dropout = 0.1,
+                            emb_dropout = 0.1,
+                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+
+                        ))
+                        # # vit large # TODO======
+                        # self.representation_network.append(ViT(
+                        #     image_size =observation_shape[1],
+                        #     # patch_size = 32,
+                        #     patch_size = 8,
+                        #     num_classes = obs_act_embed_dim,
+                        #     dim = 1024,
+                        #     depth = 24,
+                        #     heads = 16,
+                        #     mlp_dim = 4096,
+                        #     dropout = 0.1,
+                        #     emb_dropout = 0.1
+                        # ))
+
+
             # TODO: we should change the output_shape to the real observation shape
             # self.decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
 
@@ -239,7 +278,7 @@ class UniZeroMTModel(nn.Module):
 
     #@profile
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            latent_state_index_in_search_path=[], task_id=None) -> MZNetworkOutput:
+                            search_depth=[], task_id=None) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of UniZero model.To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
@@ -265,7 +304,7 @@ class UniZeroMTModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
+            state_action_history, simulation_index, search_depth, task_id=task_id)
         next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)

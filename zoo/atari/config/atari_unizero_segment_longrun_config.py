@@ -14,18 +14,20 @@ def main(env_id, seed):
     evaluator_env_num = 3
     num_simulations = 50
     # max_env_step = int(4e5)
-    max_env_step = int(1e6)
+    # max_env_step = int(1e6)
+    max_env_step = int(100e6)
 
     batch_size = 64
     num_layers = 2
-    replay_ratio = 0.25
+    # replay_ratio = 0.25
+    replay_ratio = 0.1
+
     num_unroll_steps = 10
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/50
-    buffer_reanalyze_freq = 1/5000000000
-
+    buffer_reanalyze_freq = 1/10000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -92,6 +94,10 @@ def main(env_id, seed):
                     num_heads=8,
                     embed_dim=768,
                     obs_type='image',
+                    
+                    encoder_type='vit',
+                    # encoder_type='resnet',
+
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
                     rotary_emb=False,
@@ -127,9 +133,10 @@ def main(env_id, seed):
             # train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
-            # replay_buffer_size=int(1e6),
-            replay_buffer_size=int(5e5),
-            eval_freq=int(5e3),
+            replay_buffer_size=int(1e6),
+            # replay_buffer_size=int(5e5),
+            # eval_freq=int(5e3),
+            eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -160,14 +167,14 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_lz/data_unizero_0501/{env_id[:-14]}/{env_id[:-14]}_uz_vit-encoder-ps8-finalsimnorm_LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_20250521/{env_id[:-14]}/{env_id[:-14]}_uz_vit-encoder-ps8-finalsimnorm_obs-kl-loss_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Process different environments and seeds.')
-    parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
+    parser.add_argument('--env', type=str, help='The environment to use', default='MsPacmanNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
     main(args.env, args.seed)
