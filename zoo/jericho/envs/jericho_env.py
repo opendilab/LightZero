@@ -473,6 +473,7 @@ class JerichoEnv(BaseEnv):
      
 if __name__ == '__main__':
     from easydict import EasyDict
+
     env_type='detective' # zork1, acorncourt, detective, omniquest
     # Configuration dictionary for the environment.
     env_cfg = EasyDict(

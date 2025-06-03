@@ -38,12 +38,12 @@ jobs:
           make zip
           ls -al dist
       - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-source-pack
           path: ./dist/*
       - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-all
           path: ./dist/*
@@ -108,12 +108,12 @@ jobs:
           ls -al ./wheelhouse
           mv wheelhouse dist
       - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ runner.os }}-cp${{ matrix.python }}-${{ matrix.architecture }}
           path: ./dist/*
       - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-all
           path: ./dist/*

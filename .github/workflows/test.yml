@@ -100,6 +100,7 @@ jobs:
         run: |
             make clean build unittest
       - name: Upload coverage to Codecov
+        if: ${{ env.OS_NAME == 'MacOS' }}
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
