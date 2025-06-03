@@ -390,16 +390,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # In distributed training, only the rank 0 process downloads the model, and other processes load from cache to speed up startup.
         if get_rank() == 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
-        
-        # layernorm_all_ones = True
-        # for name, param in self.pretrained_model.named_parameters():
-        #     if 'LayerNorm.weight' in name:
-        #         # 检查所有值是否接近1。可以用torch.allclose进行判断：
-        #         if not torch.allclose(param, torch.ones_like(param), rtol=1e-05, atol=1e-08):
-        #             print(f"{name} is not all ones!")
-        #             layernorm_all_ones = False
-        # if layernorm_all_ones:
-        #     print("All LayerNorm.weight parameters are all ones.")
 
         if get_world_size() > 1:
             # Wait for rank 0 to finish loading the model.
@@ -421,8 +411,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
-
-        # self.sim_norm = SimNorm(simnorm_dim=group_size)
 
         # # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
@@ -484,7 +472,6 @@ class RepresentationNetworkUniZero(nn.Module):
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
-            # final_norm_option_in_encoder: str = 'SimNorm',
             final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> None:
         """
@@ -746,8 +733,6 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
-        # TODO
-        # x = self.sim_norm(x)
         x = self.norm(x)
 
         return x
