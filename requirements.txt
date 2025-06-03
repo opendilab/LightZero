@@ -9,3 +9,4 @@ line_profiler
 xxhash
 einops
 openai
+nltk

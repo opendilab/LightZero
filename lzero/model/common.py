@@ -364,12 +364,11 @@ class DownSample(nn.Module):
 
 class HFLanguageRepresentationNetwork(nn.Module):
     def __init__(self,
-                 model_path: str = 'google-bert/bert-base-uncased',
-                 embedding_size: int = 768,
-                 group_size: int = 8,
-                 norm_type: str = "simnorm",
-                #  norm_type: str = "layernorm", # TODO: Why does nan appear in the first step of training?
-                 tokenizer=None):
+                model_path: str = 'google-bert/bert-base-uncased',
+                embedding_size: int = 768,
+                group_size: int = 8,
+                final_norm_option_in_encoder: str = "layernorm",
+                tokenizer=None):
         """
         Overview:
             This class defines a language representation network that utilizes a pretrained Hugging Face model.
@@ -379,7 +378,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
             - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
             - embedding_size (int): The dimension of the output embeddings. Default is 768.
             - group_size (int): The group size for SimNorm when using normalization.
-            - norm_type (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "layernorm".
+            - final_norm_option_in_encoder (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "layernorm".
             - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
         """
         super().__init__()
@@ -389,12 +388,13 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
         # In distributed training, only the rank 0 process downloads the model, and other processes load from cache to speed up startup.
         if get_rank() == 0:
-            self.model = AutoModel.from_pretrained(model_path)
+            self.pretrained_model = AutoModel.from_pretrained(model_path)
+
         if get_world_size() > 1:
             # Wait for rank 0 to finish loading the model.
             torch.distributed.barrier()
         if get_rank() != 0:
-            self.model = AutoModel.from_pretrained(model_path)
+            self.pretrained_model = AutoModel.from_pretrained(model_path)
 
         if tokenizer is None:
             # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
@@ -409,15 +409,15 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
         # Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).
         self.embedding_size = embedding_size
-        self.embed_proj_head = nn.Linear(self.model.config.hidden_size, self.embedding_size)
+        self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
 
-        # Select the normalization method based on the norm_type parameter.
-        if norm_type.lower() == "simnorm":
+        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
-        elif norm_type.lower() == "layernorm":
+        elif final_norm_option_in_encoder.lower() == "layernorm":
             self.norm = nn.LayerNorm(embedding_size)
         else:
-            raise NotImplementedError(f"Normalization type '{norm_type}' is not implemented. "
+            raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
                                       f"Choose 'simnorm' or 'layernorm'.")
 
     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
@@ -433,6 +433,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
         Returns:
         - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
         """
+
         # Construct the attention mask to exclude padding tokens.
         attention_mask = x != self.tokenizer.pad_token_id
 
@@ -440,19 +441,19 @@ class HFLanguageRepresentationNetwork(nn.Module):
         if no_grad:
             with torch.no_grad():
                 x = x.long()  # Ensure the input tensor is of type long.
-                outputs = self.model(x, attention_mask=attention_mask)
+                outputs = self.pretrained_model(x, attention_mask=attention_mask)
                 # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
                 cls_embedding = outputs.last_hidden_state[:, 0, :]
         else:
             x = x.long()
-            outputs = self.model(x, attention_mask=attention_mask)
+            outputs = self.pretrained_model(x, attention_mask=attention_mask)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
 
         # Apply linear projection to obtain the desired output dimension.
         cls_embedding = self.embed_proj_head(cls_embedding)
         # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
         cls_embedding = self.norm(cls_embedding)
-
+        
         return cls_embedding
 
 
@@ -468,6 +469,7 @@ class RepresentationNetworkUniZero(nn.Module):
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
+            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> None:
         """
         Overview:
@@ -486,6 +488,8 @@ class RepresentationNetworkUniZero(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - embedding_dim (:obj:`int`): The dimension of the latent state.
             - group_size (:obj:`int`): The dimension for simplicial normalization.
+            - final_norm_option_in_encoder (:obj:`str`): The normalization option for the final layer, defaults to 'SimNorm'. \
+                Options are 'SimNorm' and 'LayerNorm'.
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
@@ -530,7 +534,14 @@ class RepresentationNetworkUniZero(nn.Module):
         elif self.observation_shape[1] in [84, 96]:
             self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
 
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+        self.final_norm_option_in_encoder = final_norm_option_in_encoder
+        if self.final_norm_option_in_encoder == 'LayerNorm':
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'SimNorm':
+            self.final_norm = SimNorm(simnorm_dim=group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -557,7 +568,7 @@ class RepresentationNetworkUniZero(nn.Module):
         x = x.view(-1, self.embedding_dim)
 
         # NOTE: very important for training stability.
-        x = self.sim_norm(x)
+        x = self.final_norm(x)
 
         return x
 
@@ -670,6 +681,7 @@ class RepresentationNetworkMLP(nn.Module):
             activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
+            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> torch.Tensor:
         """
         Overview:
@@ -700,7 +712,15 @@ class RepresentationNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        if final_norm_option_in_encoder.lower() == "simnorm":
+            self.norm = SimNorm(simnorm_dim=group_size)
+        elif final_norm_option_in_encoder.lower() == "layernorm":
+            self.norm = nn.LayerNorm(hidden_channels)
+        else:
+            raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
+                                      f"Choose 'simnorm' or 'layernorm'.")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -709,8 +729,8 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
-        # TODO
-        x = self.sim_norm(x)
+        x = self.norm(x)
+
         return x
 
 
