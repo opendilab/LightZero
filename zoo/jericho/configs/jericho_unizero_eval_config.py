@@ -21,29 +21,18 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # ------------------------------------------------------------------
     # Define environment configurations
     env_configurations = {
-        'detective.z5': (12, 50),
-        # 'detective.z5': (10, 50),
-
-        'omniquest.z5': (10, 100),
-        'acorncourt.z5': (10, 50),
-        'zork1.z5': (10, 400),
+        'detective.z5': (12, 100),
+        'omniquest.z5': (25, 100),
+        'acorncourt.z5': (45, 50),
+        'zork1.z5': (55, 500),
     }
 
     env_id = 'detective.z5'
-    # env_id = 'omniquest.z5'
-    # env_id = 'acorncourt.z5'
-    # env_id = 'zork1.z5'
 
     # Set action_space_size and max_steps based on env_id
     action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
 
-    # ------------------------------------------------------------------
-    # User frequently modified configurations
-    # ------------------------------------------------------------------
-    # evaluator_env_num: int = 2       # Number of evaluator environments
-    # evaluator_env_num: int = 4       # Number of evaluator environments
     evaluator_env_num: int = 2       # Number of evaluator environments
-
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
@@ -121,10 +110,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse', # TODO: for latent state layer_norm
-
-                    # final_norm_option_in_obs_head='SimNorm',
-                    # final_norm_option_in_encoder='SimNorm',
-                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     policy_entropy_weight=5e-2,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,

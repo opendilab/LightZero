@@ -9,10 +9,10 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # Base configurations
     # ------------------------------------------------------------------
     env_configurations = {
-        'detective.z5': (10, 50),
-        'omniquest.z5': (10, 100),
-        'acorncourt.z5': (10, 50),
-        'zork1.z5': (10, 400),
+        'detective.z5': (12, 100),
+        'omniquest.z5': (25, 100),
+        'acorncourt.z5': (45, 50),
+        'zork1.z5': (55, 500),
     }
 
     # Set action_space_size and max_steps based on env_id
@@ -92,10 +92,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse', # TODO: for latent state layer_norm
-                                        
-                    # final_norm_option_in_obs_head='SimNorm',
-                    # final_norm_option_in_encoder='SimNorm',
-                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,

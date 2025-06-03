@@ -455,8 +455,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
         cls_embedding = self.norm(cls_embedding)
 
-        # cls_embedding = self.sim_norm(cls_embedding)
-
         return cls_embedding
 
 
