@@ -21,8 +21,11 @@ import sys
 sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
 
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
-from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
+# from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
 from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
+from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
+from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
+
 
 
 import torch.distributed as dist
@@ -496,16 +499,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 self.grad_correct.init_param()  
                 self.grad_correct.rep_grad = False
             elif self._cfg.moco_version=="v1":
-                # learner_ranks = [0, 1]          # 只把 learner 的 rank 列出来
-                # learner_pg = build_learner_group(learner_ranks)
 
-                # cfg_moco = MoCoCfg(beta0=0.9, beta_sigma=0.5,
-                #     gamma0=10,  gamma_sigma=0.5,
-                #     rho=0.01,   stat_interval=5000)
                 cfg_moco = MoCoCfg(
                     beta0=0.9,  beta_sigma=0.95,
                     gamma0=0.1, gamma_sigma=0.95,
-                    rho=0.01,   stat_interval=5000)
+                    rho=0.01,   stat_interval=10000)
                 self.grad_correct = FastMoCo(
                     shared_module=self.wrapped_model,
                     world_task_num=self._cfg.total_task_num,   # 全局任务数
@@ -513,17 +511,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                     multi_gpu=self._cfg.multi_gpu,
                     cfg=cfg_moco,
                 )
-                # self.grad_correct._init_state() 
 
-                                # self.grad_correct = GenericMoCo(
-                #     shared_module=self.wrapped_model,
-                #     world_task_num=self._cfg.total_task_num,   # 全局任务数
-                #     device=self._cfg.device,
-                #     multi_gpu=self._cfg.multi_gpu,
-                #     cfg=cfg_moco,
-                #     # pg=learner_pg
-                # )
-                # self.grad_correct.init_param()
 
         # 用于缓存上一帧的可塑性相关指标
         self._prev_plasticity_metrics = dict(

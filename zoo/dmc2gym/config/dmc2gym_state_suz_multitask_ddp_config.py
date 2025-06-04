@@ -20,9 +20,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
     task_name = env_id.split('-')[1]
 
     if domain_name == "pendulum":
-        # frame_skip=8
-        frame_skip=4
-
+        frame_skip=8
+        # frame_skip=4
     else:
         # frame_skip=2 # orig
         # frame_skip=8
@@ -70,28 +69,28 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                 num_of_sampled_actions=20,
                 model_type='mlp',
                 world_model_cfg=dict(
-                    # final_norm_option_in_obs_head='LayerNorm',
-                    # final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
                     
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
-                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    # final_norm_option_in_obs_head='SimNorm',
+                    # final_norm_option_in_encoder='SimNorm',
+                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
 
                     share_head=False, # TODO
                     use_shared_projection=False,
 
                     # analysis_dormant_ratio_weight_rank=True, # TODO 按照atari unizeor_mt的更新一下 ========
                     analysis_dormant_ratio_weight_rank=False, # TODO
-                    analysis_dormant_ratio_interval=100,
+                    analysis_dormant_ratio_interval=5000,
                     # analysis_dormant_ratio_interval=20,
                     
-                    # task_embed_option=None,   # ==============TODO: none ==============
-                    # use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
 
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    use_task_embed=True, # ==============TODO==============
-                    task_embed_dim=128,
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    # use_task_embed=True, # ==============TODO==============
+                    # task_embed_dim=128,
 
                     observation_shape_list=observation_shape_list,
                     action_space_size_list=action_space_size_list,
@@ -206,7 +205,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_suz_dmc_mt_20250522/dmc_{len(env_id_list)}tasks_frameskip4_simnorm-kl_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_dmc_mt_20250601/dmc_{len(env_id_list)}tasks_frameskip4-pendulum-skip8_ln-mse_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
     # exp_name_prefix = f'data_suz_dmc_mt_20250522/dmc_{len(env_id_list)}tasks_frameskip4_ln-mse_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250509/dmc_{len(env_id_list)}tasks_orig_nlayer8_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
@@ -268,6 +267,9 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+
+        cd /fs-computility/niuyazhe/puyuan/code/LightZero/
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee /fs-computility/niuyazhe/puyuan/code/LightZero/log/20250601/uz_mt_dmc18_frameskip4-pendulumskip8_ln-mse_nlayer8_trans-moe8.log
 
         =========== oss dmc18 =========================
         cd /oss/niuyazhe/puyuan/data/data_lz_202505/
@@ -399,8 +401,11 @@ if __name__ == "__main__":
     # total_batch_size = 8
     # batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
+    import torch.distributed as dist
 
-    for seed in [0,1]:
+    # for seed in [0,1]:
+    for seed in [1,2]:
+    
         # You can iterate over multiple seeds if needed
 
         configs = generate_configs(
@@ -426,3 +431,4 @@ if __name__ == "__main__":
             train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name= "dmc" )
             # 如果只想训练部分任务，可以修改 configs，例如:
             # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)
+            dist.destroy_process_group()

@@ -413,7 +413,9 @@ if __name__ == "__main__":
         total_batch_size=total_batch_size,
     )
 
+    import torch.distributed as dist
     with DDPContext():
         train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
         # 如果只想训练部分任务，可以修改 configs，例如:
         # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)
+        dist.destroy_process_group()
