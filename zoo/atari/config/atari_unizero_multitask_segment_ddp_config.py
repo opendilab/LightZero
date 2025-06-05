@@ -215,12 +215,16 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
 
 
     # ========= TODO: global BENCHMARK_NAME =========
-    # exp_name_prefix = f'data_unizero_atari_mt_20250527/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    # exp_name_prefix = f'data_unizero_atari_mt_20250522/atari_{len(env_id_list)}games_orig_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_atari_mt_20250527/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moco-v2_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_vit_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    exp_name_prefix = f'data_unizero_atari_mt_20250601/atari_{len(env_id_list)}games_orig_ln-mse_moco-memeff_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_taskembed128_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_simnorm-kl_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+
+    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_ln-mse_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+
+    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_ln-mse_moco-memeff_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250601/atari_{len(env_id_list)}games_orig_vit_ln-mse_moco-memeff_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
@@ -276,6 +280,15 @@ if __name__ == "__main__":
 
         =========== cpfs atari8 =========================
         cd /cpfs04/user/puyuan/code/LightZero/
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_moco-v1_lop_nlayer8_brf0_seed2.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_vit_moe8_lop_nlayer8_brf0_seed1.log
+
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_taskembed128_lop_nlayer8_brf0_seed1.log
+
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_simnorm-kl_lop_nlayer8_brf0_seed1.log
+
+
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari26_orig_simnorm-kl_vit_moe8_nlayer8_brf002_seed01.log
 
         python -m torch.distributed.launch --nproc_per_node=2 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_simnorm-kl_vit_moe8_moco-v1_nlayer4_brf0_seed01.log
@@ -324,9 +337,6 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-
-    # num_games = 3 # TODO: only for debug
-
     num_layers = 8 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
@@ -364,8 +374,8 @@ if __name__ == "__main__":
             # effective_batch_size =  1024 # nlayer4 需要设置replay_ratio=0.25对应的upc=40
             effective_batch_size =  512 # nlayer4 需要设置replay_ratio=0.25对应的upc=40 moco
         elif num_layers == 8:
-            # effective_batch_size = 512 # nlayer8 需要设置replay_ratio=0.5对应的upc=80
-            effective_batch_size = 256 # moco nlayer8 需要设置replay_ratio=0.5对应的upc=80
+            effective_batch_size = 512 # nlayer8 需要设置replay_ratio=0.5对应的upc=80
+            # effective_batch_size = 256 # moco nlayer8 需要设置replay_ratio=0.5对应的upc=80
 
     elif len(env_id_list) == 26:
         # effective_batch_size = 832  # cnn-encoder
@@ -387,12 +397,13 @@ if __name__ == "__main__":
     # infer_context_length = 5 # ==============TODO==============
 
     norm_type = 'LN'
-    buffer_reanalyze_freq = 1 / 50
-    # buffer_reanalyze_freq = 1 / 1000000
+    # buffer_reanalyze_freq = 1 / 50
+    buffer_reanalyze_freq = 1 / 1000000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
+    # num_games=3
     # env_id_list = [
     #         'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4'
     #     ]
@@ -407,10 +418,11 @@ if __name__ == "__main__":
     # infer_context_length = 2
     # batch_sizes = [20 for _ in range(len(env_id_list))]
     # total_batch_size =  20*len(env_id_list)
-
+    # max_env_step = 300
 
     import torch.distributed as dist
-    for seed in [1,2]:
+    for seed in [2]:
+    # for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
@@ -420,6 +432,6 @@ if __name__ == "__main__":
             train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name= "atari" )
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
-
+            print(f"seed: {seed} done!")
             dist.destroy_process_group()
     

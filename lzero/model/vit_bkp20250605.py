@@ -1,8 +1,11 @@
 import torch
+# from vit_pytorch import ViT
+import torch
 from torch import nn
+
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-from lzero.model.common import SimNorm
+from .common import SimNorm
 
 # helpers
 
@@ -106,6 +109,9 @@ class ViT(nn.Module):
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
 
         self.pool = pool
+        # self.to_latent = nn.Identity()
+
+        # self.mlp_head = nn.Linear(dim, num_classes)
         self.last_linear = nn.Linear(dim, num_classes)
 
         group_size = 8
@@ -133,42 +139,37 @@ class ViT(nn.Module):
 
         x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
 
+        # x = self.to_latent(x)
+        
+        # x = self.mlp_head(x)
         x = self.last_linear(x)
+
         x = self.final_norm(x)
 
         return x
+        # return self.mlp_head(x)
 
-# --------------------------- 测试代码 --------------------------- #
-if __name__ == "__main__":
-    import random
-    torch.manual_seed(42)
-    random.seed(42)
-    model = ViT(
-        image_size = 64,
-        patch_size = 8,
-        num_classes =768,
-        dim = 768,
-        depth = 12,
-        heads = 12,
-        mlp_dim = 3072,
-        dropout = 0.1,
-        emb_dropout = 0.1,
-        final_norm_option_in_encoder="LayerNorm"
-    )
-    model = model.cuda() if torch.cuda.is_available() else model
-    dummy = torch.randn(256,3,64,64).to(next(model.parameters()).device)
-    with torch.no_grad():
-        out = model(dummy)
-    print("Output shape:", out.shape)      # => (10, 768)
-    print("output[0]", out[0][:50])      # => (1, 50)
 
-    # 简单基准
-    import time, contextlib
-    warm, rep = 5, 20
-    for _ in range(warm): out = model(dummy)
-    torch.cuda.synchronize() if torch.cuda.is_available() else None
-    t0=time.time()
-    for _ in range(rep):
-        out = model(dummy)
-    torch.cuda.synchronize() if torch.cuda.is_available() else None
-    print(f"Average latency: {(time.time()-t0)/rep*1000:.2f} ms")
+
+v = ViT(
+    image_size = 256,
+    patch_size = 32,
+    # num_classes = 1000,
+    num_classes =768,
+    dim = 1024,
+    # dim = 768,
+    depth = 6,
+    heads = 16,
+    mlp_dim = 2048,
+    dropout = 0.1,
+    emb_dropout = 0.1
+)
+
+# img = torch.randn(1, 3, 256, 256)
+img = torch.randn(10, 3, 64, 64)
+
+
+preds = v(img) # (1, 1000)
+print(v)
+
+print(preds.shape)

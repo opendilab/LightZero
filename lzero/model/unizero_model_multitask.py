@@ -11,7 +11,9 @@ from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
 from line_profiler import line_profiler
-from .vit import ViT
+# from .vit import ViT
+from .vit_efficient import VisionTransformer as ViT
+
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroMTModel')
@@ -126,7 +128,6 @@ class UniZeroMTModel(nn.Module):
                         # vit base
                         self.representation_network.append(ViT(
                             image_size =observation_shape[1],
-                            # patch_size = 32,
                             patch_size = 8,
                             num_classes = obs_act_embed_dim,
                             dim = 768,
@@ -141,7 +142,6 @@ class UniZeroMTModel(nn.Module):
                         # vit base
                         self.representation_network.append(ViT(
                             image_size =observation_shape[1],
-                            # patch_size = 32,
                             patch_size = 8,
                             num_classes = obs_act_embed_dim,
                             dim = 768,

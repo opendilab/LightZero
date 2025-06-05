@@ -17,12 +17,12 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-# sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
-sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
+sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
+# sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
 
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
-from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
+# from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
 from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
 from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
 
@@ -499,7 +499,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 self.grad_correct.init_param()  
                 self.grad_correct.rep_grad = False
             elif self._cfg.moco_version=="v1":
-
                 cfg_moco = MoCoCfg(
                     beta0=0.9,  beta_sigma=0.95,
                     gamma0=0.1, gamma_sigma=0.95,
@@ -511,7 +510,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
                     multi_gpu=self._cfg.multi_gpu,
                     cfg=cfg_moco,
                 )
-
 
         # 用于缓存上一帧的可塑性相关指标
         self._prev_plasticity_metrics = dict(
