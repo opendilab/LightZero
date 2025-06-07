@@ -17,16 +17,6 @@ from .tokenizer import Tokenizer
 from lzero.model.unizero_world_models.modeling.transformer import Transformer, TransformerConfig
 from lzero.model.unizero_world_models.modeling.adaptive_attention import AdaptiveSpanAttention
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
-from .attention_map import visualize_attention_maps
-
-visualize_attention_maps(
-            model=self.transformer,
-            input_embeddings=self._last_sequences,
-            kv_cache=None,
-            valid_context_lengths=None,
-            suffix=f'compute_loss_initial_attention_{self.transformer.config.attention}',
-            nhead_each_row=4
-        )
 
 
 logging.getLogger().setLevel(logging.DEBUG)

@@ -1046,42 +1046,57 @@ class UniZeroPolicy(MuZeroPolicy):
 
     def visualize_attn_map(self):
         """
-        Visualizes the attention map
+        Visualizes a 20×20 slice of the self‐attention map on CPU to avoid CUDA device‐side asserts.
         """
-        world_model = self._model.world_model
-        device = next(world_model.parameters()).device
 
-        obs_batch = self.last_batch_obs
-        action_batch = self.last_batch_action
+        import torch
 
-        obs_batch = obs_batch.to(device)
-        obs_embeddings = world_model.tokenizer.encode_to_obs_embeddings(obs_batch)
-        B = obs_embeddings.size(0)
+        wm = self._model.world_model
+        orig_dev = next(wm.parameters()).device
+        wm.cpu()
 
-        if world_model.continuous_action_space:
-            act_tensor = torch.as_tensor(action_batch, dtype=torch.float32, device=device)  # (B, action_dim)
-            act_tokens = act_tensor.unsqueeze(1)
-        else:
-            act_tensor = torch.as_tensor(action_batch, dtype=torch.long, device=device)  # (B,)
-            act_tokens = act_tensor.unsqueeze(-1)  # → shape (B, 1, 1)
+        obs = self.last_batch_obs.cpu()
+        acts = self.last_batch_action
 
-        prev_steps = torch.zeros(B, dtype=torch.long, device=device)
-        if world_model.continuous_action_space:
-            combined_seqs, _ = world_model._process_obs_act_combined_cont(
-                {"obs_embeddings_and_act_tokens": (obs_embeddings, act_tokens)},
-                prev_steps=prev_steps,
+        B = obs.shape[0]
+        obs_emb = wm.tokenizer.encode_to_obs_embeddings(obs)
+        if wm.continuous_action_space:
+            at = torch.as_tensor(acts, dtype=torch.float32, device="cpu")
+            act_tokens = at.unsqueeze(1)
+            combined, _ = wm._process_obs_act_combined_cont(
+                {"obs_embeddings_and_act_tokens": (obs_emb, act_tokens)},
+                prev_steps=torch.zeros((B, 1), dtype=torch.long, device="cpu"),
             )
         else:
-            combined_seqs, _ = world_model._process_obs_act_combined(
-                {"obs_embeddings_and_act_tokens": (obs_embeddings, act_tokens)},
-                prev_steps=prev_steps,
+            at = torch.as_tensor(acts, dtype=torch.long, device="cpu")
+            max_idx = wm.act_embedding_table.num_embeddings - 1
+            at = at.clamp(0, max_idx)
+            act_tokens = at.unsqueeze(1).unsqueeze(2)
+            combined, _ = wm._process_obs_act_combined(
+                {"obs_embeddings_and_act_tokens": (obs_emb, act_tokens)},
+                prev_steps=torch.zeros((B, 1), dtype=torch.long, device="cpu"),
             )
 
+        _, T, C = combined.shape
+        if T < 20:
+            pad = combined.new_zeros((B, 20 - T, C))
+            seq20 = torch.cat([combined, pad], dim=1)
+            valid_len = T
+        else:
+            seq20 = combined[:, :20, :]
+            valid_len = 20
+
+        valid_lens = torch.full((B,), valid_len, dtype=torch.long, device="cpu")
+
+        # ── 9) Call visualize_attention_maps on CPU ──────────────────────────────────
         visualize_attention_maps(
-            model=world_model.transformer,
-            input_embeddings=combined_seqs,  # (B, T, C)
+            model=wm.transformer,  # CPU transformer
+            input_embeddings=seq20,  # (B,20,C_emb) on CPU
             kv_cache=None,
-            valid_context_lengths=None,
-            suffix=f"end_of_training_attn",
+            valid_context_lengths=valid_lens,  # (B,) on CPU
+            suffix="20x20_end_of_training_attn",
             nhead_each_row=4,
         )
+
+        # ── 10) Restore transformer back to its original device ───────────────────────
+        wm.to(orig_dev)
