@@ -18,6 +18,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from ..model.unizero_world_models.attention_map import visualize_attention_maps
 from ..model.unizero_world_models.modeling.adaptive_attention import AdaptiveSpanAttention
 from ..model.unizero_world_models.modeling.gaam import GAAM
 
@@ -593,39 +594,6 @@ class UniZeroPolicy(MuZeroPolicy):
                 mus = F.softplus(attn.mu_p_raw).clamp(max=attn.max_len).detach().cpu().tolist()
                 return_log_dict[f"gaam_sigma/layer_{layer_id}"] = wandb.Histogram(sigmas)
                 return_log_dict[f"gaam_mu/layer_{layer_id}"] = wandb.Histogram(mus)
-
-        # Log attention map to wandb
-        self.attn_logged = True # TODO: Remove eventually
-        if not self.attn_logged and self.attn_plotted:
-            cfg = self._cfg.model.world_model_cfg
-            cfg_id = (
-                f"{cfg.attention}"
-                f"_L{cfg.num_layers}"
-                f"_H{cfg.num_heads}"
-                f"_E{cfg.embed_dim}"
-                f"_{cfg.tokens_per_block}x{cfg.max_blocks}"
-            )
-
-            base_dir = '/home/ddediosallegue/projects/UniZero'
-            suffix = 'compute_loss_initial_attention'
-            nhead_each_row = 4  # keep this in sync with your plotting call
-
-            # now include cfg_id in the filename
-            fn = f'{suffix}/attn_maps_{cfg_id}_{nhead_each_row}-each-row.png'
-            file_path = os.path.join(base_dir, fn)
-
-            # Creates artifact
-            art = wandb.Artifact(
-                name="attn_maps_initial_attention",
-                type="attention-maps",
-                description=(
-                    "Attention maps (all heads & layers) for the initial "
-                    f"compute_loss batch [{cfg_id}]"
-                )
-            )
-
-            art.add_file(file_path)
-            wandb.log_artifact(art)
         
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
@@ -1075,3 +1043,45 @@ class UniZeroPolicy(MuZeroPolicy):
                 model.world_model.precompute_pos_emb_diff_kv()
             model.world_model.clear_caches()
         torch.cuda.empty_cache()
+
+    def visualize_attn_map(self):
+        """
+        Visualizes the attention map
+        """
+        world_model = self._model.world_model
+        device = next(world_model.parameters()).device
+
+        obs_batch = self.last_batch_obs
+        action_batch = self.last_batch_action
+
+        obs_batch = obs_batch.to(device)
+        obs_embeddings = world_model.tokenizer.encode_to_obs_embeddings(obs_batch)
+        B = obs_embeddings.size(0)
+
+        if world_model.continuous_action_space:
+            act_tensor = torch.as_tensor(action_batch, dtype=torch.float32, device=device)  # (B, action_dim)
+            act_tokens = act_tensor.unsqueeze(1)
+        else:
+            act_tensor = torch.as_tensor(action_batch, dtype=torch.long, device=device)  # (B,)
+            act_tokens = act_tensor.unsqueeze(-1)  # → shape (B, 1, 1)
+
+        prev_steps = torch.zeros(B, dtype=torch.long, device=device)
+        if world_model.continuous_action_space:
+            combined_seqs, _ = world_model._process_obs_act_combined_cont(
+                {"obs_embeddings_and_act_tokens": (obs_embeddings, act_tokens)},
+                prev_steps=prev_steps,
+            )
+        else:
+            combined_seqs, _ = world_model._process_obs_act_combined(
+                {"obs_embeddings_and_act_tokens": (obs_embeddings, act_tokens)},
+                prev_steps=prev_steps,
+            )
+
+        visualize_attention_maps(
+            model=world_model.transformer,
+            input_embeddings=combined_seqs,  # (B, T, C)
+            kv_cache=None,
+            valid_context_lengths=None,
+            suffix=f"end_of_training_attn",
+            nhead_each_row=4,
+        )

@@ -226,10 +226,10 @@ def train_unizero(
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             logging.info("Stopping condition met, training ends!")
+            policy.visualize_attn_map()
             break
 
     learner.call_hook('after_run')
-
     # ─── Final evaluation at end of training ─────────────────────────────────────
     logging.info("Performing final evaluation at end of training...")
     stop, final_reward = evaluator.eval(

@@ -19,6 +19,16 @@ from lzero.model.unizero_world_models.modeling.adaptive_attention import Adaptiv
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
 from .attention_map import visualize_attention_maps
 
+visualize_attention_maps(
+            model=self.transformer,
+            input_embeddings=self._last_sequences,
+            kv_cache=None,
+            valid_context_lengths=None,
+            suffix=f'compute_loss_initial_attention_{self.transformer.config.attention}',
+            nhead_each_row=4
+        )
+
+
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -133,6 +143,7 @@ class WorldModel(nn.Module):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+        self.last_obs_embeddings = []
 
     def custom_copy_kv_cache_to_shared_init_envs(self, src_kv: KeysValues, env_id) -> int:
         """
@@ -1271,21 +1282,8 @@ class WorldModel(nn.Module):
         start_pos = batch['timestep']
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
-
-        # visualize attention maps
-        self.attn_plotted = True #TODO: Remove eventually
-        if not self.attn_plotted:
-            visualize_attention_maps(
-                model=self.transformer,
-                input_embeddings=obs_embeddings,  # (B, T, C)
-                kv_cache=None,  # full-context
-                valid_context_lengths=None,
-                suffix='compute_loss_initial_attention',
-                nhead_each_row=4
-            )
-
-            # Only plot once
-            self.attn_plotted = True
+        if len(self.last_obs_embeddings) >= 10:
+            self.last_obs_embeddings.append(obs_embeddings)
 
 
         # ========= for visual analysis =========

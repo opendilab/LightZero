@@ -1,208 +1,147 @@
-#!/usr/bin/env python
-import wandb
+#!/usr/bin/env python3
+"""
+plot_histogram.py
+
+Reads a CSV exported from wandb (or similar) where one column contains a JSON‐encoded
+histogram (with "_type":"histogram", "values":[…], "bins":[…]). Extracts the last
+row's histogram data and plots it as a bar chart.
+"""
+
+import json
+import pandas as pd
 import numpy as np
 import matplotlib
 matplotlib.use('TkAgg')  # or 'Agg', 'Qt5Agg', depending on your system
 import matplotlib.pyplot as plt
 
-# ─── CONFIGURATION ─────────────────────────────────────────────────────────────
-ENTITY       = "dani-allegue"
-PROJECT      = "LightZero"
-RUN_ID       = "rwqf9q5y"
-RUN_IDS = ["dez110gm", "4yjgxtun", "rsrwmmb1"]
-# STEPS        = [0, 50_000, 100_000]
-STEPS  = list(range(0, 100_001, 10_000))
-LAYERS  = [0, 1]
-WIDTH_FACTOR = 4  # how many σ’s to span around μ
-# ────────────────────────────────────────────────────────────────────────────────
-def histogram_stats(hist: dict):
-    """
-    Given a W&B histogram dict with keys 'bins' (edges length N+1) and
-    'values' (counts length N), compute the weighted mean and std.
-    """
-    edges  = np.array(hist["bins"], dtype=float)
-    counts = np.array(hist["values"], dtype=float)
-    if len(edges) != len(counts) + 1:
-        raise ValueError(f"bins length {len(edges)} vs values length {len(counts)}")
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    total   = counts.sum()
-    if total == 0:
-        raise ValueError("Empty histogram (all zero counts)")
-    mean = (centers * counts).sum() / total
-    var  = (counts * (centers - mean) ** 2).sum() / total
-    return mean, np.sqrt(var)
+layer0 = [
+    "../results/learning_pong/first_mu_0.csv",
+"../results/learning_pong/second_mu_0.csv",
+"../results/learning_pong/third_mu_0.csv",
+"../results/learning_pong/fourth_mu_0.csv",
+"../results/learning_pong/fifth_mu_0.csv",
+]
 
-def fetch_distribution_params(entity, project, run_id, steps, layers):
-    """
-    Fetch and reduce the W&B histograms for mu & sigma into mean+std per step/layer.
-    Returns params[step][layer] = {'mu': mean_mu, 'sigma': std_sigma}
-    """
-    api = wandb.Api()
-    run = api.run(f"{entity}/{project}/{run_id}")
+layer1 = [
+    "../results/learning_pong/first_mu_1.csv",
+    "../results/learning_pong/second_mu_1.csv",
+    "../results/learning_pong/third_mu_1.csv",
+     "../results/learning_pong/fourth_mu_1.csv",
+    "../results/learning_pong/fifth_mu_1.csv",
+]
 
-    # metric keys
-    keys = []
-    for L in layers:
-        keys += [
-            f"learner_step/gaam_mu/layer_{L}",
-            f"learner_step/gaam_sigma/layer_{L}",
-        ]
+def plot_last_offsets():
+    # Hard‐coded path to your CSV
+    csv_path = "../results/distribution_test.csv"
 
-    df = run.history(keys=keys, pandas=True)
-    # pick whatever step‐column they used
-    for idx_col in ("_step", "step", "Step"):
-        if idx_col in df.columns:
-            df = df.set_index(idx_col)
-            break
-    else:
-        raise KeyError(f"No step column in {df.columns}")
+    # Load the CSV
+    df = pd.read_csv(csv_path)
+    if df.shape[0] == 0:
+        raise ValueError(f"No data found in '{csv_path}'")
 
-    params = {}
-    for step in steps:
-        if step in df.index:
-            row = df.loc[step]
-        else:
-            idxs    = np.array(df.index, dtype=float)
-            nearest = idxs[np.abs(idxs - step).argmin()]
-            print(f"• step {step} not found, using {int(nearest)}")
-            row = df.loc[nearest]
+    # Assume the histogram column is the second column
+    hist_col = df.columns[1]
+    hist_json_str = df[hist_col].iloc[-1]
 
-        params[step] = {}
-        for L in layers:
-            mu_hist  = row[f"learner_step/gaam_mu/layer_{L}"]
-            sig_hist = row[f"learner_step/gaam_sigma/layer_{L}"]
+    # Parse the JSON
+    try:
+        hist = json.loads(hist_json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Failed to parse JSON in column '{hist_col}': {e}")
 
-            if isinstance(mu_hist, dict) and "bins" in mu_hist and "values" in mu_hist:
-                mean_mu, _       = histogram_stats(mu_hist)
-                _, std_sigma    = histogram_stats(sig_hist)
-            else:
-                mean_mu  = float(mu_hist)
-                std_sigma = float(sig_hist)
+    # Extract counts and bin edges
+    counts = np.array(hist["values"], dtype=int)
+    bins = np.array(hist["bins"], dtype=float)
+    if bins.shape[0] != counts.shape[0] + 1:
+        raise ValueError("Bin array length must be one greater than counts length")
 
-            params[step][L] = {"mu": mean_mu, "sigma": std_sigma}
-            print(f"[step {step}, layer {L}]  μ={mean_mu:.4f}, σ={std_sigma:.4f}")
-    print()
-    return params
+    # Compute bin midpoints and reconstruct per-head offsets
+    mids = (bins[:-1] + bins[1:]) / 2
+    offsets = np.repeat(mids, counts)
+    if offsets.size != 8:
+        raise ValueError(f"Expected 8 offsets but reconstructed {offsets.size}")
 
-def aggregate_runs(run_ids: list[str]):
-    """
-    Fetch each run’s params, stack into arrays:
-      mus[r,i,L], sigmas[r,i,L]   where r=run, i=step-index, L=layer.
-    """
-    all_params = [fetch_distribution_params(ENTITY, PROJECT, rid, STEPS, LAYERS) for rid in run_ids]
-    n_runs = len(run_ids)
-    n_steps = len(STEPS)
-    mus    = np.zeros((n_runs, n_steps, len(LAYERS)))
-    sigmas = np.zeros_like(mus)
-    for r, params in enumerate(all_params):
-        for i, step in enumerate(STEPS):
-            for j, L in enumerate(LAYERS):
-                mus[r, i, j]    = params[step][L]['mu']
-                sigmas[r, i, j] = params[step][L]['sigma']
-    return mus, sigmas
-
-def plot_distributions(params, layers, width_factor):
-    """
-    Plot the Gaussian pdfs at the selected steps for each layer.
-    """
-    fig, axes = plt.subplots(len(layers), 1,
-                             figsize=(8, 4 * len(layers)))
-    if len(layers) == 1:
-        axes = [axes]
-
-    for ax, L in zip(axes, layers):
-        for step in sorted(params):
-            mu, sigma = params[step][L]["mu"], params[step][L]["sigma"]
-            xs = np.linspace(mu - width_factor*sigma,
-                             mu + width_factor*sigma, 500)
-            ys = (1 / (sigma * np.sqrt(2*np.pi)) *
-                  np.exp(-0.5 * ((xs - mu)/sigma)**2))
-            ax.plot(xs, ys, label=f"step {step:,}")
-
-        ax.set_title(f"Layer {L} Gaussian distributions")
-        ax.set_xlabel("x")
-        ax.set_ylabel("PDF")
-        ax.legend()
-
+    # Plot 8 separate bars
+    labels = [f"Head {i}" for i in range(len(offsets))]
+    plt.figure(figsize=(8, 5))
+    plt.bar(labels, offsets, edgecolor="black")
+    plt.xlabel("Head Index")
+    plt.ylabel("Learned Mean Offset")
+    plt.title("Learned Mean Offsets per Head")
+    plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
 
-def plot_parameter_evolution(params, layers):
+def load_offsets(csv_paths):
     """
-    Plot the evolution of μ and σ across the selected steps for each layer.
+    Given a list of CSV paths, each containing a JSON‐encoded histogram column
+    in the second column, reconstruct per-head offsets (8 values) for each run
+    and return an (n_runs x 8) array.
     """
-    steps = sorted(params.keys())
+    all_offsets = []
+    for path in csv_paths:
+        df = pd.read_csv(path)
+        if df.shape[0] == 0:
+            raise ValueError(f"No data in '{path}'")
+        hist_col = df.columns[1]
+        hist = json.loads(df[hist_col].iloc[-1])
+        counts = np.array(hist["values"], dtype=int)
+        bins = np.array(hist["bins"], dtype=float)
+        if bins.shape[0] != counts.shape[0] + 1:
+            raise ValueError(f"Bad histogram in '{path}'")
+        mids = (bins[:-1] + bins[1:]) / 2
+        offsets = np.repeat(mids, counts)
+        if offsets.size != 8:
+            raise ValueError(f"Expected 8 offsets in '{path}', got {offsets.size}")
+        all_offsets.append(offsets)
+    return np.vstack(all_offsets)
 
-    # μ evolution
-    plt.figure(figsize=(6,4))
-    for L in layers:
-        mus = [params[s][L]["mu"] for s in steps]
-        plt.plot(steps, mus, label=f"layer {L}")  # no marker
-    plt.title("Evolution of μ")
-    plt.xlabel("step")
-    plt.ylabel("μ")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+def plot_layer_comparison(layer0_paths, layer1_paths):
+    # Load and aggregate
+    offs0 = load_offsets(layer0_paths)  # shape (5,8)
+    offs1 = load_offsets(layer1_paths)
 
-    # σ evolution
-    plt.figure(figsize=(6,4))
-    for L in layers:
-        sigs = [params[s][L]["sigma"] for s in steps]
-        plt.plot(steps, sigs, label=f"layer {L}")  # no marker
-    plt.title("Evolution of σ")
-    plt.xlabel("step")
-    plt.ylabel("σ")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    means0 = offs0.mean(axis=0)
+    stds0  = offs0.std(axis=0)
+    means1 = offs1.mean(axis=0)
+    stds1  = offs1.std(axis=0)
 
-def plot_aggregated_evolution(run_ids: list[str]):
-    mus, sigmas = aggregate_runs(run_ids)
-    mean_mu = mus.mean(axis=0)
-    std_mu = mus.std(axis=0, ddof=1)
-    mean_sig = sigmas.mean(axis=0)
-    std_sig = sigmas.std(axis=0, ddof=1)
-    ci_mult = 1.96 / np.sqrt(len(run_ids))  # 95% CI
+    # Bar positions
+    indices = np.arange(8)
+    width = 0.35
 
-    # μ evolution with 95% CI
-    plt.figure(figsize=(6, 4))
-    for j, L in enumerate(LAYERS):
-        plt.plot(STEPS, mean_mu[:, j], label=f"layer {L}")
-        lower = mean_mu[:, j] - ci_mult * std_mu[:, j]
-        upper = mean_mu[:, j] + ci_mult * std_mu[:, j]
-        plt.fill_between(STEPS, lower, upper, alpha=0.2)
-    plt.title("Aggregated Evolution of μ (95% CI)")
-    plt.xlabel("step")
-    plt.ylabel("μ")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    # Draw bars with error bars (whiskers) for std
+    bars0 = ax.bar(
+        indices - width/2, means0, width,
+        yerr=stds0, capsize=5,
+        label='Layer 0', color='blue', edgecolor='black'
+    )
+    bars1 = ax.bar(
+        indices + width/2, means1, width,
+        yerr=stds1, capsize=5,
+        label='Layer 1', color='red', edgecolor='black'
+    )
 
-    # σ evolution with 95% CI
-    plt.figure(figsize=(6, 4))
-    for j, L in enumerate(LAYERS):
-        plt.plot(STEPS, mean_sig[:, j], label=f"layer {L}")
-        lower = mean_sig[:, j] - ci_mult * std_sig[:, j]
-        upper = mean_sig[:, j] + ci_mult * std_sig[:, j]
-        plt.fill_between(STEPS, lower, upper, alpha=0.2)
-    plt.title("Aggregated Evolution of σ (95% CI)")
-    plt.xlabel("step")
-    plt.ylabel("σ")
-    plt.legend()
+    ax.axhline(
+        y=2.0,
+        color='gray',
+        linestyle='--',
+        linewidth=1.5,
+        label='Initial $\mu = 6.0$ '
+    )
+
+    ax.set_xlabel("Head Index", fontsize = 14)
+    ax.set_ylabel("Mean Learned $\mu_h$", fontsize = 14)
+    ax.set_title("Mean Learned $\mu_h$ per Head with Std Dev in Pong", fontsize = 18)
+    ax.set_xticks(indices)
+    ax.set_xticklabels([f"Head {i}" for i in indices])
+    ax.tick_params(axis='both', labelsize=12)
+    ax.legend()
     plt.tight_layout()
     plt.show()
 
 
 if __name__ == "__main__":
-    #print("Fetching GAAM parameters from W&B…")
-    params = fetch_distribution_params(ENTITY, PROJECT, RUN_ID, STEPS, LAYERS)
+    plot_layer_comparison(layer0, layer1)
 
-    #print("Plotting distributions…")
-    #plot_distributions(params, LAYERS, WIDTH_FACTOR)
-
-    #print("Plotting parameter evolution…")
-    #plot_parameter_evolution(params, LAYERS)
-
-    print("Plotting aggregated parameter evolution for runs:", RUN_IDS)
-    plot_aggregated_evolution(RUN_IDS)
