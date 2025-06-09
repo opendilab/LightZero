@@ -205,7 +205,7 @@ def cal_dormant_ratio(
             parts["model"] = model
 
     # 定义要捕获的目标模块类型 TODO: 增加更多模块
-    target_modules = (nn.Conv2d, nn.Linear, nn.Embedding)
+    target_modules = (nn.Conv2d, nn.Linear)
     
     # 用于存储各部分的 hook（字典：部分名 -> list of (module_name, hook)）
     hooks_dict = {part: [] for part in parts}

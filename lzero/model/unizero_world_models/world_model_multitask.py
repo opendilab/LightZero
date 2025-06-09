@@ -1788,7 +1788,8 @@ class WorldModelMT(nn.Module):
         if self.do_analysis:
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
-            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
+            inputs = batch['observations'].contiguous().view(-1, shape[-1]) # (b, s, h) -> (b * s, h)
+            # inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             if self.continuous_action_space:
                 encoder_index = task_id
             else:
