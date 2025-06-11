@@ -115,8 +115,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     analysis_dormant_ratio_weight_rank=True,  # ==============TODO==============
                     # analysis_dormant_ratio_weight_rank=False, # TODO
-                    # analysis_dormant_ratio_interval=100,
-                    analysis_dormant_ratio_interval=5000,
+                    analysis_dormant_ratio_interval=100, # TODO
+                    # analysis_dormant_ratio_interval=5000,
                     # analysis_dormant_ratio_interval=20,
 
                     continuous_action_space=False,
@@ -215,9 +215,11 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
 
 
     # ========= TODO: global BENCHMARK_NAME =========
-    exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_vit_moe8_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+
+    # exp_name_prefix = f'data_unizero_atari_mt_20250611/atari_{len(env_id_list)}games_orig_vit_moe8_tbs256_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_taskembed128_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_simnorm-kl_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
@@ -421,8 +423,8 @@ if __name__ == "__main__":
     # max_env_step = 300
 
     import torch.distributed as dist
-    for seed in [2]:
-    # for seed in [0]:
+    # for seed in [1]:
+    for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,

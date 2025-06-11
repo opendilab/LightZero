@@ -21,7 +21,7 @@ from ding.utils import EasyTimer
 import torch.nn.functional as F
 import torch.distributed as dist
 import concurrent.futures
-from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer
+from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer,CurriculumLoRALinear
 
 # ===== 新增依赖 =====
 import numpy as np                    # 计算均值
@@ -376,6 +376,7 @@ def train_unizero_multitask_balance_segment_ddp(
     # ====== UniZero-MT 需要用到的基准分数（与 26 个 Atari100k 任务 id 一一对应）======
     #   原始的 RANDOM_SCORES 和 HUMAN_SCORES
     if benchmark_name == "atari":
+        # Alien开始 按照字母顺序排序
         RANDOM_SCORES = np.array([
             227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
             152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
@@ -808,6 +809,17 @@ def train_unizero_multitask_balance_segment_ddp(
             tb_logger.add_scalar('UniZero-MT/stage',   curr_ctrl.stage,   global_step=learner.train_iter)
             tb_logger.add_scalar('UniZero-MT/last_solved', curr_ctrl.last_solved, global_step=learner.train_iter)
 
+            # 遍历 transformer 中所有子模块，根据其名称查找 CurriculumLoRALinear 模块
+            transformer = policy._learn_model.world_model.transformer
+            for module_name, module in transformer.named_modules():
+                if isinstance(module, CurriculumLoRALinear) and module.adapters is not None:
+                    for adapter_idx, scale_param in enumerate(module.adapter_scales):
+                        tb_logger.add_scalar(
+                            f'UniZero-MT/adapter_scales/{module_name}/adapter_{adapter_idx}',
+                            scale_param.item(),
+                            global_step=learner.train_iter
+                        )
+                        
         if switch:
             dist.broadcast_object_list([curr_ctrl.stage], src=0)
         else:

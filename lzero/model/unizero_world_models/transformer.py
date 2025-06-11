@@ -123,6 +123,7 @@ class CurriculumLoRALinear(nn.Module):
                     adapter['lora_B'].requires_grad = False
                 self.adapter_scales[idx].requires_grad = True   #  ← 新增
             logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: 基础层可训练，所有 adapter 均冻结。")
+            logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
         else:
             # 阶段大于 0，冻结基础层
             self.weight.requires_grad = False
@@ -130,6 +131,7 @@ class CurriculumLoRALinear(nn.Module):
                 self.bias.requires_grad = False
             for idx, adapter in enumerate(self.adapters):
                 self.adapter_scales[idx].requires_grad = True   #  ← 新增
+                logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
                 if idx == stage - 1:
                     adapter['lora_A'].requires_grad = True
                     adapter['lora_B'].requires_grad = True

@@ -11,8 +11,8 @@ from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
 from line_profiler import line_profiler
-# from .vit import ViT
-from .vit_efficient import VisionTransformer as ViT
+from .vit import ViT
+# from .vit_efficient import VisionTransformer as ViT
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -125,15 +125,28 @@ class UniZeroMTModel(nn.Module):
             elif world_model_cfg.encoder_type == "vit":
                 for task_id in range(1):  # TODO: one share encoder
                     if world_model_cfg.task_num <=8: 
-                        # vit base
+                        # # vit base
+                        # self.representation_network.append(ViT(
+                        #     image_size =observation_shape[1],
+                        #     patch_size = 8,
+                        #     num_classes = obs_act_embed_dim,
+                        #     dim = 768,
+                        #     depth = 12,
+                        #     heads = 12,
+                        #     mlp_dim = 3072,
+                        #     dropout = 0.1,
+                        #     emb_dropout = 0.1,
+                        #     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                        # ))
+                        # vit small
                         self.representation_network.append(ViT(
                             image_size =observation_shape[1],
                             patch_size = 8,
                             num_classes = obs_act_embed_dim,
                             dim = 768,
-                            depth = 12,
-                            heads = 12,
-                            mlp_dim = 3072,
+                            depth = 6,
+                            heads = 6,
+                            mlp_dim = 2048,
                             dropout = 0.1,
                             emb_dropout = 0.1,
                             final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
