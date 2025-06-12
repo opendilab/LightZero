@@ -23,12 +23,14 @@ from lzero.policy import (
     mz_network_output_unpack,
     select_action,
     prepare_obs,
-    prepare_obs_stack4_for_unizero
+    prepare_obs_stack_for_unizero
 )
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import torch.nn.functional as F
 import torch.distributed as dist
+from ding.utils import set_pkg_seed, get_rank, get_world_size
+
 import sys
 sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
@@ -336,7 +338,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self.grad_correct.rep_grad = False
 
 
-    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
         Forward function for learning policy in learn mode, handling multiple tasks.
         """
@@ -364,12 +366,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
-            obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
+            obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
             target_reward, target_value, target_policy = target_batch
 
             # Prepare observations based on frame stack number
             if self._cfg.model.frame_stack_num == 4:
-                obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+                obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
             else:
                 obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg, task_id)
 
@@ -393,8 +395,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             ]
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list, self._cfg.device)
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            # target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            # target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+
+            cur_batch_size = target_reward.size(0)          # run-time batch
+            target_reward = target_reward.view(cur_batch_size, -1)
+            target_value = target_value.view(cur_batch_size, -1)
 
             # Transform rewards and values to their scaled forms
             transformed_target_reward = scalar_transform(target_reward)
@@ -408,10 +414,10 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape_list[task_id], int) or len(self._cfg.model.observation_shape_list[task_id]) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape_list[task_id])
+                    cur_batch_size, -1, self._cfg.model.observation_shape_list[task_id])
             elif len(self._cfg.model.observation_shape_list[task_id]) == 3:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape_list[task_id])
+                    cur_batch_size, -1, *self._cfg.model.observation_shape_list[task_id])
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
             batch_for_gpt['child_sampled_actions'] = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)[:, :-1]
@@ -489,6 +495,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            # print(f'rank:{get_rank()}, after moco backword')
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
@@ -500,11 +507,19 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
+        if ignore_grad:
+            #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
+            self._optimizer_world_model.zero_grad()
+            # print(f"ignore_grad")
+
         if self._cfg.multi_gpu:
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
             #     self.sync_gradients(self._learn_model)
             if not self._cfg.use_moco:
+                # self.sync_gradients(self._learn_model)
+                # dist.barrier() # ================== TODO: ==================
                 self.sync_gradients(self._learn_model)
+                # print(f'rank:{get_rank()}, after self.sync_gradients(self._learn_model)')
 
         self._optimizer_world_model.step()
 
@@ -669,6 +684,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
+            timestep: List = [0],
             task_id: int = None,
     ) -> Dict:
         """
@@ -722,7 +738,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             
             # try:
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
                 # print("latent_state_roots.shape:", latent_state_roots.shape)
             # except Exception as e:
             #     print("="*20)
@@ -805,7 +821,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, task_id: int = None) -> Dict:
+                      ready_env_id: np.array = None, timestep: List = [0], task_id: int = None) -> Dict:
         """
         Forward function for evaluating the current policy in eval mode, handling multiple tasks.
         """
@@ -853,7 +869,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             # print(f'policy_logits: {policy_logits}')
 
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
 
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()
