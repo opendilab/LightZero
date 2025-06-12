@@ -1002,8 +1002,8 @@ class UniZeroPolicy(MuZeroPolicy):
             Clear the caches and precompute positional embedding matrices in the model.
         """
         for model in [self._collect_model, self._target_model]:
-            if not self._cfg.model.world_model_cfg.rotary_emb:
-                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
-                model.world_model.precompute_pos_emb_diff_kv()
+            # if not self._cfg.model.world_model_cfg.rotary_emb:
+            #     # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+            #     model.world_model.precompute_pos_emb_diff_kv()
             model.world_model.clear_caches()
         torch.cuda.empty_cache()

@@ -9,7 +9,9 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
     HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
-from .unizero_world_models.world_model import WorldModel
+# from .unizero_world_models.world_model import WorldModel
+from .unzero_world_models.world_model_mamba2 import WorldModel
+from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
