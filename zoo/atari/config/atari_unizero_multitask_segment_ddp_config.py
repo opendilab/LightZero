@@ -423,8 +423,8 @@ if __name__ == "__main__":
     # max_env_step = 300
 
     import torch.distributed as dist
-    # for seed in [1]:
-    for seed in [0]:
+    for seed in [1]:
+    # for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,

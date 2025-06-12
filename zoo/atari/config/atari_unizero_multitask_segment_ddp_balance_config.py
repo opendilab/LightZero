@@ -211,7 +211,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_unizero_atari_mt_balance_20250612/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}__stage-50k-20k_vit-small-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_balance_20250612/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -244,7 +244,7 @@ if __name__ == "__main__":
         Run the following command to launch the script:
 
         cd /cpfs04/user/puyuan/code/LightZero/
-        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250522_cpfs/uz_mt_nlayer4_atari8_vit-small_moe8_balance-totalstage5_stage-50k-20k_s0.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250522_cpfs/uz_mt_nlayer4_atari8_vit-small_moe8_balance-totalstage5_stage-50k-20k_s1.log
 
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_nlayer4_atari26_vit-ln_moe8_balance-totalstage9.log
 
@@ -325,11 +325,12 @@ if __name__ == "__main__":
         # target score
         target_scores = {
             # 8games
-            'PongNoFrameskip-v4': 14.6, # 0 expert
+            # 'PongNoFrameskip-v4': 14.6, # 0 expert
+            'PongNoFrameskip-v4': 20, # 0 expert
             # 'MsPacmanNoFrameskip-v4': 1500.6, # 1 
             'MsPacmanNoFrameskip-v4': 6951.6, # 1
             # 'SeaquestNoFrameskip-v4': 1000.7, # 2
-            'SeaquestNoFrameskip-v4': 42054.7, # 2
+            'SeaquestNoFrameskip-v4': 42054.7, # 2 expert
             'BoxingNoFrameskip-v4': 12.1, # 3 expert
             # 'AlienNoFrameskip-v4': 1000.7, # 4
             'AlienNoFrameskip-v4': 7127.7, # 4 expert
