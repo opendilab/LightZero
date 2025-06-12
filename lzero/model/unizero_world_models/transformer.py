@@ -15,6 +15,7 @@ from ding.torch_utils.network import GRUGatingUnit
 from einops import rearrange
 
 from .kv_caching import KeysValues
+from mamba_ssm import Mamba2
 
 
 @dataclass
@@ -239,7 +240,8 @@ class Block(nn.Module):
 
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
-        self.attn = SelfAttention(config)
+        # self.attn = SelfAttention(config)
+        self.attn = Mamba2(d_model=config.embed_dim, d_state=64, d_conv=4, expand=2)
         self.mlp = nn.Sequential(
             nn.Linear(config.embed_dim, 4 * config.embed_dim),
             nn.GELU(approximate='tanh'),
@@ -261,7 +263,8 @@ class Block(nn.Module):
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
-        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, freqs_cis)
+        # x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, freqs_cis)
+        x_attn = self.attn(self.ln1(x))
         if self.gru_gating:
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.mlp(self.ln2(x)))
