@@ -151,6 +151,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         self._max_episode_return = float("-inf")
         self._last_eval_iter = 0
         self._end_flag = False
+        
 
     def close(self) -> None:
         """
@@ -242,9 +243,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                 init_obs = self._env.ready_obs
 
             action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
-
             to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-            timestep_dict = {i: to_ndarray(init_obs[i]['timestep']) for i in range(env_nums)}
+
+            timestep_dict = {}
+            for i in range(env_nums):
+                if 'timestep' not in init_obs[i]:
+                    print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+            
             dones = np.array([False for _ in range(env_nums)])
 
             game_segments = [
@@ -262,6 +268,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             ready_env_id = set()
             remain_episode = n_episode
             eps_steps_lst = np.zeros(env_nums)
+            
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Get current ready env obs.
@@ -288,7 +295,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # policy forward
                     # ==============================================================
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
-
+                    
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                     if self.policy_config.sampled_algo:
@@ -299,7 +306,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                     pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                    timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
+                    timestep_dict_with_env_id = {
+                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
+                    }
                     visit_entropy_dict_with_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
@@ -313,6 +322,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     pred_value_dict = {}
                     timestep_dict = {}
                     visit_entropy_dict = {}
+
                     for index, env_id in enumerate(ready_env_id):
                         actions[env_id] = actions_with_env_id.pop(env_id)
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -328,8 +338,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     timesteps = self._env.step(actions)
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
+
                     for env_id, episode_timestep in timesteps.items():
                         obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
+
+                        # obs_input_ids = obs['observation'].long()
+                        # obs_attn_mask = obs['obs_attn_mask'][0].long()
+                        # valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
 
                         eps_steps_lst[env_id] += 1
                         if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
@@ -345,7 +360,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         # the obs['action_mask'] and obs['to_play'] are corresponding to next action
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
-                        timestep_dict[env_id] = to_ndarray(obs['timestep'])
+                        timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
 
                         dones[env_id] = done
                         if episode_timestep.done:
@@ -414,6 +429,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                             ready_env_id.remove(env_id)
 
                         envstep_count += 1
+            
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
             info = {
@@ -428,7 +444,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 'reward_mean': np.mean(episode_return),
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
-                'reward_min': np.min(episode_return),
+                'reward_min': np.min(episode_return)
                 # 'each_reward': episode_return,
             }
             episode_info = eval_monitor.get_episode_info()

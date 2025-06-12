@@ -72,6 +72,7 @@ class BipedalWalkerEnv(CartPoleEnv):
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
+        self._timestep = 0
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -115,7 +116,8 @@ class BipedalWalkerEnv(CartPoleEnv):
             self._frames = []
 
         action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep = 0
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         return obs
 
@@ -140,7 +142,9 @@ class BipedalWalkerEnv(CartPoleEnv):
         done = terminated or truncated
 
         action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep += 1
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         self._eval_episode_return += rew
         if self._rew_clip:

@@ -75,7 +75,7 @@ class UniZeroMCTSCtree(object):
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
             List[Any]], timestep: Union[int, List[Any]]
-    ) -> None:
+    ) -> dict:
         """
         Overview:
             Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
@@ -93,6 +93,10 @@ class UniZeroMCTSCtree(object):
 
             # preparation some constant
             batch_size = roots.num
+
+            # Store the latent state of each possible action at the MCTS root for each environment.
+            first_action_latent_map = {env_id: {} for env_id in range(batch_size)} # {env_id: {action: latent_state}} 
+
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
             # the data storage of latent states: storing the latent state of all the nodes in the search.
             latent_state_batch_in_search_path = [latent_state_roots]
@@ -156,8 +160,15 @@ class UniZeroMCTSCtree(object):
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
                 network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
 
+                for env_id in range(batch_size):
+                    depth = search_depth[env_id]
+                    action = last_actions[env_id].item()
+                    if depth == 1 and action not in first_action_latent_map[env_id]:
+                        first_action_latent_map[env_id][action] = network_output.latent_state[env_id]
+                    else:
+                        continue
+                        
                 latent_state_batch_in_search_path.append(network_output.latent_state)
-
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()
@@ -173,6 +184,8 @@ class UniZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
+            
+            return first_action_latent_map
 
 
 class MuZeroMCTSCtree(object):

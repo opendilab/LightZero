@@ -75,6 +75,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
+        self._timestep = 0
 
     def reset(self) -> np.ndarray:
         """
@@ -128,7 +129,9 @@ class LunarLanderDiscEnv(LunarLanderEnv):
         self._action_space = gym.spaces.Discrete(self.K)
 
         action_mask = np.ones(self.K, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep = 0
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
         return obs
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
@@ -153,7 +156,8 @@ class LunarLanderDiscEnv(LunarLanderEnv):
         done = terminated or truncated
 
         action_mask = np.ones(self._action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep += 1
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
         self._eval_episode_return += rew
         if done:
             info['eval_episode_return'] = self._eval_episode_return

@@ -11,10 +11,10 @@ replay_ratio = 0.25
 max_env_step = int(2e5)
 batch_size = 256
 num_unroll_steps = 5
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-
 cartpole_unizero_config = dict(
     exp_name=f'data_unizero/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
@@ -27,6 +27,7 @@ cartpole_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000, ), ), ),
         model=dict(
             observation_shape=4,
             action_space_size=2,
@@ -35,6 +36,9 @@ cartpole_unizero_config = dict(
             norm_type='BN',
             model_type='mlp',
             world_model_cfg=dict(
+                final_norm_option_in_obs_head='LayerNorm',
+                final_norm_option_in_encoder='LayerNorm',
+                predict_latent_loss_type='mse',
                 max_blocks=10,
                 max_tokens=2 * 10,
                 context_length=2 * 4,
@@ -52,7 +56,7 @@ cartpole_unizero_config = dict(
                 rotary_emb=True,
             ),
         ),
-        use_wandb=True,
+        use_wandb=False,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,
@@ -68,6 +72,7 @@ cartpole_unizero_config = dict(
         target_update_freq=100,
         grad_clip_value=5,
         num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(1e3),
         replay_buffer_size=int(1e6),

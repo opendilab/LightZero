@@ -1,3 +1,4 @@
+import os
 import time
 from collections import deque, namedtuple
 from typing import Optional, Any, List
@@ -15,6 +16,7 @@ import torch.distributed as dist
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from lzero.policy.utils import compute_bleu
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -140,7 +142,7 @@ class MuZeroCollector(ISerialCollector):
         if _policy is not None:
             self.reset_policy(_policy)
 
-        self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
+        self._env_info = {env_id: {'time': 0., 'step': 0, 'text_bleu': 0.} for env_id in range(self._env_num)}
 
         self._episode_info = []
         self._total_envstep_count = 0
@@ -162,7 +164,7 @@ class MuZeroCollector(ISerialCollector):
         Arguments:
             - env_id (:obj:`int`): the id where we need to reset the collector's state
         """
-        self._env_info[env_id] = {'time': 0., 'step': 0}
+        self._env_info[env_id] = {'time': 0., 'step': 0, 'text_bleu': 0.}
 
     @property
     def envstep(self) -> int:
@@ -361,7 +363,12 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-        timestep_dict = {i: to_ndarray(init_obs[i]['timestep']) for i in range(env_nums)}
+        timestep_dict = {}
+        for i in range(env_nums):
+            if 'timestep' not in init_obs[i]:
+                print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+            timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
@@ -441,12 +448,16 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
-
+                
+                pred_next_text_with_env_id = {k: v['predicted_next_text'] for k, v in policy_output.items()}
+                    
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
+                timestep_dict_with_env_id = {
+                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
+                }
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -469,6 +480,7 @@ class MuZeroCollector(ISerialCollector):
                 value_dict = {}
                 pred_value_dict = {}
                 timestep_dict = {}
+                pred_next_text = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -487,6 +499,7 @@ class MuZeroCollector(ISerialCollector):
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
                     timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
+                    pred_next_text[env_id] = pred_next_text_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -499,14 +512,15 @@ class MuZeroCollector(ISerialCollector):
                         if self.policy_config.gumbel_algo:
                             improved_policy_dict[env_id] = improved_policy_dict_with_env_id.pop(env_id)
                             completed_value_dict[env_id] = completed_value_with_env_id.pop(env_id)
-
+        
                 # ==============================================================
                 # Interact with the environment
                 # ==============================================================
                 timesteps = self._env.step(actions)
 
             interaction_duration = self._timer.value / len(timesteps)
-
+            
+            groundtrut_next_text = {}
             for env_id, episode_timestep in timesteps.items():
                 with self._timer:
                     if episode_timestep.info.get('abnormal', False):
@@ -518,7 +532,22 @@ class MuZeroCollector(ISerialCollector):
                         self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, episode_timestep.info))
                         continue
                     obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
+                    
 
+                    
+                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                        obs_input_ids = torch.tensor(obs['observation'], dtype=torch.long)  # shape: [L]
+                        obs_attn_mask = torch.tensor(obs['obs_attn_mask'][0], dtype=torch.long)
+                        valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
+
+                        groundtrut_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(valid_input_ids, skip_special_tokens=True)
+                        text_bleu = compute_bleu(reference=groundtrut_next_text[env_id], prediction=pred_next_text[env_id])
+                        # Whether to output text comparisons with high BLEU scores to evaluate the effectiveness of decoding the next latent.
+                        if text_bleu > 0.85:
+                            os.makedirs("./log", exist_ok=True)
+                            with open("./log/bleu_match.txt", "a", encoding="utf-8") as f:
+                                f.write(f"pred_text={pred_next_text[env_id]}\ngroundtruth_text={groundtrut_next_text[env_id]}\ntext_bleu={text_bleu:.4f}\n\n")
+                    
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
                     else:
@@ -549,7 +578,7 @@ class MuZeroCollector(ISerialCollector):
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
-                    timestep_dict[env_id] = to_ndarray(obs['timestep'])
+                    timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         chance_dict[env_id] = to_ndarray(obs['chance'])
 
@@ -612,6 +641,9 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
+                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                        self._env_info[env_id]['text_bleu'] += text_bleu
+
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
@@ -622,6 +654,9 @@ class MuZeroCollector(ISerialCollector):
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }
+                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                        info.update({'text_bleu':self._env_info[env_id]['text_bleu'] / self._env_info[env_id]['step']})
+
                     if not collect_with_pure_policy:
                         info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id]
                         if self.policy_config.gumbel_algo:
@@ -680,7 +715,8 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                        timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
+                        timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
+
                         if self.policy_config.use_ture_chance_label_in_chance_encoder:
                             chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
@@ -761,6 +797,9 @@ class MuZeroCollector(ISerialCollector):
             envstep_count = sum([d['step'] for d in self._episode_info])
             duration = sum([d['time'] for d in self._episode_info])
             episode_reward = [d['reward'] for d in self._episode_info]
+            if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                episode_bleu = [d['text_bleu'] for d in self._episode_info]
+
             if not self.collect_with_pure_policy:
                 visit_entropy = [d['visit_entropy'] for d in self._episode_info]
             else:
@@ -784,10 +823,13 @@ class MuZeroCollector(ISerialCollector):
                 'total_duration': self._total_duration,
                 'visit_entropy': np.mean(visit_entropy),
             }
+            if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                info.update({'text_avg_bleu':np.mean(episode_bleu)})
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
+            
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue

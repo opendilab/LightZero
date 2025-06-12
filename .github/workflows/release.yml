@@ -38,10 +38,10 @@ jobs:
         run: |
           make zip
           ls -al dist
-      - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v2
+      - name: Upload packed files to artifacts (source)
+        uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-all
+          name: build-artifacts-source
           path: ./dist/*
 
   wheel_build:
@@ -102,11 +102,97 @@ jobs:
         run: |
           ls -al ./wheelhouse
           mv wheelhouse dist
-      - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v2
+      - name: Upload packed files to artifacts (wheels)
+        uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-all
+          name: build-artifacts-wheels-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.architecture }}
           path: ./dist/*
+
+  wheel_aggregate:
+    name: Aggregate all wheels
+    runs-on: ubuntu-20.04
+    needs: wheel_build
+    steps:
+      - name: Create aggregation directory
+        run: mkdir -p aggregated_wheels_all
+
+      - name: Download wheel ubuntu-20.04, 3.7, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.7-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.8, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.8-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.9, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.9-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.10, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.10-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.11, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.11-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.7, aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.7-aarch64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.8, aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.8-aarch64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.9, aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.9-aarch64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.10, aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.10-aarch64
+          path: aggregated_wheels_all
+      - name: Download wheel ubuntu-20.04, 3.11, aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-ubuntu-20.04-3.11-aarch64
+          path: aggregated_wheels_all
+
+      - name: Download wheel macos-13, 3.7, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-macos-13-3.7-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel macos-13, 3.8, x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-macos-13-3.8-x86_64
+          path: aggregated_wheels_all
+      - name: Download wheel macos-13, 3.7, arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-macos-13-3.7-arm64
+          path: aggregated_wheels_all
+      - name: Download wheel macos-13, 3.8, arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-wheels-macos-13-3.8-arm64
+          path: aggregated_wheels_all
+
+      - name: Upload unified wheels artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-wheels
+          path: aggregated_wheels_all
 
   # the publishing can only be processed on linux system
   wheel_publish:
@@ -114,7 +200,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs:
       - source_build
-      - wheel_build
+      - wheel_aggregate
     strategy:
       fail-fast: false
       matrix:
@@ -122,15 +208,13 @@ jobs:
           - '3.8.7'
 
     steps:
-      - name: Download packed files to artifacts
-        uses: actions/download-artifact@v3
+      - name: Download unified wheels artifact
+        uses: actions/download-artifact@v4
         with:
-          name: build-artifacts-all
+          name: build-artifacts-wheels
           path: ./dist
-      - name: Show the buildings
-        shell: bash
-        run: |
-          ls -al ./dist
+      - name: Show the aggregated wheels
+        run: ls -al ./dist
       - name: Upload distribution 📦 to github release
         uses: svenstaro/upload-release-action@v2
         with:

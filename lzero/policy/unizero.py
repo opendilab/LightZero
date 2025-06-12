@@ -662,11 +662,13 @@ class UniZeroPolicy(MuZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
 
+            next_latent_state_with_env = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
+            
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
+
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -690,6 +692,14 @@ class UniZeroPolicy(MuZeroPolicy):
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
+                next_latent_state = next_latent_state_with_env[i][action]
+                
+                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._collect_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
+
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                 #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
@@ -704,7 +714,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
+                    'timestep': timestep[i],
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 
@@ -740,7 +751,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
                       ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
         """
         Overview:
@@ -788,14 +799,14 @@ class UniZeroPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
+            next_latent_state_with_env = self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             batch_action = []
-
+            
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # print("roots_visit_count_distributions:", distributions, "root_value:", value)
@@ -811,6 +822,15 @@ class UniZeroPolicy(MuZeroPolicy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
+                # Predict the next latent state based on the selected action and policy
+                next_latent_state = next_latent_state_with_env[i][action]
+
+                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._eval_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
+
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
@@ -818,7 +838,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
+                    'timestep': timestep[i],
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 

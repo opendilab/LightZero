@@ -9,10 +9,10 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # Base configurations
     # ------------------------------------------------------------------
     env_configurations = {
-        'detective.z5': (10, 50),
-        'omniquest.z5': (10, 100),
-        'acorncourt.z5': (10, 50),
-        'zork1.z5': (10, 400),
+        'detective.z5': (12, 100),
+        'omniquest.z5': (25, 100),
+        'acorncourt.z5': (45, 50),
+        'zork1.z5': (55, 500),
     }
 
     # Set action_space_size and max_steps based on env_id
@@ -89,6 +89,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                 encoder_url=model_name,
                 model_type="mlp",
                 world_model_cfg=dict(
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse',
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,

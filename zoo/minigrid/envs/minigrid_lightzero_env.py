@@ -71,6 +71,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
         self._replay_path_gif = cfg.replay_path_gif
         self._max_step = cfg.max_step
         self._save_replay_count = 0
+        self._timestep = 0
 
     def reset(self) -> np.ndarray:
         """
@@ -128,7 +129,8 @@ class MiniGridEnvLightZero(MiniGridEnv):
             self._frames = []
 
         action_mask = np.ones(self.action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep = 0
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         return obs
 
@@ -197,7 +199,8 @@ class MiniGridEnvLightZero(MiniGridEnv):
         rew = to_ndarray(rew)  # wrapped to be transferred to an array with shape (1,)
 
         action_mask = np.ones(self.action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep += 1
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         return BaseEnvTimestep(obs, rew, done, info)
 

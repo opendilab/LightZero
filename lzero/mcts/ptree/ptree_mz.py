@@ -220,7 +220,7 @@ class Roots:
             noises: List[float],
             rewards: List[float],
             policies: List[List[float]],
-            to_play: int = -1
+            to_play: Union[int, List] = -1
     ) -> None:
         """
         Overview:
@@ -241,7 +241,7 @@ class Roots:
             self.roots[i].add_exploration_noise(root_noise_weight, noises[i])
             self.roots[i].visit_count += 1
 
-    def prepare_no_noise(self, rewards: List[float], policies: List[List[float]], to_play: int = -1) -> None:
+    def prepare_no_noise(self, rewards: List[float], policies: List[List[float]], to_play: Union[int, List] = -1) -> None:
         """
         Overview:
             Expand the roots without noise.
