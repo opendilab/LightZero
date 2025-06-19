@@ -449,7 +449,7 @@ class MuZeroCollector(ISerialCollector):
                 # print(f'ready_env_id:{ready_env_id}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
                 
-                pred_next_text_with_env_id = {k: v['predicted_next_text'] for k, v in policy_output.items()}
+                pred_next_text_with_env_id = {k: v['predicted_next_text'] if 'predicted_next_text' in v else -1 for k, v in policy_output.items()}
                     
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -534,8 +534,7 @@ class MuZeroCollector(ISerialCollector):
                     obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
                     
 
-                    
-                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                    if "world_model_cfg" in self.policy_config.model and self.policy_config.model.world_model_cfg.obs_type == 'text':
                         obs_input_ids = torch.tensor(obs['observation'], dtype=torch.long)  # shape: [L]
                         obs_attn_mask = torch.tensor(obs['obs_attn_mask'][0], dtype=torch.long)
                         valid_input_ids = obs_input_ids[obs_attn_mask == 1].tolist()
@@ -641,7 +640,7 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
-                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                    if "world_model_cfg" in self.policy_config.model and self.policy_config.model.world_model_cfg.obs_type == 'text':
                         self._env_info[env_id]['text_bleu'] += text_bleu
 
                     collected_step += 1
@@ -654,7 +653,7 @@ class MuZeroCollector(ISerialCollector):
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }
-                    if self.policy_config.model.world_model_cfg.obs_type == 'text':
+                    if "world_model_cfg" in self.policy_config.model and self.policy_config.model.world_model_cfg.obs_type == 'text':
                         info.update({'text_bleu':self._env_info[env_id]['text_bleu'] / self._env_info[env_id]['step']})
 
                     if not collect_with_pure_policy:
@@ -797,7 +796,7 @@ class MuZeroCollector(ISerialCollector):
             envstep_count = sum([d['step'] for d in self._episode_info])
             duration = sum([d['time'] for d in self._episode_info])
             episode_reward = [d['reward'] for d in self._episode_info]
-            if self.policy_config.model.world_model_cfg.obs_type == 'text':
+            if "world_model_cfg" in self.policy_config.model and self.policy_config.model.world_model_cfg.obs_type == 'text':
                 episode_bleu = [d['text_bleu'] for d in self._episode_info]
 
             if not self.collect_with_pure_policy:
@@ -823,7 +822,7 @@ class MuZeroCollector(ISerialCollector):
                 'total_duration': self._total_duration,
                 'visit_entropy': np.mean(visit_entropy),
             }
-            if self.policy_config.model.world_model_cfg.obs_type == 'text':
+            if "world_model_cfg" in self.policy_config.model and self.policy_config.model.world_model_cfg.obs_type == 'text':
                 info.update({'text_avg_bleu':np.mean(episode_bleu)})
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
