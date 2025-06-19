@@ -49,7 +49,7 @@ def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Opt
     attention_map = attention_map[0, head_id].cpu().numpy()  # Select the attention map of the first sample
 
     plt.figure(figsize=(10, 10))
-    sns.heatmap(attention_map, cmap='coolwarm', square=True, cbar_kws={"shrink": 0.5},
+    sns.heatmap(attention_map, cmap='viridis', square=True, cbar_kws={"shrink": 0.5},
                 xticklabels=input_ids[0].cpu().numpy(), yticklabels=input_ids[0, -T:].cpu().numpy())
     plt.xticks(rotation=90)
     plt.yticks(rotation=0)
@@ -58,7 +58,7 @@ def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Opt
     plt.title(f'Attention Map of Layer {layer_id} Head {head_id}')
     plt.show()
 
-    directory = f'/home/ddediosallegue/projects/UniZero/{suffix}'
+    directory = f'/home/ddediosallegue/projects/UniZero/{suffix}' # Change the placeholder
     if not os.path.exists(directory):
         os.makedirs(directory)
     plt.savefig(f'{directory}/attn_map_layer_{layer_id}_head_{head_id}.png')
@@ -111,7 +111,7 @@ def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Op
                 ax = axs[row_id, col_id] if num_rows > 1 else axs[col_id]
 
                 attention_map = attention_maps[0, head_id].cpu().numpy()  # Select the attention map of the first sample
-                sns.heatmap(attention_map, cmap='coolwarm', square=True, cbar=False, ax=ax)
+                sns.heatmap(attention_map, cmap='viridis', square=True, cbar=False, ax=ax)
 
                 ax.tick_params(labelsize=8)
                 ax.tick_params(axis='x', rotation=90)
@@ -122,9 +122,7 @@ def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Op
                 head_count += 1
 
     plt.tight_layout()
-    directory = f'/home/ddediosallegue/projects/UniZero/{suffix}'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    plt.savefig(f'{directory}/attn_maps_{nhead_each_row}-each-row.png', dpi=300)
-    print(f'Attention maps saved to {directory}/attn_maps_{nhead_each_row}-each-row.png')
+    directory = f'/home/ddediosallegue/projects/UniZero/{suffix}' # Change the placeholder
+    plt.savefig(f'attn_maps_{nhead_each_row}-each-row.pdf', dpi=300)
+    print(f'Attention maps saved to {directory}/attn_maps_{nhead_each_row}-each-row.pdf')
     plt.close()

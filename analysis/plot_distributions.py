@@ -30,6 +30,64 @@ layer1 = [
     "../results/learning_pong/fifth_mu_1.csv",
 ]
 
+layer0_boxing = [
+    "../results/learning_boxing_2/first_mu_0.csv",
+"../results/learning_boxing_2/second_mu_0.csv",
+"../results/learning_boxing_2/third_mu_0.csv",
+"../results/learning_boxing_2/fourth_mu_0.csv",
+"../results/learning_boxing_2/fifth_mu_0.csv",
+]
+
+layer1_boxing = [
+    "../results/learning_boxing_2/first_mu_1.csv",
+    "../results/learning_boxing_2/second_mu_1.csv",
+    "../results/learning_boxing_2/third_mu_1.csv",
+     "../results/learning_boxing_2/fourth_mu_1.csv",
+    "../results/learning_boxing_2/fifth_mu_1.csv",
+]
+
+layer_0_bankheist = [
+    "../results/learning_bankheist/first_mu_0.csv",
+    "../results/learning_bankheist/second_mu_0.csv",
+    "../results/learning_bankheist/third_mu_0.csv",
+     "../results/learning_bankheist/fourth_mu_0.csv",
+    "../results/learning_bankheist/fifth_mu_0.csv",
+]
+
+layer_1_bankheist = [
+    "../results/learning_bankheist/first_mu_1.csv",
+    "../results/learning_bankheist/second_mu_1.csv",
+    "../results/learning_bankheist/third_mu_1.csv",
+     "../results/learning_bankheist/fourth_mu_1.csv",
+    "../results/learning_bankheist/fifth_mu_1.csv",
+]
+
+layer_0_pacman = [
+    "../results/learning_pacman/first_mu_0.csv",
+    "../results/learning_pacman/second_mu_0.csv",
+    "../results/learning_pacman/third_mu_0.csv",
+     "../results/learning_pacman/fourth_mu_0.csv",
+    "../results/learning_pacman/fifth_mu_0.csv",
+]
+
+layer_1_pacman = [
+    "../results/learning_pacman/first_mu_1.csv",
+    "../results/learning_pacman/second_mu_1.csv",
+    "../results/learning_pacman/third_mu_1.csv",
+     "../results/learning_pacman/fourth_mu_1.csv",
+    "../results/learning_pacman/fifth_mu_1.csv",
+]
+
+
+
+plt.rcParams.update({
+    "axes.titlesize": 30,     # default for ax.set_title(...)
+    "axes.labelsize": 26,     # default for ax.set_xlabel / set_ylabel
+    "xtick.labelsize": 18,    # tick labels
+    "ytick.labelsize": 18,
+    "legend.fontsize": 18,
+})
+
 def plot_last_offsets():
     # Hard‐coded path to your CSV
     csv_path = "../results/distribution_test.csv"
@@ -64,7 +122,7 @@ def plot_last_offsets():
     # Plot 8 separate bars
     labels = [f"Head {i}" for i in range(len(offsets))]
     plt.figure(figsize=(8, 5))
-    plt.bar(labels, offsets, edgecolor="black")
+    plt.bar(labels, offsets, width=0.9, edgecolor="black")
     plt.xlabel("Head Index")
     plt.ylabel("Learned Mean Offset")
     plt.title("Learned Mean Offsets per Head")
@@ -96,7 +154,8 @@ def load_offsets(csv_paths):
         all_offsets.append(offsets)
     return np.vstack(all_offsets)
 
-def plot_layer_comparison(layer0_paths, layer1_paths):
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 8))
+def plot_layer_comparison(layer0_paths, layer1_paths, idx):
     # Load and aggregate
     offs0 = load_offsets(layer0_paths)  # shape (5,8)
     offs1 = load_offsets(layer1_paths)
@@ -110,7 +169,15 @@ def plot_layer_comparison(layer0_paths, layer1_paths):
     indices = np.arange(8)
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    if idx == 0:
+        ax = ax1
+    elif idx == 1:
+        ax = ax2
+    elif idx == 2:
+        ax = ax3
+    else:
+        ax = ax4
+
     # Draw bars with error bars (whiskers) for std
     bars0 = ax.bar(
         indices - width/2, means0, width,
@@ -123,25 +190,54 @@ def plot_layer_comparison(layer0_paths, layer1_paths):
         label='Layer 1', color='red', edgecolor='black'
     )
 
-    ax.axhline(
-        y=2.0,
-        color='gray',
-        linestyle='--',
-        linewidth=1.5,
-        label='Initial $\mu = 6.0$ '
-    )
+    if idx == 0:
+        ax.axhline(
+            y=2.0,
+            color='gray',
+            linestyle='--',
+            linewidth=1.5,
+            label='Initial $\mu = 2.0$ '
+        )
+    elif idx == 1:
+        ax.axhline(
+            y=6.0,
+            color='gray',
+            linestyle='--',
+            linewidth=1.5,
+            label='Initial $\mu = 6.0$ '
+        )
+    else:
+        ax.axhline(
+            y=10.0,
+            color='gray',
+            linestyle='--',
+            linewidth=1.5,
+            label='Initial $\mu = 10.0$ '
+        )
 
-    ax.set_xlabel("Head Index", fontsize = 14)
-    ax.set_ylabel("Mean Learned $\mu_h$", fontsize = 14)
-    ax.set_title("Mean Learned $\mu_h$ per Head with Std Dev in Pong", fontsize = 18)
+    ax.set_xlabel("Head Index")
+    if idx == 0:
+        ax.set_ylabel("Mean Learned $\mu_h$")
+    # ax.set_ylabel("Mean Learned $\mu_h$", fontsize = 14)
+    if idx == 0:
+        ax.set_title("Mean Learned $\mu_h$ per Head in Pong")
+    elif idx == 1:
+        ax.set_title("Mean Learned $\mu_h$ per Head in Boxing")
+    elif idx == 2:
+        ax.set_title("Mean Learned $\mu_h$ per Head in BankHeist")
+    else:
+        ax.set_title("Mean Learned $\mu_h$ per Head in MsPacman")
     ax.set_xticks(indices)
     ax.set_xticklabels([f"Head {i}" for i in indices])
-    ax.tick_params(axis='both', labelsize=12)
+    ax.tick_params(axis='both')
     ax.legend()
-    plt.tight_layout()
-    plt.show()
 
 
 if __name__ == "__main__":
-    plot_layer_comparison(layer0, layer1)
+    plot_layer_comparison(layer0, layer1, 0)
+    plot_layer_comparison(layer0_boxing, layer1_boxing, 1)
+    # fig.tight_layout()
+    fig.subplots_adjust(wspace=0.10)
+
+    fig.savefig("learned-mu.pdf", bbox_inches='tight')
 

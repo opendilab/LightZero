@@ -36,7 +36,7 @@ class Tokenizer(nn.Module):
     Overview:
         Tokenizer model that encodes and decodes observations.
     """
-    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False) -> None:
+    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False, image_channels : int = 3, image_size : int = 64) -> None:
         """Initialize the Tokenizer.
 
         Arguments:
@@ -51,8 +51,16 @@ class Tokenizer(nn.Module):
         else:
             self.lpips = None
 
+        self.image_channels = image_channels
+        self.image_size = image_size
+
+        # Always initialize a simple ToyDecoder
+        self.decoder_network = ToyDecoder(
+            embed_dim=self.embed_dim,
+            channels=self.image_channels,
+            image_size=self.image_size
+        )
         self.encoder = encoder
-        self.decoder_network = decoder_network
 
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -133,3 +141,23 @@ class Tokenizer(nn.Module):
 
     def __repr__(self) -> str:
         return "Tokenizer"
+
+class ToyDecoder(nn.Module):
+    """
+    A minimal linear decoder mapping embeddings back to images.
+    """
+    def __init__(self, embed_dim: int, channels: int = 3, image_size: int = 64):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(embed_dim, channels * image_size * image_size),
+            nn.Sigmoid()
+        )
+        self.channels = channels
+        self.image_size = image_size
+
+    def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
+        if embeddings.dim() == 3:
+            embeddings = embeddings.squeeze(1)
+        x = self.net(embeddings)
+        B = x.size(0)
+        return x.view(B, self.channels, self.image_size, self.image_size)

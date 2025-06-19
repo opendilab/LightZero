@@ -116,59 +116,52 @@ class CausalAttention(Attention):
         return y
 
     @torch.no_grad()
-    def get_attention_map(
-            self,
-            x: torch.Tensor,
-            kv_cache: Optional[KeysValues] = None,
-            valid_context_lengths: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def get_attention_map(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
+                          valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Compute the attention map for the input sequence (B, T, C), reusing an existing kv_cache
-        only to determine how much past context to mask, without mutating it.
-        Returns attn weights of shape (B, nh, T, L+T).
+        Compute the attention map for the input sequence. This is useful for visualization purposes.
+        More details can be found in visualizing_utils.py.
+
+        Arguments:
+            - x (:obj:`torch.Tensor`): Input sequence with shape (B, T, C).
+            - kv_cache (:obj:`Optional[KeysValues]`): Cached keys and values for supporting long sequence inference.
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid context lengths for handling variable-length contexts.
+
+        Returns:
+            - torch.Tensor: Attention map with shape (B, nh, T, L + T), representing the distribution of attention.
         """
         B, T, C = x.size()
-        device = x.device
-
-        # 1) project Q and fresh K
-        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-        k_fresh = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-
-        # 2) rotary embeddings if used (not supported here)
-        if getattr(self.config, 'rotary_emb', False):
-            raise RuntimeError("Rotary embedding case not supported in this helper; pass freqs_cis.")
-
-        # 3) determine L via cache (read-only)
         if kv_cache is not None:
-            k_old, _ = kv_cache.get()
-            k = torch.cat([k_old, k_fresh], dim=2)
-            L = k_old.shape[2]
+            b, nh, L, c = kv_cache.shape
+            assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions are inconsistent with input dimensions."
         else:
-            k = k_fresh
             L = 0
 
-        total_len = L + T
+        # Compute query, key, and value projections
+        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
+        k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
+        v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
 
-        # 4) raw scores
-        scores = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        if kv_cache is not None:
+            # Update the kv_cache with the new keys and values
+            kv_cache.update(k, v)
+            k, v = kv_cache.get()
 
-        # 5) build the same float mask and apply it
+        # Compute the attention scores
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+
         if valid_context_lengths is not None:
-            mask_bt = torch.zeros(B, T, total_len, device=device, dtype=self.mask.dtype)
+            mask = torch.zeros(B, T, L + T, device=att.device)
             for i in range(B):
-                valid = int(valid_context_lengths[i].item())
-                stale = L - valid
-                sub = self.mask[L:L + T, :L + T].clone()  # float tensor
-                if stale > 0:
-                    sub[:, :stale] = 0.0
-                mask_bt[i] = sub
-            mask = mask_bt.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
+                # Create attention mask for each batch
+                mask[i] = self.mask[L:L + T, :L + T].clone()
+                mask[i, :, :(L - valid_context_lengths[i])] = 0
+            mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
         else:
-            raw = self.mask[L:L + T, :L + T]  # float tensor
-            mask = raw.unsqueeze(0).unsqueeze(1).expand(B, self.num_heads, T, total_len)
+            mask = self.mask[L:L + T, :L + T]
 
-        # 6) apply mask and softmax just like forward
-        scores = scores.masked_fill(mask == 0, float('-inf'))
-        attn = F.softmax(scores, dim=-1)
+        # Apply the attention mask
+        att = att.masked_fill(mask == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
 
-        return attn
+        return att

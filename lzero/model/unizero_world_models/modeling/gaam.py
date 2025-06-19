@@ -164,6 +164,7 @@ class GAAM(Attention):
         else:
             mask = base.unsqueeze(0).unsqueeze(1).expand(B, self.num_heads, T, total_len)
 
+        # Gaussian mask
         sigmas = F.softplus(self.sigma_p)
         mus    = F.softplus(self.mu_p_raw).clamp(max=self.max_len)
         qpos   = torch.arange(L, L+T, device=device).unsqueeze(1)

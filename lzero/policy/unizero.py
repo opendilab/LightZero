@@ -443,8 +443,9 @@ class UniZeroPolicy(MuZeroPolicy):
         average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model and plots attention map
+        plot_policy = (train_iter >= 20_000)
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, plot_policy
         )
 
         # Attention is plotted in compute_loss
@@ -1053,37 +1054,39 @@ class UniZeroPolicy(MuZeroPolicy):
 
         wm = self._model.world_model
         orig_dev = next(wm.parameters()).device
-        wm.cpu()
 
-        obs = self.last_batch_obs.cpu()
+        obs = self.last_batch_obs.to(orig_dev)
         acts = self.last_batch_action
 
         B = obs.shape[0]
         obs_emb = wm.tokenizer.encode_to_obs_embeddings(obs)
         if wm.continuous_action_space:
-            at = torch.as_tensor(acts, dtype=torch.float32, device="cpu")
+            at = torch.as_tensor(acts, dtype=torch.float32, device=orig_dev)
             act_tokens = at.unsqueeze(1)
             combined, _ = wm._process_obs_act_combined_cont(
                 {"obs_embeddings_and_act_tokens": (obs_emb, act_tokens)},
-                prev_steps=torch.zeros((B, 1), dtype=torch.long, device="cpu"),
+                prev_steps=torch.zeros((B, 1), dtype=torch.long, device=orig_dev),
             )
         else:
-            at = torch.as_tensor(acts, dtype=torch.long, device="cpu")
+            at = torch.as_tensor(acts, dtype=torch.long, device=orig_dev)
             max_idx = wm.act_embedding_table.num_embeddings - 1
             at = at.clamp(0, max_idx)
             act_tokens = at.unsqueeze(1).unsqueeze(2)
             combined, _ = wm._process_obs_act_combined(
                 {"obs_embeddings_and_act_tokens": (obs_emb, act_tokens)},
-                prev_steps=torch.zeros((B, 1), dtype=torch.long, device="cpu"),
+                prev_steps=torch.zeros((B, 1), dtype=torch.long, device=orig_dev),
             )
 
-        _, T, C = combined.shape
+        combined_cpu = combined.cpu()
+        wm.transformer.cpu()
+
+        _, T, C = combined_cpu.shape
         if T < 20:
-            pad = combined.new_zeros((B, 20 - T, C))
-            seq20 = torch.cat([combined, pad], dim=1)
+            pad = combined_cpu.new_zeros((B, 20 - T, C))
+            seq20 = torch.cat([combined_cpu, pad], dim=1)
             valid_len = T
         else:
-            seq20 = combined[:, :20, :]
+            seq20 = combined_cpu[:, :20, :]
             valid_len = 20
 
         valid_lens = torch.full((B,), valid_len, dtype=torch.long, device="cpu")
@@ -1097,6 +1100,4 @@ class UniZeroPolicy(MuZeroPolicy):
             suffix="20x20_end_of_training_attn",
             nhead_each_row=4,
         )
-
-        # ── 10) Restore transformer back to its original device ───────────────────────
         wm.to(orig_dev)

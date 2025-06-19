@@ -9,6 +9,70 @@ from PIL import ImageDraw
 from sklearn.manifold import TSNE
 
 
+def visualize_sequence_only(
+    original_images,
+    not_plot_timesteps=None,
+):
+    """
+    Plots only the original frames for each sequence in a batch.
+
+    Args:
+        original_images (torch.Tensor or ndarray):
+            Shape (batch_size, T, C, H, W) or (T, C, H, W).
+        not_plot_timesteps (list[int], optional):
+            1-based timesteps to skip. Default None.
+    """
+    if not_plot_timesteps is None:
+        not_plot_timesteps = []
+
+    orig = (original_images.detach().cpu().numpy()
+            if hasattr(original_images, 'detach') else original_images)
+
+    if orig.ndim == 5:
+        batch_size, T, C, H, W = orig.shape
+    elif orig.ndim == 4:
+        orig = orig[None, ...]
+        batch_size, T, C, H, W = orig.shape
+    else:
+        raise ValueError(f"Expected 4D or 5D input, got shape {orig.shape}")
+
+    # Fixed plotting parameters
+    frame_width = 1.0
+    gap_width = 0.2
+    frame_height = (H / W) * frame_width
+
+    for b in range(batch_size):
+        seq = orig[b]  # shape (T, C, H, W)
+        all_ts = list(range(1, T + 1))
+        plot_ts = [t for t in all_ts if t not in not_plot_timesteps]
+        N = len(plot_ts)
+
+        fig, axes = plt.subplots(
+            1, N,
+            figsize=(frame_width * N, frame_width * frame_height),
+            squeeze=False
+        )
+
+        for i, t in enumerate(plot_ts):
+            left   = i * (frame_width + gap_width)
+            right  = left + frame_width
+            bottom = 0.5 - frame_height / 2
+            top    = 0.5 + frame_height / 2
+
+            img = seq[t - 1].transpose(1, 2, 0).astype('uint8')
+            ax  = axes[0, i]
+            ax.imshow(img, extent=[left, right, bottom, top], aspect='auto')
+            ax.text(left + frame_width/2, bottom - 0.05,
+                    str(t), ha='center', va='top', fontsize=10)
+            ax.axis('off')
+
+        plt.tight_layout()
+
+    filename = "frames.pdf" # Change to other filename if needed
+    plt.savefig(filename)
+    plt.close(fig)
+    print(f"Saved {filename}")
+
 def visualize_reward_value_img_policy( original_images, reconstructed_images, target_predict_value, true_rewards,
                                       target_policy, predict_value, predict_rewards, predict_policy,
                                       not_plot_timesteps=[], suffix='pong', width=64

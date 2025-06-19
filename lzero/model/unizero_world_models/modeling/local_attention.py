@@ -184,6 +184,13 @@ class LocalAttention(Attention):
             mask = mask.unsqueeze(0).unsqueeze(1)  # (1,1, T, total_len)
             mask = mask.expand(B, self.num_heads, T, total_len)
 
+        # Apply local mask
+        qpos = torch.arange(L, L + T, device=device).unsqueeze(1)  # (T,1)
+        kpos = torch.arange(0, L + T, device=device).unsqueeze(0)  # (1, total_len)
+        wmask = (qpos - kpos).abs() <= self.window  # (T, total_len)
+        wmask = wmask.unsqueeze(0).unsqueeze(1).expand(B, self.num_heads, T, total_len)
+        mask = mask & wmask
+
         # 6) apply mask & softmax
         scores = scores.masked_fill(~mask, float('-inf'))
         attn = F.softmax(scores, dim=-1)

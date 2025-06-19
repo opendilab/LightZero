@@ -1461,3 +1461,5 @@ wandb/
 results/
 
 atari-env/
+
+plots/
