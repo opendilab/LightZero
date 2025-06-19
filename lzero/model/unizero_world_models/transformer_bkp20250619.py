@@ -23,21 +23,6 @@ from line_profiler import line_profiler
 from lzero.model.common import SimNorm
 import logging
 
-class LearnableScale(nn.Module):
-    """
-    可学习且有界的标量参数:
-      s = s_max * sigmoid(ŝ)         (0, s_max)
-    """
-    def __init__(self, init=1.0, s_max=1.5):
-        super().__init__()
-        # 反推初始值
-        inv_sig = math.log(init / (s_max - init + 1e-9))
-        self.logit = nn.Parameter(torch.tensor(inv_sig))
-        self.logit.requires_grad = True # TODO
-        self.s_max = s_max
-
-    def forward(self):
-        return self.s_max * torch.sigmoid(self.logit)
 ##############################################
 # CurriculumLoRALinear 实现
 ##############################################
@@ -89,9 +74,7 @@ class CurriculumLoRALinear(nn.Module):
 
         # 初始化 LoRA adapter，只有在 r > 0 且 curriculum_stage_num > 1 时才存在
         self.adapters = nn.ModuleList()
-        # self.adapter_scales = nn.ParameterList()
-        self.adapter_scales = nn.ModuleList()
-
+        self.adapter_scales = nn.ParameterList()
         if r > 0 and (curriculum_stage_num - 1) > 0:
             for i in range(curriculum_stage_num - 1):
                 adapter = nn.ParameterDict({
@@ -100,15 +83,12 @@ class CurriculumLoRALinear(nn.Module):
                 })
                 self.adapters.append(adapter)
 
-                self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.5))
-                
-                # self.adapter_scales.append(  #  ← 新增
-                #     nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
-                # )
-
+                self.adapter_scales.append(  #  ← 新增
+                    nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
+                )
             # --- CurriculumLoRALinear.__init__() ------------
-            # for p in self.adapter_scales:
-            #     p.requires_grad = True   # 统一设 True，避免遗漏
+            for p in self.adapter_scales:
+                p.requires_grad = True   # 统一设 True，避免遗漏
         else:
             self.adapters = None
 
@@ -144,10 +124,10 @@ class CurriculumLoRALinear(nn.Module):
                 for idx, adapter in enumerate(self.adapters):
                     adapter['lora_A'].requires_grad = False
                     adapter['lora_B'].requires_grad = False
-                    # self.adapter_scales[idx].requires_grad = True   #  ← 新增
+                    self.adapter_scales[idx].requires_grad = True   #  ← 新增
             logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: 基础层可训练，所有 adapter 均冻结。")
             logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
-            logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0]().item()}")
+            logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0].item()}")
 
         else:
             # 阶段大于 0，冻结基础层
@@ -155,9 +135,9 @@ class CurriculumLoRALinear(nn.Module):
             if self.bias is not None:
                 self.bias.requires_grad = False
             for idx, adapter in enumerate(self.adapters):
-                # self.adapter_scales[idx].requires_grad = True   #  ← 新增
+                self.adapter_scales[idx].requires_grad = True   #  ← 新增
                 logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
-                logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0]().item()}")
+                logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0].item()}")
 
                 if idx == stage - 1:
                     adapter['lora_A'].requires_grad = True
@@ -181,7 +161,7 @@ class CurriculumLoRALinear(nn.Module):
             adapter = self.adapters[idx]
             out = F.linear(self.lora_dropout(x), adapter['lora_A'])
             out = F.linear(out, adapter['lora_B'])
-            scale = self.adapter_scales[idx]() # TODO: 所有adapter  对应的scale都参与训练
+            scale = self.adapter_scales[idx] # TODO: 所有adapter  对应的scale都参与训练
             if idx == self.curriculum_stage - 1:
                 adapter_out = adapter_out + self.scaling * out * scale  # 仅当前 adapter 参与更新
             else:

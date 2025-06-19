@@ -78,8 +78,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         policy=dict(
             multi_gpu=True,  # Very important for ddp
             only_use_moco_stats=False,
-            # use_moco=False,  # ==============TODO==============
-            use_moco=True,  # ==============TODO: moco==============
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO: moco==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
@@ -147,8 +147,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
-                    # encoder_type='vit', # =======TODO: vit=======
-                    encoder_type='resnet', # ==============TODO:orig==============
+                    encoder_type='vit', # =======TODO: vit=======
+                    # encoder_type='resnet', # ==============TODO:orig==============
 
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -156,8 +156,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False, # ==============TODO:orig==============
-                    # multiplication_moe_in_transformer=True, # =======TODO: moe8=======
+                    # multiplication_moe_in_transformer=False, # ==============TODO:orig==============
+                    multiplication_moe_in_transformer=True, # =======TODO: moe8=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
@@ -217,7 +217,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # ========= TODO: global BENCHMARK_NAME =========
     # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250611/atari_{len(env_id_list)}games_orig_vit_moe8_tbs256_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
@@ -282,7 +283,7 @@ if __name__ == "__main__":
 
         =========== cpfs atari8 =========================
         cd /cpfs04/user/puyuan/code/LightZero/
-        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_moco-v1_lop_nlayer8_brf0_seed2.log
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_moco-v1_lop_nlayer8_brf0_seed2.log
 
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_atari8_orig_vit_moe8_lop_nlayer8_brf0_seed1.log
 
@@ -339,7 +340,7 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 8 # ==============TODO==============
+    num_layers = 4 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -423,8 +424,8 @@ if __name__ == "__main__":
     # max_env_step = 300
 
     import torch.distributed as dist
-    for seed in [1]:
-    # for seed in [0]:
+    # for seed in [1]:
+    for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,

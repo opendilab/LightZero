@@ -32,6 +32,19 @@ import math
 from collections import defaultdict
 GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
 
+def log_param_statistics(model, logger=logging):
+    n_tensors_total   = sum(1 for _ in model.parameters())
+    n_tensors_train   = sum(p.requires_grad for p in model.parameters())
+
+    n_elems_total     = sum(p.numel() for p in model.parameters())
+    n_elems_train     = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    logger.info(
+        f'Trainable parameters: '
+        f'{n_tensors_train}/{n_tensors_total} tensors  |  '
+        f'{n_elems_train:,}/{n_elems_total:,} elements '
+        f'(~{n_elems_train/1e6:.2f} M / {n_elems_total/1e6:.2f} M)'
+    )
 
 def tasks_per_stage(unsolved: int, remain_lora: int) -> int:
     """
@@ -84,6 +97,10 @@ class CurriculumController:
             logging.info(f'[Curriculum] switch to stage {self.stage} '
                          f'(solved={solved_cnt}, unsolved={unsolved_cnt}, '
                          f'iter={train_iter})')
+                        
+            updated = sum(p.requires_grad for p in self.policy._learn_model.world_model.parameters())
+            logging.info(f'{updated}/{sum(1 for _ in self.policy._learn_model.world_model.parameters())} params will be optimized')
+            log_param_statistics(self.policy._learn_model.world_model)          # 再打印一次，看看数值变化
             self.last_solved      = solved_cnt
             self.last_switch_iter = train_iter
             return True
@@ -595,6 +612,9 @@ def train_unizero_multitask_balance_segment_ddp(
     # 初始化一次（rank0 或各 rank 均可）
     curr_ctrl = CurriculumController(cfg, policy)
 
+    updated = sum(p.requires_grad for p in policy._learn_model.world_model.parameters())
+    logging.info(f'{updated}/{sum(1 for _ in policy._learn_model.world_model.parameters())} params will be optimized')
+    
     while True:
         last_curriculum_stage = cur_curriculum_stage
 
@@ -814,9 +834,14 @@ def train_unizero_multitask_balance_segment_ddp(
             for module_name, module in transformer.named_modules():
                 if isinstance(module, CurriculumLoRALinear) and module.adapters is not None:
                     for adapter_idx, scale_param in enumerate(module.adapter_scales):
+                        # tb_logger.add_scalar(
+                        #     f'UniZero-MT/adapter_scales/{module_name}/adapter_{adapter_idx}',
+                        #     scale_param.item(),
+                        #     global_step=learner.train_iter
+                        # )
                         tb_logger.add_scalar(
                             f'UniZero-MT/adapter_scales/{module_name}/adapter_{adapter_idx}',
-                            scale_param.item(),
+                            scale_param().item(),
                             global_step=learner.train_iter
                         )
                         

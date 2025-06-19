@@ -211,7 +211,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_unizero_atari_mt_balance_20250612/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_balance_20250612/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_fix-lora-update-stablescale_vit-small-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
