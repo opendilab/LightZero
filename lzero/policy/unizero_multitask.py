@@ -232,7 +232,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
                 analysis_dormant_ratio_weight_rank=False,
                 # (float) The threshold for a dormant neuron.
-                dormant_threshold=0.025,
+                # dormant_threshold=0.025,
+                dormant_threshold=0.01,
+
             ),
         ),
         # ****** common ******

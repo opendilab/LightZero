@@ -38,6 +38,7 @@ class LearnableScale(nn.Module):
 
     def forward(self):
         return self.s_max * torch.sigmoid(self.logit)
+        
 ##############################################
 # CurriculumLoRALinear 实现
 ##############################################
