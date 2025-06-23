@@ -398,13 +398,13 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     horizon_id += 1
 
                     if current_index < game_segment_len_non_re:
-                        target_values.append(value_list[value_index])
+                        target_values.append(value_list[value_index].item())
                         # Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
                         value_prefix += reward_list[current_index].item()  # * config.discount_factor ** (current_index - base_index)
                         target_value_prefixs.append(value_prefix.item())
                     else:
-                        target_values.append(np.array(0.))
+                        target_values.append(0.)
                         target_value_prefixs.append(value_prefix.item())
 
                     value_index += 1
