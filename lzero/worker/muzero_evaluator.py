@@ -250,6 +250,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                 if 'timestep' not in init_obs[i]:
                     print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
                 timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+
+            if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
             
             dones = np.array([False for _ in range(env_nums)])
 
@@ -286,6 +289,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                     to_play = [to_play_dict[env_id] for env_id in ready_env_id]
                     timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+
+                    if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                        chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
 
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
@@ -351,16 +357,24 @@ class MuZeroEvaluator(ISerialEvaluator):
                             # only for UniZero now
                             self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
-                        game_segments[env_id].append(
-                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], timestep_dict[env_id]
-                        )
+                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                            game_segments[env_id].append(
+                                actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                                to_play_dict[env_id], timestep_dict[env_id], chance_dict[env_id]
+                            )
+                        else:
+                            game_segments[env_id].append(
+                                actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                                to_play_dict[env_id], timestep_dict[env_id]
+                            )
 
                         # NOTE: the position of code snippet is very important.
                         # the obs['action_mask'] and obs['to_play'] are corresponding to next action
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
                         timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
+                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                            chance_dict[env_id] = to_ndarray(obs['chance'])
 
                         dones[env_id] = done
                         if episode_timestep.done:
@@ -408,6 +422,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                                 to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
                                 timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
+
+                                if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                                    chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                                 game_segments[env_id] = GameSegment(
                                     self._env.action_space,
