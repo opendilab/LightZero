@@ -484,10 +484,10 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # print(f'ready_env_id:{ready_env_id}')
                 if self.task_id is None:
                     # single task setting
-                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
                 else:
                     # multi task setting
-                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep, task_id=self.task_id)
 
 
                 # Extract relevant policy outputs

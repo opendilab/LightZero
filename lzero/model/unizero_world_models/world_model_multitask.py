@@ -11,7 +11,6 @@ from einops import rearrange
 from lzero.model.common import SimNorm
 from lzero.model.unizero_world_models.world_model import WorldModel
 from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
-from .moe import MoeLayer, MultiplicationFeedForward
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
@@ -28,6 +27,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import torch 
+import math
 
 
 class WorldModelMT(WorldModel):
@@ -58,6 +58,21 @@ class WorldModelMT(WorldModel):
         super().__init__(config, tokenizer)
         self.tokenizer = tokenizer
         self.config = config
+
+        self.continuous_action_space = self.config.continuous_action_space
+        self.task_num = config.task_num
+
+        # TODO: 26games share encoder, sclae the grad of encoder
+        # if not self.continuous_action_space:
+        #     # atari共享encoder
+        #     encoder_index = 0
+        #     encoder = self.tokenizer.encoder[encoder_index]
+
+        #     # 给 encoder 所有参数注册 hook
+        #     for p in encoder.parameters():
+        #         p.register_hook(self._scale_grad)
+
+
         self.share_head = config.share_head  # 新增参数
 
         if self.config.device == 'cpu':
@@ -80,7 +95,6 @@ class WorldModelMT(WorldModel):
         # Task embedding setup
         self.use_task_embed = config.use_task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
-        self.task_num = config.task_num
         self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         
@@ -106,6 +120,10 @@ class WorldModelMT(WorldModel):
 
 
         self.transformer = Transformer(self.config, self.task_emb)
+
+        self.analysis_dormant_ratio_interval = self.config.get('analysis_dormant_ratio_interval', 100)  # 每 100 次调用做一次分析
+        self._analysis_step_counter = 0
+        self.do_analysis = self.analysis_dormant_ratio_weight_rank 
 
         # TODO ========
         self.analysis_tsne = self.config.get('analysis_tsne', False)
@@ -159,7 +177,6 @@ class WorldModelMT(WorldModel):
 
         self.hidden_size = config.embed_dim // config.num_heads
 
-        self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
         if self.continuous_action_space:
@@ -302,6 +319,11 @@ class WorldModelMT(WorldModel):
         self.reanalyze_phase = False
         self._rank = get_rank()
 
+    def _scale_grad(self, grad: torch.Tensor) -> torch.Tensor:
+        # ① 1/k 缩放；若想更保守可用 1/√k
+        # return grad / self.task_num
+        return grad / math.sqrt(self.task_num)
+
     def _generate_colors(self, num_colors):
         """
         生成足够多的独特颜色，适用于大量分类。
@@ -400,13 +422,15 @@ class WorldModelMT(WorldModel):
         )
     def get_moe(self, name):
         """Get or create a MoE instance"""
+        from .moe import MoELayer, MultiplicationFeedForward
+
         if name not in self.moe_instances:
             # Create multiple FeedForward instances for multiplication-based MoE
             self.experts = nn.ModuleList([
                 MultiplicationFeedForward(self.config) for _ in range(self.config.num_experts_of_moe_in_transformer)
             ])
 
-            self.moe_instances[name] = MoeLayer(
+            self.moe_instances[name] = MoELayer(
                 experts=self.experts,
                 gate=nn.Linear(self.config.embed_dim, self.config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=1,
@@ -1792,6 +1816,14 @@ class WorldModelMT(WorldModel):
             
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio_weight_rank:
+            self._analysis_step_counter += 1
+            self.do_analysis = (
+                self.analysis_dormant_ratio_weight_rank          # 总开关
+                and self._analysis_step_counter % self.analysis_dormant_ratio_interval == 0
+            )
+
+        # ========= logging for analysis =========
+        if self.do_analysis:
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
@@ -1822,7 +1854,12 @@ class WorldModelMT(WorldModel):
 
             e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
             # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
-            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+            try:
+                e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+            except Exception as e:
+                e_rank_sim_norm = torch.tensor(0.)
+
+                
             # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
 
             self.past_kv_cache_init_infer.clear()
@@ -1831,6 +1868,13 @@ class WorldModelMT(WorldModel):
             torch.cuda.empty_cache()
         else:
             dormant_ratio_encoder = torch.tensor(0.)
+            avg_weight_mag_encoder = torch.tensor(0.)
+            avg_weight_mag_transformer = torch.tensor(0.)
+            avg_weight_mag_head = torch.tensor(0.)
+            e_rank_last_linear = torch.tensor(0.)
+            e_rank_sim_norm = torch.tensor(0.)
+            # dormant_ratio_encoder   = None
+
 
         # Calculate the L2 norm of the latent state roots
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
@@ -1903,7 +1947,8 @@ class WorldModelMT(WorldModel):
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, task_id=task_id)
 
         # ========= logging for analysis =========
-        if self.analysis_dormant_ratio_weight_rank:
+        # if self.analysis_dormant_ratio_weight_rank:
+        if self.do_analysis:
             # Calculate dormant ratio of the world model
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
@@ -1917,11 +1962,14 @@ class WorldModelMT(WorldModel):
         else:
             dormant_ratio_transformer = torch.tensor(0.)
             dormant_ratio_head = torch.tensor(0.)
-            avg_weight_mag_encoder = torch.tensor(0.)
-            avg_weight_mag_transformer = torch.tensor(0.)
-            avg_weight_mag_head = torch.tensor(0.)
-            e_rank_last_linear = torch.tensor(0.)
-            e_rank_sim_norm = torch.tensor(0.)
+
+            # dormant_ratio_transformer = None
+            # dormant_ratio_head        = None
+            # avg_weight_mag_encoder    = None
+            # avg_weight_mag_transformer= None
+            # avg_weight_mag_head       = None
+            # e_rank_last_linear        = None
+            # e_rank_sim_norm           = None
 
         #  ========== for visualization ==========
         # Uncomment the lines below for visualization
