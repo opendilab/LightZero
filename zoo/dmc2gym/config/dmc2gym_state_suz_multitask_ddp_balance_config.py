@@ -128,7 +128,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_of_moe_in_transformer=8,
                     
                     # LoRA 参数：
-                    moe_use_lora=False, # TODO
+                    # moe_use_lora=False, # TODO
+                    moe_use_lora=True, # TODO
 
                     # curriculum_stage_num=3,
                     curriculum_stage_num=curriculum_stage_num,
@@ -140,7 +141,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     lora_dropout=0.0,
                     lora_scale_init=1,
 
-                    min_stage0_iters=10000,
+                    # min_stage0_iters=15000, # 400k envsteps 40k iter
+                    min_stage0_iters=10000, # 400k envsteps 40k iter
                     max_stage_iters=5000,
 
                     # ======== TODO: only for debug ========
@@ -214,7 +216,7 @@ def generate_configs(env_id_list: List[str],
     configs = []
     # ========= TODO: global BENCHMARK_NAME =========
 
-    exp_name_prefix = f'data_suz_dmc_mt_balance_20250612/dmc_{len(env_id_list)}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}_stage0-10k-5k_fix-lora-update-stablescale_moe8_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_dmc_mt_balance_20250625/dmc_{len(env_id_list)}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}_stage0-10k-5k_fix-lora-update-stablescale_moe8-uselora_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -273,7 +275,7 @@ if __name__ == "__main__":
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee /fs-computility/niuyazhe/puyuan/code/LightZero/log/20250509/uz_mt_dmc18_ln_balance_moe8_stage5_stage0-10k-5k_nlayer8.log
 
         cd /cpfs04/user/puyuan/code/LightZero/
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_dmc18_ln_balance_moe8_stage5_stage0-5k-10k_nlayer4_fix-lora-update-stablescale_seed1.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250625/uz_mt_dmc18_ln_balance_moe8-uselora_stage5_stage0-5k-10k_nlayer4_fix-lora-update-stablescale_seed0.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -394,7 +396,7 @@ if __name__ == "__main__":
     # batch_size = [3 for _ in range(len(env_id_list))]
     # =======================================
 
-    seed = 1  # You can iterate over multiple seeds if needed
+    seed = 0  # You can iterate over multiple seeds if needed
 
     configs = generate_configs(
         env_id_list=env_id_list,

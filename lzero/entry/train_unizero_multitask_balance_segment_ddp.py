@@ -27,6 +27,7 @@ from lzero.model.unizero_world_models.transformer import set_curriculum_stage_fo
 import numpy as np                    # 计算均值
 from collections import defaultdict   # 保存所有任务最近一次评估分数
 import math
+from .utils import freeze_non_lora
 
 # 保存最近一次评估回报：{task_id: eval_episode_return_mean}
 from collections import defaultdict
@@ -94,6 +95,14 @@ class CurriculumController:
                 self.policy._learn_model.world_model.transformer,
                 self.stage
             )
+
+            # NEW : freeze all non-LoRA weights from stage-1 onwards
+            # freeze_non_lora(
+            #     self.policy._learn_model.world_model.transformer,
+            #     freeze=(self.stage >= 1),
+            #     verbose=True,
+            # )
+
             logging.info(f'[Curriculum] switch to stage {self.stage} '
                          f'(solved={solved_cnt}, unsolved={unsolved_cnt}, '
                          f'iter={train_iter})')
