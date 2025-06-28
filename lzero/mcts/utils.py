@@ -97,11 +97,18 @@ def prepare_observation(observation_list, model_type='conv'):
     Returns:
         - np.ndarray: Reshaped array of observations.
     """
-    assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
+    assert model_type in ['conv', 'conv_history', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
     observation_array = np.array(observation_list)
+    
+    # try:
+    #     observation_array = np.array(observation_list)
+    # except Exception as e:
+    #     print(e)
+    #     import ipdb;ipdb.set_trace()
+
     batch_size = observation_array.shape[0]
 
-    if model_type in ['conv', 'conv_context']:
+    if model_type in ['conv', 'conv_history', 'conv_context']:
         if observation_array.ndim == 3:
             # Add a channel dimension if it's missing
             observation_array = observation_array[..., np.newaxis]

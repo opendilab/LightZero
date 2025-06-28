@@ -1021,7 +1021,7 @@ class PredictionNetwork(nn.Module):
         if observation_shape[1] == 96:
             latent_shape = (observation_shape[1] / 16, observation_shape[2] / 16)
         elif observation_shape[1] == 64:
-            latent_shape = (observation_shape[1] / 8, observation_shape[2] / 8)
+            latent_shape = (int(observation_shape[1] / 8), int(observation_shape[2] / 8))
 
         if norm_type == 'BN':
             self.norm_value = nn.BatchNorm2d(value_head_channels)

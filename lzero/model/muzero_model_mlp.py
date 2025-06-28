@@ -105,7 +105,7 @@ class MuZeroModelMLP(nn.Module):
             observation_shape=observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
 
-        self.dynamics_network = DynamicsNetwork(
+        self.dynamics_network = DynamicsNetworkVector(
             action_encoding_dim=self.action_encoding_dim,
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
@@ -325,7 +325,7 @@ class MuZeroModelMLP(nn.Module):
         return get_params_mean(self)
 
 
-class DynamicsNetwork(nn.Module):
+class DynamicsNetworkVector(nn.Module):
 
     def __init__(
         self,

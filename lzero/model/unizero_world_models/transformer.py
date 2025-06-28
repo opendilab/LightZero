@@ -36,6 +36,8 @@ class TransformerConfig:
     max_seq_len: int
     rotary_emb: bool = False
 
+    gru_gating: bool
+
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks

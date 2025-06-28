@@ -372,6 +372,55 @@ def prepare_obs_stack_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> T
     return obs_batch, obs_target_batch
 
 
+def prepare_obs_history(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Overview:
+        Prepare the observations for the model by converting the original batch of observations
+        to a PyTorch tensor, and then slicing it to create the batches used for the initial inference
+        and for calculating the consistency loss if required.
+
+    Arguments:
+        - obs_batch_ori (:obj:`np.ndarray`): The original observations in a batch style.
+        - cfg (:obj:`EasyDict`): The configuration dictionary containing model settings.
+
+    Returns:
+        - obs_batch (:obj:`torch.Tensor`): The tensor containing the observations for the initial inference.
+        - obs_target_batch (:obj:`torch.Tensor`): The tensor containing the observations for calculating
+                                                   the consistency loss, if applicable.
+    """
+    # 按照 history_length 切分 observation
+    history_length = cfg.model.history_length
+    # print(f"cfg.model.history_length:{history_length}")
+
+    # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
+    # Also, ensure the tensor is of the correct floating-point type for the model.
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
+
+    # Calculate the dimension size to slice based on the model configuration.
+    # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
+    # For multi-layer perceptron models ('mlp'), use the number of frames to stack times the size of the observation space.
+    stack_dim = cfg.model.frame_stack_num * (
+        cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context', 'conv_history'] else cfg.model.observation_shape)
+
+    # Slice the original observation tensor to obtain the batch for the initial inference.
+    obs_batch = obs_batch_ori[:, :stack_dim*history_length]
+
+    # Initialize the target batch for consistency loss as `None`. It will only be set if consistency loss calculation is enabled.
+    obs_target_batch = None
+    # If the model configuration specifies the use of self-supervised learning loss, prepare the target batch for the consistency loss.
+    if cfg.model.self_supervised_learning_loss:
+        # Determine the starting dimension to exclude based on the model type.
+        # For 'conv', exclude the first 'image_channel' dimensions.
+        # For 'mlp', exclude the first 'observation_shape' dimensions.
+        exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context', 'conv_history'] else cfg.model.observation_shape
+
+        # Slice the original observation tensor to obtain the batch for consistency loss calculation.
+        obs_target_batch = obs_batch_ori[:, exclude_dim*history_length:]
+
+    # Return the prepared batches: one for the initial inference and one for the consistency loss calculation (if applicable).
+    return obs_batch, obs_target_batch
+
+
 def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
