@@ -551,6 +551,30 @@ make_time: the time the batch is made (for correctly updating replay buffer when
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._scalar_reward">
+<span class="sig-name descname"><span class="pre">_scalar_reward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer_muzero.html#MuZeroGameBuffer._scalar_reward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._scalar_reward" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Convert a reward input of various types into a scalar float value.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>r</strong> (<em>-</em>) – The reward input, which can be a numpy array, list, tuple, or a scalar.
+If it is a numpy array, list, or tuple, the function uses the first element.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The scalar representation of the input reward.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>float</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py attribute">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.config">
 <span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'mini_infer_size':</span> <span class="pre">10240,</span> <span class="pre">'reanalyze_outdated':</span> <span class="pre">True,</span> <span class="pre">'reanalyze_ratio':</span> <span class="pre">0,</span> <span class="pre">'replay_buffer_size':</span> <span class="pre">1000000,</span> <span class="pre">'sample_type':</span> <span class="pre">'transition',</span> <span class="pre">'use_root_value':</span> <span class="pre">False}</span></em><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.config" title="Permalink to this definition"></a></dt>

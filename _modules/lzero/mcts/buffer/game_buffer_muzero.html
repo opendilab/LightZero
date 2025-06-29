@@ -513,6 +513,24 @@
         <span class="p">]</span>
         <span class="k">return</span> <span class="n">policy_re_context</span></div>
 
+<div class="viewcode-block" id="MuZeroGameBuffer._scalar_reward"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._scalar_reward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_scalar_reward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Convert a reward input of various types into a scalar float value.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - r (Any): The reward input, which can be a numpy array, list, tuple, or a scalar.</span>
+<span class="sd">                    If it is a numpy array, list, or tuple, the function uses the first element.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - float: The scalar representation of the input reward.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># If the reward is in the form of a list, tuple, or numpy array,</span>
+        <span class="c1"># convert it to a numpy array, reshape it into a flat array, and take the first element.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        
+        <span class="c1"># Return the float value of the reward.</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="MuZeroGameBuffer._compute_target_reward_value"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_reward_value">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_reward_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reward_value_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
@@ -604,11 +622,11 @@
                             <span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">reward</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="o">**</span> <span class="n">i</span>
 
                     <span class="c1"># TODO: check the boundary condition</span>
-                    <span class="n">target_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">])</span>
+                    <span class="n">target_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_scalar_reward</span><span class="p">(</span><span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">]))</span>
                     <span class="k">if</span> <span class="n">current_index</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">reward_list</span><span class="p">):</span>
-                        <span class="n">target_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reward_list</span><span class="p">[</span><span class="n">current_index</span><span class="p">])</span>
+                        <span class="n">target_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_scalar_reward</span><span class="p">(</span><span class="n">reward_list</span><span class="p">[</span><span class="n">current_index</span><span class="p">]))</span>
                     <span class="k">else</span><span class="p">:</span>
-                        <span class="n">target_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="mf">0.</span><span class="p">))</span>
+                        <span class="n">target_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.</span><span class="p">)</span>
 
                     <span class="n">value_index</span> <span class="o">+=</span> <span class="mi">1</span>
 
