@@ -248,9 +248,10 @@ class MuZeroEvaluator(ISerialEvaluator):
             timestep_dict = {}
             for i in range(env_nums):
                 if 'timestep' not in init_obs[i]:
-                    print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
+                        print(f"Warning: 'timestep' key is missing in init_obs[{i}]. Assigning value -1. Please note that the unizero algorithm may require the 'timestep' key in init_obs.")
                 timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
-            
+
             dones = np.array([False for _ in range(env_nums)])
 
             game_segments = [
