@@ -363,10 +363,12 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+
         timestep_dict = {}
         for i in range(env_nums):
             if 'timestep' not in init_obs[i]:
-                print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
+                    print(f"Warning: 'timestep' key is missing in init_obs[{i}]. Assigning value -1. Please note that the unizero algorithm may require the 'timestep' key in init_obs.")
             timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
 
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
