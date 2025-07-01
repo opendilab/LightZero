@@ -567,7 +567,7 @@ class MuZeroCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], chance_dict[env_id], timestep_dict[env_id]
+                            to_play_dict[env_id], timestep_dict[env_id], chance_dict[env_id]
                         )
                     else:
                         game_segments[env_id].append(
