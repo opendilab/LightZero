@@ -422,7 +422,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                                 action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                                 to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                                timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
+                                timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
 
                                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                                     chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
