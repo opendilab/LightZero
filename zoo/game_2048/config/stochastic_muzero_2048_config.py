@@ -44,6 +44,8 @@ game_2048_stochastic_muzero_config = dict(
             self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
+            reward_support_range=(0., 601., 1.),
+            value_support_range=(0., 601., 1.),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,

@@ -7,7 +7,7 @@ from easydict import EasyDict
 
 import lzero.mcts.ptree.ptree_stochastic_mz as tree_stochastic_muzero
 from lzero.mcts.ptree import MinMaxStatsList
-from lzero.policy import InverseScalarTransform
+from lzero.policy import DiscreteSupport, InverseScalarTransform
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_stochastic_mz as stochastic_mz_ptree
@@ -69,9 +69,10 @@ class StochasticMuZeroMCTSPtree(object):
         # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "stochastic_mz_ptree.Roots":
@@ -209,8 +210,8 @@ class StochasticMuZeroMCTSPtree(object):
                                                                                    reward_splits,
                                                                                    policy_logits_splits)):
                         if not model.training:
-                            value = self.inverse_scalar_transform_handle(value).detach().cpu().numpy()
-                            reward = self.inverse_scalar_transform_handle(reward).detach().cpu().numpy()
+                            value = self.value_inverse_scalar_transform_handle(value).detach().cpu().numpy()
+                            reward = self.reward_inverse_scalar_transform_handle(reward).detach().cpu().numpy()
                             latent_state = latent_state.detach().cpu().numpy()
                             policy_logits = policy_logits.detach().cpu().numpy()
 

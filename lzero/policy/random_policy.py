@@ -5,7 +5,7 @@ import torch
 from ding.policy.base_policy import Policy
 from ding.utils import POLICY_REGISTRY
 
-from lzero.policy import InverseScalarTransform, select_action, ez_network_output_unpack, mz_network_output_unpack
+from lzero.policy import DiscreteSupport, InverseScalarTransform, select_action, ez_network_output_unpack, mz_network_output_unpack
 
 
 @POLICY_REGISTRY.register('lightzero_random_policy')
@@ -81,9 +81,10 @@ class LightZeroRandomPolicy(Policy):
             self._mcts_collect = self.MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     def _forward_collect(
         self,
@@ -132,7 +133,7 @@ class LightZeroRandomPolicy(Policy):
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             if self._cfg.type in ['efficientzero', 'sampled_efficientzero']:
                 reward_hidden_state_roots = (
