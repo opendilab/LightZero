@@ -8,7 +8,7 @@ from ding.utils import BUFFER_REGISTRY, EasyTimer
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
-from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
+from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer import GameBuffer
 
 if TYPE_CHECKING:
@@ -60,6 +60,9 @@ class MuZeroGameBuffer(GameBuffer):
         self.origin_search_time = 0
         self.sample_times = 0
         self.active_root_num = 0
+
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
     def reset_runtime_metrics(self):
         """
@@ -473,7 +476,7 @@ class MuZeroGameBuffer(GameBuffer):
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                         [
                             m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            inverse_scalar_transform(m_output.value, self.value_support),
                             m_output.policy_logits
                         ]
                     )
@@ -598,7 +601,7 @@ class MuZeroGameBuffer(GameBuffer):
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                         [
                             m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            inverse_scalar_transform(m_output.value, self.value_support),
                             m_output.policy_logits
                         ]
                     )

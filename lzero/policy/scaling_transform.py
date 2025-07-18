@@ -5,14 +5,12 @@ import torch
 
 class DiscreteSupport(object):
 
-    def __init__(self, min: int, max: int, delta: float = 1.) -> None:
-        assert min < max
-        self.min = min
-        self.max = max
-        self.range = np.arange(min, max + 1, delta)
-        self.size = len(self.range)
-        self.set_size = len(self.range)
-        self.delta = delta
+    def __init__(self, start: float, stop: float, step: float = 1., device: Union[str, torch.device] = 'cpu') -> None:
+        assert start < stop
+        self.arange = torch.arange(start, stop, step).unsqueeze(0).to(device)
+        self.size = self.arange.shape[1]
+        assert self.size > 0, "DiscreteSupport size must be greater than 0"
+        self.step = step
 
 
 def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.) -> torch.Tensor:
@@ -64,7 +62,7 @@ def ensure_softmax(logits, dim=1):
 
 def inverse_scalar_transform(
         logits: torch.Tensor,
-        support_size: int,
+        scalar_support: DiscreteSupport,
         epsilon: float = 0.001,
         categorical_distribution: bool = True
 ) -> torch.Tensor:
@@ -77,9 +75,8 @@ def inverse_scalar_transform(
         - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
     if categorical_distribution:
-        scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
         value_probs = ensure_softmax(logits, dim=1)
-        value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
+        value_support = scalar_support.arange
 
         value_support = value_support.to(device=value_probs.device)
         value = (value_support * value_probs).sum(1, keepdim=True)
@@ -106,13 +103,10 @@ class InverseScalarTransform:
 
     def __init__(
             self,
-            support_size: int,
-            device: Union[str, torch.device] = 'cpu',
+            scalar_support: DiscreteSupport,
             categorical_distribution: bool = True
     ) -> None:
-        scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
-        self.value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
-        self.value_support = self.value_support.to(device)
+        self.value_support = scalar_support.arange
         self.categorical_distribution = categorical_distribution
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
@@ -151,19 +145,21 @@ def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.T
     Reference:
         - MuZero paper Appendix F: Network Architecture.
     """
-    min = discrete_support.min
-    max = discrete_support.max
-    set_size = discrete_support.set_size
-    delta = discrete_support.delta
+    arange = discrete_support.arange
+    min_bound = arange[0, 0]
+    max_bound = arange[0, -1]
+    size = discrete_support.size
+    step = discrete_support.step
 
-    x.clamp_(min, max)
-    x_low = x.floor()
-    x_high = x.ceil()
-    p_high = x - x_low
+    x.clamp_(min_bound, max_bound)
+    x_low_idx = ((x - min_bound)/step).floor().long()
+    x_high_idx = x_low_idx + 1
+    x_high_idx = x_high_idx.clamp(0, size - 1)
+    x_low_val = torch.take_along_dim(arange, x_low_idx, dim=1)
+    p_high = (x - x_low_val)/step
     p_low = 1 - p_high
 
-    target = torch.zeros(x.shape[0], x.shape[1], set_size).to(x.device)
-    x_high_idx, x_low_idx = x_high - min / delta, x_low - min / delta
+    target = torch.zeros(x.shape[0], x.shape[1], size).to(x.device)
     target.scatter_(2, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
     target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
 

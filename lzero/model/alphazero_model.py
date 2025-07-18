@@ -34,7 +34,7 @@ class AlphaZeroModel(nn.Module):
         policy_head_channels: int = 16,
         value_head_hidden_channels: SequenceType = [32],
         policy_head_hidden_channels: SequenceType = [32],
-        value_support_size: int = 601,
+        value_support_range: SequenceType =(-300., 301., 1.),
         # ==============================================================
         # specific sampled related config
         # ==============================================================
@@ -68,13 +68,13 @@ class AlphaZeroModel(nn.Module):
             - policy_head_channels (:obj:`int`): The channels of policy head.
             - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
             - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - value_support_size (:obj:`int`): The size of categorical value.
+            - value_support_range (:obj:`SequenceType`): The range of categorical value output.
         """
         super(AlphaZeroModel, self).__init__()
-        self.categorical_distribution = categorical_distribution
         self.observation_shape = observation_shape
+        self.categorical_distribution = categorical_distribution
         if self.categorical_distribution:
-            self.value_support_size = value_support_size
+            self.value_support_size = len(torch.arange(*value_support_range))
         else:
             self.value_support_size = 1
 

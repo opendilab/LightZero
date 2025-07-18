@@ -44,9 +44,10 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             image_channel=1,
             # (int) The number of frames to stack together.
             frame_stack_num=1,
-            # (int) The scale of supports used in categorical distribution.
-            # This variable is only effective when ``categorical_distribution=True``.
-            support_scale=300,
+            # (tuple) The range of supports used in categorical distribution.
+            # These variables are only effective when ``model.categorical_distribution=True``.
+            reward_support_range=(-300., 301., 1.),
+            value_support_range=(-300., 301., 1.),
             # (int) The hidden size in LSTM.
             rnn_hidden_size=512,
             # gru_hidden_size=512,
@@ -300,7 +301,7 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-        original_value = self.inverse_scalar_transform_handle(value)
+        original_value = self.value_inverse_scalar_transform_handle(value)
 
         # Note: The following lines are just for debugging.
         predicted_rewards = []
@@ -433,10 +434,10 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
             if self._cfg.monitor_extra_statistics:
-                original_rewards = self.inverse_scalar_transform_handle(reward)
+                original_rewards = self.reward_inverse_scalar_transform_handle(reward)
                 original_rewards_cpu = original_rewards.detach().cpu()
                 predicted_values = torch.cat(
-                    (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
+                    (predicted_values, self.value_inverse_scalar_transform_handle(value).detach().cpu())
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -581,7 +582,7 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             latent_state_roots, reward_roots, world_model_latent_history_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output
             )
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
 
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             world_model_latent_history_roots = world_model_latent_history_roots.detach().cpu().numpy()
@@ -709,7 +710,7 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
 
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+                pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 world_model_latent_history_roots = world_model_latent_history_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
