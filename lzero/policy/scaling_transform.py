@@ -1,5 +1,4 @@
 from typing import Union
-import numpy as np
 import torch
 
 
@@ -7,7 +6,7 @@ class DiscreteSupport(object):
 
     def __init__(self, start: float, stop: float, step: float = 1., device: Union[str, torch.device] = 'cpu') -> None:
         assert start < stop
-        self.arange = torch.arange(start, stop, step).unsqueeze(0).to(device)
+        self.arange = torch.arange(start, stop, step, dtype=torch.float32).unsqueeze(0).to(device)
         self.size = self.arange.shape[1]
         assert self.size > 0, "DiscreteSupport size must be greater than 0"
         self.step = step
@@ -137,32 +136,62 @@ def visit_count_temperature(
         return fixed_temperature_value
 
 
-def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.Tensor:
+def phi_transform(
+    discrete_support: DiscreteSupport,
+    x: torch.Tensor,
+) -> torch.Tensor:
     """
     Overview:
-        We then apply a transformation ``phi`` to the scalar in order to obtain equivalent categorical representations.
-         After this transformation, each scalar is represented as the linear combination of its two adjacent supports.
-    Reference:
-        - MuZero paper Appendix F: Network Architecture.
+        Map a real-valued scalar to a categorical distribution over a discrete support using linear interpolation (a.k.a. “soft” one-hot).
+
+        For each scalar value the probability mass is split between the two
+        nearest support atoms so that their weighted sum equals the original
+        value (MuZero, Appendix F).
+
+    Arguments:
+        - discrete_support : DiscreteSupport
+            Container with the support values (must be evenly spaced).
+        - x : torch.Tensor
+            Input tensor of arbitrary shape ``(...,)`` containing real numbers.
+
+    Returns:
+        - torch.Tensor
+            Tensor of shape ``(*x.shape, N)`` where ``N = discrete_support.size``.
+            The last dimension is a probability distribution (sums to 1).
+
+    Notes
+    -----
+    • No in-place ops on the input are used, improving autograd safety.  
+    • Only one `scatter_add_` kernel is launched for efficiency.  
     """
-    arange = discrete_support.arange
-    min_bound = arange[0, 0]
-    max_bound = arange[0, -1]
-    size = discrete_support.size
-    step = discrete_support.step
+    # --- constants ----------------------------------------------------------
+    min_bound = discrete_support.arange[0, 0]
+    max_bound = discrete_support.arange[0, -1]
+    step      = discrete_support.step
+    size      = discrete_support.size
 
-    x.clamp_(min_bound, max_bound)
-    x_low_idx = ((x - min_bound)/step).floor().long()
-    x_high_idx = x_low_idx + 1
-    x_high_idx = x_high_idx.clamp(0, size - 1)
-    x_low_val = torch.take_along_dim(arange, x_low_idx, dim=1)
-    p_high = (x - x_low_val)/step
-    p_low = 1 - p_high
+    # --- 1. clip to the valid range ----------------------------------------
+    x = x.clamp(min_bound, max_bound)
 
-    target = torch.zeros(x.shape[0], x.shape[1], size).to(x.device)
-    target.scatter_(2, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
-    target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
+    # --- 2. locate neighbouring indices ------------------------------------
+    pos             = (x - min_bound) / step    # continuous position
+    low_idx_float   = torch.floor(pos)          # lower index
+    low_idx_long    = low_idx_float.long()      # lower index
+    high_idx        = low_idx_long + 1          # upper index (may overflow)
 
+    # --- 3. linear interpolation weights -----------------------------------
+    p_high = pos - low_idx_float                # distance to lower atom
+    p_low  = 1.0 - p_high                       # complementary mass
+
+    # --- 4. stack indices / probs and scatter ------------------------------
+    idx   = torch.stack([low_idx_long,
+                         torch.clamp(high_idx, max=size - 1)], dim=-1)  # (*x, 2)
+    prob  = torch.stack([p_low, p_high], dim=-1)                        # (*x, 2)
+
+    target = torch.zeros(*x.shape, size,
+                         dtype=x.dtype, device=x.device)
+
+    target.scatter_add_(-1, idx, prob)
     return target
 
 
