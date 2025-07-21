@@ -40,23 +40,7 @@ def ensure_softmax(logits, dim=1):
     Returns:
         - output (:obj:`torch.Tensor`): The normalized tensor.
     """
-    # Calculate the sum along the specified dimension (dim=1 in this case)
-    sum_along_dim = logits.sum(dim=dim, keepdim=True)
-    
-    # Create a tensor of ones with the same shape as sum_along_dim
-    ones_like_sum = torch.ones_like(sum_along_dim)
-    
-    # Check if the logits are already normalized (i.e., if the sum along the dimension is approximately 1)
-    # torch.allclose checks if all elements of two tensors are close within a tolerance
-    # atol (absolute tolerance) is set to a small value to allow for numerical precision issues
-    is_normalized = torch.allclose(sum_along_dim, ones_like_sum, atol=1e-5)
-    
-    # If logits are not normalized, apply softmax along the specified dimension
-    if not is_normalized:
-        return torch.softmax(logits, dim=dim)
-    else:
-        # If logits are already normalized, return them as they are
-        return logits
+    return torch.softmax(logits, dim=dim)
 
 
 def inverse_scalar_transform(
