@@ -3,7 +3,7 @@ import pytest
 import torch
 from easydict import EasyDict
 
-from lzero.policy import inverse_scalar_transform, select_action
+from lzero.policy import DiscreteSupport, inverse_scalar_transform, select_action
 
 policy = 'GumbelMuZero'
 
@@ -89,7 +89,8 @@ policy_config = EasyDict(
     value_delta_max=0.01,
     model=dict(
         action_space_size=9,
-        support_scale=300,
+        reward_support_range=(-300., 301., 1.),
+        value_support_range=(-300., 301., 1.),
         categorical_distribution=True,
     ),
     env_type='not_board_games',
@@ -110,7 +111,8 @@ value_prefix_pool = network_output['value_prefix']
 policy_logits_pool = network_output['policy_logits']
 
 # network output process
-pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
+discrete_support = DiscreteSupport(*policy_config.model.value_support_range)
+pred_values_pool = inverse_scalar_transform(pred_values_pool, discrete_support).detach().cpu().numpy()
 latent_state_roots = latent_state_roots.detach().cpu().numpy()
 reward_hidden_state_roots = (
     reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
@@ -201,8 +203,9 @@ def test_mcts_vs_bot_to_play_large():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
+    discrete_support = DiscreteSupport(*policy_config.model.value_support_range)
     pred_values_pool = inverse_scalar_transform(pred_values_pool,
-                                                policy_config.model.support_scale).detach().cpu().numpy()
+                                                discrete_support).detach().cpu().numpy()
     latent_state_roots = latent_state_roots.detach().cpu().numpy()
     reward_hidden_state_roots = (
         reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()

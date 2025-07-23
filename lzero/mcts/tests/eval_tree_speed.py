@@ -1,6 +1,6 @@
 import torch
 from easydict import EasyDict
-from lzero.policy import inverse_scalar_transform, select_action
+from lzero.policy import DiscreteSupport, inverse_scalar_transform, select_action
 import numpy as np
 import random
 
@@ -81,6 +81,8 @@ def ptree_func(policy_config, num_simulations):
     search_time = []
     total_time = []
 
+    discrete_support = DiscreteSupport(*policy_config.model.value_support_range)
+
     for n_s in num_simulations:
         t0 = time.time()
         model = MuZeroModelFake(action_num=action_space_size)
@@ -102,7 +104,7 @@ def ptree_func(policy_config, num_simulations):
 
         # network output process
         pred_values_pool = inverse_scalar_transform(pred_values_pool,
-                                                    policy_config.model.support_scale).detach().cpu().numpy()
+                                                    discrete_support).detach().cpu().numpy()
         latent_state_roots = latent_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -175,6 +177,8 @@ def ctree_func(policy_config, num_simulations):
     search_time = []
     total_time = []
 
+    discrete_support = DiscreteSupport(*policy_config.model.value_support_range)
+
     for n_s in num_simulations:
         t0 = time.time()
         model = MuZeroModelFake(action_num=action_space_size)
@@ -196,7 +200,7 @@ def ctree_func(policy_config, num_simulations):
 
         # network output process
         pred_values_pool = inverse_scalar_transform(pred_values_pool,
-                                                    policy_config.model.support_scale).detach().cpu().numpy()
+                                                    discrete_support).detach().cpu().numpy()
         latent_state_roots = latent_state_roots.detach().cpu().numpy()
         reward_hidden_state_state = (
             reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
@@ -297,7 +301,8 @@ if __name__ == "__main__":
         dict(
             lstm_horizon_len=5,
             model=dict(
-                support_scale=300,
+                reward_support_range=(-300., 301., 1.),
+                value_support_range=(-300., 301., 1.),
                 categorical_distribution=True,
             ),
             action_space_size=100,

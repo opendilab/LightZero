@@ -32,8 +32,8 @@ class EfficientZeroModel(nn.Module):
             reward_head_hidden_channels: SequenceType = [32],
             value_head_hidden_channels: SequenceType = [32],
             policy_head_hidden_channels: SequenceType = [32],
-            reward_support_size: int = 601,
-            value_support_size: int = 601,
+            reward_support_range: SequenceType =(-300., 301., 1.),
+            value_support_range: SequenceType =(-300., 301., 1.),
             proj_hid: int = 1024,
             proj_out: int = 1024,
             pred_hid: int = 512,
@@ -66,8 +66,8 @@ class EfficientZeroModel(nn.Module):
             - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
             - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - reward_support_size (:obj:`int`): The size of categorical reward output
-            - value_support_size (:obj:`int`): The size of categorical value output.
+            - reward_support_range (:obj:`SequenceType`): The range of categorical reward output
+            - value_support_range (:obj:`SequenceType`): The range of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
             - proj_out (:obj:`int`): The size of projection output layer.
             - pred_hid (:obj:`int`): The size of prediction hidden layer.
@@ -91,12 +91,13 @@ class EfficientZeroModel(nn.Module):
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
             observation_shape = [1, observation_shape, 1]
-        if not categorical_distribution:
+        self.categorical_distribution = categorical_distribution
+        if self.categorical_distribution:
+            self.reward_support_size = len(torch.arange(*reward_support_range))
+            self.value_support_size = len(torch.arange(*value_support_range))
+        else:
             self.reward_support_size = 1
             self.value_support_size = 1
-        else:
-            self.reward_support_size = reward_support_size
-            self.value_support_size = value_support_size
 
         self.action_space_size = action_space_size
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type

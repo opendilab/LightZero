@@ -44,7 +44,8 @@ The `main_config` dictionary contains the main parameter settings for running th
     - `downsample`: Whether to downsample the input.
     - `norm_type`: The type of normalization used.
     - `num_channels`: The number of channels in the convolutional layers (number of features extracted).
-    - `support_scale`: The range of the value support set (`-support_scale` to `support_scale`).
+    - `reward_support_range`: The range of the reward support set (`(start, stop, step)`).
+    - `value_support_range`: The range of the value support set (`(start, stop, step)`).
     - `bias`: Whether to use bias terms in the layers.
     - `discrete_action_encoding_type`: How discrete actions are encoded.
     - `self_supervised_learning_loss`: Whether to use a self-supervised learning loss (as in EfficientZero).

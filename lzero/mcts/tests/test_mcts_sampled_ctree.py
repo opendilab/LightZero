@@ -1,7 +1,7 @@
 import pytest
 import torch
 from easydict import EasyDict
-from lzero.policy import inverse_scalar_transform
+from lzero.policy import DiscreteSupport, inverse_scalar_transform
 
 
 class MuZeroModelFake(torch.nn.Module):
@@ -80,7 +80,8 @@ def test_mcts():
             value_delta_max=0,
             model=dict(
                 continuous_action_space=True,
-                support_scale=300,
+                reward_support_range=(-300., 301., 1.),
+                value_support_range=(-300., 301., 1.),
                 action_space_size=2,
                 categorical_distribution=True,
             ),
@@ -106,8 +107,9 @@ def test_mcts():
     policy_logits_pool = network_output['policy_logits']
 
     # network output process
+    discrete_support = DiscreteSupport(*policy_config.model.value_support_range)
     pred_values_pool = inverse_scalar_transform(pred_values_pool,
-                                                policy_config.model.support_scale).detach().cpu().numpy()
+                                                discrete_support).detach().cpu().numpy()
     latent_state_roots = latent_state_roots.detach().cpu().numpy()
     reward_hidden_state_state = (
         reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()
