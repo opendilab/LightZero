@@ -211,16 +211,17 @@
 下面是一个 LightZero 中单元测试的例子。在这个例子中，所测试的对象是 <code class="docutils literal notranslate"><span class="pre">inverse_scalar_transform</span></code> 和 <code class="docutils literal notranslate"><span class="pre">InverseScalarTransform</span></code> 方法。这两个方法都将经过变换的 value 逆变换为原本的值，但是采取了不同的实现。单元测试时，用这两个方法对同一组数据进行处理，并比较输出的结果是否相同。如果相同，则会通过测试。</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.scaling_transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.scaling_transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">DiscreteSupport</span><span class="p">,</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">unittest</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">test_scaling_transform</span><span class="p">():</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
     <span class="n">logit</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">601</span><span class="p">)</span>
+    <span class="n">discrete_support</span> <span class="o">=</span> <span class="n">DiscreteSupport</span><span class="p">(</span><span class="o">-</span><span class="mf">300.</span><span class="p">,</span> <span class="mf">301.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-    <span class="n">output_1</span> <span class="o">=</span> <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="mi">300</span><span class="p">)</span>
+    <span class="n">output_1</span> <span class="o">=</span> <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="n">discrete_support</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;t1&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
-    <span class="n">handle</span> <span class="o">=</span> <span class="n">InverseScalarTransform</span><span class="p">(</span><span class="mi">300</span><span class="p">)</span>
+    <span class="n">handle</span> <span class="o">=</span> <span class="n">InverseScalarTransform</span><span class="p">(</span><span class="n">discrete_support</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">output_2</span> <span class="o">=</span> <span class="n">handle</span><span class="p">(</span><span class="n">logit</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;t2&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>

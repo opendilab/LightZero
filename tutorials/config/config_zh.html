@@ -139,7 +139,8 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">downsample</span></code>: 是否进行降采样。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">norm_type</span></code>: 归一化使用的方法。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">num_channels</span></code>: 卷积层提取的特征个数。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">support_scale</span></code>: 价值支持集的范围 (-support_scale, support_scale)。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reward_support_range</span></code>: 价值支持集的范围 (<code class="docutils literal notranslate"><span class="pre">(start,</span> <span class="pre">stop,</span> <span class="pre">step)</span></code>)。<!-- TODO : ADAPT THIS DESCRIPTION, I DON'T SPEAK CHINESE --></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_support_range</span></code>: 价值支持集的范围 (<code class="docutils literal notranslate"><span class="pre">(start,</span> <span class="pre">stop,</span> <span class="pre">step)</span></code>)。<!-- TODO : ADAPT THIS DESCRIPTION, I DON'T SPEAK CHINESE --></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">bias</span></code>: 是否使用偏置。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">discrete_action_encoding_type</span></code>: 离散化动作空间使用的编码类型。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">self_supervised_learning_loss</span></code>: 是否使用自监督学习损失（参照EfficientZero的实现）。</p></li>

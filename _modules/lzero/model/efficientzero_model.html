@@ -125,8 +125,8 @@
             <span class="n">reward_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
             <span class="n">value_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
             <span class="n">policy_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
-            <span class="n">reward_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
-            <span class="n">value_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
+            <span class="n">reward_support_range</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">300.</span><span class="p">,</span> <span class="mf">301.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">),</span>
+            <span class="n">value_support_range</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">300.</span><span class="p">,</span> <span class="mf">301.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">),</span>
             <span class="n">proj_hid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
             <span class="n">proj_out</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
             <span class="n">pred_hid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">512</span><span class="p">,</span>
@@ -159,8 +159,8 @@
 <span class="sd">            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
 <span class="sd">            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
 <span class="sd">            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
-<span class="sd">            - reward_support_size (:obj:`int`): The size of categorical reward output</span>
-<span class="sd">            - value_support_size (:obj:`int`): The size of categorical value output.</span>
+<span class="sd">            - reward_support_range (:obj:`SequenceType`): The range of categorical reward output</span>
+<span class="sd">            - value_support_range (:obj:`SequenceType`): The range of categorical value output.</span>
 <span class="sd">            - proj_hid (:obj:`int`): The size of projection hidden layer.</span>
 <span class="sd">            - proj_out (:obj:`int`): The size of projection output layer.</span>
 <span class="sd">            - pred_hid (:obj:`int`): The size of prediction hidden layer.</span>
@@ -184,12 +184,13 @@
             <span class="c1"># for vector obs input, e.g. classical control and box2d environments</span>
             <span class="c1"># to be compatible with LightZero model/policy, transform to shape: [C, W, H]</span>
             <span class="n">observation_shape</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">categorical_distribution</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">categorical_distribution</span> <span class="o">=</span> <span class="n">categorical_distribution</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">categorical_distribution</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">*</span><span class="n">reward_support_range</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">*</span><span class="n">value_support_range</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span> <span class="o">=</span> <span class="mi">1</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span> <span class="o">=</span> <span class="mi">1</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span> <span class="o">=</span> <span class="n">reward_support_size</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span> <span class="o">=</span> <span class="n">value_support_size</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">action_space_size</span> <span class="o">=</span> <span class="n">action_space_size</span>
         <span class="k">assert</span> <span class="n">discrete_action_encoding_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;one_hot&#39;</span><span class="p">,</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">],</span> <span class="n">discrete_action_encoding_type</span>
