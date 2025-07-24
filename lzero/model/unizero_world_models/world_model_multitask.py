@@ -183,7 +183,8 @@ class WorldModelMT(WorldModel):
             # TODO: check the effect of SimNorm
             # self.act_embedding_table = nn.Sequential(
             #     nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-            #     SimNorm(simnorm_dim=self.group_size))
+            #     SimNorm(simnorm_dim=self.group_size)
+            # )
             # print(f'config.action_space_size_list:{config.action_space_size_list}')
             self.act_embedding_table = nn.ModuleList([
                 nn.Sequential(
@@ -318,6 +319,9 @@ class WorldModelMT(WorldModel):
 
         self.reanalyze_phase = False
         self._rank = get_rank()
+
+        # tangjia
+        self.obs_embeddings_grad = None # 保留参数
 
     def _scale_grad(self, grad: torch.Tensor) -> torch.Tensor:
         # ① 1/k 缩放；若想更保守可用 1/√k
@@ -1796,6 +1800,9 @@ class WorldModelMT(WorldModel):
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id = 0, **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], task_id=task_id)
+        
+        obs_embeddings.register_hook(lambda grad: setattr(self, 'obs_embeddings_grad', grad)) #note: register hook to save gradients of obs_embeddings
+        
 
         if self.analysis_tsne:
             # =========== tsne analysis ===========

@@ -14,7 +14,7 @@ from lzero.policy import prepare_obs_stack_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
-from .utils import configure_optimizers_nanogpt
+from .utils import configure_optimizers_nanogpt, compute_gradient_conflict_distributed
 import sys
 
 sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
@@ -418,7 +418,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
         )
-
+        self.a=1
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
 
@@ -548,7 +548,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self._prev_plasticity_metrics[name] = value
             return value
 
-
+    
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
@@ -771,9 +771,119 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
+        
+
+        # ===================================modified by tangjia========================================
+        
+      
+        # self._learn_model.world_model.tokenizer.encoder[0].grad = None
+        # encoder_grad=self._learn_model.world_model.obs_embeddings_grad.view(-1)
+        # world_size = dist.get_world_size()
+        # gathered_grads = [torch.zeros_like(encoder_grad) for _ in range(world_size)]
+
+        multi_gpu = dist.is_initialized() and self._cfg.multi_gpu
+        rank = dist.get_rank() if multi_gpu else 0
+        
+
+        # 将 self.y 与 self.lambd 转移到当前设备，避免设备不一致问题
+        # self.y = self.y.to(self.device)
+        # self.lambd = self.lambd.to(self.device)
+
+
+        # 获取transformer 的架构
+        # get_architecture_info = self._learn_model.world_model.transformer.get_architecture_info()
+        num_experts= self._learn_model.world_model.transformer.num_experts
+
+
+        local_task_num = len(losses_list)
+        local_encoder_grad_list = []
+        local_before_moe_grad_list=[]
+        local_shared_expert_grad_list=[]
+
+        local_last_block_expert_grad_list=[[] for _ in range(num_experts)] 
+        
+        print(f'Rank {rank} 正在收集梯度')
+        
+
+
+        for i in range(local_task_num):
+            # 对每个任务的 loss 调用 backward 计算全网络梯度
+
+            # encoder
+            losses_list[i].backward(retain_graph=True) #保留梯度图，因为后面还有backward
+            local_encoder_grad_list.append(self._learn_model.world_model.obs_embeddings_grad.view(-1).detach().clone())
+            
+            
+            # self_attention
+            attention_before_moe_list=self._learn_model.world_model.transformer.get_block_before_moe_gradients()
+            before_moe_grad=attention_before_moe_list[0]
+            local_before_moe_grad_list.append(before_moe_grad.view(-1).detach().clone())
+            
+            # 获取共享 expert 的梯度 
+            if self._learn_model.world_model.transformer.shared_expert>0 :
+                # get_shared_expert_gradients_by_block_id
+                shared_expert_grad_for_last_task= self._learn_model.world_model.transformer.get_last_shared_expert_gradients() # 获取最后一个 block 的共享 expert 梯度
+                local_shared_expert_grad_list.append(shared_expert_grad_for_last_task)
+                
+            # 计算最后一个Block上的Expert上的梯度的冲突 num_blocks
+            if num_experts>0:
+                last_block_expert_grad_list = self._learn_model.world_model.transformer.get_expert_gradients_for_last_block()
+
+            for j in range(num_experts):
+                local_last_block_expert_grad_list[j].append(last_block_expert_grad_list[j])
+
+        
+        print(f'Rank {rank} 正在计算梯度冲突')
+            
+        # 清零共享参数梯度，防止梯度累加
+        self._optimizer_world_model.zero_grad()
+        
+        print(f'Rank {rank} 正在计算attention梯度冲突')
+        # 1. 计算attention 之后 MOE 之前的梯度的冲突
+        local_before_moe_grad_list=torch.stack(local_before_moe_grad_list,dim=0) # shape: (local_task_num, encoder_grad_dim)
+        before_moe_grad_conflict_ddp=compute_gradient_conflict_distributed(local_before_moe_grad_list, device=self._cfg.device)
+
+        print(f'Rank {rank} 正在计算encoder梯度冲突')
+        # 2. 计算encoder 的梯度的冲突
+        local_encoder_grad_list=torch.stack(local_encoder_grad_list,dim=0) # shape: (local_task_num, encoder_grad_dim)
+        encoder_grad_conflict_ddp=compute_gradient_conflict_distributed(local_encoder_grad_list, device=self._cfg.device)
+
+
+        print(f'Rank {rank} 正在计算共享expert梯度冲突')
+        # 3.如果有共享expert 计算共享expert 上的梯度的冲突 
+        local_shared_expert_grad_list=torch.stack(local_shared_expert_grad_list,dim=0)
+        shared_expert_grad_conflict= compute_gradient_conflict_distributed(local_shared_expert_grad_list, device=self._cfg.device) if len(local_shared_expert_grad_list)>0 else None
+        print(f'Rank {rank} shared_expert_grad_conflict: {shared_expert_grad_conflict.avg_conflict_score if shared_expert_grad_conflict is not None else "None"}')
+
+        print(f'Rank {rank} 正在计算expert梯度冲突')
+
+        last_block_expert_grad_conflict_ddp_list=[]
+        # 4. last block shang de Expert的梯度的冲突
+        
+        gradient_conflict_log_dict = {
+            'encoder_grad_conflict': encoder_grad_conflict_ddp.avg_conflict_score if encoder_grad_conflict_ddp is not None else 0,
+            'before_moe_grad_conflict': before_moe_grad_conflict_ddp.avg_conflict_score if before_moe_grad_conflict_ddp is not None else 0,
+            'shared_expert_grad_conflict': shared_expert_grad_conflict.avg_conflict_score if shared_expert_grad_conflict is not None else 0,
+        }
+
+        for i in range(num_experts):
+            # 将每个任务的最后一个 block 的 expert 梯度堆叠起来
+            local_last_block_expert_grad_list[i]=torch.stack(local_last_block_expert_grad_list[i],dim=0)
+            # 计算每个 expert 的梯度的冲突
+            expert_conflict=compute_gradient_conflict_distributed(local_last_block_expert_grad_list[i], device=self._cfg.device)
+            last_block_expert_grad_conflict_ddp_list.append(expert_conflict)
+            
+            gradient_conflict_log_dict[f'expert_{i}_grad_conflict'] = expert_conflict.avg_conflict_score if expert_conflict is not None else 0
+
+        print(f'Rank {rank} 梯度冲突计算完毕')
+
+
+        # =================================== end modified ========================================
 
         # 假设每个进程计算出的 losses_list 为可求梯度的 tensor list，比如多个标量 loss 组成的列表
         # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
+
+        self._optimizer_world_model.zero_grad()
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
             if self._cfg.moco_version=="v0":
@@ -790,6 +900,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
             weighted_total_loss.backward()
 
+        print(f'Rank {rank} 正在反向传播')
+
         # TODO: 使用 MoCo 或 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
@@ -803,7 +915,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
         #     if param.requires_grad:
         #         print(name, param.grad.norm())
-
+    
         if self._cfg.analysis_sim_norm:
             del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
@@ -816,13 +928,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
             self._optimizer_world_model.zero_grad()
             # print(f"ignore_grad")
+        
 
-        # if self._cfg.multi_gpu:
-        #     # Very important to sync gradients before updating the model
-        #     # rank = get_rank()
-        #     # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
-        #     self.sync_gradients(self._learn_model)
-        #     # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
 
         if self._cfg.multi_gpu:
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
@@ -870,6 +977,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 'target_policy_entropy': average_target_policy_entropy,
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
+        
+        return_loss_dict.update(gradient_conflict_log_dict)
+        print(f'Rank {rank} 正在根据冲突记录日志')
+        print(gradient_conflict_log_dict)
 
         # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
         # multi_task_loss_dicts = {
@@ -939,6 +1050,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # print(f'return_loss_dict:{return_loss_dict}')
 
         # 返回最终的损失字典
+        print(f'Rank {rank} 返回')
+        dist.barrier()
         return return_loss_dict
 
     def monitor_weights_and_grads(self, model):
@@ -979,6 +1092,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             tensorboard according to the return value ``_forward_learn``.
             If num_tasks is provided, generate monitored variables for each task.
         """
+        rank= dist.get_rank() if dist.is_initialized() else 0
+        print(f"Rank {rank} 开始记录日志1111")
+
+
         # Basic monitored variables that do not depend on the number of tasks
         monitored_vars = [
             'Current_GPU',
@@ -988,6 +1105,18 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'cur_lr_world_model',
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
+            # modified by tangjia
+            'encoder_grad_conflict',
+            'before_moe_grad_conflict',
+            'shared_expert_grad_conflict',
+            'expert_0_grad_conflict',
+            'expert_1_grad_conflict',
+            'expert_2_grad_conflict',
+            'expert_3_grad_conflict',
+            'expert_4_grad_conflict',
+            'expert_5_grad_conflict',
+            'expert_6_grad_conflict',
+            'expert_7_grad_conflict',
         ]
 
         # rank = get_rank()
@@ -1077,7 +1206,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         else:
             # If num_tasks is not provided, we assume there's only one task and keep the original variable names
             monitored_vars.extend(task_specific_vars)
-
+        print(f"Rank {rank} 日志记录完毕")
         return monitored_vars
 
     #@profile

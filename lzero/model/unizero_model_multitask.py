@@ -6,7 +6,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook #,ModelGradientHook
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
@@ -188,6 +188,11 @@ class UniZeroMTModel(nn.Module):
             if world_model_cfg.analysis_sim_norm:
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
+
+            # if True: # Fixme: for debug
+            #     # 增加对encoder的hook,监控传播到encoder 上的梯度
+            #     self.encoder_output_hook = ModelGradientHook()
+            #     self.encoder_output_hook.setup_hook(self.representation_network)
 
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)

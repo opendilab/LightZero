@@ -141,9 +141,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_layers=num_layers,
                     # num_layers=8,
                     # num_layers=12, # todo
-                    num_heads=24,
+                    num_heads=1,
 
-                    embed_dim=768,
+                    embed_dim=5, #768
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
@@ -160,7 +160,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     multiplication_moe_in_transformer=True, # =======TODO: moe8=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
-                    num_experts_of_moe_in_transformer=8,
+                    num_experts_of_moe_in_transformer=1,
 
                     # LoRA 参数：
                     moe_use_lora=False, # TDO
@@ -333,7 +333,7 @@ if __name__ == "__main__":
 
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
-
+# /fs-computility/niuyazhe/tangjia/code/LightZero-dev-multitask-balance-clean/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
     from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     import os
