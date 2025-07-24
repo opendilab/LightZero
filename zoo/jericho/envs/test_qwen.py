@@ -79,9 +79,7 @@ class Qwen3Policy:
             )
         else:
             prompt = (
-                "You will receive a log of unsuccessful gameplay from a text-based adventure game.\n"
-                "Please identify the reasons for failure and provide a short suggestion for improving the strategy next time.\n"
-                "Respond with one sentence only.\n"
+                "You will receive a log of unsuccessful gameplay from a text-based adventure game. Please identify the reasons for this game failure and provide a short suggestion for improving the game strategy next time. Do not summarize the gameplay trajectory; respond with your suggestion in a single sentence. For instance:  'Remember to light a lamp before entering dark areas to avoid being eaten by a grue.\n"
                 f"{trajectory_str}\n"
             )
 
@@ -153,9 +151,9 @@ if __name__ == '__main__':
     # Configuration dictionary for the environment.
     env_cfg = EasyDict(
         dict(
-            max_steps=100,
+            max_steps=500,
             game_path="./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + f"{env_type}.z5",
-            max_action_num=12,
+            max_action_num=55,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
             remove_stuck_actions=False,
@@ -186,7 +184,7 @@ if __name__ == '__main__':
 
     num_episodes = 20  # 可设置为任意 N
     good_trial_memory = deque(maxlen=5)  
-    bad_trial_memory = deque(maxlen=5)  
+    bad_trial_memory = deque(maxlen=20)  
 
     for episode_id in range(num_episodes):
         f.write(f"{'='*60}\n")
@@ -215,16 +213,17 @@ if __name__ == '__main__':
 
             step_count += 1
 
-            if "*** you have died ***" in obs_str.lower():
-                reflection = qwen_policy.generate_reflection(list(history), positive=False)
-                bad_trial_memory.append(reflection)
-                f.write(f"[BAD Reflection]: {reflection}\n")
-                print(f'[BAD Reflection]: {reflection}')
-            elif "your score has just gone up by" in obs_str.lower():
-                reflection = qwen_policy.generate_reflection(list(history), positive=True)
-                good_trial_memory.append(reflection)
-                f.write(f"[GOOD Reflection]: {reflection}\n")
-                print(f'[GOOD Reflection]: {reflection}')
+
+        reflection = qwen_policy.generate_reflection(list(history), positive=False)
+        bad_trial_memory.append(reflection)
+        f.write(f"[BAD Reflection]: {reflection}\n")
+        print(f'[BAD Reflection]: {reflection}')
+
+        ## 是否生产好轨迹的relection
+        # reflection = qwen_policy.generate_reflection(list(history), positive=True)
+        # good_trial_memory.append(reflection)
+        # f.write(f"[GOOD Reflection]: {reflection}\n")
+        # print(f'[GOOD Reflection]: {reflection}')
 
         
         f.write(f"Episode finished. Final return: {info.get('eval_episode_return', 0.0)}\n")
