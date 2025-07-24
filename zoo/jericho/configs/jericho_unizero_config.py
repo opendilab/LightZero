@@ -59,7 +59,14 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     reanalyze_partition: float = 0.75
 
     # Model name or path - configurable according to the predefined model paths or names
-    model_name: str = 'BAAI/bge-base-en-v1.5'
+    encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
+
+    if encoder_option == 'qwen':
+        model_name: str = 'Qwen/Qwen3-0.6B'
+    elif encoder_option == 'legacy':
+        model_name: str = 'BAAI/bge-base-en-v1.5'
+    else:
+        raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
@@ -104,6 +111,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
+                encoder_option=encoder_option,
                 encoder_url=model_name,
                 model_type="mlp",
                 continuous_action_space=False,

@@ -8,7 +8,7 @@ import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
-from lzero.entry.utils import initialize_zeros_batch
+from lzero.entry.utils import initialize_zeros_batch, initialize_pad_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
@@ -348,6 +348,9 @@ class UniZeroPolicy(MuZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+
+        encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+        self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
         
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
@@ -592,7 +595,9 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_obs = torch.full(
+                [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+            ).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
     # @profile
@@ -696,7 +701,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 
                 if self._cfg.model.world_model_cfg.obs_type == 'text':
                     # Output the plain text content decoded by the decoder from the next latent state
-                    predicted_next = self._collect_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                    predicted_next = self._collect_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
                 else:
                     predicted_next = None
 
@@ -745,11 +750,13 @@ class UniZeroPolicy(MuZeroPolicy):
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
+            self.last_batch_obs = torch.full(
+                [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+            ).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
                       ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
@@ -827,7 +834,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 if self._cfg.model.world_model_cfg.obs_type == 'text':
                     # Output the plain text content decoded by the decoder from the next latent state
-                    predicted_next = self._eval_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                    predicted_next = self._eval_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
                 else:
                     predicted_next = None
 
@@ -861,10 +868,11 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
+            self.last_batch_obs = initialize_pad_batch(
                 self._cfg.model.observation_shape,
                 self._cfg.collector_env_num,
-                self._cfg.device
+                self._cfg.device,
+                pad_token_id=self.pad_token_id
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
@@ -905,10 +913,11 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
+            self.last_batch_obs = initialize_pad_batch(
                 self._cfg.model.observation_shape,
                 self._cfg.evaluator_env_num,
-                self._cfg.device
+                self._cfg.device,
+                pad_token_id=self.pad_token_id
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 

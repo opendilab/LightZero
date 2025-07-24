@@ -156,7 +156,7 @@ class GameBuffer(ABC, object):
                 # For some environments (e.g., Jericho), the action space size may be different.
                 # To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),
                 # we avoid sampling from the last `num_unroll_steps` steps of the game segment. 
-                if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+                if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
             else:
                 # For environments with a fixed action space (e.g., Atari),
