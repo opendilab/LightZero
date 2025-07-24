@@ -100,7 +100,7 @@ class WorldModel(nn.Module):
         skip_modules = set()
         if hasattr(self.tokenizer.encoder, 'pretrained_model'):
             skip_modules.update(self.tokenizer.encoder.pretrained_model.modules())
-        if hasattr(self.tokenizer, 'decoder_network'):
+        if hasattr(self.tokenizer, 'decoder_network') and self.tokenizer.decoder_network is not None:
             skip_modules.update(self.tokenizer.decoder_network.modules())
 
         def custom_init(module):
@@ -1372,7 +1372,7 @@ class WorldModel(nn.Module):
             if decode_loss_mode == "after_backbone":
                 next_latent_state = outputs.logits_observations[:, :-1, :]
                 next_target_ids = batch['observations'][:, 1:, :] 
-
+                
                 latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
                     embeddings=next_latent_state,
                     target_ids=next_target_ids,
