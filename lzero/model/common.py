@@ -248,6 +248,68 @@ class FeatureAndGradientHook:
         self.forward_handler.remove()
         self.backward_handler.remove()
 
+# # modified by tangjia
+# class ModelGradientHook:
+ 
+
+#     def __init__(self):
+#         """
+#         Overview:
+#             Class to capture gradients at model output.
+#         """
+#         self.output_grads = []
+ 
+#     def setup_hook(self, model):
+#         # Hook to capture gradients at model output
+#         self.backward_handler = model.register_full_backward_hook(self.backward_hook)
+ 
+#     def backward_hook(self, module, grad_input, grad_output):
+#         with torch.no_grad():
+#             # 保存输出梯度
+#             if grad_output[0] is not None:
+#                 self.output_grads.append(grad_output[0].clone())
+ 
+#     def analyze(self):
+#         if not self.output_grads:
+#             return None
+        
+#         # Calculate norms of output gradients
+#         grad_norms = [torch.norm(g, p=2, dim=1).mean() for g in self.output_grads]
+#         avg_grad_norm = torch.mean(torch.stack(grad_norms))
+#         max_grad_norm = torch.max(torch.stack(grad_norms))
+#         min_grad_norm = torch.min(torch.stack(grad_norms))
+ 
+#         # Clear stored data and delete tensors to free memory
+#         self.clear_data()
+ 
+#         # Optionally clear CUDA cache
+#         if torch.cuda.is_available():
+#             torch.cuda.empty_cache()
+ 
+#         return avg_grad_norm, max_grad_norm, min_grad_norm
+ 
+#     def clear_data(self):
+#         del self.output_grads[:]
+ 
+#     def remove_hooks(self):
+#         self.backward_handler.remove()
+ 
+# 使用示例
+# monitor = ModelGradientMonitor()
+# monitor.setup_hook(model)
+# 
+# # 训练过程中...
+# loss.backward()
+# 
+# # 获取梯度信息
+# grad_norm = monitor.get_gradient_norm()
+# grad_stats = monitor.get_gradient_stats()
+# 
+# # 清理数据
+# monitor.clear_data()
+# 
+# # 训练结束后移除hook
+# monitor.remove_hook()
 
 class DownSample(nn.Module):
 
