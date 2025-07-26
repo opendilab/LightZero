@@ -695,3 +695,293 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, reward, value, policy_logits
+
+
+# ==================== modified by tangjia=============================
+import torch.distributed as dist
+
+
+
+def example_usage():
+    """
+    示例用法：计算梯度冲突分析结果
+    该函数生成示例梯度并计算它们之间的冲突分析结果
+    结果包括平均冲突得分、最大冲突得分、冲突梯度对数量、平均冲突强度和梯度范数等信息。
+    还包括余弦相似度矩阵的计算结果。
+    该函数用于演示如何使用 compute_gradient_conflicts 函数进行梯度冲突分析。
+    结果将打印到控制台。
+    该函数不接受任何参数，直接生成示例梯度进行分析。    
+    """
+    # 生成示例梯度
+    torch.manual_seed(42)
+    gradients = [
+        torch.randn(100),  # 梯度1
+        torch.randn(100),  # 梯度2  
+        torch.randn(100),  # 梯度3
+    ]
+    
+    # 计算冲突
+    conflicts = compute_gradient_conflicts(gradients)
+    
+    print("梯度冲突分析结果:")
+    print(f"平均冲突得分: {conflicts['avg_conflict_score']:.4f}")
+    print(f"最大冲突得分: {conflicts['max_conflict_score']:.4f}")
+    print(f"冲突梯度对数量: {conflicts['num_conflicting_pairs']}")
+    print(f"平均冲突强度: {conflicts['avg_conflict_intensity']:.4f}")
+    print(f"梯度范数: {conflicts['gradient_norms']}")
+    print("\n余弦相似度矩阵:")
+    print(conflicts['cosine_similarity_matrix'])
+
+# def compute_gradient_conflicts(gradients: List[torch.Tensor]) -> dict:
+#     """
+#     计算多个梯度之间的冲突
+    
+#     Args:
+#         gradients: 梯度列表，每个元素是一个梯度张量
+    
+#     Returns:
+#         dict: 包含以下键值的字典，各字段含义如下：
+
+#             - cosine_similarity_matrix (Tensor): 所有梯度两两之间的余弦相似度矩阵，值越小表示冲突越大。
+#             - avg_conflict_score (float): 所有梯度对之间负余弦相似度的平均值，用于衡量整体冲突程度。
+#             - max_conflict_score (float): 所有梯度对之间负余弦相似度中的最大值，反映最严重的冲突程度。
+#             - dot_product_matrix (Tensor): 所有梯度两两之间的点积矩阵，用于更直接地衡量方向一致性与冲突。
+#             - gradient_norms (List[float]): 每个梯度向量的 L2 范数，反映其大小，用于分析范数不平衡。
+#             - num_conflicting_pairs (int): 存在负点积（即方向相反）的梯度对数量，表示冲突对的总数。
+#             - avg_conflict_intensity (float): 所有冲突对的平均冲突强度（负点积的平均值），反映冲突严重性。
+
+#     Notation: 
+#         dot_product_matrix：相当于没有归一化的cosine_similarity_matrix(分母没有除以 norm)
+#                         g1     g2     g3
+#                 ---------------------
+#             g1 |  <g1, g1> <g1, g2> <g1, g3>
+#             g2 |  <g2, g1> <g2, g2> <g2, g3>
+#             g3 |  <g3, g1> <g3, g2> <g3, g3>
+#     """
+#     results = {}
+#     n_gradients = len(gradients)
+    
+#     # 确保所有梯度形状相同
+#     assert all(g.shape == gradients[0].shape for g in gradients), "梯度形状必须相同"
+    
+#     # 1. 余弦相似度矩阵
+#     cosine_sim_matrix = torch.zeros(n_gradients, n_gradients)
+#     for i in range(n_gradients):
+#         for j in range(n_gradients):
+#             cos_sim = torch.cosine_similarity(
+#                 gradients[i].flatten(), 
+#                 gradients[j].flatten(), 
+#                 dim=0
+#             )
+#             cosine_sim_matrix[i, j] = cos_sim
+    
+#     results['cosine_similarity_matrix'] = cosine_sim_matrix
+    
+#     # 2. 梯度冲突得分 (负余弦相似度的平均)
+#     # 排除对角线元素
+#     mask = ~torch.eye(n_gradients, dtype=bool)
+#     conflict_scores = -cosine_sim_matrix[mask]
+#     results['avg_conflict_score'] = conflict_scores.mean().item()
+#     results['max_conflict_score'] = conflict_scores.max().item()
+    
+#     # 3. 点积矩阵
+#     dot_product_matrix = torch.zeros(n_gradients, n_gradients)
+#     for i in range(n_gradients):
+#         for j in range(n_gradients):
+#             dot_prod = torch.dot(gradients[i].flatten(), gradients[j].flatten())
+#             dot_product_matrix[i, j] = dot_prod
+    
+#     results['dot_product_matrix'] = dot_product_matrix
+    
+#     # 4. 梯度范数
+#     gradient_norms = [torch.norm(g).item() for g in gradients]
+#     results['gradient_norms'] = gradient_norms
+    
+#     # 5. 冲突强度 (基于负点积)
+#     negative_dot_products = []
+#     for i in range(n_gradients):
+#         for j in range(i+1, n_gradients):
+#             dot_prod = torch.dot(gradients[i].flatten(), gradients[j].flatten())
+#             if dot_prod < 0:  # 负点积表示冲突
+#                 negative_dot_products.append(-dot_prod.item())
+    
+#     results['num_conflicting_pairs'] = len(negative_dot_products)
+#     results['avg_conflict_intensity'] = np.mean(negative_dot_products) if negative_dot_products else 0
+    
+#     return EasyDict(results)
+# def compute_gradient_conflict_distributed(local_grads, multi_gpu=True,device=0):
+#     """
+#     分布式模式下计算梯度冲突
+    
+#     Args:
+#         local_grads: 本地梯度tensor，shape: (local_task_num, encoder_grad_dim)
+#         local_task_num: 本地任务数量
+#         multi_gpu: 是否多GPU模式
+#         rank: 当前GPU rank
+#     Returns:
+#         gradient_conflict: 仅在rank 0返回梯度冲突矩阵，其他rank返回None
+#     """
+#     rank = dist.get_rank() if multi_gpu else 0
+#     local_task_num,encoder_grad_dim = local_grads.shape
+
+#     if not multi_gpu:
+#         return compute_gradient_conflicts(local_grads)
+    
+#     # 多GPU模式
+#     world_size = dist.get_world_size()
+    
+#     # 收集每个rank的任务数
+#     all_local_task_nums = [None for _ in range(world_size)]
+#     dist.all_gather_object(all_local_task_nums, local_task_num)
+    
+#     max_local_task_num = max(all_local_task_nums)
+    
+#     # 填充到相同形状,我也不知道为什么要填充到相同形状
+#     if local_task_num < max_local_task_num:
+#         pad_tensor = torch.zeros(max_local_task_num - local_task_num, 
+#                                encoder_grad_dim, device=device)
+#         local_grads = torch.cat([local_grads, pad_tensor], dim=0)
+    
+#     # 聚合所有梯度到rank 0
+#     local_grads_cpu = local_grads.cpu()
+#     all_local_grads = [None for _ in range(world_size)]
+#     dist.all_gather_object(all_local_grads, local_grads_cpu)
+    
+#     if rank == 0:
+#         # 重建有效梯度
+#         valid_grad_list = []
+#         for i, tensor_cpu in enumerate(all_local_grads):
+#             valid_count = all_local_task_nums[i]
+#             tensor_valid = tensor_cpu[:valid_count, :].to(device)
+#             valid_grad_list.append(tensor_valid)
+        
+#         all_task_grads = torch.cat(valid_grad_list, dim=0)
+        
+#         # 计算梯度冲突
+#         return compute_gradient_conflicts(all_task_grads)
+#     else:
+#         return None
+
+def compute_gradient_conflicts(gradients: List[torch.Tensor]) -> dict:
+    """
+    计算多个梯度之间的冲突
+    
+    Args:
+        gradients: 梯度列表，每个元素是一个梯度张量
+    
+    Returns:
+        dict: 包含avg_conflict_score的字典
+    """
+    results = {}
+    n_gradients = len(gradients)
+    
+    # 如果只有一个梯度，没有冲突
+    if n_gradients <= 1:
+        results['avg_conflict_score'] = 0.0
+        return EasyDict(results)
+    
+    # 确保所有梯度形状相同
+    assert all(g.shape == gradients[0].shape for g in gradients), "梯度形状必须相同"
+    
+    # 余弦相似度矩阵
+    cosine_sim_matrix = torch.zeros(n_gradients, n_gradients)
+    for i in range(n_gradients):
+        for j in range(n_gradients):
+            cos_sim = torch.cosine_similarity(
+                gradients[i].flatten(), 
+                gradients[j].flatten(), 
+                dim=0
+            )
+            cosine_sim_matrix[i, j] = cos_sim
+    
+    # 梯度冲突得分 (负余弦相似度的平均)
+    # 排除对角线元素
+    mask = ~torch.eye(n_gradients, dtype=bool)
+    conflict_scores = -cosine_sim_matrix[mask]
+    results['avg_conflict_score'] = conflict_scores.mean().item()
+    
+    return EasyDict(results)
+ 
+ 
+def compute_gradient_conflict_distributed(local_grads, multi_gpu=True, device=0):
+    """
+    分布式模式下计算梯度冲突
+    
+    Args:
+        local_grads: 本地梯度tensor，shape: (local_task_num, encoder_grad_dim)
+        multi_gpu: 是否多GPU模式
+        device: 当前设备
+    Returns:
+        gradient_conflict: 仅在rank 0返回梯度冲突结果，其他rank返回None
+    """
+    rank = dist.get_rank() if multi_gpu else 0
+    local_task_num, encoder_grad_dim = local_grads.shape
+    
+    # 过滤掉norm为0的向量
+    norms = torch.norm(local_grads, dim=1)
+    valid_mask = norms > 1e-8  # 使用小阈值避免数值问题
+    local_grads_filtered = local_grads[valid_mask]
+    local_task_num_filtered = local_grads_filtered.shape[0]
+ 
+    if not multi_gpu:
+        # 单GPU模式
+        if local_task_num_filtered <= 1:
+            return EasyDict({'avg_conflict_score': 0.0})
+        
+        grad_list = [local_grads_filtered[i] for i in range(local_task_num_filtered)]
+        return compute_gradient_conflicts(grad_list)
+    
+    # 多GPU模式
+    world_size = dist.get_world_size()
+    
+    # 收集每个rank过滤后的任务数
+    all_local_task_nums = [None for _ in range(world_size)]
+    dist.all_gather_object(all_local_task_nums, local_task_num_filtered)
+    
+    # 检查总任务数
+    total_valid_tasks = sum(all_local_task_nums)
+    if total_valid_tasks <= 1:
+        if rank == 0:
+            return EasyDict({'avg_conflict_score': 0.0})
+        else:
+            return None
+    
+    max_local_task_num = max(all_local_task_nums)
+    
+    # 填充到相同形状
+    if local_task_num_filtered < max_local_task_num:
+        if local_task_num_filtered > 0:
+            pad_tensor = torch.zeros(max_local_task_num - local_task_num_filtered, 
+                                   encoder_grad_dim, device=device)
+            local_grads_filtered = torch.cat([local_grads_filtered, pad_tensor], dim=0)
+        else:
+            # 当前rank没有有效梯度
+            local_grads_filtered = torch.zeros(max_local_task_num, encoder_grad_dim, device=device)
+    
+    # 聚合所有梯度到rank 0
+    local_grads_cpu = local_grads_filtered.cpu()
+    all_local_grads = [None for _ in range(world_size)]
+    dist.all_gather_object(all_local_grads, local_grads_cpu)
+    
+    if rank == 0:
+        # 重建有效梯度
+        valid_grad_list = []
+        for i, tensor_cpu in enumerate(all_local_grads):
+            valid_count = all_local_task_nums[i]
+            if valid_count > 0:
+                tensor_valid = tensor_cpu[:valid_count, :].to(device)
+                valid_grad_list.append(tensor_valid)
+        
+        if len(valid_grad_list) == 0:
+            return EasyDict({'avg_conflict_score': 0.0})
+            
+        all_task_grads = torch.cat(valid_grad_list, dim=0)
+        
+        # 转换为列表格式并计算冲突
+        grad_list = [all_task_grads[i] for i in range(all_task_grads.shape[0])]
+        return compute_gradient_conflicts(grad_list)
+    else:
+        return None
+
+if __name__ == "__main__":
+    example_usage()
