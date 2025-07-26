@@ -67,7 +67,7 @@ def visualize_avg_softmax(logits):
     avg_probabilities = torch.mean(probabilities, dim=0)
 
     # Convert to numpy for visualization.
-    avg_probabilities_np = avg_probabilities.detach().numpy()
+    avg_probabilities_np = avg_probabilities.detach().cpu().numpy()
 
     # Create a bar plot.
     plt.figure(figsize=(10, 8))
