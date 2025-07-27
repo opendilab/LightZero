@@ -30,19 +30,6 @@ def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.)
     return output
 
 
-def ensure_softmax(logits, dim=1):
-    """
-    Overview:
-        Ensure that the input tensor is normalized along the specified dimension.
-    Arguments:
-         - logits (:obj:`torch.Tensor`): The input tensor.
-        - dim (:obj:`int`): The dimension along which to normalize the input tensor.
-    Returns:
-        - output (:obj:`torch.Tensor`): The normalized tensor.
-    """
-    return torch.softmax(logits, dim=dim)
-
-
 def inverse_scalar_transform(
         logits: torch.Tensor,
         scalar_support: DiscreteSupport,
@@ -58,7 +45,7 @@ def inverse_scalar_transform(
         - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
     if categorical_distribution:
-        value_probs = ensure_softmax(logits, dim=1)
+        value_probs = torch.softmax(logits, dim=1)
         value_support = scalar_support.arange
 
         value_support = value_support.to(device=value_probs.device)
@@ -94,7 +81,7 @@ class InverseScalarTransform:
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
-            value_probs = ensure_softmax(logits, dim=1)
+            value_probs = torch.softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
         else:
             value = logits
