@@ -21,7 +21,8 @@ from ding.utils import EasyTimer
 import torch.nn.functional as F
 import torch.distributed as dist
 import concurrent.futures
-from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer,CurriculumLoRALinear
+# from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer,CurriculumLoRALinear
+from lzero.model.unizero_world_models.transformer import set_curriculum_stage, CurriculumLoRALinear
 
 # ===== 新增依赖 =====
 import numpy as np                    # 计算均值
@@ -33,6 +34,40 @@ from .utils import freeze_non_lora
 from collections import defaultdict
 GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
 
+def log_module_trainable_status(module: torch.nn.Module, module_name: str, logger=logging):
+    """
+    一个高效且可扩展的日志函数，用于详细打印一个模块内部参数的冻结/可训练状态。
+
+    Args:
+        module (torch.nn.Module): 需要检查的模块 (例如 ViT Encoder 或 Transformer)。
+        module_name (str): 在日志中显示的模块名称。
+        logger: 用于输出的日志记录器。
+    """
+    logger.info(f"--- '{module_name}' 模块参数状态详细日志 ---")
+    
+    total_params = 0
+    trainable_params = 0
+    
+    # 打印详细的参数状态
+    for name, param in module.named_parameters():
+        total_params += param.numel()
+        status = "Trainable" if param.requires_grad else "Frozen"
+        
+        # 为了日志整洁，我们可以重点关注 LoRA 相关参数和一些代表性参数
+        # 这里为了完整性，我们全部打印，但在实际使用中可以根据需要过滤
+        logger.info(f"  - {name:<60} | Shape: {str(param.shape):<25} | Status: {status}")
+        
+        if param.requires_grad:
+            trainable_params += param.numel()
+            
+    # 打印摘要信息
+    logger.info(f"--- '{module_name}' 摘要 ---")
+    logger.info(f"  - 总参数量: {total_params:,}")
+    logger.info(f"  - 可训练参数量: {trainable_params:,}")
+    if total_params > 0:
+        percentage = 100 * trainable_params / total_params
+        logger.info(f"  - 可训练比例: {percentage:.4f}%")
+    logger.info("-" * (len(module_name) + 30))
 
 def freeze_non_lora_parameters(model: torch.nn.Module, freeze: bool = True, verbose: bool = False):
     """
@@ -50,7 +85,7 @@ def freeze_non_lora_parameters(model: torch.nn.Module, freeze: bool = True, verb
                 logging.info(f"解冻: {name}")
             elif verbose and freeze:
                 logging.info(f"冻结: {name}")
-                
+
 def log_param_statistics(model, logger=logging):
     n_tensors_total   = sum(1 for _ in model.parameters())
     n_tensors_train   = sum(p.requires_grad for p in model.parameters())
@@ -113,19 +148,58 @@ class CurriculumController:
             is_entering_stage1 = (self.stage == 0)
 
             self.stage += 1
-            set_curriculum_stage_for_transformer(
-                self.policy._learn_model.world_model.transformer,
-                self.stage
-            )
 
-            # 如果是从阶段 0 进入阶段 1，则冻结整个骨干网络
+            # set_curriculum_stage_for_transformer(
+            #     self.policy._learn_model.world_model.transformer,
+            #     self.stage
+            # )
+            # # 如果是从阶段 0 进入阶段 1，则冻结整个骨干网络
+            # if is_entering_stage1:
+            #     logging.info("[课程学习] 进入阶段 1。正在冻结所有非 LoRA 的骨干网络参数。")
+            #     freeze_non_lora_parameters(
+            #         self.policy._learn_model.world_model.transformer,
+            #         freeze=True,
+            #         verbose=True
+            #     )
+
+            # 同时为 ViT Encoder 和 Transformer Decoder 设置新阶段
+            world_model = self.policy._learn_model.world_model
+            
+            # 假设 ViT Encoder 在 self.policy._learn_model.tokenizer.encoder 中
+            # 根据您的 UniZeroMTModel 实现，它在 self.representation_network 中，
+            # 而 tokenizer.encoder 引用了它。
+            vit_encoder = world_model.tokenizer.encoder
+            transformer_backbone = world_model.transformer
+            
+            set_curriculum_stage(vit_encoder, self.stage)
+            set_curriculum_stage(transformer_backbone, self.stage)
+
+            # 如果是从阶段 0 进入阶段 1，则冻结整个骨干网络（包括Encoder和Decoder）
             if is_entering_stage1:
                 logging.info("[课程学习] 进入阶段 1。正在冻结所有非 LoRA 的骨干网络参数。")
+                # <--- 修改：对整个 world_model 进行冻结
                 freeze_non_lora_parameters(
-                    self.policy._learn_model.world_model.transformer,
+                    transformer_backbone,
                     freeze=True,
                     verbose=True
                 )
+                freeze_non_lora_parameters(
+                    vit_encoder,
+                    freeze=True,
+                    verbose=True
+                )
+                # freeze_non_lora_parameters(
+                #     world_model,
+                #     freeze=True,
+                #     verbose=True
+                # )
+            
+            # 3. 调用新的日志函数，详细打印每个组件的状态
+            #    这会提供一个最终的、权威的参数状态快照。
+            log_module_trainable_status(vit_encoder, "ViT Encoder")
+            log_module_trainable_status(transformer_backbone, "Transformer Backbone")
+            
+            # ==================== 新增/修改部分 结束 ====================
 
             # NEW : freeze all non-LoRA weights from stage-1 onwards
             # freeze_non_lora(

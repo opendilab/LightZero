@@ -127,8 +127,9 @@ class CurriculumLoRALinear(nn.Module):
                 })
                 self.adapters.append(adapter)
 
-                self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.2))
-                
+                # self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.2))
+                self.adapter_scales.append(LearnableScale(lora_scale_init, s_range=0.2))
+
                 # self.adapter_scales.append(  #  ← 新增
                 #     nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
                 # )
@@ -147,6 +148,7 @@ class CurriculumLoRALinear(nn.Module):
             for adapter in self.adapters:
                 adapter['lora_A'].requires_grad = False
                 adapter['lora_B'].requires_grad = False
+
 
     def set_curriculum_stage(self, stage: int):
         """
@@ -263,20 +265,35 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
 # 辅助函数：在 transformer 内部遍历所有 CurriculumLoRALinear 模块，并设置阶段
 ##############################################
 
-def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
+# def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
+#     """
+#     遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
+#     并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
+#     """
+#     count = 0
+#     for module in transformer.modules():
+#         # logging.info(f"[Transformer] module {module}.")
+
+#         if isinstance(module, CurriculumLoRALinear):
+#             module.set_curriculum_stage(stage)
+#             count += 1
+#     logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
+
+def set_curriculum_stage(model: nn.Module, stage: int):
     """
-    遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
-    并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
+    遍历给定模型 (model) 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
+    并调用其 set_curriculum_stage(stage) 方法。
+    这个函数是通用的，可以作用于 ViT Encoder 或 Transformer Decoder。
     """
     count = 0
-    for module in transformer.modules():
-        # logging.info(f"[Transformer] module {module}.")
-
+    for module in model.modules():
         if isinstance(module, CurriculumLoRALinear):
             module.set_curriculum_stage(stage)
             count += 1
-    logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
+    logging.info(f"[Curriculum] 在 {type(model).__name__} 中共更新 {count} 个 CurriculumLoRALinear 模块为 stage {stage}.")
 
+# 保留旧函数名并指向新函数，以实现向后兼容
+set_curriculum_stage_for_transformer = set_curriculum_stage
 
 ##############################################
 # TransformerConfig 示例（增加 curriculum_stage_num）

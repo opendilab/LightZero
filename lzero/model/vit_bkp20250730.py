@@ -4,21 +4,6 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from lzero.model.common import SimNorm
 
-# ==================== 新增/修改部分 开始 ====================
-
-# 从您的 transformer.py 中导入核心组件
-# 假设 vit.py 和 transformer.py 在同一个目录下
-# 如果不在，请调整导入路径
-try:
-    from .transformer import _maybe_wrap_linear, TransformerConfig
-except ImportError:
-    # 提供一个备用路径或占位符，以防直接运行此文件
-    print("无法导入 LoRA 组件，将使用标准 nn.Linear。")
-    _maybe_wrap_linear = lambda linear, config, label: linear
-    class TransformerConfig: pass
-
-# ==================== 新增/修改部分 结束 ====================
-
 # helpers
 
 def pair(t):
@@ -27,16 +12,14 @@ def pair(t):
 # classes
 
 class FeedForward(nn.Module):
-    # <--- 修改：__init__ 需要接收 config
-    def __init__(self, dim, hidden_dim, dropout = 0., config: TransformerConfig = None):
+    def __init__(self, dim, hidden_dim, dropout = 0.):
         super().__init__()
-        # <--- 修改：使用 _maybe_wrap_linear 包装线性层
         self.net = nn.Sequential(
             nn.LayerNorm(dim),
-            _maybe_wrap_linear(nn.Linear(dim, hidden_dim), config, "feed_forward"),
+            nn.Linear(dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            _maybe_wrap_linear(nn.Linear(hidden_dim, dim), config, "feed_forward"),
+            nn.Linear(hidden_dim, dim),
             nn.Dropout(dropout)
         )
 
@@ -44,8 +27,7 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 class Attention(nn.Module):
-    # <--- 修改：__init__ 需要接收 config
-    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0., config: TransformerConfig = None):
+    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
         super().__init__()
         inner_dim = dim_head *  heads
         project_out = not (heads == 1 and dim_head == dim)
@@ -58,25 +40,12 @@ class Attention(nn.Module):
         self.attend = nn.Softmax(dim = -1)
         self.dropout = nn.Dropout(dropout)
 
-        # <--- 修改：使用 _maybe_wrap_linear 包装 to_qkv
-        self.to_qkv = _maybe_wrap_linear(nn.Linear(dim, inner_dim * 3, bias = False), config, "attn")
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
 
-        # <--- 修改：使用 _maybe_wrap_linear 包装 to_out
-        self.to_out = _maybe_wrap_linear(nn.Sequential(
+        self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim),
             nn.Dropout(dropout)
-        ), config, "attn") if project_out else nn.Identity()
-        # 注意：这里的包装方式可能需要根据 _maybe_wrap_linear 的实现进行调整。
-        # 如果它只接受 nn.Linear，你需要像下面这样单独包装：
-        if project_out:
-            wrapped_linear = _maybe_wrap_linear(nn.Linear(inner_dim, dim), config, "attn")
-            self.to_out = nn.Sequential(
-                wrapped_linear,
-                nn.Dropout(dropout)
-            )
-        else:
-            self.to_out = nn.Identity()
-
+        ) if project_out else nn.Identity()
 
     def forward(self, x):
         x = self.norm(x)
@@ -94,16 +63,14 @@ class Attention(nn.Module):
         return self.to_out(out)
 
 class Transformer(nn.Module):
-    # <--- 修改：__init__ 需要接收 config
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0., config: TransformerConfig = None):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                # <--- 修改：将 config 传递下去
-                Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout, config=config),
-                FeedForward(dim, mlp_dim, dropout = dropout, config=config)
+                Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout),
+                FeedForward(dim, mlp_dim, dropout = dropout)
             ]))
 
     def forward(self, x):
@@ -114,8 +81,7 @@ class Transformer(nn.Module):
         return self.norm(x)
 
 class ViT(nn.Module):
-    # <--- 修改：__init__ 增加一个 config 参数
-    def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0., final_norm_option_in_encoder='SimNorm', config: TransformerConfig = None):
+    def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0., final_norm_option_in_encoder='SimNorm'):
         super().__init__()
         image_height, image_width = pair(image_size)
         patch_height, patch_width = pair(patch_size)
@@ -137,14 +103,14 @@ class ViT(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
-        # <--- 修改：将 config 传递给内部的 Transformer
-        self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout, config=config)
+        self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
 
         self.pool = pool
         self.last_linear = nn.Linear(dim, num_classes)
 
         group_size = 8
 
+        # 最后归一化层，根据 final_norm_option_in_encoder 进行选择
         if final_norm_option_in_encoder == 'LayerNorm':
             self.final_norm = nn.LayerNorm(num_classes, eps=1e-5)
         elif final_norm_option_in_encoder == 'SimNorm':
@@ -170,8 +136,6 @@ class ViT(nn.Module):
         x = self.final_norm(x)
 
         return x
-
-
 
 # --------------------------- 测试代码 --------------------------- #
 if __name__ == "__main__":

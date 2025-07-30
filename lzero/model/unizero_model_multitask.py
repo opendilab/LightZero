@@ -150,6 +150,10 @@ class UniZeroMTModel(nn.Module):
                             dropout = 0.1,
                             emb_dropout = 0.1,
                             final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                            # ==================== 新增/修改部分 开始 ====================
+                            config=world_model_cfg # <--- 将包含LoRA参数的配置传递给ViT
+                            # ==================== 新增/修改部分 结束 ====================
+                        
                         ))
                     elif world_model_cfg.task_num > 8: 
                         # vit base
@@ -164,6 +168,9 @@ class UniZeroMTModel(nn.Module):
                             dropout = 0.1,
                             emb_dropout = 0.1,
                             final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                            # ==================== 新增/修改部分 开始 ====================
+                            config=world_model_cfg # <--- 将包含LoRA参数的配置传递给ViT
+                            # ==================== 新增/修改部分 结束 ====================
 
                         ))
                         # # vit large # TODO======
