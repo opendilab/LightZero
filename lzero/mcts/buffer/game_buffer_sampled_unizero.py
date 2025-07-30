@@ -668,7 +668,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # calculate the target value
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
             if self.task_id is not None:
-                m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, task_id=self.task_id)
+                # m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, task_id=self.task_id)
+
+                m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
             else:
                 m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
