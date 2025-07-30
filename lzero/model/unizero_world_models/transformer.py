@@ -23,22 +23,48 @@ from line_profiler import line_profiler
 from lzero.model.common import SimNorm
 import logging
 
+# class LearnableScale(nn.Module):
+#     """
+#     可学习且有界的标量参数:
+#       s = s_max * sigmoid(ŝ)         (0, s_max)
+#     """
+#     def __init__(self, init=1.0, s_max=1.2):
+#         super().__init__()
+#         # 反推初始值
+#         inv_sig = math.log(init / (s_max - init + 1e-9))
+#         self.logit = nn.Parameter(torch.tensor(inv_sig))
+#         self.logit.requires_grad = True # TODO
+#         self.s_max = s_max
+
+#     def forward(self):
+#         return self.s_max * torch.sigmoid(self.logit)
+
 class LearnableScale(nn.Module):
     """
-    可学习且有界的标量参数:
-      s = s_max * sigmoid(ŝ)         (0, s_max)
+    一个被约束在特定范围内的可学习标量参数。
+    
+    s = offset + scale * tanh(ŝ)
+    
+    这将无界的 logit ŝ 映射到 (offset - scale, offset + scale) 范围内。
+    使用 tanh 有时比 sigmoid 能提供更稳定的梯度。
+    
+    例如: 要获得 (0.8, 1.2) 的范围，使用 init=1.0, s_range=0.2。
     """
-    def __init__(self, init=1.0, s_max=1.5):
+    def __init__(self, init: float = 1.0, s_range: float = 0.2):
         super().__init__()
-        # 反推初始值
-        inv_sig = math.log(init / (s_max - init + 1e-9))
-        self.logit = nn.Parameter(torch.tensor(inv_sig))
-        self.logit.requires_grad = True # TODO
-        self.s_max = s_max
+        assert s_range > 0, "缩放范围必须为正。"
+        self.offset = init
+        self.scale = s_range
 
-    def forward(self):
-        return self.s_max * torch.sigmoid(self.logit)
-        
+        # 将 logit 初始化为 0，使初始输出恰好为 `init`。
+        self.logit = nn.Parameter(torch.tensor(0.0))
+        self.logit.requires_grad = False  # TODO 初始时冻结，由 CurriculumController 激活
+        # self.logit.requires_grad = True # TODO
+
+
+    def forward(self) -> torch.Tensor:
+        return self.offset + self.scale * torch.tanh(self.logit)
+    
 ##############################################
 # CurriculumLoRALinear 实现
 ##############################################
@@ -101,7 +127,7 @@ class CurriculumLoRALinear(nn.Module):
                 })
                 self.adapters.append(adapter)
 
-                self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.5))
+                self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.2))
                 
                 # self.adapter_scales.append(  #  ← 新增
                 #     nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
@@ -156,7 +182,6 @@ class CurriculumLoRALinear(nn.Module):
             if self.bias is not None:
                 self.bias.requires_grad = False
             for idx, adapter in enumerate(self.adapters):
-                # self.adapter_scales[idx].requires_grad = True   #  ← 新增
                 logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
                 logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0]().item()}")
 

@@ -33,6 +33,24 @@ from .utils import freeze_non_lora
 from collections import defaultdict
 GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
 
+
+def freeze_non_lora_parameters(model: torch.nn.Module, freeze: bool = True, verbose: bool = False):
+    """
+    冻结或解冻模型中所有不属于 LoRA 适配器的参数。
+    这对于在初始训练阶段后锁定骨干网络非常有用。
+    """
+    if verbose:
+        logging.info(f"为所有非 LoRA 参数设置 requires_grad={not freeze}。")
+        
+    for name, param in model.named_parameters():
+        # 我们通过名称中是否包含 'lora_' 或 'adapter_scales' 来识别 LoRA 参数
+        if 'lora_' not in name and 'adapter_scales' not in name:
+            param.requires_grad = not freeze
+            if verbose and not freeze:
+                logging.info(f"解冻: {name}")
+            elif verbose and freeze:
+                logging.info(f"冻结: {name}")
+                
 def log_param_statistics(model, logger=logging):
     n_tensors_total   = sum(1 for _ in model.parameters())
     n_tensors_train   = sum(p.requires_grad for p in model.parameters())
@@ -90,11 +108,24 @@ class CurriculumController:
 
         # ----- 执行切换 -----
         if need_switch and self.stage < self.stage_num - 1:
+            
+            # --- 优化: 当离开阶段 0 时，显式冻结骨干网络 ---
+            is_entering_stage1 = (self.stage == 0)
+
             self.stage += 1
             set_curriculum_stage_for_transformer(
                 self.policy._learn_model.world_model.transformer,
                 self.stage
             )
+
+            # 如果是从阶段 0 进入阶段 1，则冻结整个骨干网络
+            if is_entering_stage1:
+                logging.info("[课程学习] 进入阶段 1。正在冻结所有非 LoRA 的骨干网络参数。")
+                freeze_non_lora_parameters(
+                    self.policy._learn_model.world_model.transformer,
+                    freeze=True,
+                    verbose=True
+                )
 
             # NEW : freeze all non-LoRA weights from stage-1 onwards
             # freeze_non_lora(
