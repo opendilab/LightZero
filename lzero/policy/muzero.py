@@ -163,8 +163,8 @@ class MuZeroPolicy(Policy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # # (int) the number of simulations in MCTS.
-        # num_simulations=50,
+        # # (int) the number of simulations in MCTS for renalyze.
+        num_simulations=50,
         # (int) The number of simulations in MCTS for the collect phase.
         collect_num_simulations=25,
         # (int) The number of simulations in MCTS for the eval phase.
