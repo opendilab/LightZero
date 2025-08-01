@@ -16,7 +16,6 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.utils import EasyTimer
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
 from torch.utils.tensorboard import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
@@ -25,7 +24,7 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
 from .utils import random_collect, calculate_update_per_collect
-
+import copy
 timer = EasyTimer()
 
 
@@ -91,6 +90,10 @@ class AsyncTrainer:
             
             self.policy = create_policy(self.cfg.policy, model=self.model, enable_field=['learn', 'collect', 'eval'])
             
+            # TODO(pu): share model, current have Race Condition, 导致KV-Cache 相关的并发读写不一致
+            self.policy._collect_model = copy.deepcopy(self.policy._model)
+            self.policy._eval_model    = copy.deepcopy(self.policy._model)
+
             if not hasattr(self.policy, 'collect_mode') or self.policy.collect_mode is None:
                 raise RuntimeError("Policy collect_mode is None after creation")
             if not hasattr(self.policy, 'eval_mode') or self.policy.eval_mode is None:
@@ -201,13 +204,11 @@ class AsyncTrainer:
                     )
                     collect_kwargs['epsilon'] = epsilon_greedy_fn(self.env_step)
 
+                # TODO(pu): collector是收集一个game_segment就返回, model 更新后 kv_cache 也应该更新? 应该是在trainer向collector同步模型后clear kv cache
                 try:
-                    if hasattr(self.policy._learn_model, 'world_model'):
-                        
-                        logging.info("[ASYNC_DEBUG] Evaluator clearing shared world model caches via self.policy.learn_mode...")
-                        self.policy._learn_model.world_model.clear_caches()
-                    else:
-                        logging.warning("[ASYNC_DEBUG] Could not find clear_caches method on self.policy.learn_mode._model.world_model.")
+                    if hasattr(self.policy._collect_model, 'world_model'):
+                        with self.policy_lock:
+                            self.policy._collect_model.world_model.clear_caches()
                 except Exception as e:
                     logging.error(f"[ASYNC_DEBUG] Error clearing evaluator caches: {e}", exc_info=True)
                 
@@ -292,20 +293,32 @@ class AsyncTrainer:
                         
                         if self.cfg.policy.use_priority:
                             self.replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-                            
-                        # --- 优化: 触发评估事件 ---
+
+                        # --- 触发评估事件 ---
                         if self.evaluator.should_eval(self.train_iter):
                             if not self.eval_event.is_set():
                                 if self.cfg.policy.enable_async_debug_log:
                                     logging.info(f"[ASYNC_DEBUG] Learner is signaling evaluator at train_iter: {self.train_iter}")
                                 self.eval_event.set()
-
                     else:
                         break
                 
+
+                # learner 更新完一个epoch的后：# TODO(pu)
+                with self.policy_lock:
+                    new_sd = self.policy._model.state_dict()
+                    self.policy._collect_model.load_state_dict(new_sd, strict=False)
+                    self.policy._eval_model.load_state_dict(new_sd, strict=False)
+
+                    # precompute positional embedding matrices in the learn model
+                    self.policy.recompute_pos_emb_diff_for_async() # TODO(pu)
+
+                    # TODO(pu): collector是收集一个game_segment就返回, model 更新后 kv_cache 也应该更新? 
+                    # 应该是在trainer向collector同步模型后clear kv cache, 但目前打开会导致多线程读写错误
+                    # self.policy.recompute_pos_emb_diff_and_clear_cache_for_async() # TODO(pu)
+
+
                 self.train_epoch += 1
-                
-                self.policy.recompute_pos_emb_diff_and_clear_cache()
 
                 if self.train_iter >= self.max_train_iter:
                     self.stop_event.set()
@@ -330,7 +343,7 @@ class AsyncTrainer:
             try:
                 # --- 优化: 使用事件等待，而不是固定时间休眠 ---
                 # 等待学习器发出评估信号，设置超时以防万一
-                eval_triggered = self.eval_event.wait(timeout=self.cfg.policy.evaluator_check_interval)
+                eval_triggered = self.eval_event.wait(timeout=60.0)
                 
                 if eval_triggered:
                     self.eval_event.clear()  # 清除事件，等待下一次信号
@@ -338,15 +351,11 @@ class AsyncTrainer:
                     if self.cfg.policy.enable_async_debug_log:
                         logging.info(f"[ASYNC_DEBUG] Evaluator received signal, starting evaluation at train_iter: {self.train_iter}")
                     
+                    # TODO(pu): model 更新后 kv_cache 也应该更新, evaluator是评估完整的几局
                     try:
-                        # 所有模式（learn, collect, eval）共享同一个模型实例，因此清除任何一个模式的缓存都会影响所有模式。
-                        # import ipdb; ipdb.set_trace()
-                        if hasattr(self.policy._learn_model, 'world_model'):
-                            
-                            logging.info("[ASYNC_DEBUG] Evaluator clearing shared world model caches via self.policy.learn_mode...")
-                            self.policy._learn_model.world_model.clear_caches()
-                        else:
-                            logging.warning("[ASYNC_DEBUG] Could not find clear_caches method on self.policy.learn_mode._model.world_model.")
+                        if hasattr(self.policy._eval_model, 'world_model'):
+                            with self.policy_lock: 
+                                self.policy._eval_model.world_model.clear_caches()
                     except Exception as e:
                         logging.error(f"[ASYNC_DEBUG] Error clearing evaluator caches: {e}", exc_info=True)
 

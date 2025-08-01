@@ -12,22 +12,22 @@ n_episode = 3
 
 game_segment_length = 20
 evaluator_env_num = 3
-# num_simulations = 25
-num_simulations = 10 # TODO
+num_simulations = 25
+# num_simulations = 10 # TODO
 
 update_per_collect = None
 replay_ratio = 0.25
-# max_env_step = int(2e5)
-max_env_step = int(3e3) # TODO
+max_env_step = int(1e5)
+# max_env_step = int(2e3) # TODO
 
 batch_size = 256
 num_unroll_steps = 5
 reanalyze_ratio = 0.
+
 # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
 # buffer_reanalyze_freq = 1/50
 buffer_reanalyze_freq = 1/50000000
 # buffer_reanalyze_freq = 1 # TODO
-
 # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
 reanalyze_batch_size = 160
 # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -37,14 +37,10 @@ reanalyze_partition = 0.75
 # 是否启用异步训练
 enable_async_training = True
 # 数据缓冲队列大小
-data_queue_size = 10
-# 评估器检查间隔（秒）
-evaluator_check_interval = 2.0
-# 线程同步超时时间（秒）
-thread_timeout = 2.0
+data_queue_size = 20
 # 是否输出异步训练的详细调试信息
-enable_async_debug_log = True
-# enable_async_debug_log = False
+# enable_async_debug_log = True
+enable_async_debug_log = False
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -61,8 +57,7 @@ cartpole_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000, ), ), ),
-        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100, ), ), ),
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000, ), ), ),
         model=dict(
             observation_shape=4,
             action_space_size=2,
@@ -116,8 +111,8 @@ cartpole_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         # eval_freq=int(1e4),
-        # eval_freq=int(1e3),
-        eval_freq=int(50), # TODO
+        eval_freq=int(1e3),
+        # eval_freq=int(50), # TODO
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -131,8 +126,6 @@ cartpole_unizero_config = dict(
         # ============= 异步训练配置 =============
         enable_async_training=enable_async_training,
         data_queue_size=data_queue_size,
-        evaluator_check_interval=evaluator_check_interval,
-        thread_timeout=thread_timeout,
         enable_async_debug_log=enable_async_debug_log,
     ),
 )

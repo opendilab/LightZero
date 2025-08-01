@@ -1031,3 +1031,31 @@ class UniZeroPolicy(MuZeroPolicy):
                 model.world_model.precompute_pos_emb_diff_kv()
             model.world_model.clear_caches()
         torch.cuda.empty_cache()
+    
+    def recompute_pos_emb_diff_for_async(self) -> None:
+        """
+        Overview:
+            Clear the caches and precompute positional embedding matrices in the model.
+        """
+        # for model in [self._collect_model, self._target_model, self._eval_model, self._learn_model]:
+        for model in [self._learn_model]:
+            if not self._cfg.model.world_model_cfg.rotary_emb:
+                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+                model.world_model.precompute_pos_emb_diff_kv()
+            
+        torch.cuda.empty_cache()
+    
+    def recompute_pos_emb_diff_and_clear_cache_for_async(self) -> None:
+        """
+        Overview:
+            Clear the caches and precompute positional embedding matrices in the model.
+        """
+        # for model in [self._collect_model, self._target_model, self._eval_model, self._learn_model]:
+        for model in [self._learn_model]:
+            if not self._cfg.model.world_model_cfg.rotary_emb:
+                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+                model.world_model.precompute_pos_emb_diff_kv()
+            
+        for model in [self._collect_model, self._target_model]:
+            model.world_model.clear_caches()
+        torch.cuda.empty_cache()
