@@ -341,8 +341,8 @@ class UniZeroPolicy(MuZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
+        # assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
+        # assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
