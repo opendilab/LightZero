@@ -657,6 +657,15 @@ class WorldModel(nn.Module):
                 valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
                 position_embeddings = self.pos_emb(
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                try:
+                    embeddings + position_embeddings
+                except Exception as e:
+                    print(f'Error: {e}')
+                    print(f'position_embeddings.shape: {position_embeddings.shape}, embeddings.shape: {embeddings.shape}')
+                    print(f'valid_context_lengths: {valid_context_lengths}')
+                    print(f'prev_steps: {prev_steps}')
+                    print(f'num_steps: {num_steps}')
+                    raise e
                 return embeddings + position_embeddings
 
     def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps):
@@ -1254,7 +1263,9 @@ class WorldModel(nn.Module):
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
                 if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    if cache_index is not None:
+                        matched_value = self.shared_pool_recur_infer[cache_index]
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
@@ -1826,6 +1837,10 @@ class WorldModel(nn.Module):
         self.past_kv_cache_recurrent_infer.clear()
         self.keys_values_wm_list.clear()
         print(f'Cleared {self.__class__.__name__} past_kv_cache.')
+
+        # 重置shared_pool_recur_infer为初始状态
+        # self.shared_pool_recur_infer = [None] * self.shared_pool_size
+        # print(f'Cleared {self.__class__.__name__} past_kv_cache and shared_pool_recur_infer.')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

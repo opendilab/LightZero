@@ -2,20 +2,32 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-num_segments = 8
+# collector_env_num = 8
+# num_segments = 8
+# n_episode = 8
+
+collector_env_num = 3
+num_segments = 3
+n_episode = 3
+
 game_segment_length = 20
-n_episode = 8
 evaluator_env_num = 3
-num_simulations = 25
+# num_simulations = 25
+num_simulations = 10 # TODO
+
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(2e5)
+# max_env_step = int(2e5)
+max_env_step = int(3e3) # TODO
+
 batch_size = 256
 num_unroll_steps = 5
 reanalyze_ratio = 0.
 # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-buffer_reanalyze_freq = 1/50
+# buffer_reanalyze_freq = 1/50
+buffer_reanalyze_freq = 1/50000000
+# buffer_reanalyze_freq = 1 # TODO
+
 # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
 reanalyze_batch_size = 160
 # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -27,11 +39,13 @@ enable_async_training = True
 # 数据缓冲队列大小
 data_queue_size = 10
 # 评估器检查间隔（秒）
-evaluator_check_interval = 1.0
+evaluator_check_interval = 2.0
 # 线程同步超时时间（秒）
-thread_timeout = 1.0
+thread_timeout = 2.0
 # 是否输出异步训练的详细调试信息
 enable_async_debug_log = True
+# enable_async_debug_log = False
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -47,7 +61,8 @@ cartpole_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000, ), ), ),
+        # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000, ), ), ),
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100, ), ), ),
         model=dict(
             observation_shape=4,
             action_space_size=2,
@@ -74,7 +89,8 @@ cartpole_unizero_config = dict(
                 evaluator_env_num=evaluator_env_num,
                 obs_type='vector',
                 norm_type='BN',
-                rotary_emb=True,
+                # rotary_emb=True,
+                rotary_emb=False,
             ),
         ),
         use_wandb=False,
@@ -99,7 +115,9 @@ cartpole_unizero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(1e3),
+        # eval_freq=int(1e4),
+        # eval_freq=int(1e3),
+        eval_freq=int(50), # TODO
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
