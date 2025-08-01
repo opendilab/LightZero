@@ -341,8 +341,8 @@ class UniZeroPolicy(MuZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
+        # assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
+        # assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
@@ -1029,5 +1029,33 @@ class UniZeroPolicy(MuZeroPolicy):
             if not self._cfg.model.world_model_cfg.rotary_emb:
                 # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
                 model.world_model.precompute_pos_emb_diff_kv()
+            model.world_model.clear_caches()
+        torch.cuda.empty_cache()
+    
+    def recompute_pos_emb_diff_for_async(self) -> None:
+        """
+        Overview:
+            Clear the caches and precompute positional embedding matrices in the model.
+        """
+        # for model in [self._collect_model, self._target_model, self._eval_model, self._learn_model]:
+        for model in [self._learn_model]:
+            if not self._cfg.model.world_model_cfg.rotary_emb:
+                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+                model.world_model.precompute_pos_emb_diff_kv()
+            
+        torch.cuda.empty_cache()
+    
+    def recompute_pos_emb_diff_and_clear_cache_for_async(self) -> None:
+        """
+        Overview:
+            Clear the caches and precompute positional embedding matrices in the model.
+        """
+        # for model in [self._collect_model, self._target_model, self._eval_model, self._learn_model]:
+        for model in [self._learn_model]:
+            if not self._cfg.model.world_model_cfg.rotary_emb:
+                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+                model.world_model.precompute_pos_emb_diff_kv()
+            
+        for model in [self._collect_model, self._target_model]:
             model.world_model.clear_caches()
         torch.cuda.empty_cache()

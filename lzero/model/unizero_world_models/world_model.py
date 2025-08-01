@@ -15,6 +15,7 @@ from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
+import threading
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -39,6 +40,7 @@ class WorldModel(nn.Module):
             - tokenizer (:obj:`Tokenizer`): The tokenizer.
         """
         super().__init__()
+        # self.cache_lock = threading.Lock()
         self.tokenizer = tokenizer
         self.config = config
         self.transformer = Transformer(self.config)
@@ -151,6 +153,18 @@ class WorldModel(nn.Module):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+
+    # # ---------- 关键补丁 ----------
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
+    #     # lock 对象无法被 pickle，序列化时去掉
+    #     state.pop('cache_lock', None)
+    #     return state
+
+    # def __setstate__(self, state):
+    #     self.__dict__.update(state)
+    #     # 反序列化后重新创建 lock
+    #     self.cache_lock = threading.Lock()
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
@@ -480,7 +494,7 @@ class WorldModel(nn.Module):
                 - logits for policy.
                 - logits for value.
         """
-
+        # with self.cache_lock:
         # Calculate previous steps based on key-value caching configuration
         if kvcache_independent:
             # If kv caching is independent, compute previous steps for each past key-value pair.
@@ -655,8 +669,24 @@ class WorldModel(nn.Module):
                 return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
             else:
                 valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
+
+                # if valid_context_lengths is None:
+                #     raise RuntimeError("valid_context_lengths should not be None here")
+                # # 保险：保证长度与 batch 一致
+                # if valid_context_lengths.numel() != embeddings.size(0):
+                #     valid_context_lengths = valid_context_lengths[:embeddings.size(0)]
+
                 position_embeddings = self.pos_emb(
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                try:
+                    embeddings + position_embeddings
+                except Exception as e:
+                    print(f'Error: {e}')
+                    print(f'position_embeddings.shape: {position_embeddings.shape}, embeddings.shape: {embeddings.shape}')
+                    print(f'valid_context_lengths: {valid_context_lengths}')
+                    print(f'prev_steps: {prev_steps}')
+                    print(f'num_steps: {num_steps}')
+                    raise e
                 return embeddings + position_embeddings
 
     def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps):
@@ -1254,7 +1284,9 @@ class WorldModel(nn.Module):
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
                 if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    if cache_index is not None:
+                        matched_value = self.shared_pool_recur_infer[cache_index]
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
@@ -1821,11 +1853,16 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
+        # with self.cache_lock:
         for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear()
         self.past_kv_cache_recurrent_infer.clear()
         self.keys_values_wm_list.clear()
+
+        self.keys_values_wm_size_list_current = []
+
         print(f'Cleared {self.__class__.__name__} past_kv_cache.')
+
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"
