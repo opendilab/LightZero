@@ -56,10 +56,10 @@ def main(env_id, seed):
             env_id=env_id,
             frame_stack_num=4,
 
-            # observation_shape=(4, 64, 64),
-            # gray_scale=True,
-            observation_shape=(12, 64, 64),
-            gray_scale=False,
+            observation_shape=(4, 64, 64),
+            gray_scale=True,
+            # observation_shape=(12, 64, 64),
+            # gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
@@ -73,13 +73,13 @@ def main(env_id, seed):
             analysis_sim_norm=False,
             cal_dormant_ratio=False,
             model=dict(
-                # observation_shape=(4, 64, 64),
-                # image_channel=1,
-                # gray_scale=True,
+                observation_shape=(4, 64, 64),
+                image_channel=1,
+                gray_scale=True,
 
-                observation_shape=(12, 64, 64),
-                image_channel=3,
-                gray_scale=False,
+                # observation_shape=(12, 64, 64),
+                # image_channel=3,
+                # gray_scale=False,
 
                 # num_res_blocks=1,
                 # num_channels=64,
@@ -153,7 +153,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_muzero_20250731/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
+    main_config.exp_name = f'data_muzero_20250731/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_gray_seed{seed}'
     train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
 if __name__ == "__main__":

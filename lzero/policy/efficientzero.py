@@ -134,6 +134,10 @@ class EfficientZeroPolicy(MuZeroPolicy):
         n_episode=8,
         # (float) the number of simulations in MCTS.
         num_simulations=50,
+        # (int) The number of simulations in MCTS for the collect phase.
+        collect_num_simulations=25,
+        # (int) The number of simulations in MCTS for the eval phase.
+        eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -471,7 +475,8 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
             self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
+                    self._cfg.policy_entropy_weight * (-1)*policy_entropy
         )
         weighted_total_loss = (weights * loss).mean()
         # TODO(pu): test the effect of gradient scale.
@@ -529,10 +534,14 @@ class EfficientZeroPolicy(MuZeroPolicy):
              Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
          """
         self._collect_model = self._model
+        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_collect_cfg = copy.deepcopy(self._cfg)
+        mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
         self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
 
@@ -662,10 +671,14 @@ class EfficientZeroPolicy(MuZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+        # 为 eval MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_eval_cfg = copy.deepcopy(self._cfg)
+        mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTSPtree(mcts_eval_cfg)
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: Union[int, List] =  [-1], ready_env_id: np.array = None, **kwargs):
         """

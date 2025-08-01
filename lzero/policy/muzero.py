@@ -163,8 +163,8 @@ class MuZeroPolicy(Policy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # # (int) the number of simulations in MCTS.
-        # num_simulations=50,
+        # # (int) the number of simulations in MCTS for renalyze.
+        num_simulations=50,
         # (int) The number of simulations in MCTS for the collect phase.
         collect_num_simulations=25,
         # (int) The number of simulations in MCTS for the eval phase.
@@ -862,6 +862,7 @@ class MuZeroPolicy(Policy):
             self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
             self._mcts_eval = MCTSPtree(mcts_eval_cfg)
+            
         if self._cfg.model.model_type == 'conv_context':
             self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(3)]
