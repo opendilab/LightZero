@@ -17,8 +17,35 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-sys.path.append('/fs-computility/ai-shen/puyuan/code/LibMTL')
+sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
+# sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
+
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
+# from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
+from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
+from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
+
+
+
+import torch.distributed as dist
+
+# ------------------------------------------------------------
+# 1. 额外增加 learner 专用 process-group
+#    (在 main / learner 初始化时调用一次)
+# ------------------------------------------------------------
+def build_learner_group(learner_ranks: list[int]) -> dist.ProcessGroup:
+    """
+    learner_ranks 里只放 **真正执行 backward** 的那些 rank
+      例：CUDA_VISIBLE_DEVICES=0,1  →  learner_ranks=[0,1]
+    返回一个新的 ProcessGroup，后续给 GenericMoCo 使用
+    """
+    world_pg = dist.group.WORLD
+    pg = dist.new_group(ranks=learner_ranks, backend='nccl')
+    if dist.get_rank() in learner_ranks:
+        torch.cuda.set_device(learner_ranks.index(dist.get_rank()))
+    return pg
+
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
@@ -205,7 +232,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
                 analysis_dormant_ratio_weight_rank=False,
                 # (float) The threshold for a dormant neuron.
-                dormant_threshold=0.025,
+                # dormant_threshold=0.025,
+                dormant_threshold=0.01,
+
             ),
         ),
         # ****** common ******
@@ -291,8 +320,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # (int) the number of simulations in MCTS.
+        # # (int) the number of simulations in MCTS for renalyze.
         num_simulations=50,
+        # (int) The number of simulations in MCTS for the collect phase.
+        collect_num_simulations=25,
+        # (int) The number of simulations in MCTS for the eval phase.
+        eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -466,16 +499,62 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 将 wrapped_model 作为 share_model 传递给 GradCorrect
             # ========= 初始化 MoCo CAGrad 参数 =========
             # self.grad_correct = GradCorrect(self.wrapped_model, self.task_num_for_current_rank, self._cfg.device)
-            self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+            
+            if self._cfg.moco_version=="v0":
+                self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+                self.grad_correct.init_param()  
+                self.grad_correct.rep_grad = False
+            elif self._cfg.moco_version=="v1":
+                cfg_moco = MoCoCfg(
+                    beta0=0.9,  beta_sigma=0.95,
+                    gamma0=0.1, gamma_sigma=0.95,
+                    rho=0.01,   stat_interval=10000)
+                self.grad_correct = FastMoCo(
+                    shared_module=self.wrapped_model,
+                    world_task_num=self._cfg.total_task_num,   # 全局任务数
+                    device=self._cfg.device,
+                    multi_gpu=self._cfg.multi_gpu,
+                    cfg=cfg_moco,
+                )
 
-            self.grad_correct.init_param()  
-            self.grad_correct.rep_grad = False
+        # 用于缓存上一帧的可塑性相关指标
+        self._prev_plasticity_metrics = dict(
+            dormant_ratio_encoder      = 0.0,
+            dormant_ratio_transformer  = 0.0,
+            dormant_ratio_head         = 0.0,
+            avg_weight_mag_encoder     = 0.0,
+            avg_weight_mag_transformer = 0.0,
+            avg_weight_mag_head        = 0.0,
+            e_rank_last_linear         = 0.0,
+            e_rank_sim_norm            = 0.0,
+        )
 
 
+    @staticmethod
+    def _is_zero(x: Union[float, torch.Tensor], eps: float = 1e-8) -> bool:
+        """
+        判断一个标量/0-D tensor 是否可视为 0
+        """
+        if isinstance(x, torch.Tensor):
+            return torch.all(torch.abs(x) < eps).item()
+        return abs(x) < eps
+
+    def _retain_prev_if_zero(self, name: str,
+                             value: Union[float, torch.Tensor]) -> Union[float, torch.Tensor]:
+        """
+        若 value≈0 则返回上一帧缓存值，否则更新缓存并返回当前值
+        """
+        if self._is_zero(value):
+            # 直接返回上一次的值（可能是 float，也可能是 tensor）
+            return self._prev_plasticity_metrics[name]
+        else:
+            # 更新缓存并返回当前值
+            self._prev_plasticity_metrics[name] = value
+            return value
 
 
     #@profile
-    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning policy in learn mode, which is the core of the learning process.
@@ -549,11 +628,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # rank = get_rank()
             # print(f'Rank {rank}: cfg.policy.task_id : {self._cfg.task_id}, self._cfg.batch_size {self._cfg.batch_size}')
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            cur_batch_size = target_reward.size(0)          # run-time batch
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            target_reward = target_reward.view(cur_batch_size, -1)
+            target_value = target_value.view(cur_batch_size, -1)
+
+            # target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            # target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
             # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
@@ -569,10 +650,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape)
+                    cur_batch_size, -1, self._cfg.model.observation_shape)
             elif len(self._cfg.model.observation_shape) == 3:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape)
+                    cur_batch_size, -1, *self._cfg.model.observation_shape)
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
@@ -633,14 +714,40 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # ============ for value priority  ============ 
 
             # 关于网络可塑性的指标
-            dormant_ratio_encoder = intermediate_losses['dormant_ratio_encoder']
-            dormant_ratio_transformer = intermediate_losses['dormant_ratio_transformer']
-            dormant_ratio_head = intermediate_losses['dormant_ratio_head']
-            avg_weight_mag_encoder = intermediate_losses['avg_weight_mag_encoder']
-            avg_weight_mag_transformer = intermediate_losses['avg_weight_mag_transformer']
-            avg_weight_mag_head = intermediate_losses['avg_weight_mag_head']
-            e_rank_last_linear = intermediate_losses['e_rank_last_linear'] 
-            e_rank_sim_norm = intermediate_losses['e_rank_sim_norm']
+            # dormant_ratio_encoder = intermediate_losses['dormant_ratio_encoder']
+            # dormant_ratio_transformer = intermediate_losses['dormant_ratio_transformer']
+            # dormant_ratio_head = intermediate_losses['dormant_ratio_head']
+            # avg_weight_mag_encoder = intermediate_losses['avg_weight_mag_encoder']
+            # avg_weight_mag_transformer = intermediate_losses['avg_weight_mag_transformer']
+            # avg_weight_mag_head = intermediate_losses['avg_weight_mag_head']
+            # e_rank_last_linear = intermediate_losses['e_rank_last_linear'] 
+            # e_rank_sim_norm = intermediate_losses['e_rank_sim_norm']
+
+            dormant_ratio_encoder  = self._retain_prev_if_zero(
+                                'dormant_ratio_encoder',
+                                            intermediate_losses['dormant_ratio_encoder'])
+            dormant_ratio_transformer  = self._retain_prev_if_zero(
+                                            'dormant_ratio_transformer',
+                                            intermediate_losses['dormant_ratio_transformer'])
+            dormant_ratio_head         = self._retain_prev_if_zero(
+                                            'dormant_ratio_head',
+                                            intermediate_losses['dormant_ratio_head'])
+            avg_weight_mag_encoder     = self._retain_prev_if_zero(
+                                            'avg_weight_mag_encoder',
+                                            intermediate_losses['avg_weight_mag_encoder'])
+            avg_weight_mag_transformer = self._retain_prev_if_zero(
+                                            'avg_weight_mag_transformer',
+                                            intermediate_losses['avg_weight_mag_transformer'])
+            avg_weight_mag_head        = self._retain_prev_if_zero(
+                                            'avg_weight_mag_head',
+                                            intermediate_losses['avg_weight_mag_head'])
+            e_rank_last_linear         = self._retain_prev_if_zero(
+                                            'e_rank_last_linear',
+                                            intermediate_losses['e_rank_last_linear'])
+            e_rank_sim_norm            = self._retain_prev_if_zero(
+                                            'e_rank_sim_norm',
+                                            intermediate_losses['e_rank_sim_norm'])
+
             
             obs_loss_multi_task.append(obs_loss)
             reward_loss_multi_task.append(reward_loss)
@@ -673,7 +780,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
-            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            if self._cfg.moco_version=="v0":
+                lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            elif self._cfg.moco_version=="v1":
+                lambd, stats = self.grad_correct.backward(losses_list)
+        
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
@@ -705,6 +816,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
         
+        if ignore_grad:
+            #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
+            self._optimizer_world_model.zero_grad()
+            # print(f"ignore_grad")
+
         # if self._cfg.multi_gpu:
         #     # Very important to sync gradients before updating the model
         #     # rank = get_rank()
@@ -717,6 +833,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             #     self.sync_gradients(self._learn_model)
             if not self._cfg.use_moco:
                 self.sync_gradients(self._learn_model)
+            
+            # print(f'Rank {dist.get_rank()} train task_id: {self._cfg.task_id} sync grad end...')
 
         # print("=== Step 前，参数梯度详细信息 ===")
         # for idx, param in enumerate(self.grad_correct.share_model.parameters()):
@@ -758,6 +876,36 @@ class UniZeroMTPolicy(UniZeroPolicy):
         }
 
         # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
+        # multi_task_loss_dicts = {
+        #     **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(perceptual_loss_multi_task, 'noreduce_perceptual_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'noreduce_latent_state_l2_norms_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
+            
+        #     # 关于网络可塑性的指标
+        #     **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'noreduce_dormant_ratio_encoder_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(dormant_ratio_transformer_multi_task, 'noreduce_dormant_ratio_transformer_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(avg_weight_mag_encoder_multi_task, 'noreduce_avg_weight_mag_encoder_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(avg_weight_mag_transformer_multi_task, 'noreduce_avg_weight_mag_transformer_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(avg_weight_mag_head_multi_task, 'noreduce_avg_weight_mag_head_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(e_rank_last_linear_multi_task, 'noreduce_e_rank_last_linear_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
+
+        #     **generate_task_loss_dict(policy_loss_multi_task, 'noreduce_policy_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(orig_policy_loss_multi_task, 'noreduce_orig_policy_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(policy_entropy_multi_task, 'noreduce_policy_entropy_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(reward_loss_multi_task, 'noreduce_reward_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(value_loss_multi_task, 'noreduce_value_loss_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'noreduce_target_policy_entropy_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(lambd, 'noreduce_lambd_task{}', task_id=self.task_id), 
+        #     **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
+        #     **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
+        # }
+
+
+        # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
         multi_task_loss_dicts = {
             **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
@@ -765,16 +913,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'noreduce_latent_state_l2_norms_task{}', task_id=self.task_id),
             **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
             
-            # 关于网络可塑性的指标
-            **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'noreduce_dormant_ratio_encoder_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(dormant_ratio_transformer_multi_task, 'noreduce_dormant_ratio_transformer_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(avg_weight_mag_encoder_multi_task, 'noreduce_avg_weight_mag_encoder_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(avg_weight_mag_transformer_multi_task, 'noreduce_avg_weight_mag_transformer_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(avg_weight_mag_head_multi_task, 'noreduce_avg_weight_mag_head_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(e_rank_last_linear_multi_task, 'noreduce_e_rank_last_linear_task{}', task_id=self.task_id),
-            **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
-
             **generate_task_loss_dict(policy_loss_multi_task, 'noreduce_policy_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(orig_policy_loss_multi_task, 'noreduce_orig_policy_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(policy_entropy_multi_task, 'noreduce_policy_entropy_task{}', task_id=self.task_id),
@@ -785,8 +923,23 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
             **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
         }
-        # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
+
+
+        if self._learn_model.world_model.do_analysis:
+            multi_task_loss_dicts = {
+                        # 关于网络可塑性的指标
+                **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'noreduce_dormant_ratio_encoder_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(dormant_ratio_transformer_multi_task, 'noreduce_dormant_ratio_transformer_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(dormant_ratio_head_multi_task, 'noreduce_dormant_ratio_head_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(avg_weight_mag_encoder_multi_task, 'noreduce_avg_weight_mag_encoder_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(avg_weight_mag_transformer_multi_task, 'noreduce_avg_weight_mag_transformer_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(avg_weight_mag_head_multi_task, 'noreduce_avg_weight_mag_head_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(e_rank_last_linear_multi_task, 'noreduce_e_rank_last_linear_task{}', task_id=self.task_id),
+                **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
+            }
+            # 合并两个字典
+            return_loss_dict.update(multi_task_loss_dicts)
         # print(f'return_loss_dict:{return_loss_dict}')
 
         # 返回最终的损失字典
@@ -808,10 +961,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         self._collect_model = self._model
 
+        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_collect_cfg = copy.deepcopy(self._cfg)
+        mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
@@ -864,8 +1022,59 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'noreduce_avg_weight_mag_head',
             'noreduce_e_rank_last_linear',
             'noreduce_e_rank_sim_norm'
-
         ]
+
+        # if self._learn_model.world_model.do_analysis:
+        #     # rank = get_rank()
+        #     task_specific_vars = [
+        #         'noreduce_obs_loss',
+        #         'noreduce_orig_policy_loss',
+        #         'noreduce_policy_loss',
+        #         'noreduce_latent_recon_loss',
+        #         'noreduce_policy_entropy',
+        #         'noreduce_target_policy_entropy',
+        #         'noreduce_reward_loss',
+        #         'noreduce_value_loss',
+        #         'noreduce_perceptual_loss',
+        #         'noreduce_latent_state_l2_norms',
+        #         'noreduce_lambd',
+        #         'noreduce_value_priority_mean',
+        #         # 关于网络可塑性的指标
+        #         'noreduce_dormant_ratio_encoder',
+        #         'noreduce_dormant_ratio_transformer',
+        #         'noreduce_dormant_ratio_head',
+        #         'noreduce_avg_weight_mag_encoder',
+        #         'noreduce_avg_weight_mag_transformer',
+        #         'noreduce_avg_weight_mag_head',
+        #         'noreduce_e_rank_last_linear',
+        #         'noreduce_e_rank_sim_norm'
+        #     ]
+        # else:
+        #     # rank = get_rank()
+        #     task_specific_vars = [
+        #         'noreduce_obs_loss',
+        #         'noreduce_orig_policy_loss',
+        #         'noreduce_policy_loss',
+        #         'noreduce_latent_recon_loss',
+        #         'noreduce_policy_entropy',
+        #         'noreduce_target_policy_entropy',
+        #         'noreduce_reward_loss',
+        #         'noreduce_value_loss',
+        #         'noreduce_perceptual_loss',
+        #         'noreduce_latent_state_l2_norms',
+        #         'noreduce_lambd',
+        #         'noreduce_value_priority_mean',
+        #         # 关于网络可塑性的指标
+        #         # 'noreduce_dormant_ratio_encoder',
+        #         # 'noreduce_dormant_ratio_transformer',
+        #         # 'noreduce_dormant_ratio_head',
+        #         # 'noreduce_avg_weight_mag_encoder',
+        #         # 'noreduce_avg_weight_mag_transformer',
+        #         # 'noreduce_avg_weight_mag_head',
+        #         # 'noreduce_e_rank_last_linear',
+        #         # 'noreduce_e_rank_sim_norm'
+        #     ]
+
         # self.task_num_for_current_rank 作为当前rank的base_index
         num_tasks = self.task_num_for_current_rank
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
@@ -889,6 +1098,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
+            timestep: List = [0],
             task_id: int = None,
     ) -> Dict:
         """
@@ -945,7 +1155,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -1011,10 +1221,16 @@ class UniZeroMTPolicy(UniZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+        
+        # 为 eval MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_eval_cfg = copy.deepcopy(self._cfg)
+        mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTSPtree(mcts_eval_cfg)
+
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
@@ -1026,7 +1242,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
     #@profile
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, task_id: int = None) -> Dict:
+                      ready_env_id: np.array = None, timestep: List = [0], task_id: int = None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -1071,7 +1287,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()

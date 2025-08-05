@@ -169,13 +169,15 @@ class SampledUniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
+                                # search_depth is used for rope in UniZero
+                search_depth = results.get_search_len()
                 # for Sampled UniZero
                 if task_id is not None:
                     # multi task setting
-                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, timestep, task_id=task_id)
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
                 else:
                     # single task setting
-                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, timestep)
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

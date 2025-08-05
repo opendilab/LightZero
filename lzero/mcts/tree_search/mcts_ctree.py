@@ -179,7 +179,8 @@ class UniZeroMCTSCtree(object):
                     # for UniZero
                     if task_id is not None:
                         # multi task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id)
+                        # network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
                     else:
                         # single task setting
                         network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
