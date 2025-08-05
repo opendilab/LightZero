@@ -173,109 +173,136 @@ class GameBuffer(ABC, object):
         return orig_data
 
     def _sample_orig_reanalyze_batch(self, batch_size: int) -> Tuple:
-        """
-        Overview:
-            This function samples a batch of game segments for reanalysis from the replay buffer.
-            It uses priority sampling based on the `reanalyze_time` of each game segment, with segments
-            that have been reanalyzed more frequently receiving lower priority.
+            """
+            Overview:
+                This function samples a batch of game segments for reanalysis from the replay buffer.
+                It uses priority sampling based on the `reanalyze_time` of each game segment, with segments
+                that have been reanalyzed more frequently receiving lower priority.
 
-            The function returns a tuple containing information about the sampled game segments,
-            including their positions within each segment and the time the batch was created.
-        Arguments:
-            - batch_size (:obj:`int`):
-                The number of samples to draw in this batch.
+                The function returns a tuple containing information about the sampled game segments,
+                including their positions within each segment and the time the batch was created.
+            Arguments:
+                - batch_size (:obj:`int`):
+                    The number of samples to draw in this batch.
 
-        Returns:
-            - Tuple:
-                A tuple containing the following elements:
-                - game_segment_list: A list of the sampled game segments.
-                - pos_in_game_segment_list: A list of indices representing the position of each transition
-                  within its corresponding game segment.
-                - batch_index_list: The indices of the sampled game segments in the replay buffer.
-                - make_time: A list of timestamps (set to `0` in this implementation) indicating when
-                  the batch was created.
+            Returns:
+                - Tuple:
+                    A tuple containing the following elements:
+                    - game_segment_list: A list of the sampled game segments.
+                    - pos_in_game_segment_list: A list of indices representing the position of each transition
+                    within its corresponding game segment.
+                    - batch_index_list: The indices of the sampled game segments in the replay buffer.
+                    - make_time: A list of timestamps (set to `0` in this implementation) indicating when
+                    the batch was created.
 
-        Key Details:
-            1. **Priority Sampling**:
-               Game segments are sampled based on a probability distribution calculated using
-               the `reanalyze_time` of each segment. Segments that have been reanalyzed more frequently
-               are less likely to be selected.
-            2. **Segment Slicing**:
-               Each selected game segment is sampled at regular intervals determined by the
-               `num_unroll_steps` parameter. Up to `samples_per_segment` transitions are sampled
-               from each selected segment.
-            3. **Handling Extra Samples**:
-               If the `batch_size` is not perfectly divisible by the number of samples per segment,
-               additional segments are sampled to make up the difference.
-            4. **Reanalyze Time Update**:
-               The `reanalyze_time` attribute of each sampled game segment is incremented to reflect
-               that it has been selected for reanalysis again.
-        Raises:
-            - ValueError:
-                If the `game_segment_length` is too small to accommodate the `num_unroll_steps`.
-        """
-        train_sample_num = len(self.game_segment_buffer)
-        assert self._cfg.reanalyze_partition <= 0.75, "The reanalyze partition should be less than 0.75."
-        valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
+            Key Details:
+                1. **Priority Sampling**:
+                Game segments are sampled based on a probability distribution calculated using
+                the `reanalyze_time` of each segment. Segments that have been reanalyzed more frequently
+                are less likely to be selected.
+                2. **Segment Slicing**:
+                Each selected game segment is sampled at regular intervals determined by the
+                `num_unroll_steps` parameter. Up to `samples_per_segment` transitions are sampled
+                from each selected segment.
+                3. **Handling Extra Samples**:
+                If the `batch_size` is not perfectly divisible by the number of samples per segment,
+                additional segments are sampled to make up the difference.
+                4. **Reanalyze Time Update**:
+                The `reanalyze_time` attribute of each sampled game segment is incremented to reflect
+                that it has been selected for reanalysis again.
+            Raises:
+                - ValueError:
+                    If the `game_segment_length` is too small to accommodate the `num_unroll_steps`.
+            """
+            train_sample_num = len(self.game_segment_buffer)
+            assert self._cfg.reanalyze_partition <= 0.75, "The reanalyze partition should be less than 0.75."
+            valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
 
-        # Calculate the number of samples per segment
-        samples_per_segment = self._cfg.game_segment_length // self._cfg.num_unroll_steps
+            # Calculate the number of samples per segment
+            samples_per_segment = self._cfg.game_segment_length // self._cfg.num_unroll_steps
 
-        # Make sure that the batch size can be divided by the number of samples per segment
-        if samples_per_segment == 0:
-            raise ValueError("The game segment length is too small for num_unroll_steps.")
+            # Make sure that the batch size can be divided by the number of samples per segment
+            if samples_per_segment == 0:
+                raise ValueError("The game segment length is too small for num_unroll_steps.")
 
-        # Calculate the number of samples per segment
-        batch_size_per_segment = batch_size // samples_per_segment
+            # Calculate the number of samples per segment
+            batch_size_per_segment = batch_size // samples_per_segment
 
-        # If the batch size cannot be divided, process the remainder part
-        extra_samples = batch_size % samples_per_segment
+            # If the batch size cannot be divided, process the remainder part
+            extra_samples = batch_size % samples_per_segment
 
-        # We use the reanalyze_time in the game_segment_buffer to generate weights
-        reanalyze_times = np.array([segment.reanalyze_time for segment in self.game_segment_buffer[:valid_sample_num]])
+            # We use the reanalyze_time in the game_segment_buffer to generate weights
+            reanalyze_times = np.array([segment.reanalyze_time for segment in self.game_segment_buffer[:valid_sample_num]])
 
-        # Calculate weights: the larger the reanalyze_time, the smaller the weight (use exp(-reanalyze_time))
-        base_decay_rate = 100
-        decay_rate = base_decay_rate / valid_sample_num
-        weights = np.exp(-decay_rate * reanalyze_times)
+            # Calculate weights: the larger the reanalyze_time, the smaller the weight (use exp(-reanalyze_time))
+            base_decay_rate = 100
+            # Add a small epsilon to avoid division by zero if valid_sample_num is 0
+            decay_rate = base_decay_rate / (valid_sample_num + 1e-6)
+            weights = np.exp(-decay_rate * reanalyze_times)
 
-        # Normalize the weights to a probability distribution
-        probabilities = weights / np.sum(weights)
+            # Normalize the weights to a probability distribution, handle case where sum is zero
+            sum_weights = np.sum(weights)
+            if sum_weights > 0:
+                probabilities = weights / sum_weights
+            else:
+                # If all weights are zero, use a uniform distribution
+                probabilities = np.ones(valid_sample_num) / valid_sample_num
 
-        # Sample game segments according to the probabilities
-        selected_game_segments = np.random.choice(valid_sample_num, batch_size_per_segment, replace=False,
-                                                  p=probabilities)
+            # Sample game segments according to the probabilities
+            # Ensure valid_sample_num is not zero before sampling
+            if valid_sample_num == 0:
+                return ([], [], [], [], [])
 
-        # If there are extra samples to be allocated, randomly select some game segments and sample again
-        if extra_samples > 0:
-            extra_game_segments = np.random.choice(valid_sample_num, extra_samples, replace=False, p=probabilities)
-            selected_game_segments = np.concatenate((selected_game_segments, extra_game_segments))
+            selected_game_segments = np.random.choice(valid_sample_num, batch_size_per_segment, replace=False,
+                                                    p=probabilities)
 
-        game_segment_list = []
-        pos_in_game_segment_list = []
-        batch_index_list = []
+            # If there are extra samples to be allocated, randomly select some game segments and sample again
+            if extra_samples > 0:
+                # We need to handle the case where we might sample the same segment again.
+                # A simple way is to allow replacement for extra samples or sample from remaining ones.
+                # For simplicity, let's stick to the original logic but ensure it's safe.
+                remaining_segments = np.setdiff1d(np.arange(valid_sample_num), selected_game_segments)
+                if len(remaining_segments) < extra_samples:
+                    # If not enough unique segments left, sample with replacement from all valid segments
+                    extra_game_segments = np.random.choice(valid_sample_num, extra_samples, replace=True, p=probabilities)
+                else:
+                    # Sample from the remaining unique segments
+                    remaining_probs = probabilities[remaining_segments]
+                    remaining_probs /= np.sum(remaining_probs)
+                    extra_game_segments = np.random.choice(remaining_segments, extra_samples, replace=False, p=remaining_probs)
 
-        for game_segment_idx in selected_game_segments:
-            game_segment_idx -= self.base_idx
-            game_segment = self.game_segment_buffer[game_segment_idx]
+                selected_game_segments = np.concatenate((selected_game_segments, extra_game_segments))
 
-            # Update reanalyze_time only once
-            game_segment.reanalyze_time += 1
+            game_segment_list = []
+            pos_in_game_segment_list = []
+            batch_index_list = []
 
-            # The sampling position should be 0, 0 + num_unroll_steps, ... (integer multiples of num_unroll_steps)
-            for i in range(samples_per_segment):
-                game_segment_list.append(game_segment)
-                pos_in_game_segment = i * self._cfg.num_unroll_steps
-                if pos_in_game_segment >= len(game_segment):
-                    pos_in_game_segment = np.random.choice(len(game_segment), 1).item()
-                pos_in_game_segment_list.append(pos_in_game_segment)
-                batch_index_list.append(game_segment_idx)
+            for game_segment_idx in selected_game_segments:
+                # =========================================================================
+                # FIX: The line below is the source of the error and has been removed.
+                # `game_segment_idx` is already a valid physical index for `game_segment_buffer`.
+                # game_segment_idx -= self.base_idx 
+                # =========================================================================
+                game_segment = self.game_segment_buffer[game_segment_idx]
 
-        # Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).
-        make_time = [0. for _ in range(len(batch_index_list))]
+                # Update reanalyze_time only once
+                game_segment.reanalyze_time += 1
 
-        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
-        return orig_data
+                # The sampling position should be 0, 0 + num_unroll_steps, ... (integer multiples of num_unroll_steps)
+                for i in range(samples_per_segment):
+                    game_segment_list.append(game_segment)
+                    pos_in_game_segment = i * self._cfg.num_unroll_steps
+                    if pos_in_game_segment >= len(game_segment):
+                        pos_in_game_segment = np.random.choice(len(game_segment), 1).item()
+                    pos_in_game_segment_list.append(pos_in_game_segment)
+                    # NOTE: We should append the physical index here, as it corresponds to the sampled segment.
+                    batch_index_list.append(game_segment_idx)
+
+            # Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).
+            make_time = [0. for _ in range(len(batch_index_list))]
+
+            orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+            return orig_data
 
     def _sample_orig_reanalyze_data(self, batch_size: int) -> Tuple:
         """
