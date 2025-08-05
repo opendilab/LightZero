@@ -276,7 +276,7 @@ class GameBuffer(ABC, object):
             game_segment_list = []
             pos_in_game_segment_list = []
             batch_index_list = []
-
+            print(f"selected_game_segments:{selected_game_segments}")
             for game_segment_idx in selected_game_segments:
                 # =========================================================================
                 # FIX: The line below is the source of the error and has been removed.
