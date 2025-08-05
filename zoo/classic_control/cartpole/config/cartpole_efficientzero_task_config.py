@@ -83,7 +83,7 @@ if __name__ == "__main__":
     from ding.framework.middleware import ContextExchanger, ModelExchanger, CkptSaver, trainer, \
         termination_checker, online_logger
     from ding.utils import set_pkg_seed
-    from lzero.policy import EfficientZeroPolicy
+    from lzero.policy.efficientzero import EfficientZeroPolicy
     from lzero.mcts import EfficientZeroGameBuffer
     from lzero.middleware import MuZeroEvaluator, MuZeroCollector, temperature_handler, data_reanalyze_fetcher, \
         lr_scheduler, data_pusher

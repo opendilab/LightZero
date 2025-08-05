@@ -45,8 +45,9 @@ class MuZeroEvaluator:
         assert env_nums == n_episode
 
         init_obs = self._env.ready_obs
-        action_mask = [init_obs[i]['action_mask'] for i in range(env_nums)]
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
+        to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        timestep_dict = {i: to_ndarray(init_obs[i].get('timestep', -1)) for i in range(env_nums)}
 
         game_segments = [
             GameSegment(self._env.action_space, game_segment_length=self._cfg.game_segment_length, config=self._cfg)
@@ -67,18 +68,25 @@ class MuZeroEvaluator:
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
-                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
+                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                stack_obs = list(stack_obs.values())
 
-                stack_obs = [game_segments[env_id].get_obs() for env_id in ready_env_id]
+                action_mask_dict_ready = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
+                to_play_dict_ready = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+                timestep_dict_ready = {env_id: timestep_dict[env_id] for env_id in ready_env_id}
+                
+                action_mask = [action_mask_dict_ready[env_id] for env_id in ready_env_id]
+                to_play = [to_play_dict_ready[env_id] for env_id in ready_env_id]
+                timestep = [timestep_dict_ready[env_id] for env_id in ready_env_id]
+
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation(stack_obs, self._cfg.model.model_type)
                 stack_obs = to_tensor(stack_obs)
                 stack_obs = to_device(stack_obs, self._cfg.device)
 
-                policy_output = self._policy.forward(stack_obs, action_mask)
+                policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
 
-                actions = {i: v['action'] for i, v in zip(ready_env_id, policy_output)}
+                actions = {k: v['action'] for k, v in policy_output.items()}
                 timesteps = self._env.step(actions)
 
                 for env_id, t in timesteps.items():
