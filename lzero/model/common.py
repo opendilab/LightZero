@@ -535,12 +535,21 @@ class RepresentationNetworkUniZero(nn.Module):
             self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
 
         self.final_norm_option_in_encoder = final_norm_option_in_encoder
-        if self.final_norm_option_in_encoder == 'LayerNorm':
+        if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
+            self.final_norm = nn.LayerNorm(
+                self.embedding_dim, eps=1e-5, elementwise_affine=False
+            )
         elif self.final_norm_option_in_encoder == 'SimNorm':
             self.final_norm = SimNorm(simnorm_dim=group_size)
+        elif self.final_norm_option_in_encoder == 'L2Norm':
+            # L2Norm 是一个函数式操作，不需要在 init 中定义模块
+            pass
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+
+
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -568,7 +577,22 @@ class RepresentationNetworkUniZero(nn.Module):
         x = x.view(-1, self.embedding_dim)
 
         # NOTE: very important for training stability.
-        x = self.final_norm(x)
+        # x = self.final_norm(x)
+
+        # 应用最终的归一化/约束
+        if self.final_norm_option_in_encoder == 'LayerNorm':
+            x = self.final_norm(x)
+        elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
+            x = self.final_norm(x)
+        elif self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
+            x = self.final_norm(x)
+            x = torch.tanh(x)
+        elif self.final_norm_option_in_encoder == 'SimNorm':
+            x = self.final_norm(x)
+        elif self.final_norm_option_in_encoder == 'L2Norm':
+            # 添加一个小的 epsilon 防止除以零
+            x = F.normalize(x, p=2, dim=-1, eps=1e-6)
+
 
         return x
 

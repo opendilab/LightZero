@@ -101,7 +101,8 @@ class WorldModel(nn.Module):
         if hasattr(self.tokenizer.encoder, 'pretrained_model'):
             skip_modules.update(self.tokenizer.encoder.pretrained_model.modules())
         if hasattr(self.tokenizer, 'decoder_network'):
-            skip_modules.update(self.tokenizer.decoder_network.modules())
+            if self.tokenizer.decoder_network is not None:
+                skip_modules.update(self.tokenizer.decoder_network.modules())
 
         def custom_init(module):
             # If the current module is part of the skip list, return without reinitializing
@@ -112,6 +113,9 @@ class WorldModel(nn.Module):
 
         # Recursively apply `custom_init` to all submodules of the model
         self.apply(custom_init)
+
+        # self.apply(init_weights)
+
 
         self._initialize_last_layer()
 
