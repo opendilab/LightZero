@@ -192,7 +192,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # cos_lr_scheduler=True,
             cos_lr_scheduler=False,
             num_segments=num_segments,
+            # (int) the number of simulations in MCTS for renalyze.
             num_simulations=num_simulations,
+            # (int) The number of simulations in MCTS for the collect phase.
+            collect_num_simulations=num_simulations,
+            # (int) The number of simulations in MCTS for the eval phase.
+            eval_num_simulations=50,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
