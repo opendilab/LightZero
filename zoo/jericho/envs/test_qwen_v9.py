@@ -19,7 +19,9 @@
     --env-type detective \
     --max-steps 100 \
     --num-episodes 20 \
-    --log-dir ./priorzero_log_optimized \
+    --good-memory-maxlen 20 \
+    --temperature 0.01 \
+    --log-dir ./priorzero_log_optimized
 """
 
 import logging
@@ -42,6 +44,7 @@ from sentence_transformers import SentenceTransformer
 import torch.nn.functional as F
 
 from jericho_env import JerichoEnv
+
 
 # =====================================================================================
 # 1. 记忆管理模块 (MemoryManager)
@@ -263,7 +266,7 @@ class QwenLocalPolicy(BaseLLMPolicy):
         prompt = self.format_prompt_v2(history, full_scene_description, inventory, location, valid_actions, good_memory, bad_memory)
         
         gen_config = GenerationConfig(
-            temperature=0.2, top_p=0.9, do_sample=True, max_new_tokens=20,
+            temperature=TEMPERATURE, top_p=0.9, do_sample=True, max_new_tokens=20,
             pad_token_id=self.tokenizer.eos_token_id
         )
         
@@ -296,6 +299,7 @@ class QwenLocalPolicy(BaseLLMPolicy):
         # 确保历史记录包含最后一步和最终结果
         # TODO: test inpact, 加入每步的reward
         trajectory_str = "\n".join([f"Step {i+1}: YOU DID ACTION: > {h['action']}', THEN YOU OBSERVED: \n{h['obs']}\n" for i, h in enumerate(recent_history)])
+
         # trajectory_str = "\n".join([f"STEP {i+1}: ACTION: > {h['action']}', OBSERVATION: \n{h['obs']}\n" for i, h in enumerate(recent_history)])
         # trajectory_str = "\n".join([f"Step {i+1}: I did '> {h['action']}' and the outcome was:\n{h['obs']}\n" for i, h in enumerate(recent_history)])
 
@@ -313,6 +317,7 @@ class QwenLocalPolicy(BaseLLMPolicy):
             "- `alternative_action_suggestion`: A concrete, actionable suggestion for what to do instead of the mistaken action, phrased as a general rule for the future. Example: 'When at the 'Outside' location after moving west, the next promising step is to explore 'east' to investigate the Mayor's home.'\n\n"
             "Respond ONLY with the JSON object, without any surrounding text or explanations.\n"
         )
+        # TODO(pu): 为什么提示词差一点，性能就差很多？
 
         # prompt = (
         #     "You are an expert strategy analyst for a text-based adventure game. Your task is to analyze a game trajectory, identify the critical mistake that led to a low score or game over, and produce actionable advice.\n\n"
@@ -353,7 +358,7 @@ class QwenLocalPolicy(BaseLLMPolicy):
 
 
         gen_config = GenerationConfig(
-            temperature=0.2, top_p=0.9, do_sample=True, max_new_tokens=250,
+            temperature=TEMPERATURE, top_p=0.9, do_sample=True, max_new_tokens=250,
             pad_token_id=self.tokenizer.eos_token_id
         )
         
@@ -400,6 +405,8 @@ def parse_args():
     parser.add_argument('--good-memory-maxlen', type=int, default=20, help='Maximum capacity for good memories.')
     parser.add_argument('--bad-memory-maxlen', type=int, default=20, help='Maximum capacity for bad memories.')
     parser.add_argument('--similarity-threshold', type=float, default=0.9, help='Similarity threshold for memory eviction.')
+    parser.add_argument('--temperature', type=float, default=0.01, help='temperature in llm.')
+
 
     return parser.parse_args()
 
@@ -418,6 +425,8 @@ def main(args):
     log_file = os.path.join(log_dir, f"rank_{rank}_{timestamp}.txt")
     f = open(log_file, "w", encoding="utf-8")
     
+    global TEMPERATURE;TEMPERATURE=args.temperature
+
     # --- 实例化策略对象 ---
     llm_policy: BaseLLMPolicy
     print(f"Using LLM Provider: {args.llm_provider}")
@@ -495,20 +504,21 @@ def main(args):
             valid_actions = env._env.get_valid_actions()
 
             # --- 动作选择：处理循环并调用 LLM ---
-            if len(last_actions) == 4 and last_actions[0] == last_actions[2] and last_actions[1] == last_actions[3]:
-                # TODO
-                f.write("[SYSTEM] Stuck in a 2-step loop. Forcing 'look' to re-evaluate.\n")
-                action, prompt = ('look', "[SYSTEM] Stuck in a loop. Forcing 'look'.") if 'look' in valid_actions else (np.random.choice([a for a in valid_actions if a not in last_actions] or valid_actions), "[SYSTEM] Stuck in a loop. Forcing random action.")
-            else:
-                action, prompt = llm_policy.sample_action_v2(
-                    history=list(episode_history)[-args.max_history_len:],
-                    full_scene_description=full_scene_description,
-                    inventory=inventory_str, 
-                    location=location_str,
-                    valid_actions=valid_actions, 
-                    good_memory=good_trial_memory.get_memories(),
-                    bad_memory=bad_trial_memory.get_memories()
-                )
+            # TODO(pu): 
+            # if len(last_actions) == 4 and last_actions[0] == last_actions[2] and last_actions[1] == last_actions[3]:
+            #     # 20eps return_mean=102.5
+            #     f.write("[SYSTEM] Stuck in a 2-step loop. Forcing 'look' to re-evaluate.\n")
+            #     action, prompt = ('look', "[SYSTEM] Stuck in a loop. Forcing 'look'.") if 'look' in valid_actions else (np.random.choice([a for a in valid_actions if a not in last_actions] or valid_actions), "[SYSTEM] Stuck in a loop. Forcing random action.")
+            # else: # 20eps return_mean=154.0
+            action, prompt = llm_policy.sample_action_v2(
+                history=list(episode_history)[-args.max_history_len:],
+                full_scene_description=full_scene_description,
+                inventory=inventory_str, 
+                location=location_str,
+                valid_actions=valid_actions, 
+                good_memory=good_trial_memory.get_memories(),
+                bad_memory=bad_trial_memory.get_memories()
+            )
             
             last_actions.append(action)
             
