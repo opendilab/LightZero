@@ -233,6 +233,7 @@ class QwenLocalPolicy(BaseLLMPolicy):
         """
         recent_history = history[-self.reflection_history_len:]
         # 确保历史记录包含最后一步和最终结果
+        # TODO
         trajectory_str = "\n".join([f"Step {i+1}: I did '> {h['action']}' and the outcome was:\n{h['obs']}\n" for i, h in enumerate(recent_history)])
 
         prompt = (
@@ -279,7 +280,7 @@ class PoeAPIPolicy(BaseLLMPolicy): # ... (内部逻辑与QwenLocalPolicy的修�
 if __name__ == '__main__':
     """
     export CUDA_VISIBLE_DEVICES=6
-    torchrun --nproc_per_node=1  /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/jericho/envs/test_qwen_v8.py  
+    torchrun --nproc_per_node=1 --master-port 20092 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/jericho/envs/test_qwen_v8.py  
     """
     # --- 核心配置区 ---
     LLM_PROVIDER = "Qwen"
@@ -305,6 +306,8 @@ if __name__ == '__main__':
     USE_AUTONOMOUS_REFLECTION = True 
     USE_STRUCTURED_INFO = True 
     ENV_TYPE = 'detective'
+    # ENV_TYPE = 'zork1'
+
 
     # --- 【优化】相似度阈值 ---
     SIMILARITY_THRESHOLD = 0.9  # 可以适当提高阈值，因为反思质量更高了
@@ -331,10 +334,11 @@ if __name__ == '__main__':
     
     env_cfg = EasyDict(
         dict(
-            max_steps=100,
+            max_steps=100, # for detective
+            # max_steps=400, # for zork1
             game_path="./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + f"{ENV_TYPE}.z5",
             add_location_and_inventory=USE_STRUCTURED_INFO,
-            max_action_num=55,
+            max_action_num=55, # TODO
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
             remove_stuck_actions=False,
@@ -396,6 +400,7 @@ if __name__ == '__main__':
             valid_actions = env._env.get_valid_actions()
 
             if len(last_actions) == 4 and last_actions[0] == last_actions[2] and last_actions[1] == last_actions[3]:
+                # TODO
                 f.write("[SYSTEM] Stuck in a 2-step loop. Forcing 'look' to re-evaluate.\n")
                 if 'look' in valid_actions:
                     action = 'look'
