@@ -40,6 +40,57 @@ class LearnableScale(nn.Module):
         return self.s_max * torch.sigmoid(self.logit)
         
 ##############################################
+# LoRALinear 实现
+##############################################
+
+class LoRALinear(nn.Module):
+    """
+    基础的LoRALinear实现，对标准线性层进行LoRA微调扩展。
+    
+    - 保留原始的weight和bias参数
+    - 添加LoRA的A和B矩阵进行低秩分解
+    - 前向计算: output = F.linear(x, W, bias) + scaling * lora_B(lora_A(dropout(x)))
+    """
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0.0):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.r = r
+        self.lora_alpha = lora_alpha
+        self.scaling = lora_alpha / r if r > 0 else 1.0
+        self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
+        
+        # 初始化基础权重
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        if bias:
+            self.bias = nn.Parameter(torch.empty(out_features))
+        else:
+            self.bias = None
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if bias:
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in)
+            nn.init.uniform_(self.bias, -bound, bound)
+            
+        # 初始化LoRA参数
+        if r > 0:
+            self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.01)
+            self.lora_B = nn.Parameter(torch.zeros(out_features, r))
+        else:
+            self.lora_A = None
+            self.lora_B = None
+            
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        baseline_out = F.linear(x, self.weight, self.bias)
+        if self.r == 0 or self.lora_A is None or self.lora_B is None:
+            return baseline_out
+            
+        lora_out = F.linear(self.lora_dropout(x), self.lora_A)
+        lora_out = F.linear(lora_out, self.lora_B)
+        return baseline_out + self.scaling * lora_out
+
+##############################################
 # CurriculumLoRALinear 实现
 ##############################################
 
@@ -132,9 +183,10 @@ class CurriculumLoRALinear(nn.Module):
           
         同时将 log 出模块信息和状态变化。
         """
+        # return
         assert 0 <= stage < self.curriculum_stage_num, f"stage 必须在 [0, {self.curriculum_stage_num-1}] 范围内"
         self.curriculum_stage = stage
-
+        
         # 输出 log 信息，展示当前模块（可结合 in_features, out_features 标识）
         module_id = f"({self.in_features}x{self.out_features})"
         if stage == 0:
@@ -202,7 +254,7 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
       - 并且 config 中配置了 curriculum_stage_num > 1
     否则，若仅满足基础 LoRA 条件，则返回原有 LoRALinear；否则返回原始的线性层。
     """
-    if config.lora_r > 0 and (module_label in config.lora_target_modules) and getattr(config, "curriculum_stage_num", 1) > 1:
+    if False and config.lora_r > 0 and (module_label in config.lora_target_modules) and getattr(config, "curriculum_stage_num", 1) > 1:
         new_linear = CurriculumLoRALinear(
             in_features=linear.in_features,
             out_features=linear.out_features,
@@ -217,20 +269,20 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
         if linear.bias is not None:
             new_linear.bias.data.copy_(linear.bias.data)
         return new_linear
-    # elif config.lora_r > 0 and (module_label in config.lora_target_modules):
-    #     # 若不使用课程学习，则调用原有 LoRALinear 实现（未展示，此处假设其已定义）
-    #     new_linear = LoRALinear(
-    #         in_features=linear.in_features,
-    #         out_features=linear.out_features,
-    #         bias=(linear.bias is not None),
-    #         r=config.lora_r,
-    #         lora_alpha=config.lora_alpha,
-    #         lora_dropout=config.lora_dropout
-    #     )
-    #     new_linear.weight.data.copy_(linear.weight.data)
-    #     if linear.bias is not None:
-    #         new_linear.bias.data.copy_(linear.bias.data)
-    #     return new_linear
+    elif config.lora_r > 0 and (module_label in config.lora_target_modules):
+        # 若不使用课程学习，则调用原有 LoRALinear 实现（未展示，此处假设其已定义）
+        new_linear = LoRALinear(
+            in_features=linear.in_features,
+            out_features=linear.out_features,
+            bias=(linear.bias is not None),
+            r=config.lora_r,
+            lora_alpha=config.lora_alpha,
+            lora_dropout=config.lora_dropout
+        )
+        new_linear.weight.data.copy_(linear.weight.data)
+        if linear.bias is not None:
+            new_linear.bias.data.copy_(linear.bias.data)
+        return new_linear
     else:
         return linear
 
@@ -346,7 +398,13 @@ class Transformer(nn.Module):
 
         else:
             self.use_register_token = False # TODO
-   
+        
+        # if config.lora_r > 0:
+        #     set_curriculum_stage_for_transformer(self,)
+# #     set_curriculum_stage_for_transformer(
+#                 self.policy._learn_model.world_model.transformer,
+#                 self.stage
+#             )
 
     def add_register_tokens(self, sequences: torch.Tensor, task_id: int) -> torch.Tensor:
         """

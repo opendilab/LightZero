@@ -392,10 +392,14 @@ def train_unizero_multitask_segment_ddp(
     #   原始的 RANDOM_SCORES 和 HUMAN_SCORES
     if benchmark_name == "atari":
         RANDOM_SCORES = np.array([
-            148.0  # SpaceInvader
+            227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
+            152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
+            -20.7, 24.9, 163.9, 11.5, 68.4, 533.4,
         ])
         HUMAN_SCORES = np.array([
-            1652.0  # SpaceInvader
+            7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
+            1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
+            14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
         ])
         # RANDOM_SCORES = np.array([
         #     148.0
@@ -418,8 +422,33 @@ def train_unizero_multitask_segment_ddp(
     #            PrivateEye, UpNDown, Qbert, Breakout]
     # 映射为原始数组中的索引（注意：索引均从0开始）
     new_order = [
-      0   # SpaceInvader (唯一任务，索引为0)
-  ]
+        20,  # Pong
+        19,  # MsPacman
+        24,  # Seaquest
+        6,   # Boxing
+        0,   # Alien
+        8,   # ChopperCommand
+        14,  # Hero
+        23,  # RoadRunner
+        1,   # Amidar
+        2,   # Assault
+        3,   # Asterix
+        4,   # BankHeist
+        5,   # BattleZone
+        9,   # CrazyClimber
+        10,  # DemonAttack
+        11,  # Freeway
+        12,  # Frostbite
+        13,  # Gopher
+        15,  # Jamesbond
+        16,  # Kangaroo
+        17,  # Krull
+        18,  # KungFuMaster
+        21,  # PrivateEye
+        25,  # UpNDown
+        22,  # Qbert
+        7    # Breakout
+    ]
     global new_RANDOM_SCORES, new_HUMAN_SCORES
     # 根据 new_order 生成新的数组
     new_RANDOM_SCORES = RANDOM_SCORES[new_order]
@@ -499,7 +528,6 @@ def train_unizero_multitask_segment_ddp(
         # 编译配置
         cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
         # 创建共享的policy
-        cfg.policy.learn.learner.hook.log_show_after_iter=100
         policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
         # 加载预训练模型（如果提供）

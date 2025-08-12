@@ -339,8 +339,8 @@ if __name__ == "__main__":
     import os
 
 
-    num_games = 8 # 26 # 8
-    num_layers = 4 # ==============TODO==============
+    num_games = 1 # 26 # 8
+    num_layers = 8 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -350,8 +350,12 @@ if __name__ == "__main__":
     max_env_step = int(4e5)
     reanalyze_ratio = 0.0
 
+    if num_games==1:
+            env_id_list = [
+            'PongNoFrameskip-v4'
+        ]
     
-    if num_games==3:
+    elif num_games==3:
             env_id_list = [
             'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4'
         ]
@@ -371,8 +375,13 @@ if __name__ == "__main__":
             'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
             'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
         ]
-
-    if len(env_id_list) == 8:
+    if len(env_id_list) == 1:
+        if num_layers == 4:
+            # effective_batch_size =  1024 # nlayer4 需要设置replay_ratio=0.25对应的upc=40
+            effective_batch_size =  512 # nlayer4 需要设置replay_ratio=0.25对应的upc=40 moco
+        elif num_layers == 8:
+            effective_batch_size = 16
+    elif len(env_id_list) == 8:
         if num_layers == 4:
             # effective_batch_size =  1024 # nlayer4 需要设置replay_ratio=0.25对应的upc=40
             effective_batch_size =  512 # nlayer4 需要设置replay_ratio=0.25对应的upc=40 moco
@@ -388,7 +397,7 @@ if __name__ == "__main__":
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
     elif len(env_id_list) == 3:
-        effective_batch_size = 10  # debug
+        effective_batch_size = 512  # debug
     else:
         raise ValueError("不支持的环境数量: {}".format(n))
 

@@ -123,33 +123,27 @@ class UniZeroMTModel(nn.Module):
                         final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
                     ))
             elif world_model_cfg.encoder_type == "vit":
+                
+                lora_config={
+                    'r':  world_model_cfg.get('encoder_lora_r', 0), 
+                    'alpha':  world_model_cfg.get('encoder_lora_alpha', 0),
+                    'dropout':  world_model_cfg.get('encoder_lora_dropout', 0),
+                    }
+                
                 for task_id in range(1):  # TODO: one share encoder
                     if world_model_cfg.task_num <=8: 
-                        # # vit base
-                        # self.representation_network.append(ViT(
-                        #     image_size =observation_shape[1],
-                        #     patch_size = 8,
-                        #     num_classes = obs_act_embed_dim,
-                        #     dim = 768,
-                        #     depth = 12,
-                        #     heads = 12,
-                        #     mlp_dim = 3072,
-                        #     dropout = 0.1,
-                        #     emb_dropout = 0.1,
-                        #     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                        # ))
-                        # vit small
                         self.representation_network.append(ViT(
                             image_size =observation_shape[1],
                             patch_size = 8,
                             num_classes = obs_act_embed_dim,
                             dim = 768,
-                            depth = 6,
-                            heads = 6,
-                            mlp_dim = 2048,
+                            depth = 12,
+                            heads = 12,
+                            mlp_dim = 3072,
                             dropout = 0.1,
                             emb_dropout = 0.1,
                             final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                            lora_config=lora_config
                         ))
                     elif world_model_cfg.task_num > 8: 
                         # vit base

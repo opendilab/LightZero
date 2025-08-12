@@ -49,7 +49,7 @@ def build_learner_group(learner_ranks: list[int]) -> dist.ProcessGroup:
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
-
+a=0
 
 def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
     """
@@ -140,7 +140,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         by addressing the limitations found in MuZero-style algorithms, particularly in environments requiring the
         capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     """
-
+    a=0
     # The default_config for UniZero policy.
     config = dict(
         type='unizero_multitask',
@@ -548,7 +548,289 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self._prev_plasticity_metrics[name] = value
             return value
 
-
+    def print_traninable_parameter(self, model):
+        """
+        打印模型的可训练参数，以树状结构显示
+        """
+        print("=" * 80)
+        print("TRAINABLE PARAMETERS TREE STRUCTURE")
+        print("=" * 80)
+        
+        # 统计信息
+        total_trainable_params = 0
+        total_trainable_size = 0
+        
+        # 按模块组织参数
+        module_params = {}
+        
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                # 解析模块层次结构
+                parts = name.split('.')
+                current_dict = module_params
+                
+                # 构建嵌套字典结构
+                for i, part in enumerate(parts[:-1]):
+                    if part not in current_dict:
+                        current_dict[part] = {}
+                    current_dict = current_dict[part]
+                
+                # 最后一层存储参数信息
+                param_name = parts[-1]
+                param_info = {
+                    'shape': list(param.shape),
+                    'numel': param.numel(),
+                    'dtype': str(param.dtype),
+                    'device': str(param.device),
+                    'requires_grad': param.requires_grad
+                }
+                current_dict[param_name] = param_info
+                
+                total_trainable_params += param.numel()
+                total_trainable_size += param.numel() * param.element_size()
+        
+        # 递归打印树状结构
+        def print_tree(tree, prefix="", is_last=True, level=0):
+            nonlocal total_trainable_params
+            
+            items = list(tree.items())
+            for i, (key, value) in enumerate(items):
+                is_last_item = (i == len(items) - 1)
+                
+                # 选择合适的前缀符号
+                if level == 0:
+                    current_prefix = ""
+                    next_prefix = ""
+                else:
+                    current_prefix = prefix + ("└── " if is_last_item else "├── ")
+                    next_prefix = prefix + ("    " if is_last_item else "│   ")
+                
+                if isinstance(value, dict) and any(isinstance(v, dict) for v in value.values()):
+                    # 这是一个模块节点
+                    print(f"{current_prefix}{key}/")
+                    print_tree(value, next_prefix, is_last_item, level + 1)
+                elif isinstance(value, dict):
+                    # 这是参数信息
+                    shape_str = "x".join(map(str, value['shape'])) if value['shape'] else "scalar"
+                    size_mb = value['numel'] * 4 / (1024 * 1024)  # 假设float32
+                    print(f"{current_prefix}{key}: {shape_str} ({value['numel']:,} params, {size_mb:.2f}MB) [{value['dtype']}]")
+                else:
+                    # 这是一个叶子节点的模块
+                    print(f"{current_prefix}{key}/")
+                    if isinstance(value, dict):
+                        print_tree(value, next_prefix, is_last_item, level + 1)
+        
+        # 打印树状结构
+        print_tree(module_params)
+        
+        # 打印汇总信息
+        print("=" * 80)
+        print("SUMMARY:")
+        print(f"Total trainable parameters: {total_trainable_params:,}")
+        print(f"Total trainable size: {total_trainable_size / (1024 * 1024):.2f} MB")
+        print(f"Total trainable size: {total_trainable_size / (1024 * 1024 * 1024):.4f} GB")
+        print("=" * 80)
+        
+    def print_frozen_parameter(self, model):
+        """
+        打印模型的冻结参数，以树状结构显示，使用蓝色字体
+        """
+        # ANSI颜色代码
+        BLUE = '\033[94m'
+        RESET = '\033[0m'
+        
+        print(BLUE + "=" * 80 + RESET)
+        print(BLUE + "FROZEN PARAMETERS TREE STRUCTURE" + RESET)
+        print(BLUE + "=" * 80 + RESET)
+        
+        # 统计信息
+        total_frozen_params = 0
+        total_frozen_size = 0
+        
+        # 按模块组织参数
+        module_params = {}
+        
+        for name, param in model.named_parameters():
+            if not param.requires_grad:  # 只处理冻结参数（不可训练）
+                # 解析模块层次结构
+                parts = name.split('.')
+                current_dict = module_params
+                
+                # 构建嵌套字典结构
+                for i, part in enumerate(parts[:-1]):
+                    if part not in current_dict:
+                        current_dict[part] = {}
+                    current_dict = current_dict[part]
+                
+                # 最后一层存储参数信息
+                param_name = parts[-1]
+                param_info = {
+                    'shape': list(param.shape),
+                    'numel': param.numel(),
+                    'dtype': str(param.dtype),
+                    'device': str(param.device),
+                    'requires_grad': param.requires_grad
+                }
+                current_dict[param_name] = param_info
+                
+                total_frozen_params += param.numel()
+                total_frozen_size += param.numel() * param.element_size()
+        
+        # 递归打印树状结构
+        def print_tree(tree, prefix="", is_last=True, level=0):
+            items = list(tree.items())
+            for i, (key, value) in enumerate(items):
+                is_last_item = (i == len(items) - 1)
+                
+                # 选择合适的前缀符号
+                if level == 0:
+                    current_prefix = ""
+                    next_prefix = ""
+                else:
+                    current_prefix = prefix + ("└── " if is_last_item else "├── ")
+                    next_prefix = prefix + ("    " if is_last_item else "│   ")
+                
+                if isinstance(value, dict) and any(isinstance(v, dict) for v in value.values()):
+                    # 这是一个模块节点
+                    print(BLUE + f"{current_prefix}{key}/" + RESET)
+                    print_tree(value, next_prefix, is_last_item, level + 1)
+                elif isinstance(value, dict):
+                    # 这是参数信息
+                    shape_str = "x".join(map(str, value['shape'])) if value['shape'] else "scalar"
+                    size_mb = value['numel'] * 4 / (1024 * 1024)  # 假设float32，与原函数保持一致
+                    print(BLUE + f"{current_prefix}{key}: {shape_str} ({value['numel']:,} params, {size_mb:.2f}MB) [{value['dtype']}]" + RESET)
+                else:
+                    # 这是一个叶子节点的模块
+                    print(BLUE + f"{current_prefix}{key}/" + RESET)
+                    if isinstance(value, dict):
+                        print_tree(value, next_prefix, is_last_item, level + 1)
+        
+        # 检查是否有冻结参数
+        if not module_params:
+            print(BLUE + "No frozen parameters found in the model." + RESET)
+            print(BLUE + "=" * 80 + RESET)
+            return
+        
+        # 打印树状结构
+        print_tree(module_params)
+        
+        # 打印汇总信息
+        print(BLUE + "=" * 80 + RESET)
+        print(BLUE + "SUMMARY:" + RESET)
+        print(BLUE + f"Total frozen parameters: {total_frozen_params:,}" + RESET)
+        print(BLUE + f"Total frozen size: {total_frozen_size / (1024 * 1024):.2f} MB" + RESET)
+        print(BLUE + f"Total frozen size: {total_frozen_size / (1024 * 1024 * 1024):.4f} GB" + RESET)
+        print(BLUE + "=" * 80 + RESET)
+    
+    def print_lora_pos(self, model):
+        """
+        打印模型中所有的LoRA参数，以树状结构显示
+        如果参数是冻结的则用蓝色字体，非冻结的用正常字体
+        """
+        # ANSI颜色代码
+        BLUE = '\033[94m'
+        RESET = '\033[0m'
+        
+        print("=" * 80)
+        print("LORA PARAMETERS TREE STRUCTURE")
+        print("=" * 80)
+        
+        # 统计信息
+        total_lora_params = 0
+        total_lora_size = 0
+        frozen_lora_params = 0
+        trainable_lora_params = 0
+        
+        # 按模块组织参数
+        module_params = {}
+        
+        for name, param in model.named_parameters():
+            if "lora" in name.lower():  # 只处理包含lora的参数
+                # 解析模块层次结构
+                parts = name.split('.')
+                current_dict = module_params
+                
+                # 构建嵌套字典结构
+                for i, part in enumerate(parts[:-1]):
+                    if part not in current_dict:
+                        current_dict[part] = {}
+                    current_dict = current_dict[part]
+                
+                # 最后一层存储参数信息
+                param_name = parts[-1]
+                param_info = {
+                    'shape': list(param.shape),
+                    'numel': param.numel(),
+                    'dtype': str(param.dtype),
+                    'device': str(param.device),
+                    'requires_grad': param.requires_grad,
+                    'is_frozen': not param.requires_grad
+                }
+                current_dict[param_name] = param_info
+                
+                total_lora_params += param.numel()
+                total_lora_size += param.numel() * param.element_size()
+                
+                if param.requires_grad:
+                    trainable_lora_params += param.numel()
+                else:
+                    frozen_lora_params += param.numel()
+        
+        # 递归打印树状结构
+        def print_tree(tree, prefix="", is_last=True, level=0):
+            items = list(tree.items())
+            for i, (key, value) in enumerate(items):
+                is_last_item = (i == len(items) - 1)
+                
+                # 选择合适的前缀符号
+                if level == 0:
+                    current_prefix = ""
+                    next_prefix = ""
+                else:
+                    current_prefix = prefix + ("└── " if is_last_item else "├── ")
+                    next_prefix = prefix + ("    " if is_last_item else "│   ")
+                
+                if isinstance(value, dict) and any(isinstance(v, dict) for v in value.values()):
+                    # 这是一个模块节点
+                    print(f"{current_prefix}{key}/")
+                    print_tree(value, next_prefix, is_last_item, level + 1)
+                elif isinstance(value, dict):
+                    # 这是参数信息，根据冻结状态选择颜色
+                    shape_str = "x".join(map(str, value['shape'])) if value['shape'] else "scalar"
+                    size_mb = value['numel'] * 4 / (1024 * 1024)  # 假设float32
+                    status_str = "FROZEN" if value['is_frozen'] else "TRAINABLE"
+                    
+                    if value['is_frozen']:
+                        # 冻结参数用蓝色
+                        print(BLUE + f"{current_prefix}{key}: {shape_str} ({value['numel']:,} params, {size_mb:.2f}MB) [{value['dtype']}] [{status_str}]" + RESET)
+                    else:
+                        # 非冻结参数用正常颜色
+                        print(f"{current_prefix}{key}: {shape_str} ({value['numel']:,} params, {size_mb:.2f}MB) [{value['dtype']}] [{status_str}]")
+                else:
+                    # 这是一个叶子节点的模块
+                    print(f"{current_prefix}{key}/")
+                    if isinstance(value, dict):
+                        print_tree(value, next_prefix, is_last_item, level + 1)
+        
+        # 检查是否有LoRA参数
+        if not module_params:
+            print("No LoRA parameters found in the model.")
+            print("=" * 80)
+            return
+        
+        # 打印树状结构
+        print_tree(module_params)
+        
+        # 打印汇总信息
+        print("=" * 80)
+        print("SUMMARY:")
+        print(f"Total LoRA parameters: {total_lora_params:,}")
+        print(f"├─ " + BLUE + f"Frozen LoRA parameters: {frozen_lora_params:,}" + RESET)
+        print(f"└─ Trainable LoRA parameters: {trainable_lora_params:,}")
+        print(f"Total LoRA size: {total_lora_size / (1024 * 1024):.2f} MB")
+        print(f"Total LoRA size: {total_lora_size / (1024 * 1024 * 1024):.4f} GB")
+        print("=" * 80)
+    
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
@@ -566,6 +848,16 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
+        # print model trainnable parameter  self.print_traninable_parameter(self._target_model)
+        
+        # self.print_traninable_parameter(self._learn_model)
+        # self.print_frozen_parameter(self._learn_model)
+        
+        # self.print_lora_pos(self._learn_model)
+        # if a==0:
+        #     self.print_traninable_parameter(self._learn_model)     
+        #     a+=1
+        
         obs_loss_multi_task = []
         reward_loss_multi_task = []
         policy_loss_multi_task = []
@@ -1489,8 +1781,90 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         # finetune_components = [] # load-enc-trans_finetune-head
         # finetune_components = ['transformer'] # load-enc-trans_finetune-trans-head
-        finetune_components = ["representation_network", "encoder"] # load-enc-trans_finetune-encoder-head
+        # finetune_components = ["representation_network", "encoder",'transformer'] # load-enc-trans_finetune-encoder-head
 
+          # 打印state_dict中所有的lora 参数，以树的结构
+        # def print_lora_from_state_dict(state_dict_part: Dict[str, Any], title: str):
+        #     """
+        #     打印state_dict中的LoRA参数，以树状结构显示
+        #     """
+        #     print("=" * 60)
+        #     print(f"LORA PARAMETERS IN {title.upper()}")
+        #     print("=" * 60)
+            
+        #     # 收集所有LoRA参数
+        #     lora_params = {}
+        #     total_lora_count = 0
+        #     total_lora_size = 0
+            
+        #     for key, value in state_dict_part.items():
+        #         if "lora" in key.lower():
+        #             # 解析参数层次结构
+        #             parts = key.split('.')
+        #             current_dict = lora_params
+                    
+        #             # 构建嵌套字典结构
+        #             for i, part in enumerate(parts[:-1]):
+        #                 if part not in current_dict:
+        #                     current_dict[part] = {}
+        #                 current_dict = current_dict[part]
+                    
+        #             # 最后一层存储参数信息
+        #             param_name = parts[-1]
+        #             if hasattr(value, 'shape'):
+        #                 param_info = {
+        #                     'shape': list(value.shape),
+        #                     'numel': value.numel() if hasattr(value, 'numel') else 0,
+        #                     'dtype': str(value.dtype)
+        #                 }
+        #                 total_lora_count += param_info['numel']
+        #                 total_lora_size += param_info['numel'] * 4  # 假设float32
+        #             else:
+        #                 param_info = {
+        #                     'shape': 'unknown',
+        #                     'numel': 0,
+        #                     'dtype': str(type(value))
+        #                 }
+        #             current_dict[param_name] = param_info
+            
+        #     # 递归打印LoRA参数树
+        #     def print_lora_tree(tree, prefix="", level=0):
+        #         items = list(tree.items())
+        #         for i, (key, value) in enumerate(items):
+        #             is_last_item = (i == len(items) - 1)
+                    
+        #             if level == 0:
+        #                 current_prefix = ""
+        #                 next_prefix = ""
+        #             else:
+        #                 current_prefix = prefix + ("└── " if is_last_item else "├── ")
+        #                 next_prefix = prefix + ("    " if is_last_item else "│   ")
+                    
+        #             if isinstance(value, dict) and any(isinstance(v, dict) for v in value.values()):
+        #                 # 模块节点
+        #                 print(f"{current_prefix}{key}/")
+        #                 print_lora_tree(value, next_prefix, level + 1)
+        #             elif isinstance(value, dict):
+        #                 # 参数信息
+        #                 shape_str = "x".join(map(str, value['shape'])) if isinstance(value['shape'], list) else str(value['shape'])
+        #                 size_mb = value['numel'] * 4 / (1024 * 1024) if value['numel'] > 0 else 0
+        #                 print(f"{current_prefix}{key}: {shape_str} ({value['numel']:,} params, {size_mb:.2f}MB) [{value['dtype']}]")
+            
+        #     if lora_params:
+        #         print_lora_tree(lora_params)
+        #         print("─" * 60)
+        #         print(f"Total LoRA parameters in {title}: {total_lora_count:,}")
+        #         print(f"Total LoRA size in {title}: {total_lora_size / (1024 * 1024):.2f} MB")
+        #     else:
+        #         print(f"No LoRA parameters found in {title}")
+        #     print("=" * 60)
+        
+        # # 分别打印learn_model和target_model中的LoRA参数
+        # if 'model' in state_dict:
+        #     print_lora_from_state_dict(state_dict['model'], "LEARN_MODEL STATE_DICT")
+        
+        
+        
         # 定义需要排除的参数前缀，即不加载这些参数
         exclude_prefixes = [
             '_orig_mod.world_model.head_policy_multi_task.',
@@ -1551,96 +1925,24 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 包含 "transformer" 则属于 transformer 模块，其它部分可根据需要扩展。
         for name, param in self._learn_model.named_parameters():
             # 如果参数属于 encoder 且不在需要微调的组件中，则冻结该参数
-            if "encoder" in name and "encoder" not in finetune_components:
+            if ("lora" not in name) and ("encoder" in name and "encoder" not in finetune_components):
                 param.requires_grad = False
                 print(f"Freezing parameter: {name}")
-            elif "representation_network" in name and "representation_network" not in finetune_components:
+            elif ("lora" not in name) and ("representation_network" in name and "representation_network" not in finetune_components):
                 param.requires_grad = False
                 print(f"Freezing parameter: {name}")
             # 如果参数属于 transformer 且不在需要微调的组件中，则冻结该参数
-            elif "transformer" in name and "transformer" not in finetune_components:
+            elif ("lora" not in name) and ("transformer" in name and "transformer" not in finetune_components):
+                param.requires_grad = False
+                print(f"Freezing parameter: {name}")
+            elif ("_orig_mod.world_model.pos_emb" in name or "_orig_mod.world_model.act_embedding_table" in name) and ("transformer" not in finetune_components):
                 param.requires_grad = False
                 print(f"Freezing parameter: {name}")
             else:
                 # 如果参数属于其他模块，或者包含在 finetune_components 中，则保持默认（或者根据需要调整）
                 print(f"Parameter remains default: {name}")
-
-        # 注意：
-        # 如果你的模型中嵌套模块更为复杂，可以基于 module 的属性而不是仅仅依靠参数名称进行判断，比如：
-        # for module in self._learn_model.modules():
-        #     if isinstance(module, EncoderModule) and "encoder" not in finetune_components:
-        #         for param in module.parameters():
-        #             param.requires_grad = False
         
-    # # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
-    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-    #     """
-    #     Overview:
-    #         Load the state_dict variable into policy learn mode, excluding multi-task related parameters.
-    #     Arguments:
-    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved previously.
-    #     """
-    #     # 定义需要排除的参数前缀
-    #     exclude_prefixes = [
-    #         '_orig_mod.world_model.head_policy_multi_task.',
-    #         '_orig_mod.world_model.head_value_multi_task.',
-    #         '_orig_mod.world_model.head_rewards_multi_task.',
-    #         '_orig_mod.world_model.head_observations_multi_task.',
-    #         '_orig_mod.world_model.task_emb.'
-    #     ]
-        
-    #     # 定义需要排除的具体参数（如果有特殊情况）
-    #     exclude_keys = [
-    #         '_orig_mod.world_model.task_emb.weight',
-    #         '_orig_mod.world_model.task_emb.bias',  # 如果存在则添加
-    #         # 添加其他需要排除的具体参数名
-    #     ]
-        
-    #     def filter_state_dict(state_dict_loader: Dict[str, Any], exclude_prefixes: list, exclude_keys: list = []) -> Dict[str, Any]:
-    #         """
-    #         过滤掉需要排除的参数。
-    #         """
-    #         filtered = {}
-    #         for k, v in state_dict_loader.items():
-    #             if any(k.startswith(prefix) for prefix in exclude_prefixes):
-    #                 print(f"Excluding parameter: {k}")  # 调试用，查看哪些参数被排除
-    #                 continue
-    #             if k in exclude_keys:
-    #                 print(f"Excluding specific parameter: {k}")  # 调试用
-    #                 continue
-    #             filtered[k] = v
-    #         return filtered
-
-    #     # 过滤并加载 'model' 部分
-    #     if 'model' in state_dict:
-    #         model_state_dict = state_dict['model']
-    #         filtered_model_state_dict = filter_state_dict(model_state_dict, exclude_prefixes, exclude_keys)
-    #         missing_keys, unexpected_keys = self._learn_model.load_state_dict(filtered_model_state_dict, strict=False)
-    #         if missing_keys:
-    #             print(f"Missing keys when loading _learn_model: {missing_keys}")
-    #         if unexpected_keys:
-    #             print(f"Unexpected keys when loading _learn_model: {unexpected_keys}")
-    #     else:
-    #         print("No 'model' key found in the state_dict.")
-
-    #     # 过滤并加载 'target_model' 部分
-    #     if 'target_model' in state_dict:
-    #         target_model_state_dict = state_dict['target_model']
-    #         filtered_target_model_state_dict = filter_state_dict(target_model_state_dict, exclude_prefixes, exclude_keys)
-    #         missing_keys, unexpected_keys = self._target_model.load_state_dict(filtered_target_model_state_dict, strict=False)
-    #         if missing_keys:
-    #             print(f"Missing keys when loading _target_model: {missing_keys}")
-    #         if unexpected_keys:
-    #             print(f"Unexpected keys when loading _target_model: {unexpected_keys}")
-    #     else:
-    #         print("No 'target_model' key found in the state_dict.")
-
-    #     # 不要加载优化器的 state_dict，因为优化器通常不包含模型参数，加载后性能反而变差
-    #     # if 'optimizer_world_model' in state_dict:
-    #     #     optimizer_state_dict = state_dict['optimizer_world_model']
-    #     #     try:
-    #     #         self._optimizer_world_model.load_state_dict(optimizer_state_dict)
-    #     #     except Exception as e:
-    #     #         print(f"Error loading optimizer state_dict: {e}")
-    #     # else:
-    #     #     print("No 'optimizer_world_model' key found in the state_dict.")
+      
+        # a=1
+        # if 'target_model' in state_dict:
+        #     print_lora_from_state_dict(state_dict['target_model'], "TARGET_MODEL STATE_DICT")
