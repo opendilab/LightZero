@@ -10,9 +10,8 @@ import numpy as np
 from ding.envs.env.base_env import BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from gymnasium import spaces
-from pettingzoo.classic.chess import chess_utils
-
 from zoo.board_games.chess.envs.chess_env import ChessEnv
+from pettingzoo.classic.chess import chess_utils as pz_cu
 
 
 @ENV_REGISTRY.register('chess_lightzero')
@@ -50,13 +49,14 @@ class ChessLightZeroEnv(ChessEnv):
 
     @property
     def legal_actions(self):
-        return chess_utils.legal_moves(self.board)
+        return pz_cu.legal_moves(self.board)
 
     def observe(self, agent_index):
         try:
-            observation = chess_utils.get_observation(self.board, agent_index).astype(float)  # TODO
+            observation = pz_cu.get_observation(self.board, agent_index).astype(float)  # TODO
         except Exception as e:
-            print('debug')
+            print(f'debug: {e}')
+            print(f"self.board:{self.board}")
 
         # TODO:
         # observation = np.dstack((observation[:, :, :7], self.board_history))
@@ -73,8 +73,11 @@ class ChessLightZeroEnv(ChessEnv):
         #         observation[..., 13 * i : 13 * i + 6] = tmp
 
         action_mask = np.zeros(4672, dtype=np.int8)
-        action_mask[chess_utils.legal_moves(self.board)] = 1
+        action_mask[pz_cu.legal_moves(self.board)] = 1
         return {'observation': observation, 'action_mask': action_mask}
+
+
+
 
     def current_state(self):
         """
@@ -101,7 +104,7 @@ class ChessLightZeroEnv(ChessEnv):
         if result == "*":
             winner = -1
         else:
-            winner = chess_utils.result_to_int(result)
+            winner = pz_cu.result_to_int(result)
 
         if not done:
             winner = -1
@@ -109,10 +112,6 @@ class ChessLightZeroEnv(ChessEnv):
         return done, winner
 
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
-        if self.alphazero_mcts_ctree and init_state is not None:
-            # Convert byte string to np.ndarray
-            init_state = np.frombuffer(init_state, dtype=np.int32)
-
         if self.scale:
             self._observation_space = spaces.Dict(
                 {
@@ -131,13 +130,21 @@ class ChessLightZeroEnv(ChessEnv):
         self._reward_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
+        
         if init_state is not None:
-            self.board = chess.Board(init_state)
+            if isinstance(init_state, np.ndarray):
+                # ndarray → bytes → str
+                fen = init_state.tobytes().decode()
+            elif isinstance(init_state, (bytes, bytearray)):
+                fen = init_state.decode()
+            else: # init_state is str
+                fen = init_state
+            self.board = chess.Board(fen)
         else:
             self.board = chess.Board()
 
         action_mask = np.zeros(4672, dtype=np.int8)
-        action_mask[chess_utils.legal_moves(self.board)] = 1
+        action_mask[pz_cu.legal_moves(self.board)] = 1
         # self.board_history = np.zeros((8, 8, 104), dtype=bool)
 
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
@@ -259,10 +266,10 @@ class ChessLightZeroEnv(ChessEnv):
         current_agent = self.current_player_index
 
         # TODO: Update board history
-        # next_board = chess_utils.get_observation(self.board, current_agent)
+        # next_board = pz_cu.get_observation(self.board, current_agent)
         # self.board_history = np.dstack((next_board[:, :, 7:], self.board_history[:, :, :-13]))
 
-        chosen_move = chess_utils.action_to_move(self.board, action, current_agent)
+        chosen_move = pz_cu.action_to_move(self.board, action, current_agent)
         assert chosen_move in self.board.legal_moves
         self.board.push(chosen_move)
 
@@ -271,7 +278,7 @@ class ChessLightZeroEnv(ChessEnv):
         if result == "*":
             reward = 0.
         else:
-            reward = chess_utils.result_to_int(result)
+            reward = pz_cu.result_to_int(result)
 
         if self.current_player == 1:
             reward = -reward
@@ -281,7 +288,7 @@ class ChessLightZeroEnv(ChessEnv):
             info['eval_episode_return'] = reward
 
         action_mask = np.zeros(4672, dtype=np.int8)
-        action_mask[chess_utils.legal_moves(self.board)] = 1
+        action_mask[pz_cu.legal_moves(self.board)] = 1
 
         obs = {
             'observation': self.observe(self.current_player_index)['observation'],
@@ -312,14 +319,14 @@ class ChessLightZeroEnv(ChessEnv):
         self._current_player = value
 
     def random_action(self):
-        action_list = chess_utils.legal_moves(self.board)
+        action_list = pz_cu.legal_moves(self.board)
         return np.random.choice(action_list)
 
     def simulate_action(self, action):
-        if action not in chess_utils.legal_moves(self.board):
+        if action not in pz_cu.legal_moves(self.board):
             raise ValueError("action {0} on board {1} is not legal".format(action, self.board.fen()))
         new_board = copy.deepcopy(self.board)
-        new_board.push(chess_utils.action_to_move(self.board, action, self.current_player_index))
+        new_board.push(pz_cu.action_to_move(self.board, action, self.current_player_index))
         if self.start_player_index == 0:
             start_player_index = 1
         else:
