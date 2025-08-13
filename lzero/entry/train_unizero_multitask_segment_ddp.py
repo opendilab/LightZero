@@ -521,7 +521,7 @@ def train_unizero_multitask_segment_ddp(
         # 编译配置
         cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
         # 创建共享的policy
-        policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
+        policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval']) # MOE
 
         # 加载预训练模型（如果提供）
         if model_path is not None:
