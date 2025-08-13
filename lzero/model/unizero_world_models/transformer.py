@@ -10,18 +10,19 @@ Modified from https://github.com/karpathy/nanoGPT
 import math
 from dataclasses import dataclass
 from typing import Optional
-
+from easydict import EasyDict
 import torch
 import torch.nn as nn
 from ding.torch_utils.network import GRUGatingUnit
 from einops import rearrange
 from torch.nn import functional as F
-
+import torch.distributed as dist
 from .kv_caching import KeysValues
 
 from line_profiler import line_profiler
 from lzero.model.common import SimNorm
 import logging
+from typing import Dict, List, Any
 
 class LearnableScale(nn.Module):
     """
@@ -298,6 +299,7 @@ class TransformerConfig:
         return self.tokens_per_block * self.max_blocks
 
 
+
 class Transformer(nn.Module):
     """
     Transformer model class.
@@ -317,11 +319,20 @@ class Transformer(nn.Module):
         self.config = config
         self.drop = nn.Dropout(config.embed_pdrop)
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
+        # self.blocks[-1].is_last_block=True
         self.ln_f = nn.LayerNorm(config.embed_dim)
-
+        
+        self.num_blocks=len(self.blocks)
+        self.num_experts=config.num_experts_of_moe_in_transformer
+        
         self.task_embed = task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
         self.register_token_shared = True
+
+        self.shared_expert=0
+        if hasattr(config, "n_shared_experts") and config.n_shared_experts > 0:
+           self.shared_expert = config.n_shared_experts
+        
 
         # TODO: 共享模式下，所有任务使用同一参数
 
@@ -399,7 +410,6 @@ class Transformer(nn.Module):
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
-
     #@profile
     def forward(
         self,
@@ -431,9 +441,11 @@ class Transformer(nn.Module):
 
         # 逐层调用
         for i, block in enumerate(self.blocks):
+            # 标识是否为最后一层
+            is_last_block = (i == len(self.blocks) - 1)
             x = block(x,
-                      None if past_keys_values is None else past_keys_values[i],
-                      valid_context_lengths)
+                    None if past_keys_values is None else past_keys_values[i],
+                    valid_context_lengths, is_last_block=is_last_block, task_id=task_id)
 
         # 最后层 LN
         x = self.ln_f(x)
@@ -450,6 +462,179 @@ class Transformer(nn.Module):
             x = x[:, :-self.register_token_num, :]
 
         return x
+    
+    def get_expert_selection_stats(self, task_id: int = None):
+        """获取最后一个Block的MOE专家选择统计"""
+        if len(self.blocks) == 0:
+            return {}
+        
+        last_block = self.blocks[-1]
+        
+        # 检查最后一个Block是否有MoE层
+        if not hasattr(last_block, 'feed_forward') or not hasattr(last_block.feed_forward, 'get_expert_selection_stats'):
+            return {}
+        
+        return last_block.feed_forward.get_expert_selection_stats(task_id)
+    
+    def reset_expert_selection_stats(self):
+        """重置最后一个Block的MOE专家选择统计"""
+        if len(self.blocks) == 0:
+            return
+        
+        last_block = self.blocks[-1]
+        
+        # 检查最后一个Block是否有MoE层
+        if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'reset_expert_selection_stats'):
+            last_block.feed_forward.reset_expert_selection_stats()
+    
+    # modified by tangjia : 
+    # def has_shared_experts(self) -> bool:
+    #     """
+    #     检查Transformer是否使用了共享专家
+        
+    #     Returns:
+    #         bool: 如果任何一个block使用了共享专家则返回True，否则返回False
+    #     """
+    #     for block in self.blocks:
+    #         if hasattr(block, 'feed_forward') and hasattr(block.feed_forward, 'shared_expert'):
+    #             if block.feed_forward.shared_expert is not None:
+    #                 return True
+    #     return False
+    
+    
+
+    def get_shared_expert_gradients_by_block_id(self, block_id: int) -> Dict[str, torch.Tensor]:
+        """
+        获取指定Block上共享专家的参数梯度
+        
+        Arguments:
+            block_id (int): Block的ID (0到num_layers-1)
+            
+        Returns:
+            Dict[str, torch.Tensor]: 包含参数名和对应梯度的字典
+            
+        Raises:
+            ValueError: 当block_id超出范围或block没有共享专家时
+        """
+        if block_id < 0 or block_id >= len(self.blocks):
+            raise ValueError(f"Block ID {block_id} out of range. Available blocks: 0-{len(self.blocks)-1}")
+        
+        block = self.blocks[block_id]
+        
+        # 检查是否有feed_forward属性且支持MoE
+        if not hasattr(block, 'feed_forward'):
+            raise ValueError(f"Block {block_id} doesn't have feed_forward layer")
+        
+        # 检查是否有共享专家
+        if not hasattr(block.feed_forward, 'shared_expert') or block.feed_forward.shared_expert is None:
+            raise ValueError(f"Block {block_id} doesn't have shared expert")
+        
+        # 收集共享专家的梯度
+        gradients = {}
+        shared_expert = block.feed_forward.shared_expert
+        
+        for name, param in shared_expert.named_parameters():
+            if param.grad is not None:
+                gradients[f"shared_expert.{name}"] = param.grad.clone()
+            else:
+                gradients[f"shared_expert.{name}"] = None
+                
+        return gradients
+
+    
+
+    def get_expert_gradients_for_last_block(self) -> Dict[str, torch.Tensor]:
+        """
+        获取最后一个Block上所有专家的参数梯度
+        """
+        if len(self.blocks) == 0:
+            return []
+        
+        # 获取最后一个Block
+        last_block = self.blocks[-1]
+        gradients = []
+        
+        # 检查是否有feed_forward属性
+        if not hasattr(last_block, 'feed_forward'):
+            return gradients
+        
+        feed_forward = last_block.feed_forward
+        
+        # 检查是否是MoE结构
+        if hasattr(feed_forward, 'experts') and feed_forward.experts is not None:
+            # 收集所有独立专家的梯度
+            for expert_idx, expert in enumerate(feed_forward.experts):
+                expert_gradients = []
+                for name, param in expert.named_parameters(): #    
+                    if param.grad is not None:
+                        expert_gradients.append(param.grad.clone().view(-1))
+                    else:
+                        expert_gradients.append(torch.zeros_like(param).view(-1))
+                expert_gradients=torch.cat(expert_gradients, dim=0)
+                gradients.append(expert_gradients)
+
+        return gradients
+
+
+    
+    # added by tangjia :
+    def get_block_before_moe_gradients(self) -> Dict[int, torch.Tensor]:
+        block_before_moe_grad_list=[]
+        for block_id, block in enumerate(self.blocks):
+            if block.block_before_moe_grad is not None:
+                block_before_moe_grad_list.append(block.block_before_moe_grad)
+        return block_before_moe_grad_list        
+
+    def get_last_shared_expert_gradients(self) -> List[Dict[str, torch.Tensor]]:
+        """
+        获取所有Block上共享专家的参数梯度
+        
+        Returns:
+            List[Dict[str, torch.Tensor]]: 包含所有共享专家梯度的列表，
+                                         每个元素是一个字典，包含参数名和对应梯度
+        """
+        if len(self.blocks) == 0:
+            return []
+        
+        # 获取最后一个Block
+        last_block = self.blocks[-1]
+
+       
+        shared_expert_gradients = []
+        shared_expert = last_block.feed_forward.shared_expert
+        
+        for name, param in shared_expert.named_parameters():
+            if param.grad is not None:
+                shared_expert_gradients.append(param.grad.clone().view(-1))
+            else:
+                shared_expert_gradients.append(torch.zeros_like(param).view(-1))
+
+        return torch.concat(shared_expert_gradients,dim=0)
+    
+    def get_last_block_expert_selection_stats(self):
+        """获取最后一个Block的MOE专家选择统计"""
+        if len(self.blocks) == 0:
+            return {}
+        
+        last_block = self.blocks[-1]
+        
+        # 检查最后一层是否有MOE
+        if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'get_expert_selection_stats'):
+            return last_block.feed_forward.get_expert_selection_stats()
+        else:
+            return {}
+    
+    def reset_last_block_expert_selection_stats(self):
+        """重置最后一个Block的MOE专家选择统计"""
+        if len(self.blocks) == 0:
+            return
+        
+        last_block = self.blocks[-1]
+        
+        # 检查最后一层是否有MOE
+        if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'reset_expert_selection_stats'):
+            last_block.feed_forward.reset_expert_selection_stats()
+
 
 
 
@@ -484,8 +669,8 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
-
-
+        self.config=config
+        
         if config.moe_in_transformer:
             from .moe import MoELayer, MultiplicationFeedForward
             # 创Create multiple independent MLP instances
@@ -546,13 +731,14 @@ class Block(nn.Module):
                 _maybe_wrap_linear(nn.Linear(config.embed_dim, 4 * config.embed_dim), config, "feed_forward"),
                 nn.GELU(approximate='tanh'),
                 _maybe_wrap_linear(nn.Linear(4 * config.embed_dim, config.embed_dim), config, "feed_forward"),
-                nn.Dropout(config.resid_pdrop),
+                # nn.Dropout(config.resid_pdrop),
             )
+        self.block_before_moe_grad = None
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None, is_last_block=False, task_id: int = 0) -> torch.Tensor:
         """
-        Forward pass of the Transformer block.
+        Forward pass of the Transformer block.self.is_last_block
 
         Arguments:
             - x (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
@@ -562,15 +748,25 @@ class Block(nn.Module):
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
+        
         x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
         if self.gru_gating:
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.feed_forward(self.ln2(x)))
         else:
             x = x + x_attn
-            x = x + self.feed_forward(self.ln2(x))
+            block_before_moe=self.ln2(x)
+            if self.training:
+                block_before_moe.register_hook(lambda grad: setattr(self, 'block_before_moe_grad', grad)) #note: register hook to save gradients of before_moe
+            
+            # 在最后一层且使用MOE时，传递task_id以收集专家选择统计
+            if is_last_block and self.config.multiplication_moe_in_transformer and hasattr(self.feed_forward, 'forward'):
+                x = x + self.feed_forward(block_before_moe, task_id=task_id)
+            else:
+                x = x + self.feed_forward(block_before_moe)
 
         return x
+    
 
 
 class SelfAttention(nn.Module):

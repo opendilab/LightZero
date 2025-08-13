@@ -14,10 +14,10 @@ from lzero.policy import prepare_obs_stack_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
-from .utils import configure_optimizers_nanogpt
+from .utils import configure_optimizers_nanogpt, compute_gradient_conflict_distributed
 import sys
 
-sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
+# sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
 # sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
 
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
@@ -25,10 +25,114 @@ from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
 from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
 from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
-
-
-
 import torch.distributed as dist
+
+# 预导入matplotlib模块，避免重复导入开销
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 全局figure缓存
+_GLOBAL_FIG_CACHE = None
+_GLOBAL_AX_CACHE = None
+
+def _get_or_create_figure(figsize=(8, 6)):
+    """获取或创建复用的matplotlib figure"""
+    global _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
+    if _GLOBAL_FIG_CACHE is None:
+        _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE = plt.subplots(figsize=figsize)
+    return _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
+
+def _fast_tensor_heatmap(matrix_np, tag):
+    """快速生成热力图tensor - 跳过文本标注以提升性能"""
+    fig, ax = _get_or_create_figure()
+    
+    # 清除之前的内容
+    ax.clear()
+    
+    # 使用Blues colormap
+    im = ax.imshow(matrix_np, cmap='Blues', vmin=-1, vmax=1)
+    ax.set_title(f'{tag}', fontsize=12)
+    
+    # 只在小矩阵时添加数值标注（避免O(n²)开销）
+    if matrix_np.size <= 64:  # 8x8或更小
+        for row in range(matrix_np.shape[0]):
+            for col in range(matrix_np.shape[1]):
+                value = matrix_np[row, col]
+                text_color = "white" if value > 0.5 else "black"
+                ax.text(col, row, f'{value:.2f}',
+                       ha="center", va="center", color=text_color, fontsize=8)
+    
+    # 快速转换为tensor
+    fig.canvas.draw()
+    try:
+        if hasattr(fig.canvas, 'buffer_rgba'):
+            buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+            img_tensor = torch.from_numpy(buf[:, :, :3]).permute(2, 0, 1).float() / 255.0
+        else:
+            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            img_tensor = torch.from_numpy(buf).permute(2, 0, 1).float() / 255.0
+    except Exception:
+        # 回退方案：创建简单的蓝色矩阵
+        h, w = matrix_np.shape
+        img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
+        img_tensor[2] = torch.from_numpy(matrix_np).repeat_interleave(50, 0).repeat_interleave(50, 1)
+    
+    return img_tensor
+
+
+def log_gradient_conflict_heatmaps_distributed_fast(tb_logger, matrix_list, step):
+    """
+    高性能分布式热力图处理 - 优化版本
+    
+    优化点:
+    1. 预导入matplotlib模块，避免重复导入开销
+    2. 复用figure对象，减少内存分配
+    3. 大矩阵跳过文本标注，避免O(n²)性能损失
+    4. 条件barrier，减少等待时间
+    5. 异常时快速回退，保证鲁棒性
+    
+    Args:
+        tb_logger: TensorBoard logger
+        matrix_list: list of (tag, matrix) tuples
+        step: int, 全局步数
+    """
+    if not matrix_list:
+        return
+    
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    
+    try:
+        # 批处理：每个GPU处理自己的矩阵
+        processed_any = False
+        for i in range(rank, len(matrix_list), world_size):
+            tag, matrix = matrix_list[i]
+            if matrix is not None and matrix.numel() > 0:
+                matrix_np = matrix.detach().cpu().numpy()
+                
+                # 使用优化的热力图生成
+                img_tensor = _fast_tensor_heatmap(matrix_np, tag)
+                tb_logger.add_image(f'gradient_conflicts/{tag}', img_tensor, global_step=step)
+                processed_any = True
+        
+        # 条件性同步：只有处理了数据的GPU才需要barrier
+        if processed_any or rank == 0:  # rank 0始终参与同步以防死锁
+            dist.barrier()
+        
+    except Exception as e:
+        print(f"Rank {rank}: Error in optimized heatmap logging: {e}")
+        # 紧急同步避免死锁
+        try:
+            dist.barrier()
+        except:
+            pass
+
+
+
 
 # ------------------------------------------------------------
 # 1. 额外增加 learner 专用 process-group
@@ -130,7 +234,7 @@ class WrappedModelV3:
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
 
 
-
+from line_profiler import LineProfiler
 @POLICY_REGISTRY.register('unizero_multitask')
 class UniZeroMTPolicy(UniZeroPolicy):
     """
@@ -140,7 +244,18 @@ class UniZeroMTPolicy(UniZeroPolicy):
         by addressing the limitations found in MuZero-style algorithms, particularly in environments requiring the
         capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     """
-
+    def __init__(self, cfg, model = None, enable_field = None):
+        super().__init__(cfg, model, enable_field)
+        self.step=0
+        self.save_freq=100
+        
+        self.cal_profile=False
+        if self.cal_profile:
+            self.profiler=LineProfiler()
+            self.profiler.add_function(self._forward_learn)
+            self.profiler.enable_by_count()
+       
+        
     # The default_config for UniZero policy.
     config = dict(
         type='unizero_multitask',
@@ -418,7 +533,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
         )
-
+        # self.a=1
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
 
@@ -459,6 +574,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         )
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
+        
+        global tb_logger
+        
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
@@ -548,7 +666,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self._prev_plasticity_metrics[name] = value
             return value
 
-
+    
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
@@ -605,7 +723,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
             else:
                 obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
-
+            
             # Apply augmentations if needed
             if self._cfg.use_augmentation:
                 obs_batch = self.image_transforms.transform(obs_batch)
@@ -637,7 +755,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # Transform rewards and values to their scaled forms
             transformed_target_reward = scalar_transform(target_reward)
             transformed_target_value = scalar_transform(target_value)
-
+            
             # Convert to categorical distributions
             target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
             target_value_categorical = phi_transform(self.value_support, transformed_target_value)
@@ -668,8 +786,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             # Update world model
             intermediate_losses = defaultdict(float)
+            
             losses = self._learn_model.world_model.compute_loss(
-                batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, task_id=task_id
+                batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, task_id=task_id# 是否需要统计expert 的选择
             )
 
             weighted_total_loss += losses.loss_total  # TODO
@@ -771,9 +890,144 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
+        
+
+        # ===================================modified by tangjia========================================
+        
+      
+        self._learn_model.world_model.tokenizer.encoder[0].grad = None
+        # encoder_grad=self._learn_model.world_model.obs_embeddings_grad.view(-1)
+        # world_size = dist.get_world_size()
+        # gathered_grads = [torch.zeros_like(encoder_grad) for _ in range(world_size)]
+
+        multi_gpu = dist.is_initialized() and self._cfg.multi_gpu
+        rank = dist.get_rank() if multi_gpu else 0
+        
+        self.log_conflict_var=False
+        self.log_conflict_matrix=False
+        if self.step % self.save_freq==0:
+            self.log_conflict_var=True
+        if self.step % (self.save_freq * 10) == 0:
+            self.log_conflict_matrix=True
+        
+        if self.log_conflict_var:
+            matrix_dict={}
+            num_experts= self._learn_model.world_model.transformer.num_experts
+
+
+            local_task_num = len(losses_list)
+            local_encoder_grad_list = []
+            local_before_moe_grad_list=[]
+            local_shared_expert_grad_list=[]
+
+            local_last_block_expert_grad_list=[[] for _ in range(num_experts)] 
+            
+            print(f'Rank {rank} 正在收集梯度')
+            gradient_conflict_log_dict = {
+            }
+
+
+            for i in range(local_task_num):
+                # 每次计算前清零梯度，确保梯度独立
+                self._optimizer_world_model.zero_grad()
+                
+                # 对每个任务的 loss 调用 backward 计算全网络梯度
+                losses_list[i].backward(retain_graph=True) #保留梯度图，因为后面还有backward
+                local_encoder_grad_list.append(self._learn_model.world_model.obs_embeddings_grad.view(-1).detach().clone())
+                
+                
+                # self_attention
+                attention_before_moe_list=self._learn_model.world_model.transformer.get_block_before_moe_gradients()
+                before_moe_grad=attention_before_moe_list[0]
+                local_before_moe_grad_list.append(before_moe_grad.view(-1).detach().clone())
+                
+                # 获取共享 expert 的梯度 
+                if self._learn_model.world_model.transformer.shared_expert>0 :
+                    # get_shared_expert_gradients_by_block_id
+                    shared_expert_grad_for_last_task= self._learn_model.world_model.transformer.get_last_shared_expert_gradients() # 获取最后一个 block 的共享 expert 梯度
+                    local_shared_expert_grad_list.append(shared_expert_grad_for_last_task)
+                    
+                # 计算最后一个Block上的Expert上的梯度的冲突 num_blocks
+                if num_experts>0:
+                    last_block_expert_grad_list = self._learn_model.world_model.transformer.get_expert_gradients_for_last_block()
+                    for j in range(num_experts):
+                        local_last_block_expert_grad_list[j].append(last_block_expert_grad_list[j])
+
+
+            
+            print(f'Rank {rank} 正在计算梯度冲突')
+                
+            # 清零共享参数梯度，防止梯度累加
+            self._optimizer_world_model.zero_grad()
+            
+            print(f'Rank {rank} 正在计算attention梯度冲突')
+            # 1. 计算attention 之后 MOE 之前的梯度的冲突
+            local_before_moe_grad_list=torch.stack(local_before_moe_grad_list,dim=0) # shape: (local_task_num, encoder_grad_dim)
+            before_moe_grad_conflict_ddp=compute_gradient_conflict_distributed(local_before_moe_grad_list, device=self._cfg.device)
+            gradient_conflict_log_dict['avg_before_moe_grad_conflict'] = before_moe_grad_conflict_ddp.avg_conflict_score if before_moe_grad_conflict_ddp is not None else 0
+            gradient_conflict_log_dict['max_before_moe_grad_conflict'] = before_moe_grad_conflict_ddp.max_conflict_score if before_moe_grad_conflict_ddp is not None else 0
+            if self.log_conflict_matrix and before_moe_grad_conflict_ddp is not None :
+                matrix_dict['before_moe_grad_conflict_matrix']=before_moe_grad_conflict_ddp.cosine_similarity_matrix
+            
+            
+            
+            # cosine_similarity_matrix  self.logger
+             
+            
+            print(f'Rank {rank} 正在计算encoder梯度冲突')
+            # 2. 计算encoder 的梯度的冲突
+            local_encoder_grad_list=torch.stack(local_encoder_grad_list,dim=0) # shape: (local_task_num, encoder_grad_dim)
+            encoder_grad_conflict_ddp=compute_gradient_conflict_distributed(local_encoder_grad_list, device=self._cfg.device)
+            gradient_conflict_log_dict['avg_encoder_grad_conflict'] = encoder_grad_conflict_ddp.avg_conflict_score if encoder_grad_conflict_ddp is not None else 0
+            gradient_conflict_log_dict['max_encoder_grad_conflict'] = encoder_grad_conflict_ddp.max_conflict_score if encoder_grad_conflict_ddp is not None else 0
+            if self.log_conflict_matrix and encoder_grad_conflict_ddp is not None:
+                matrix_dict['encoder_grad_conflict_matrix']=encoder_grad_conflict_ddp.cosine_similarity_matrix 
+
+
+            print(f'Rank {rank} 正在计算共享expert梯度冲突')
+            # 3.如果有共享expert 计算共享expert 上的梯度的冲突 
+            if self._learn_model.world_model.transformer.shared_expert>0 :
+                local_shared_expert_grad_list=torch.stack(local_shared_expert_grad_list,dim=0)
+                shared_expert_grad_conflict= compute_gradient_conflict_distributed(local_shared_expert_grad_list, device=self._cfg.device) if len(local_shared_expert_grad_list)>0 else None
+                gradient_conflict_log_dict['avg_shared_expert_grad_conflict'] = shared_expert_grad_conflict.avg_conflict_score if shared_expert_grad_conflict is not None else 0
+                gradient_conflict_log_dict['max_shared_expert_grad_conflict'] = shared_expert_grad_conflict.max_conflict_score if shared_expert_grad_conflict is not None else 0
+
+                
+               
+                if self.log_conflict_matrix and shared_expert_grad_conflict is not None:
+                    matrix_dict['shared_expert_grad_conflict_matrix']=shared_expert_grad_conflict.cosine_similarity_matrix 
+
+            # 4. last block的梯度的冲突
+            last_block_expert_grad_conflict_ddp_list=[]
+            if num_experts>0:
+                for i in range(num_experts):
+                    # 将每个任务的最后一个 block 的 expert 梯度堆叠起来
+                    local_last_block_expert_grad_list[i]=torch.stack(local_last_block_expert_grad_list[i],dim=0)
+                    # 计算每个 expert 的梯度的冲突
+                    expert_conflict=compute_gradient_conflict_distributed(local_last_block_expert_grad_list[i], device=self._cfg.device)
+                    last_block_expert_grad_conflict_ddp_list.append(expert_conflict)
+                    gradient_conflict_log_dict[f'avg_expert_{i}_grad_conflict'] = expert_conflict.avg_conflict_score if expert_conflict is not None else 0
+                    gradient_conflict_log_dict[f'max_expert_{i}_grad_conflict'] = expert_conflict.max_conflict_score if expert_conflict is not None else 0
+                    
+                    if self.log_conflict_matrix and expert_conflict is not None:
+                        matrix_dict[f'expert_{i}_grad_conflict_matrix']=shared_expert_grad_conflict.cosine_similarity_matrix 
+
+                all_moe_gradient=torch.cat(local_last_block_expert_grad_list, dim=1)    
+                if self._learn_model.world_model.transformer.shared_expert>0 :
+                    all_moe_gradient=torch.cat((local_shared_expert_grad_list,all_moe_gradient), dim=1)
+                all_moe_gradient_ddp=compute_gradient_conflict_distributed(all_moe_gradient, device=self._cfg.device)
+                
+                gradient_conflict_log_dict['avg_moe_layer_grad_conflict'] = all_moe_gradient_ddp.avg_conflict_score if all_moe_gradient_ddp is not None else 0
+                gradient_conflict_log_dict['max_moe_layer_grad_conflict'] = all_moe_gradient_ddp.max_conflict_score if all_moe_gradient_ddp is not None else 0
+                if self.log_conflict_matrix and all_moe_gradient_ddp is not None:
+                    matrix_dict['max_moe_layer_grad_conflict_matrix']=all_moe_gradient_ddp.cosine_similarity_matrix 
+
+        # =================================== end modified ========================================
 
         # 假设每个进程计算出的 losses_list 为可求梯度的 tensor list，比如多个标量 loss 组成的列表
         # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
+
+        self._optimizer_world_model.zero_grad()
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
             if self._cfg.moco_version=="v0":
@@ -790,6 +1044,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
             weighted_total_loss.backward()
 
+        # print(f'Rank {rank} 正在反向传播')
+
         # TODO: 使用 MoCo 或 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
@@ -803,7 +1059,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
         #     if param.requires_grad:
         #         print(name, param.grad.norm())
-
+    
         if self._cfg.analysis_sim_norm:
             del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
@@ -816,14 +1072,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
             #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
             self._optimizer_world_model.zero_grad()
             # print(f"ignore_grad")
-
-        # if self._cfg.multi_gpu:
-        #     # Very important to sync gradients before updating the model
-        #     # rank = get_rank()
-        #     # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
-        #     self.sync_gradients(self._learn_model)
-        #     # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
-
+        
+        
+        # dist.barrier()  # 确保所有进程都完成了梯度计算
         if self._cfg.multi_gpu:
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
             #     self.sync_gradients(self._learn_model)
@@ -870,6 +1121,20 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 'target_policy_entropy': average_target_policy_entropy,
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
+        if self.log_conflict_matrix:
+            
+            # matrix_dict
+            # 转换为list，准备分布式处理
+            matrix_list = list(matrix_dict.items())
+            log_gradient_conflict_heatmaps_distributed_fast(self.logger, matrix_list, self.step)
+                
+                    
+                    
+        if self.log_conflict_var:    
+            return_loss_dict.update(gradient_conflict_log_dict)
+            
+        # print(f'Rank {rank} 正在根据冲突记录日志')
+        # print(gradient_conflict_log_dict)
 
         # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
         # multi_task_loss_dicts = {
@@ -936,9 +1201,24 @@ class UniZeroMTPolicy(UniZeroPolicy):
             }
             # 合并两个字典
             return_loss_dict.update(multi_task_loss_dicts)
-        # print(f'return_loss_dict:{return_loss_dict}')
 
-        # 返回最终的损失字典
+
+        print(f"{self.step}============y============")
+        
+        
+        # if self.step==100:
+        #     if self.cal_profile:
+        #         self.profiler.disable_by_count()
+        #         output_filename = f'profile_results.rank{rank}.txt'
+        #         # 将分析结果打印到指定的文件中
+        #         with open(output_filename, 'w') as f:
+        #             self.profiler.print_stats(stream=f)
+        #     exit()
+        
+        self.step+=1
+        print(f"{rank} 结束训练 == 正在同步")
+        dist.barrier()
+        print(f"{rank} 结束训练 ==")
         return return_loss_dict
 
     def monitor_weights_and_grads(self, model):
@@ -979,6 +1259,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             tensorboard according to the return value ``_forward_learn``.
             If num_tasks is provided, generate monitored variables for each task.
         """
+        # rank= dist.get_rank() if dist.is_initialized() else 0
+        # print(f"Rank {rank} 开始记录日志1111")
+
+
         # Basic monitored variables that do not depend on the number of tasks
         monitored_vars = [
             'Current_GPU',
@@ -988,7 +1272,26 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'cur_lr_world_model',
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
+            # modified by tangjia
+            'avg_encoder_grad_conflict',
+            'avg_before_moe_grad_conflict',
+            'avg_shared_expert_grad_conflict',
+
+             'max_encoder_grad_conflict',
+            'max_before_moe_grad_conflict',
+            'max_shared_expert_grad_conflict',
+            "avg_moe_layer_grad_conflict",
+            "max_moe_layer_grad_conflict",
         ]
+        
+        # # If the model uses MoE, add expert gradient conflict variables
+        if self._learn_model.world_model.transformer.shared_expert > 0:
+            monitored_vars.append('avg_shared_expert_grad_conflict')
+            monitored_vars.append('max_shared_expert_grad_conflict')
+        for i in range(self._learn_model.world_model.transformer.num_experts):
+            monitored_vars.append(f'avg_expert_{i}_grad_conflict')
+            monitored_vars.append(f'max_expert_{i}_grad_conflict')
+
 
         # rank = get_rank()
         task_specific_vars = [
@@ -1077,8 +1380,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
         else:
             # If num_tasks is not provided, we assume there's only one task and keep the original variable names
             monitored_vars.extend(task_specific_vars)
-
+        
+        
+        rank= dist.get_rank()
+        dist.barrier()
+        print(f"Rank {rank} 日志记录完毕")
         return monitored_vars
+        
 
     #@profile
     def _forward_collect(
@@ -1487,9 +1795,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - finetune_components (:obj:`List[str]`, optional): A list of component names that will remain trainable after loading.
                 For example, it can include "encoder", "transformer", or both. The components not in this list will be frozen.
         """
-        # finetune_components = [] # load-enc-trans_finetune-head
-        # finetune_components = ['transformer'] # load-enc-trans_finetune-trans-head
-        finetune_components = ["representation_network", "encoder"] # load-enc-trans_finetune-encoder-head
+        # # finetune_components = [] # load-enc-trans_finetune-head
+        # # finetune_components = ['transformer'] # load-enc-trans_finetune-trans-head
+        # finetune_components = ["representation_network", "encoder"] # load-enc-trans_finetune-encoder-head
 
         # 定义需要排除的参数前缀，即不加载这些参数
         exclude_prefixes = [
@@ -1513,6 +1821,18 @@ class UniZeroMTPolicy(UniZeroPolicy):
             """
             filtered = {}
             for k, v in state_dict_loader.items():
+                # if any(prefix in k for prefix in ['head_policy_multi_task.', 'head_value_multi_task.', 'head_rewards_multi_task.', 'head_observations_multi_task.']):
+                #     # 提取任务ID
+                #     import re
+                #     match = re.search(r'\.(\d+)\.', k)
+                #     if match:
+                #         task_id = int(match.group(1))
+                #         if task_id <=0:
+                #             filtered[k] = v
+                #             print(f"include {k}")
+                #             continue
+                
+                
                 if any(k.startswith(prefix) for prefix in exclude_prefixes):
                     print(f"Excluding parameter: {k}")  # 调试用，查看哪些参数被排除
                     continue

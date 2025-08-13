@@ -433,6 +433,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             temp_visit_list = [0.0 for i in range(self._env.action_space.n)]
 
         while True:
+            print("collect loop 111")
             with self._timer:
                 # Get current ready env obs.
                 obs = self._env.ready_obs

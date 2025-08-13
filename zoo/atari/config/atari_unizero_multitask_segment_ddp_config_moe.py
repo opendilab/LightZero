@@ -19,7 +19,7 @@ def compute_batch_config(
         max_micro_batch_one_gpu (int): 单卡能接受的最大 micro-batch
     Returns:
         batch_sizes (list[int]): 每个 env 的 micro-batch
-        grad_acc_steps (int): 梯度累积步数
+        grad_acc_steps (int): 梯度累积步数/fs-computility/niuyazhe/tangjia/github/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe.py
     """
     n_env = len(env_id_list)
     # 每张卡要同时跑多少个 env
@@ -156,8 +156,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    # multiplication_moe_in_transformer=False, # ==============TODO:orig==============
-                    multiplication_moe_in_transformer=True, # =======TODO: moe8=======
+                    multiplication_moe_in_transformer=True, # ==============TODO:orig==============
+                    # multiplication_moe_in_transformer=True, # =======TODO: moe8=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
@@ -217,7 +217,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # ========= TODO: global BENCHMARK_NAME =========
     # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = 'debug/moe/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250611/atari_{len(env_id_list)}games_orig_vit_moe8_tbs256_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
@@ -340,13 +340,13 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 4 # ==============TODO==============
+    num_layers = 1 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
-    num_simulations = 50
+    num_simulations = 25
     max_env_step = int(4e5)
     reanalyze_ratio = 0.0
 
@@ -380,7 +380,7 @@ if __name__ == "__main__":
             effective_batch_size = 512 # nlayer8 需要设置replay_ratio=0.5对应的upc=80
             # effective_batch_size = 256 # moco nlayer8 需要设置replay_ratio=0.5对应的upc=80
         elif num_layers == 1:
-            effective_batch_size = 512 
+            effective_batch_size = 256 
     elif len(env_id_list) == 26:
         # effective_batch_size = 832  # cnn-encoder
         # effective_batch_size = 1024  # base-vit-encoder transformer-nlayer4  or cnn-encoder
@@ -426,7 +426,7 @@ if __name__ == "__main__":
 
     import torch.distributed as dist
     # for seed in [1]:
-    for seed in [1]:
+    for seed in [100]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,

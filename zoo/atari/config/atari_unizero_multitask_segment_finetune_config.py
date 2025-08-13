@@ -187,8 +187,8 @@ if __name__ == "__main__":
     from ding.utils import DDPContext
     from easydict import EasyDict
 
-    # env_id_list = ['PongNoFrameskip-v4']  # Debug setup
-    env_id_list = ['AmidarNoFrameskip-v4']  # Debug setup
+    env_id_list = ['PongNoFrameskip-v4']  # Debug setup
+    # env_id_list = ['AmidarNoFrameskip-v4']  # Debug setup
 
     action_space_size = 18
 
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         reanalyze_batch_size = 160
         reanalyze_partition = 0.75
 
-        # ======== TODO: only for debug ========
+        # ======== TODO: only for debug ========/fs-computility/niuyazhe/tangjia/github/LightZero/zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
         # collector_env_num = 2
         # num_segments = 2
         # n_episode = 2
@@ -231,6 +231,6 @@ if __name__ == "__main__":
         # pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/iteration_200000.pth.tar'
         # pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_atari_mt_20250217/atari_8games_notaskembed_bs64_brf0.02_seed0_dev-uz-mz-mt-cont/Pong_seed0_250218_124624/ckpt/ckpt_best.pth.tar'
 
-        pretrained_model_path = '/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_atari_mt_20250307/atari_8games_brf0.02_not-share-head_final-ln_seed0/Pong_seed0/ckpt/ckpt_best.pth.tar'
+        pretrained_model_path = '/fs-computility/niuyazhe/shared/puyuan/data_lz_atari26/ckpt_best.pth.tar'
         with DDPContext():
             train_unizero_multitask_segment_ddp(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)
