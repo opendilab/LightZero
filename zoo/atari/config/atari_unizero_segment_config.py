@@ -17,7 +17,8 @@ def main(env_id, seed):
     eval_num_simulations = 50
     # max_env_step = int(5e5)
     max_env_step = int(50e6)
-    batch_size = 64
+    batch_size = 256
+    # batch_size = 64
     num_layers = 2
     # replay_ratio = 0.25
     replay_ratio = 0.1
@@ -65,6 +66,8 @@ def main(env_id, seed):
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
                 world_model_cfg=dict(
+                    num_res_blocks=2,
+                    num_channels=128,
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -81,17 +84,24 @@ def main(env_id, seed):
                     num_simulations=num_simulations,
                     rotary_emb=False,
                     # final_norm_option_in_encoder='LayerNorm_Tanh',
-                    # final_norm_option_in_encoder='LayerNormNoAffine',
+                    # final_norm_option_in_obs_head="LayerNorm",
+                    # predict_latent_loss_type='mse',
+
                     # final_norm_option_in_encoder='L2Norm',
+                    # final_norm_option_in_obs_head="L2Norm",
                     # predict_latent_loss_type='mse',
 
                     final_norm_option_in_encoder="LayerNorm",
+                    final_norm_option_in_obs_head="LayerNorm",
                     predict_latent_loss_type='mse',
+
                     # final_norm_option_in_encoder="SimNorm",
                     # final_norm_option_in_obs_head="SimNorm",
                     # predict_latent_loss_type='group_kl',
                 ),
             ),
+            # gradient_scale=True, #TODO
+            gradient_scale=False, #TODO
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             use_augmentation=False, # TODO
@@ -103,18 +113,25 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
+            # target_model_update_option="hard",
+            target_update_freq=100,
+
+            target_model_update_option="soft",
+            target_update_theta=0.05,
             learning_rate=0.0001,
             num_simulations=50, # for reanalyze
             collect_num_simulations=collect_num_simulations,
             eval_num_simulations=eval_num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            train_start_after_envsteps=0,
+            # train_start_after_envsteps=0,
+            train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
-            eval_freq=int(1e4),
+            # eval_freq=int(1e4),
+            eval_freq=int(2e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -145,7 +162,9 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN-gradscale_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_LN-noaffine_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_simnorm_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
@@ -159,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    # args.env = 'MsPacmanNoFrameskip-v4'
+    args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'QbertNoFrameskip-v4'
 
     # args.env = 'SpaceInvadersNoFrameskip-v4'
@@ -176,7 +195,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=1
+    export CUDA_VISIBLE_DEVICES=4
     cd /fs-computility/niuyazhe/puyuan/code/LightZero
     python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_segment_config.py
     """

@@ -94,7 +94,6 @@ def main(env_id, seed):
                 self_supervised_learning_loss=True,  # default is False
                 discrete_action_encoding_type='one_hot',
                 norm_type='BN',
-                # use_sim_norm=True, # NOTE
                 use_sim_norm_kl_loss=False,
                 model_type='conv'
             ),

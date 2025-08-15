@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
 
-from lzero.model.common import SimNorm
+from lzero.model.common import SimNorm, L2Norm
 from lzero.model.utils import cal_dormant_ratio
 from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
@@ -78,7 +78,7 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm')
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
@@ -164,6 +164,9 @@ class WorldModel(nn.Module):
             return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
         elif norm_option == 'SimNorm':
             return SimNorm(simnorm_dim=self.config.group_size)
+        elif norm_option == 'L2Norm':
+            # L2Norm 是一个函数式操作，不需要在 init 中定义模块
+            return L2Norm(eps=1e-6)
         else:
             raise ValueError(f"Unsupported final_norm_option_in_obs_head: {norm_option}")
 

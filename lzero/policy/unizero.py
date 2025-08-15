@@ -331,13 +331,22 @@ class UniZeroPolicy(MuZeroPolicy):
         assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
         self._model = torch.compile(self._model)
         self._target_model = torch.compile(self._target_model)
-        # NOTE: soft target
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='momentum',
-            update_kwargs={'theta': self._cfg.target_update_theta}
-        )
+        if self._cfg.target_model_update_option=="soft":
+            # NOTE: soft target
+            self._target_model = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='momentum',
+                update_kwargs={'theta': self._cfg.target_update_theta}
+            )
+        elif self._cfg.target_model_update_option=="hard":
+            self._target_model = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='assign',
+                update_kwargs={'freq': self._cfg.target_update_freq}
+            )
+
         self._learn_model = self._model
 
         if self._cfg.use_augmentation:
@@ -476,6 +485,21 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
+
+        if self._cfg.gradient_scale:
+            # ==============================================================
+            # START OF THE FIX: Add gradient scaling just like in MuZero
+            # ==============================================================
+            # This is the key to stabilizing the latent norm. It averages the gradients
+            # accumulated over the unroll steps, preventing the exploding gradient problem
+            # in the recurrent world model (Transformer).
+            gradient_scale = 1.0 / self._cfg.num_unroll_steps
+            weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+            # ==============================================================
+            # END OF THE FIX
+            # ==============================================================
+
+
         weighted_total_loss.backward()
 
         # Check if the current iteration completes an accumulation cycle
