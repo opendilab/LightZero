@@ -268,6 +268,20 @@ class LossWithIntermediateLosses:
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
             self.ends_loss_weight = 0.
+
+            # muzero loss weight
+            # self.obs_loss_weight = 2
+            # self.value_loss_weight = 0.25
+            # self.reward_loss_weight = 1
+            # self.policy_loss_weight = 1
+            # self.ends_loss_weight = 0.
+
+            # like TD-MPC2 for DMC
+            # self.obs_loss_weight = 10
+            # self.value_loss_weight = 0.1
+            # self.reward_loss_weight = 0.1
+            # self.policy_loss_weight = 0.1
+            # self.ends_loss_weight = 0.
         else:
             # like TD-MPC2 for DMC
             self.obs_loss_weight = 10
@@ -275,7 +289,7 @@ class LossWithIntermediateLosses:
             self.reward_loss_weight = 0.1
             self.policy_loss_weight = 0.1
             self.ends_loss_weight = 0.
-
+        
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
 

@@ -62,6 +62,8 @@ class WorldModel(nn.Module):
         # Position embedding
         if not self.config.rotary_emb:
             self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+            # TODO(pu)
+            # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
             self.precompute_pos_emb_diff_kv()
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
@@ -76,6 +78,9 @@ class WorldModel(nn.Module):
         else:
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+            # TODO(pu)
+            # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
+
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
@@ -1324,18 +1329,21 @@ class WorldModel(nn.Module):
         else:
             dormant_ratio_encoder = torch.tensor(0.)
 
-        # Calculate the L2 norm of the latent state roots
-        latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
-
         # Action tokens
         if self.continuous_action_space:
             act_tokens = batch['actions']
         else:
             act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
+        with torch.no_grad():
+            # Calculate the L2 norm of the latent state roots
+            latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
+            # Calculate the L2 norm of the latent action
+            latent_action_l2_norms = torch.norm(self.act_embedding_table(act_tokens), p=2, dim=2).mean()
+
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
-        
+
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
@@ -1481,7 +1489,7 @@ class WorldModel(nn.Module):
         loss_obs = (loss_obs * mask_padding_expanded)
 
         # Compute labels for policy and value
-        labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
+        labels_value, labels_policy = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
 
@@ -1582,6 +1590,7 @@ class WorldModel(nn.Module):
                 dormant_ratio_encoder=dormant_ratio_encoder,
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
+                latent_action_l2_norms=latent_action_l2_norms,
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
@@ -1605,6 +1614,8 @@ class WorldModel(nn.Module):
                 dormant_ratio_encoder=dormant_ratio_encoder,
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
+                latent_action_l2_norms=latent_action_l2_norms,
+
             )
 
     
@@ -1821,9 +1832,9 @@ class WorldModel(nn.Module):
         labels_value = target_value.masked_fill(mask_fill_value, -100)
 
         if self.continuous_action_space:
-            return None, labels_value.reshape(-1, self.support_size)
+            return labels_value.reshape(-1, self.support_size), None
         else:
-            return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
+            return labels_value.reshape(-1, self.support_size), labels_policy.reshape(-1, self.action_space_size)
 
     def clear_caches(self):
         """

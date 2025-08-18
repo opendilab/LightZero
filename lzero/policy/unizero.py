@@ -474,6 +474,7 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
+        latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -586,6 +587,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
             'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
+            'analysis/latent_action_l2_norms': latent_action_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
@@ -620,6 +622,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
             self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
@@ -908,29 +911,59 @@ class UniZeroPolicy(MuZeroPolicy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
-        # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # --- BEGIN ROBUST FIX ---
+        # This logic handles the crucial end-of-episode cache clearing.
+        # The collector calls `_policy.reset([env_id])` when an episode is done,
+        # which results in `current_steps` being None and `env_id` being a list.
+        
+        # We must handle both single int and list of ints for env_id.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+                
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the collector.
+            if current_steps is None:
+                world_model = self._collect_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+                    
+                    print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end.')
 
-        # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+                # The recurrent cache is global, which is problematic.
+                # A full clear is heavy-handed but safer than leaving stale entries.
+                world_model.past_kv_cache_recurrent_infer.clear()
+                
+                if hasattr(world_model, 'keys_values_wm_list'):
+                    world_model.keys_values_wm_list.clear()
 
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
-            print(f'clear_interval: {clear_interval}')
+                torch.cuda.empty_cache()
 
-            # Clear various caches in the collect model's world model
-            world_model = self._collect_model.world_model
-            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-                kv_cache_dict_env.clear()
-            world_model.past_kv_cache_recurrent_infer.clear()
-            world_model.keys_values_wm_list.clear()
+        # --- END ROBUST FIX ---
 
-            # Free up GPU memory
-            torch.cuda.empty_cache()
+        # # Determine the clear interval based on the environment's sample type
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
 
-            print('collector: collect_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+        # # Clear caches if the current steps are a multiple of the clear interval
+        # if current_steps % clear_interval == 0:
+        #     print(f'clear_interval: {clear_interval}')
+
+        #     # Clear various caches in the collect model's world model
+        #     world_model = self._collect_model.world_model
+        #     for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+        #         kv_cache_dict_env.clear()
+        #     world_model.past_kv_cache_recurrent_infer.clear()
+        #     world_model.keys_values_wm_list.clear()
+
+        #     # Free up GPU memory
+        #     torch.cuda.empty_cache()
+
+        #     print('collector: collect_model clear()')
+        #     print(f'eps_steps_lst[{env_id}]: {current_steps}')
+
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
         """
@@ -952,29 +985,54 @@ class UniZeroPolicy(MuZeroPolicy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
-        # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # --- BEGIN ROBUST FIX ---
+        # This logic handles the crucial end-of-episode cache clearing for evaluation.
+        # The evaluator calls `_policy.reset([env_id])` when an episode is done.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
 
-        # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
+            if current_steps is None:
+                world_model = self._eval_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+                    
+                    print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end.')
 
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
-            print(f'clear_interval: {clear_interval}')
+                # The recurrent cache is global.
+                world_model.past_kv_cache_recurrent_infer.clear()
+                
+                if hasattr(world_model, 'keys_values_wm_list'):
+                    world_model.keys_values_wm_list.clear()
 
-            # Clear various caches in the eval model's world model
-            world_model = self._eval_model.world_model
-            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-                kv_cache_dict_env.clear()
-            world_model.past_kv_cache_recurrent_infer.clear()
-            world_model.keys_values_wm_list.clear()
+                torch.cuda.empty_cache()
+                return
+        # --- END ROBUST FIX ---
 
-            # Free up GPU memory
-            torch.cuda.empty_cache()
+        # # # Determine the clear interval based on the environment's sample type
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
 
-            print('evaluator: eval_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+        # # # Clear caches if the current steps are a multiple of the clear interval
+        # if current_steps % clear_interval == 0:
+        #     print(f'clear_interval: {clear_interval}')
+
+        #     # Clear various caches in the eval model's world model
+        #     world_model = self._eval_model.world_model
+        #     for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+        #         kv_cache_dict_env.clear()
+        #     world_model.past_kv_cache_recurrent_infer.clear()
+        #     world_model.keys_values_wm_list.clear()
+
+        #     # Free up GPU memory
+        #     torch.cuda.empty_cache()
+
+        #     print('evaluator: eval_model clear()')
+        #     print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """
@@ -986,6 +1044,8 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_world_model',
             'analysis/latent_state_l2_norms',
+            'analysis/latent_action_l2_norms',
+
             'analysis/l2_norm_before',
             'analysis/l2_norm_after',
             'analysis/grad_norm_before',

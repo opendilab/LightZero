@@ -1,6 +1,7 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-
+# # 在main文件开始，通过全局变量来控制是否处于调试状态
+# global DEBUG_ENABLED;DEBUG_ENABLED = True 
 
 def main(env_id, seed):
     action_space_size = atari_env_action_space_map[env_id]
@@ -10,8 +11,13 @@ def main(env_id, seed):
     # ==============================================================
     collector_env_num = 8
     num_segments = 8
-    game_segment_length = 20
     evaluator_env_num = 3
+
+    # collector_env_num = 1
+    # num_segments = 1
+    # evaluator_env_num = 1
+
+    game_segment_length = 20
     num_simulations = 50
     collect_num_simulations = 25
     eval_num_simulations = 50
@@ -26,17 +32,20 @@ def main(env_id, seed):
     num_unroll_steps = 10
     infer_context_length = 4
 
+    # num_unroll_steps = 4 # TODO
+    # infer_context_length = 2
+
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/50
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/1000000000000
+    # buffer_reanalyze_freq = 1/1000000000000
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
 
-    norm_type ="LN"
+    norm_type ="BN"
 
     # ====== only for debug =====
     # collector_env_num = 2
@@ -76,6 +85,7 @@ def main(env_id, seed):
                     num_channels=128,
                     support_size=601,
                     policy_entropy_weight=5e-3,
+                    # policy_entropy_weight=5e-2, # TODO(pu)
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -171,7 +181,10 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250812_debug/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_fix-reset-v2_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_encoder-LN_act-pos-maxnorm1-encoder-l2norm_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_encoder-LN_act-pos-maxnorm1_muzero-loss-weight__brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN-gradscale_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -187,7 +200,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    # args.env = 'MsPacmanNoFrameskip-v4'
+    args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'QbertNoFrameskip-v4'
 
     # args.env = 'SpaceInvadersNoFrameskip-v4'
@@ -200,6 +213,9 @@ if __name__ == "__main__":
 
 
     args.seed = 0
+
+
+    
 
     main(args.env, args.seed)
 
