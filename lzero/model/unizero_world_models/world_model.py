@@ -1773,6 +1773,7 @@ class WorldModel(nn.Module):
             # Compute policy entropy loss
             policy_entropy = self.compute_policy_entropy_loss(logits, mask_padding)
             # Combine losses with specified weight
+            # print(f"self.policy_entropy_weight:{self.policy_entropy_weight}")
             combined_loss = loss - self.policy_entropy_weight * policy_entropy
             return combined_loss, loss, policy_entropy
 

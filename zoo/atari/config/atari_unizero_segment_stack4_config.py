@@ -27,16 +27,14 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/50
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/1000000000000
+    # buffer_reanalyze_freq = 1/1000000000000
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
-
-    norm_type ="LN"
 
     # ====== only for debug =====
     # collector_env_num = 2
@@ -52,8 +50,13 @@ def main(env_id, seed):
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 64, 64),
+            # observation_shape=(3, 64, 64),
+            # gray_scale=False,
+
+            observation_shape=(12, 64, 64),
+            image_channel=3,
             gray_scale=False,
+            frame_stack_num=4,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
@@ -66,12 +69,21 @@ def main(env_id, seed):
             # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
             model=dict(
-                observation_shape=(3, 64, 64),
+                observation_shape=(12, 64, 64),
+                image_channel=3,
+                gray_scale=False,
+                frame_stack_num=4,
+
+                # observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
                 world_model_cfg=dict(
-                    norm_type=norm_type,
+                    observation_shape=(12, 64, 64),
+                    image_channel=3,
+                    gray_scale=False,
+                    frame_stack_num=4,
+
                     num_res_blocks=2,
                     num_channels=128,
                     support_size=601,
@@ -123,9 +135,9 @@ def main(env_id, seed):
             target_update_freq=100,
 
             target_model_update_option="soft",
-            # target_update_theta=0.005, # TODO
+            target_update_theta=0.005, # TODO
             # target_update_theta=0.01,
-            target_update_theta=0.05,
+            # target_update_theta=0.05,
 
             learning_rate=0.0001,
             num_simulations=50, # for reanalyze
@@ -171,7 +183,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_stack4_encoder-LN-head-LN_soft-target-0005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN-gradscale_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -204,7 +216,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=2
+    export CUDA_VISIBLE_DEVICES=0
     cd /fs-computility/niuyazhe/puyuan/code/LightZero
-    python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_segment_config.py
+    python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_segment_stack4_config.py
     """
