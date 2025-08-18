@@ -470,6 +470,8 @@ class RepresentationNetworkUniZero(nn.Module):
             embedding_dim: int = 256,
             group_size: int = 8,
             final_norm_option_in_encoder: str = 'LayerNorm', # TODO
+            use_manual: bool = False,
+            manual_dim: int = 768
     ) -> None:
         """
         Overview:
@@ -496,8 +498,10 @@ class RepresentationNetworkUniZero(nn.Module):
         logging.info(f"Using norm type: {norm_type}")
         logging.info(f"Using activation type: {activation}")
 
-        self.observation_shape = observation_shape
+        self.observation_shape = observation_shape  
         self.downsample = downsample
+        self.use_manual = use_manual
+
         if self.downsample:
             self.downsample_net = DownSample(
                 observation_shape,
@@ -533,6 +537,8 @@ class RepresentationNetworkUniZero(nn.Module):
 
         elif self.observation_shape[1] in [84, 96]:
             self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
+        elif self.observation_shape[1] == 10:
+            self.last_linear = nn.Linear(64 * 10 * 10, self.embedding_dim, bias=False)
 
         self.final_norm_option_in_encoder = final_norm_option_in_encoder
         if self.final_norm_option_in_encoder == 'LayerNorm':
@@ -542,6 +548,8 @@ class RepresentationNetworkUniZero(nn.Module):
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
 
+        if use_manual:
+            self.feature_merge_linear = nn.Linear(self.embedding_dim + manual_dim, self.embedding_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

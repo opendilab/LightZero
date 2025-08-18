@@ -100,7 +100,7 @@ class WorldModel(nn.Module):
         skip_modules = set()
         if hasattr(self.tokenizer.encoder, 'pretrained_model'):
             skip_modules.update(self.tokenizer.encoder.pretrained_model.modules())
-        if hasattr(self.tokenizer, 'decoder_network'):
+        if hasattr(self.tokenizer, 'decoder_network') and self.tokenizer.decoder_network is not None:
             skip_modules.update(self.tokenizer.decoder_network.modules())
 
         def custom_init(module):

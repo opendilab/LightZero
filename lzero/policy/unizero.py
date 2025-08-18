@@ -589,7 +589,8 @@ class UniZeroPolicy(MuZeroPolicy):
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            # self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2]]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
@@ -745,7 +746,9 @@ class UniZeroPolicy(MuZeroPolicy):
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            # self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
