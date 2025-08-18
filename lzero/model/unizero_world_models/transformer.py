@@ -579,11 +579,10 @@ class Transformer(nn.Module):
     
     # added by tangjia :
     def get_block_before_moe_gradients(self) -> Dict[int, torch.Tensor]:
-        block_before_moe_grad_list=[]
-        for block_id, block in enumerate(self.blocks):
-            if block.block_before_moe_grad is not None:
-                block_before_moe_grad_list.append(block.block_before_moe_grad)
-        return block_before_moe_grad_list        
+        # 把最后一个返回即可
+        
+        return self.blocks[-1].block_before_moe_grad
+          
 
     def get_last_shared_expert_gradients(self) -> List[Dict[str, torch.Tensor]]:
         """
@@ -756,8 +755,14 @@ class Block(nn.Module):
         else:
             x = x + x_attn
             block_before_moe=self.ln2(x)
-            if self.training:
-                block_before_moe.register_hook(lambda grad: setattr(self, 'block_before_moe_grad', grad)) #note: register hook to save gradients of before_moe
+            if self.training and is_last_block:
+                # 清除之前的梯度
+                self.block_before_moe_grad = None
+                # 使用更安全的hook注册方式，避免闭包问题
+                def grad_hook(grad):
+                    self.block_before_moe_grad = grad.clone()  # 克隆梯度避免引用问题
+                    return None
+                block_before_moe.register_hook(grad_hook)
             
             # 在最后一层且使用MOE时，传递task_id以收集专家选择统计
             if is_last_block and self.config.multiplication_moe_in_transformer and hasattr(self.feed_forward, 'forward'):

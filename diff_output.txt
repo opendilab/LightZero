@@ -1,0 +1,2207 @@
+diff --git a/lzero/entry/train_unizero_multitask_segment_ddp.py b/lzero/entry/train_unizero_multitask_segment_ddp.py
+index 74d2de0..5e913af 100644
+--- a/lzero/entry/train_unizero_multitask_segment_ddp.py
++++ b/lzero/entry/train_unizero_multitask_segment_ddp.py
+@@ -19,7 +19,10 @@ try:
+ except ImportError:
+     LineProfiler = None
+ 
+-from lzero.entry.utils import log_buffer_memory_usage, TemperatureScheduler
++from lzero.entry.utils import (
++    log_buffer_memory_usage, TemperatureScheduler,
++    collect_and_log_moe_statistics, collect_and_log_divergences_with_heatmaps
++)
+ from lzero.policy import visit_count_temperature
+ from lzero.worker import MuZeroEvaluator as Evaluator
+ from lzero.worker import MuZeroSegmentCollector as Collector
+@@ -439,6 +442,11 @@ def collect_and_log_moe_statistics(policy, tb_logger, train_iter, world_size, ra
+         # 记录总体MOE使用情况
+         tb_logger.add_scalar('MOE_Global/ActiveTasks', len(merged_stats), global_step=train_iter)
+         
++        # Step 6: 新增分布差异计算和记录（包含去对角线热力图）
++        if any('immediate' in task_stats for task_stats in merged_stats.values()):
++            print(f"Rank {rank}: 开始计算任务间分布差异...")
++            collect_and_log_divergences_with_heatmaps(tb_logger, merged_stats, train_iter)
++        
+         print(f"Rank {rank}: MOE统计记录完成，train_iter={train_iter}")
+     
+     except Exception as e:
+@@ -447,6 +455,388 @@ def collect_and_log_moe_statistics(policy, tb_logger, train_iter, world_size, ra
+         traceback.print_exc()
+ 
+ import concurrent.futures
++
++# ====== GPU优化的分布差异计算和可视化函数 ======
++def jensen_shannon_divergence_batch_gpu(distributions_tensor):
++    """
++    GPU批量计算JS散度矩阵 - 完全向量化，无循环
++    
++    Args:
++        distributions_tensor: shape (n_tasks, n_experts), GPU张量
++    
++    Returns:
++        js_matrix: shape (n_tasks, n_tasks), 对称矩阵
++    """
++    device = distributions_tensor.device
++    n_tasks, n_experts = distributions_tensor.shape
++    
++    # 1. 归一化为概率分布
++    eps = 1e-8
++    distributions_tensor = distributions_tensor / (distributions_tensor.sum(dim=1, keepdim=True) + eps)
++    
++    # 2. 使用广播计算所有任务对的平均分布
++    # P_i: (n_tasks, 1, n_experts), P_j: (1, n_tasks, n_experts)
++    P_i = distributions_tensor.unsqueeze(1)  
++    P_j = distributions_tensor.unsqueeze(0)  
++    M = 0.5 * (P_i + P_j)  # shape: (n_tasks, n_tasks, n_experts)
++    
++    # 3. 批量计算KL散度 - 完全向量化
++    # KL(P_i || M) for all pairs
++    log_ratio_i = torch.log((P_i + eps) / (M + eps))
++    kl_i_m = torch.sum(P_i * log_ratio_i, dim=2)  # (n_tasks, n_tasks)
++    
++    # KL(P_j || M) for all pairs  
++    log_ratio_j = torch.log((P_j + eps) / (M + eps))
++    kl_j_m = torch.sum(P_j * log_ratio_j, dim=2)  # (n_tasks, n_tasks)
++    
++    # 4. JS散度矩阵
++    js_matrix = 0.5 * (kl_i_m + kl_j_m)
++    
++    return js_matrix
++
++
++def wasserstein_distance_batch_gpu(distributions_tensor):
++    """
++    GPU批量计算Wasserstein距离矩阵 - 1D分布的高效实现
++    
++    Args:
++        distributions_tensor: shape (n_tasks, n_experts), GPU张量
++    
++    Returns:
++        wasserstein_matrix: shape (n_tasks, n_tasks), 对称矩阵
++    """
++    device = distributions_tensor.device
++    n_tasks, n_experts = distributions_tensor.shape
++    eps = 1e-8
++    
++    # 1. 归一化为概率分布
++    distributions_tensor = distributions_tensor / (distributions_tensor.sum(dim=1, keepdim=True) + eps)
++    
++    # 2. 计算累积分布函数 (CDF)
++    cdf_tensor = torch.cumsum(distributions_tensor, dim=1)  # (n_tasks, n_experts)
++    
++    # 3. 使用广播计算所有CDF对之间的L1距离
++    cdf_i = cdf_tensor.unsqueeze(1)  # (n_tasks, 1, n_experts)
++    cdf_j = cdf_tensor.unsqueeze(0)  # (1, n_tasks, n_experts)
++    
++    # Wasserstein距离 = 累积分布差异的L1范数
++    wasserstein_matrix = torch.sum(torch.abs(cdf_i - cdf_j), dim=2)
++    
++    return wasserstein_matrix
++
++
++def compute_distribution_divergences_optimized(merged_stats, window_type='immediate'):
++    """
++    GPU优化版本 - 高效分布差异计算
++    """
++    # 1. 数据预处理
++    valid_tasks = [(tid, stats[window_type]['frequencies']) 
++                  for tid, stats in merged_stats.items() 
++                  if window_type in stats]
++    
++    if len(valid_tasks) < 2:
++        return {}
++    
++    task_ids, frequencies_list = zip(*valid_tasks)
++    
++    # 2. 高效张量转换
++    try:
++        if isinstance(frequencies_list[0], torch.Tensor):
++            frequencies_tensor = torch.stack(frequencies_list)
++        else:
++            frequencies_tensor = torch.tensor(
++                np.array(frequencies_list), 
++                dtype=torch.float32
++            )
++        
++        # 自动GPU加速
++        if torch.cuda.is_available():
++            frequencies_tensor = frequencies_tensor.cuda()
++            
++    except Exception as e:
++        print(f"GPU转换失败，使用CPU: {e}")
++        frequencies_tensor = torch.tensor(np.array(frequencies_list), dtype=torch.float32)
++    
++    device = frequencies_tensor.device
++    n_tasks, n_experts = frequencies_tensor.shape
++    
++    # 3. GPU批量计算（无循环）
++    with torch.no_grad():
++        # 批量计算JS散度和Wasserstein距离
++        js_matrix = jensen_shannon_divergence_batch_gpu(frequencies_tensor)
++        wasserstein_matrix = wasserstein_distance_batch_gpu(frequencies_tensor)
++        
++        # 高效提取上三角值（避免重复计算）
++        triu_indices = torch.triu_indices(n_tasks, n_tasks, offset=1, device=device)
++        js_values = js_matrix[triu_indices[0], triu_indices[1]]
++        wasserstein_values = wasserstein_matrix[triu_indices[0], triu_indices[1]]
++        
++        # 统计计算（向量化）
++        js_stats = {
++            'avg': torch.mean(js_values).item(),
++            'max': torch.max(js_values).item(),
++            'min': torch.min(js_values).item(),
++            'std': torch.std(js_values).item()
++        }
++        
++        wasserstein_stats = {
++            'avg': torch.mean(wasserstein_values).item(),
++            'max': torch.max(wasserstein_values).item(), 
++            'min': torch.min(wasserstein_values).item(),
++            'std': torch.std(wasserstein_values).item()
++        }
++    
++    return {
++        'task_ids': task_ids,
++        'n_tasks': n_tasks,
++        'n_experts': n_experts,
++        'device': str(device),
++        'gpu_accelerated': 'cuda' in str(device),
++        
++        # 返回CPU版本用于记录
++        'js_matrix': js_matrix.cpu().numpy(),
++        'wasserstein_matrix': wasserstein_matrix.cpu().numpy(),
++        'js_stats': js_stats,
++        'wasserstein_stats': wasserstein_stats
++    }
++
++
++def create_similarity_heatmap_no_diagonal(similarity_matrix, task_ids, metric_name, title_suffix=""):
++    """
++    创建任务相似度热力图 - 去掉对角线部分
++    
++    Args:
++        similarity_matrix: 相似度矩阵 (n_tasks, n_tasks)
++        task_ids: 任务ID列表
++        metric_name: 指标名称 ('js_divergence', 'wasserstein_distance')
++        title_suffix: 标题后缀
++    """
++    try:
++        # 复制矩阵避免修改原数据
++        matrix = similarity_matrix.copy()
++        
++        # 将对角线设置为NaN，这样matplotlib会显示为空白
++        np.fill_diagonal(matrix, np.nan)
++        
++        figsize = (max(6, len(task_ids)), max(4, len(task_ids)))
++        fig, ax = plt.subplots(figsize=figsize)  # 创建新figure避免复用问题
++        
++        # 根据指标类型选择颜色映射
++        if 'js' in metric_name.lower():
++            cmap = 'Reds'
++            title_name = 'JS Divergence'
++            vmin, vmax = 0, 1.0
++        else:  # wasserstein
++            cmap = 'Blues'  
++            title_name = 'Wasserstein Distance'
++            vmin, vmax = None, None  # 自适应
++        
++        # 使用masked数组处理NaN值，对角线显示为白色
++        masked_matrix = np.ma.masked_invalid(matrix)
++        im = ax.imshow(masked_matrix, cmap=cmap, vmin=vmin, vmax=vmax, aspect='auto')
++        
++        # 添加数值标注（跳过对角线）
++        if len(task_ids) <= 15:  # 只在任务数较少时添加标注
++            for i in range(len(task_ids)):
++                for j in range(len(task_ids)):
++                    if i != j:  # 跳过对角线
++                        value = matrix[i, j]
++                        if not np.isnan(value):
++                            threshold = (vmax or np.nanmax(matrix)) * 0.5 if vmax else np.nanmax(matrix) * 0.5
++                            color = 'white' if value > threshold else 'black'
++                            ax.text(j, i, f'{value:.3f}', ha='center', va='center', 
++                                   color=color, fontsize=8)
++        
++        # 设置标签
++        ax.set_xticks(range(len(task_ids)))
++        ax.set_yticks(range(len(task_ids)))
++        ax.set_xticklabels([f'T{tid}' for tid in task_ids], fontsize=9)
++        ax.set_yticklabels([f'T{tid}' for tid in task_ids], fontsize=9)
++        ax.set_title(f'Task {title_name} Matrix {title_suffix} (No Diagonal)', fontsize=12)
++        ax.set_xlabel('Tasks', fontsize=10)
++        ax.set_ylabel('Tasks', fontsize=10)
++        
++        # 添加colorbar
++        plt.colorbar(im, ax=ax, label=title_name, shrink=0.8)
++        
++        # 转换为图像数组 - 修复matplotlib版本兼容性
++        fig.canvas.draw()
++        
++        try:
++            # 新版matplotlib使用buffer_rgba
++            if hasattr(fig.canvas, 'buffer_rgba'):
++                buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
++                h, w = fig.canvas.get_width_height()
++                img_array = buf.reshape(h, w, 4)[:, :, :3]  # 去掉alpha通道
++            else:
++                # 旧版matplotlib回退方案
++                buf = fig.canvas.print_to_string()
++                img_array = np.frombuffer(buf, dtype=np.uint8)
++                h, w = fig.canvas.get_width_height()
++                img_array = img_array.reshape(h, w, 3)
++        except Exception as conv_e:
++            print(f"图像转换方法失败: {conv_e}, 尝试PIL方案")
++            # 最终回退：通过PIL转换
++            from io import BytesIO
++            buf = BytesIO()
++            fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
++            buf.seek(0)
++            from PIL import Image
++            img = Image.open(buf)
++            img_array = np.array(img)[:, :, :3]  # 去掉alpha通道
++            buf.close()
++        
++        img_array = img_array.transpose(2, 0, 1)  # CHW格式
++        plt.close(fig)  # 关闭figure避免内存泄漏
++        
++        return img_array
++        
++    except Exception as e:
++        print(f"Warning: 无对角线热力图生成失败: {e}")
++        return np.zeros((3, 100, 100), dtype=np.uint8)
++
++
++def log_pairwise_optimized(tb_logger, divergence_data, train_iter):
++    """
++    优化的任务对记录 - 批量处理
++    """
++    task_ids = divergence_data['task_ids']
++    js_matrix = divergence_data['js_matrix']
++    wasserstein_matrix = divergence_data['wasserstein_matrix']
++    
++    # 批量构建任务对指标字典
++    pairwise_scalars = {}
++    
++    for i, task_i in enumerate(task_ids):
++        for j, task_j in enumerate(task_ids):
++            if i < j:  # 只记录上三角
++                # 构建指标名称
++                js_key = f'TaskPairwise/Immediate_Task{task_i}_Task{task_j}_JS_Divergence'
++                wass_key = f'TaskPairwise/Immediate_Task{task_i}_Task{task_j}_Wasserstein_Distance'
++                
++                pairwise_scalars[js_key] = js_matrix[i, j]
++                pairwise_scalars[wass_key] = wasserstein_matrix[i, j]
++    
++    # 批量写入TensorBoard
++    for key, value in pairwise_scalars.items():
++        tb_logger.add_scalar(key, float(value), global_step=train_iter)
++
++
++def log_divergences_with_heatmaps(tb_logger, divergence_data, train_iter):
++    """
++    记录分布差异指标和热力图（去掉对角线）
++    """
++    if not divergence_data:
++        return
++    
++    js_stats = divergence_data['js_stats']
++    wasserstein_stats = divergence_data['wasserstein_stats']
++    task_ids = divergence_data['task_ids']
++    n_tasks = divergence_data['n_tasks']
++    
++    # 调试：检查矩阵数据
++    js_matrix = divergence_data['js_matrix']
++    wasserstein_matrix = divergence_data['wasserstein_matrix']
++    print(f"DEBUG: JS矩阵形状={js_matrix.shape}, 范围=[{np.min(js_matrix):.6f}, {np.max(js_matrix):.6f}]")
++    print(f"DEBUG: Wasserstein矩阵形状={wasserstein_matrix.shape}, 范围=[{np.min(wasserstein_matrix):.6f}, {np.max(wasserstein_matrix):.6f}]")
++    
++    # 1. 记录标量指标
++    scalar_dict = {
++        'MOE_Divergence/Immediate_AvgJS_Divergence': js_stats['avg'],
++        'MOE_Divergence/Immediate_MaxJS_Divergence': js_stats['max'],
++        'MOE_Divergence/Immediate_AvgWasserstein_Distance': wasserstein_stats['avg'],
++        'MOE_Divergence/Immediate_MaxWasserstein_Distance': wasserstein_stats['max'],
++    }
++    
++    for key, value in scalar_dict.items():
++        tb_logger.add_scalar(key, value, global_step=train_iter)
++    
++    # 1.1 打印核心指标到控制台
++    print("=" * 65)
++    print(f" 任务间分布差异统计 (Iteration: {train_iter})")
++    print("=" * 65)
++    print(f"参与任务数量: {n_tasks} | 任务ID: {list(task_ids)}")
++    print(f"计算设备: {divergence_data.get('device', 'Unknown')} | GPU加速: {'启用' if divergence_data.get('gpu_accelerated', False) else '禁用'}")
++    print("-" * 65)
++    print("JS散度 (Jensen-Shannon Divergence):")
++    print(f"  平均值: {js_stats['avg']:.6f}  |  最大值: {js_stats['max']:.6f}")
++    print(f"  最小值: {js_stats['min']:.6f}  |  标准差: {js_stats['std']:.6f}")
++    print("-" * 65)
++    print("Wasserstein距离:")
++    print(f"  平均值: {wasserstein_stats['avg']:.6f}  |  最大值: {wasserstein_stats['max']:.6f}")
++    print(f"  最小值: {wasserstein_stats['min']:.6f}  |  标准差: {wasserstein_stats['std']:.6f}")
++    print("=" * 65)
++    
++    # 2. 记录去掉对角线的相似度矩阵热力图
++    task_ids = divergence_data['task_ids']
++    n_tasks = divergence_data['n_tasks']
++    
++    if n_tasks <= 25:  # 限制矩阵大小避免过大热力图
++        try:
++            # JS散度矩阵热力图（无对角线）
++            js_heatmap = create_similarity_heatmap_no_diagonal(
++                divergence_data['js_matrix'], 
++                task_ids, 
++                'js_divergence',
++                f'(Immediate-{n_tasks} tasks)'
++            )
++            tb_logger.add_image(
++                'TaskSimilarity/Immediate_JS_Matrix_NoDiagonal',
++                js_heatmap,
++                global_step=train_iter,
++                dataformats='CHW'
++            )
++            
++            # Wasserstein距离矩阵热力图（无对角线）
++            wass_heatmap = create_similarity_heatmap_no_diagonal(
++                divergence_data['wasserstein_matrix'], 
++                task_ids, 
++                'wasserstein_distance',
++                f'(Immediate-{n_tasks} tasks)'
++            )
++            tb_logger.add_image(
++                'TaskSimilarity/Immediate_Wasserstein_Matrix_NoDiagonal',
++                wass_heatmap,
++                global_step=train_iter,
++                dataformats='CHW'
++            )
++            
++        except Exception as e:
++            print(f"Warning: 相似度矩阵热力图生成失败: {e}")
++    
++    # 3. 记录任务对指标（可选）
++    if n_tasks <= 20:
++        log_pairwise_optimized(tb_logger, divergence_data, train_iter)
++
++
++def collect_and_log_divergences_with_heatmaps(tb_logger, merged_stats, train_iter):
++    """
++    完整的分布差异计算和记录（包含无对角线热力图）
++    """
++    try:
++        # GPU优化计算
++        divergence_data = compute_distribution_divergences_optimized(merged_stats, 'immediate')
++        
++        if not divergence_data:
++            print(f"跳过分布差异计算 - 任务数不足 (需要>=2个任务)")
++            return
++        
++        # 记录指标和热力图
++        log_divergences_with_heatmaps(tb_logger, divergence_data, train_iter)
++        
++        # 汇总打印
++        print(f">> 分布差异统计已完成并记录到TensorBoard")
++        if divergence_data.get('n_tasks', 0) <= 25:
++            print(f">> 相似度矩阵热力图已生成 (去除对角线)")
++        if divergence_data.get('n_tasks', 0) <= 20:
++            print(f">> 任务对详细指标已记录")
++        print()  # 空行分隔
++        
++    except Exception as e:
++        print(f"ERROR: 分布差异计算失败 - {e}")
++        import traceback
++        traceback.print_exc()
++
+ # ====== UniZero-MT 归一化所需基准分数 (26 Atari100k task_id 对应索引) ======
+ # 原始的 RANDOM_SCORES 和 HUMAN_SCORES
+ 
+@@ -1245,12 +1635,19 @@ def train_unizero_multitask_segment_ddp(
+                     
+                     # +++++++++++++++++++++++++++++++++ MOE专家选择统计记录 +++++++++++++++++++++++++++++++++
+                     if cfg.policy.model.world_model_cfg.multiplication_moe_in_transformer:
+-                        # 性能监控开始
+-                        if cal_moe_profile:
+-                            import time
+-                            moe_start_time = time.perf_counter()
++                        # 控制MoE统计记录频率
++                        moe_log_interval = getattr(cfg.policy, 'moe_log_interval', 500)  # 默认每500个iter记录一次
+                         
+-                        collect_and_log_moe_statistics(policy, tb_logger, learner.train_iter, world_size, rank)
++                        if learner.train_iter % moe_log_interval == 0:
++                            # # 性能监控开始
++                            # if cal_moe_profile:
++                            #     import time
++                            #     moe_start_time = time.perf_counter()
++                            
++                            collect_and_log_moe_statistics(policy, tb_logger, learner.train_iter, world_size, rank)
++                            
++                            if rank == 0:  # 只在rank 0打印日志
++                                print(f"MoE统计已记录 (train_iter={learner.train_iter})")
+                         
+                         # global a
+                         # a+=1
+diff --git a/lzero/entry/utils.py b/lzero/entry/utils.py
+index b51eb7f..3ccec94 100644
+--- a/lzero/entry/utils.py
++++ b/lzero/entry/utils.py
+@@ -1,4 +1,5 @@
+ import os
++import time
+ from typing import Optional, Callable, Union, List, Tuple
+ 
+ import psutil
+@@ -362,3 +363,841 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
+ 
+         # Reset the time records in the buffer.
+         buffer.reset_runtime_metrics()
++
++
++# ==================== MoE TensorBoard 记录模块 =============================
++# 导入必要的模块
++import seaborn as sns
++from io import BytesIO
++from PIL import Image
++import concurrent.futures
++
++# 全局图像缓存，避免重复创建 figure
++_GLOBAL_HEATMAP_FIG = None
++_GLOBAL_HEATMAP_AX = None
++
++def _get_or_create_heatmap_figure(figsize):
++    """获取或创建复用的 heatmap figure"""
++    global _GLOBAL_HEATMAP_FIG, _GLOBAL_HEATMAP_AX
++    if _GLOBAL_HEATMAP_FIG is None:
++        _GLOBAL_HEATMAP_FIG, _GLOBAL_HEATMAP_AX = plt.subplots(figsize=figsize)
++    else:
++        # 清除之前的内容
++        _GLOBAL_HEATMAP_AX.clear()
++        # 调整图像大小
++        _GLOBAL_HEATMAP_FIG.set_size_inches(figsize)
++    return _GLOBAL_HEATMAP_FIG, _GLOBAL_HEATMAP_AX
++
++def create_heatmap_with_values_fast(matrix, task_ids, title="Task-Expert Selection Frequencies"):
++    """
++    高效创建带数值标注的蓝色系热力图 - 优化版本
++    
++    优化点:
++    1. 复用 matplotlib figure，减少内存分配
++    2. 大矩阵跳过数值标注，避免性能损失
++    3. 优化图像转换流程
++    4. 使用更低的 DPI 减少计算量
++    """
++    try:
++        figsize = (max(6, matrix.shape[1]), max(4, matrix.shape[0]))
++        fig, ax = _get_or_create_heatmap_figure(figsize)
++        
++        # 智能选择是否显示数值标注
++        show_annot = matrix.size <= 64  # 只在 8x8 或更小时显示数值
++        
++        # 使用 matplotlib 直接绘制，避免 seaborn 的额外开销
++        im = ax.imshow(matrix, cmap='Blues', aspect='auto')
++        
++        # 有选择性地添加数值标注
++        if show_annot:
++            for i in range(matrix.shape[0]):
++                for j in range(matrix.shape[1]):
++                    value = matrix[i, j]
++                    color = 'white' if value > 0.5 else 'black'
++                    ax.text(j, i, f'{value:.3f}', ha='center', va='center', 
++                           color=color, fontsize=8)
++        
++        # 设置标签和标题
++        ax.set_xticks(range(matrix.shape[1]))
++        ax.set_yticks(range(matrix.shape[0]))
++        ax.set_xticklabels([f'E{i}' for i in range(matrix.shape[1])], fontsize=10)
++        ax.set_yticklabels([f'T{tid}' for tid in task_ids], fontsize=10)
++        ax.set_title(title, fontsize=12, pad=15)
++        ax.set_xlabel('Experts', fontsize=10)
++        ax.set_ylabel('Tasks', fontsize=10)
++        
++        # 简化的 colorbar
++        if not hasattr(fig, '_colorbar_created'):
++            plt.colorbar(im, ax=ax, label='Frequency')
++            fig._colorbar_created = True
++        
++        # 优化的图像转换：使用更低 DPI 和简化流程
++        fig.canvas.draw()
++        try:
++            # 直接从 canvas 获取 RGB 数据
++            if hasattr(fig.canvas, 'buffer_rgba'):
++                buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
++                buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
++                img_array = buf[:, :, :3]  # 去掉 alpha 通道
++            else:
++                buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
++                img_array = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
++            
++            # 转换为 CHW 格式
++            img_array = img_array.transpose(2, 0, 1)
++            
++        except Exception:
++            # 回退方案：创建简单的蓝色渠度矩阵
++            h, w = matrix.shape
++            img_array = np.zeros((3, h*20, w*20), dtype=np.uint8)
++            # 简单放大矩阵并映射到蓝色通道
++            matrix_resized = np.repeat(np.repeat(matrix, 20, axis=0), 20, axis=1)
++            img_array[2] = (matrix_resized * 255).astype(np.uint8)
++        
++        return img_array
++        
++    except Exception as e:
++        print(f"Warning: 热力图生成失败: {e}, 使用回退方案")
++        # 终极回退：返回空白图像
++        return np.zeros((3, 100, 100), dtype=np.uint8)
++
++def create_heatmap_with_values(matrix, task_ids, title="Task-Expert Selection Frequencies"):
++    """创建带数值标注的蓝色系热力图 - 原始版本（回退用）"""
++    fig, ax = plt.subplots(figsize=(max(8, matrix.shape[1]), max(6, matrix.shape[0])))
++    
++    # 使用蓝色系颜色映射
++    sns.heatmap(matrix, 
++                annot=True,  # 显示数值
++                fmt='.3f',   # 数值格式
++                cmap='Blues',  # 蓝色系
++                ax=ax,
++                cbar_kws={'label': 'Selection Frequency'},
++                xticklabels=[f'Expert{i}' for i in range(matrix.shape[1])],
++                yticklabels=[f'Task{tid}' for tid in task_ids])
++    
++    ax.set_title(title, fontsize=14, pad=20)
++    ax.set_xlabel('Experts', fontsize=12)
++    ax.set_ylabel('Tasks', fontsize=12)
++    
++    plt.tight_layout()
++    
++    # 保存到BytesIO
++    buf = BytesIO()
++    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
++    buf.seek(0)
++    
++    # 转换为numpy数组用于tensorboard
++    img = Image.open(buf)
++    img_array = np.array(img)
++    buf.close()
++    plt.close(fig)
++    
++    # 转换为CHW格式 (Channel, Height, Width)
++    if len(img_array.shape) == 3:
++        img_array = img_array.transpose(2, 0, 1)
++    
++    return img_array
++
++def log_expert_selection_details(tb_logger, merged_stats, valid_task_ids, matrix, window_type, train_iter):
++    """记录每个任务的详细专家选择统计"""
++    for i, task_id in enumerate(valid_task_ids):
++        frequencies = matrix[i]
++        stats = merged_stats[task_id][window_type]
++        
++        # 计算并记录该任务选择专家的熵（均匀性指标）
++        task_frequencies = np.array(frequencies)
++        task_frequencies = task_frequencies + 1e-8  # 避免log(0)
++        task_entropy = -np.sum(task_frequencies * np.log(task_frequencies))
++        tb_logger.add_scalar(
++            f'MOE_Details/Task{task_id}_{window_type}/ExpertSelectionEntropy',
++            task_entropy, global_step=train_iter
++        )
++        
++        # 记录该任务专家选择的方差（分散程度）
++        expert_variance = np.var(task_frequencies)
++        tb_logger.add_scalar(
++            f'MOE_Details/Task{task_id}_{window_type}/ExpertSelectionVariance',
++            expert_variance, global_step=train_iter
++        )
++        
++        # 记录任务级别的汇总统计
++        tb_logger.add_scalar(
++            f'MOE_Details/Task{task_id}_{window_type}/TotalSelections',
++            stats['total_selections'], global_step=train_iter
++        )
++        tb_logger.add_scalar(
++            f'MOE_Details/Task{task_id}_{window_type}/DataPoints',
++            stats['data_points'], global_step=train_iter
++        )
++
++def log_global_moe_statistics(tb_logger, matrix, window_type, valid_task_ids, train_iter):
++    """记录全局MOE统计信息"""
++    # 记录基本信息
++    tb_logger.add_scalar(
++        f'MOE_Global/{window_type}/NumActiveTasks',
++        len(valid_task_ids), global_step=train_iter
++    )
++    tb_logger.add_scalar(
++        f'MOE_Global/{window_type}/NumExperts', 
++        matrix.shape[1], global_step=train_iter
++    )
++    
++    # 计算专家使用均匀性
++    expert_avg_usage = np.mean(matrix, axis=0)  # 每个专家的平均使用频率
++    usage_entropy = -np.sum(expert_avg_usage * np.log(expert_avg_usage + 1e-8))
++    tb_logger.add_scalar(
++        f'MOE_Global/{window_type}/ExpertUsageEntropy',
++        usage_entropy, global_step=train_iter
++    )
++    
++    # 记录最常用和最少用的专家
++    most_used_expert = np.argmax(expert_avg_usage)
++    least_used_expert = np.argmin(expert_avg_usage)
++    tb_logger.add_scalar(
++        f'MOE_Global/{window_type}/MostUsedExpert',
++        most_used_expert, global_step=train_iter
++    )
++    tb_logger.add_scalar(
++        f'MOE_Global/{window_type}/LeastUsedExpert', 
++        least_used_expert, global_step=train_iter
++    )
++
++def process_and_log_moe_heatmaps_fast(tb_logger, merged_stats, window_type, train_iter):
++    """
++    高效处理和记录MOE热力图 - 优化版本
++    
++    优化点:
++    1. 向量化数据处理，减少循环
++    2. 使用高效的热力图生成函数
++    3. 条件性热力图生成
++    4. 批量处理统计数据
++    """
++    # 快速筛选有效任务
++    valid_task_data = [(tid, stats[window_type]['frequencies']) 
++                      for tid, stats in merged_stats.items() 
++                      if window_type in stats]
++    
++    if not valid_task_data:
++        return
++    
++    # 向量化构建矩阵
++    valid_task_ids, frequencies_list = zip(*valid_task_data)
++    matrix = np.array(frequencies_list)
++    
++    # 条件性热力图生成：小矩阵才生成热力图
++    if matrix.size <= 200:  # 只有在任务数*专家数 <= 200时才生成热力图
++        try:
++            heatmap_img = create_heatmap_with_values_fast(
++                matrix, valid_task_ids, 
++                f'MOE {window_type} Task-Expert Selection'
++            )
++            
++            # 记录热力图到tensorboard
++            tb_logger.add_image(
++                f'MOE_Heatmap/{window_type}_TaskExpert_Heatmap',
++                heatmap_img,
++                global_step=train_iter,
++                dataformats='CHW'
++            )
++        except Exception as e:
++            print(f"Warning: 热力图生成失败: {e}")
++    
++    # 始终记录统计数据（轻量级操作）
++    log_expert_selection_details(tb_logger, merged_stats, valid_task_ids, matrix, window_type, train_iter)
++    log_global_moe_statistics(tb_logger, matrix, window_type, valid_task_ids, train_iter)
++
++def process_and_log_moe_heatmaps(tb_logger, merged_stats, window_type, train_iter):
++    """处理和记录MOE热力图 - 原始版本（回退用）"""
++    all_task_ids = sorted(merged_stats.keys())
++    task_expert_matrix = []
++    valid_task_ids = []
++    
++    # 收集有效任务的频率数据
++    for task_id in all_task_ids:
++        if window_type in merged_stats[task_id]:
++            frequencies = merged_stats[task_id][window_type]['frequencies']
++            task_expert_matrix.append(frequencies)
++            valid_task_ids.append(task_id)
++    
++    if not task_expert_matrix:
++        return
++    
++    # 转换为numpy矩阵 (num_tasks, num_experts)
++    matrix = np.array(task_expert_matrix)
++    
++    # 创建带数值标注的蓝色系热力图
++    heatmap_img = create_heatmap_with_values(
++        matrix, valid_task_ids, 
++        f'MOE {window_type} Task-Expert Selection Frequencies'
++    )
++    
++    # 记录热力图到tensorboard
++    tb_logger.add_image(
++        f'MOE_Heatmap/{window_type}_TaskExpert_Heatmap',
++        heatmap_img,
++        global_step=train_iter,
++        dataformats='CHW'
++    )
++    
++    # 记录详细统计和全局统计
++    log_expert_selection_details(tb_logger, merged_stats, valid_task_ids, matrix, window_type, train_iter)
++
++def convert_stats_to_serializable(moe_stats):
++    """将MOE统计数据中的tensor转换为可序列化的numpy格式"""
++    if not moe_stats:
++        return {}
++    
++    converted = {}
++    for task_id, task_stats in moe_stats.items():
++        converted[task_id] = {}
++        for window_type, stats in task_stats.items():
++            if stats and 'frequencies' in stats:
++                converted[task_id][window_type] = {
++                    'frequencies': stats['frequencies'].cpu().numpy().tolist(),
++                    'total_selections': stats['total_selections'],
++                    'data_points': stats['data_points']
++                }
++    return converted
++
++def gather_distributed_moe_stats(local_stats, world_size):
++    """在分布式训练中收集和合并MOE统计数据"""
++    if world_size == 1:
++        return local_stats
++    
++    # 将本地统计转换为可序列化格式后进行分布式收集
++    serializable_stats = convert_stats_to_serializable(local_stats)
++    return serializable_stats
++
++def collect_and_log_moe_statistics(policy, tb_logger, train_iter, world_size, rank):
++    """
++    收集和记录MOE统计信息 - 主要入口函数
++    
++    优化版本，增加了异常处理和性能监控
++    """
++    try:
++        # 从policy收集本地MOE统计
++        local_stats = {}
++        if hasattr(policy, '_learn_model') and hasattr(policy._learn_model, 'world_model'):
++            world_model = policy._learn_model.world_model
++            
++            # 检查是否有transformer和MoE层
++            if hasattr(world_model, 'transformer'):
++                transformer = world_model.transformer
++                if hasattr(transformer, 'moe_layers') and transformer.moe_layers:
++                    # 只从最后一个MoE层收集统计（性能优化）
++                    last_moe_layer = transformer.moe_layers[-1]
++                    if hasattr(last_moe_layer, 'get_expert_selection_stats'):
++                        local_stats = last_moe_layer.get_expert_selection_stats()
++        
++        # 分布式收集统计（简化版本）
++        merged_stats = gather_distributed_moe_stats(local_stats, world_size)
++        
++        # 只在rank 0记录到TensorBoard
++        if rank == 0 and tb_logger and merged_stats:
++            # 处理不同时间窗口的统计
++            for window_type in ['immediate', 'short', 'medium', 'long']:
++                # 检查是否有有效数据
++                has_data = any(window_type in task_stats for task_stats in merged_stats.values())
++                if has_data:
++                    # 使用优化版本的热力图处理
++                    process_and_log_moe_heatmaps_fast(tb_logger, merged_stats, window_type, train_iter)
++    
++    except Exception as e:
++        print(f"Rank {rank}: MOE统计收集失败 - {e}, train_iter={train_iter}")
++        import traceback
++        traceback.print_exc()
++
++# ====== GPU优化的分布差异计算和可视化函数 ======
++def jensen_shannon_divergence_batch_gpu(distributions_tensor):
++    """
++    GPU批量计算JS散度矩阵 - 使用GPU优化器的内存池
++    
++    Args:
++        distributions_tensor: shape (n_tasks, n_experts), GPU张量
++    
++    Returns:
++        js_matrix: shape (n_tasks, n_tasks), 对称矩阵
++    """
++    # 使用GPU优化器提升性能
++    return get_gpu_optimizer().optimized_js_divergence(distributions_tensor)
++
++def wasserstein_distance_batch_gpu(distributions_tensor):
++    """
++    GPU批量计算Wasserstein距离矩阵 - 使用GPU优化器的内存池
++    
++    Args:
++        distributions_tensor: shape (n_tasks, n_experts), GPU张量
++    
++    Returns:
++        wasserstein_matrix: shape (n_tasks, n_tasks), 对称矩阵
++    """
++    # 使用GPU优化器提升性能
++    return get_gpu_optimizer().optimized_wasserstein(distributions_tensor)
++
++def compute_distribution_divergences_optimized(merged_stats, window_type='immediate'):
++    """
++    GPU优化版本 - 高效分布差异计算
++    """
++    # 1. 数据预处理
++    valid_tasks = [(tid, stats[window_type]['frequencies']) 
++                  for tid, stats in merged_stats.items() 
++                  if window_type in stats]
++    
++    if len(valid_tasks) < 2:
++        return {}
++    
++    task_ids, frequencies_list = zip(*valid_tasks)
++    
++    # 2. 高效张量转换
++    try:
++        if isinstance(frequencies_list[0], torch.Tensor):
++            frequencies_tensor = torch.stack(frequencies_list)
++        else:
++            frequencies_tensor = torch.tensor(
++                np.array(frequencies_list), 
++                dtype=torch.float32
++            )
++        
++        # 自动GPU加速
++        if torch.cuda.is_available():
++            frequencies_tensor = frequencies_tensor.cuda()
++            
++    except Exception as e:
++        print(f"GPU转换失败，使用CPU: {e}")
++        frequencies_tensor = torch.tensor(np.array(frequencies_list), dtype=torch.float32)
++    
++    device = frequencies_tensor.device
++    n_tasks, n_experts = frequencies_tensor.shape
++    
++    # 3. GPU批量计算（无循环）
++    with torch.no_grad():
++        # 批量计算JS散度和Wasserstein距离
++        js_matrix = jensen_shannon_divergence_batch_gpu(frequencies_tensor)
++        wasserstein_matrix = wasserstein_distance_batch_gpu(frequencies_tensor)
++        
++        # 高效提取上三角值（避免重复计算）
++        triu_indices = torch.triu_indices(n_tasks, n_tasks, offset=1, device=device)
++        js_values = js_matrix[triu_indices[0], triu_indices[1]]
++        wasserstein_values = wasserstein_matrix[triu_indices[0], triu_indices[1]]
++        
++        # 统计计算（向量化）
++        js_stats = {
++            'avg': torch.mean(js_values).item(),
++            'max': torch.max(js_values).item(),
++            'min': torch.min(js_values).item(),
++            'std': torch.std(js_values).item()
++        }
++        
++        wasserstein_stats = {
++            'avg': torch.mean(wasserstein_values).item(),
++            'max': torch.max(wasserstein_values).item(), 
++            'min': torch.min(wasserstein_values).item(),
++            'std': torch.std(wasserstein_values).item()
++        }
++    
++    return {
++        'task_ids': task_ids,
++        'n_tasks': n_tasks,
++        'n_experts': n_experts,
++        'device': str(device),
++        'gpu_accelerated': 'cuda' in str(device),
++        
++        # 返回CPU版本用于记录
++        'js_matrix': js_matrix.cpu().numpy(),
++        'wasserstein_matrix': wasserstein_matrix.cpu().numpy(),
++        'js_stats': js_stats,
++        'wasserstein_stats': wasserstein_stats
++    }
++
++def create_similarity_heatmap_no_diagonal(similarity_matrix, task_ids, metric_name, title_suffix=""):
++    """
++    创建任务相似度热力图 - 去掉对角线部分
++    
++    Args:
++        similarity_matrix: 相似度矩阵 (n_tasks, n_tasks)
++        task_ids: 任务ID列表
++        metric_name: 指标名称 ('js_divergence', 'wasserstein_distance')
++        title_suffix: 标题后缀
++    """
++    try:
++        # 复制矩阵避免修改原数据
++        matrix = similarity_matrix.copy()
++        
++        # 将对角线设置为NaN，这样matplotlib会显示为空白
++        np.fill_diagonal(matrix, np.nan)
++        
++        figsize = (max(6, len(task_ids)), max(4, len(task_ids)))
++        fig, ax = plt.subplots(figsize=figsize)  # 创建新figure避免复用问题
++        
++        # 根据指标类型选择颜色映射
++        if 'js' in metric_name.lower():
++            cmap = 'Reds'
++            title_name = 'JS Divergence'
++            vmin, vmax = 0, 1.0
++        else:  # wasserstein
++            cmap = 'Blues'  
++            title_name = 'Wasserstein Distance'
++            vmin, vmax = None, None  # 自适应
++        
++        # 使用masked数组处理NaN值，对角线显示为白色
++        masked_matrix = np.ma.masked_invalid(matrix)
++        im = ax.imshow(masked_matrix, cmap=cmap, vmin=vmin, vmax=vmax, aspect='auto')
++        
++        # 添加数值标注（跳过对角线）
++        if len(task_ids) <= 15:  # 只在任务数较少时添加标注
++            for i in range(len(task_ids)):
++                for j in range(len(task_ids)):
++                    if i != j:  # 跳过对角线
++                        value = matrix[i, j]
++                        if not np.isnan(value):
++                            threshold = (vmax or np.nanmax(matrix)) * 0.5 if vmax else np.nanmax(matrix) * 0.5
++                            color = 'white' if value > threshold else 'black'
++                            ax.text(j, i, f'{value:.3f}', ha='center', va='center', 
++                                   color=color, fontsize=8)
++        
++        # 设置标签
++        ax.set_xticks(range(len(task_ids)))
++        ax.set_yticks(range(len(task_ids)))
++        ax.set_xticklabels([f'T{tid}' for tid in task_ids], fontsize=9)
++        ax.set_yticklabels([f'T{tid}' for tid in task_ids], fontsize=9)
++        ax.set_title(f'Task {title_name} Matrix {title_suffix} (No Diagonal)', fontsize=12)
++        ax.set_xlabel('Tasks', fontsize=10)
++        ax.set_ylabel('Tasks', fontsize=10)
++        
++        # 添加colorbar
++        plt.colorbar(im, ax=ax, label=title_name, shrink=0.8)
++        
++        # 转换为图像数组 - 修复matplotlib版本兼容性
++        fig.canvas.draw()
++        
++        try:
++            # 新版matplotlib使用buffer_rgba
++            if hasattr(fig.canvas, 'buffer_rgba'):
++                buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
++                h, w = fig.canvas.get_width_height()
++                img_array = buf.reshape(h, w, 4)[:, :, :3]  # 去掉alpha通道
++            else:
++                # 旧版matplotlib回退方案
++                buf = fig.canvas.print_to_string()
++                img_array = np.frombuffer(buf, dtype=np.uint8)
++                h, w = fig.canvas.get_width_height()
++                img_array = img_array.reshape(h, w, 3)
++        except Exception as conv_e:
++            print(f"图像转换方法失败: {conv_e}, 尝试PIL方案")
++            # 最终回退：通过PIL转换
++            from io import BytesIO
++            buf = BytesIO()
++            fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
++            buf.seek(0)
++            from PIL import Image
++            img = Image.open(buf)
++            img_array = np.array(img)[:, :, :3]  # 去掉alpha通道
++            buf.close()
++        
++        img_array = img_array.transpose(2, 0, 1)  # CHW格式
++        plt.close(fig)  # 关闭figure避免内存泄漏
++        
++        return img_array
++        
++    except Exception as e:
++        print(f"Warning: 无对角线热力图生成失败: {e}")
++        return np.zeros((3, 100, 100), dtype=np.uint8)
++
++def log_pairwise_optimized(tb_logger, divergence_data, train_iter):
++    """
++    优化的任务对记录 - 批量处理
++    """
++    task_ids = divergence_data['task_ids']
++    js_matrix = divergence_data['js_matrix']
++    wasserstein_matrix = divergence_data['wasserstein_matrix']
++    
++    # 批量构建任务对指标字典
++    pairwise_scalars = {}
++    
++    for i, task_i in enumerate(task_ids):
++        for j, task_j in enumerate(task_ids):
++            if i < j:  # 只记录上三角
++                # 构建指标名称
++                js_key = f'TaskPairwise/Immediate_Task{task_i}_Task{task_j}_JS_Divergence'
++                wass_key = f'TaskPairwise/Immediate_Task{task_i}_Task{task_j}_Wasserstein_Distance'
++                
++                pairwise_scalars[js_key] = js_matrix[i, j]
++                pairwise_scalars[wass_key] = wasserstein_matrix[i, j]
++    
++    # 批量写入TensorBoard
++    for key, value in pairwise_scalars.items():
++        tb_logger.add_scalar(key, float(value), global_step=train_iter)
++
++def log_divergences_with_heatmaps(tb_logger, divergence_data, train_iter):
++    """
++    记录分布差异指标和热力图（去掉对角线）
++    """
++    if not divergence_data:
++        return
++    
++    js_stats = divergence_data['js_stats']
++    wasserstein_stats = divergence_data['wasserstein_stats']
++    task_ids = divergence_data['task_ids']
++    n_tasks = divergence_data['n_tasks']
++    
++    # 调试：检查矩阵数据
++    js_matrix = divergence_data['js_matrix']
++    wasserstein_matrix = divergence_data['wasserstein_matrix']
++    print(f"DEBUG: JS矩阵形状={js_matrix.shape}, 范围=[{np.min(js_matrix):.6f}, {np.max(js_matrix):.6f}]")
++    print(f"DEBUG: Wasserstein矩阵形状={wasserstein_matrix.shape}, 范围=[{np.min(wasserstein_matrix):.6f}, {np.max(wasserstein_matrix):.6f}]")
++    
++    # 1. 记录标量指标
++    scalar_dict = {
++        'MOE_Divergence/Immediate_AvgJS_Divergence': js_stats['avg'],
++        'MOE_Divergence/Immediate_MaxJS_Divergence': js_stats['max'],
++        'MOE_Divergence/Immediate_AvgWasserstein_Distance': wasserstein_stats['avg'],
++        'MOE_Divergence/Immediate_MaxWasserstein_Distance': wasserstein_stats['max'],
++    }
++    
++    for key, value in scalar_dict.items():
++        tb_logger.add_scalar(key, value, global_step=train_iter)
++    
++    # 1.1 打印核心指标到控制台
++    print("=" * 65)
++    print(f" 任务间分布差异统计 (Iteration: {train_iter})")
++    print("=" * 65)
++    print(f"参与任务数量: {n_tasks} | 任务ID: {list(task_ids)}")
++    print(f"计算设备: {divergence_data.get('device', 'Unknown')} | GPU加速: {'启用' if divergence_data.get('gpu_accelerated', False) else '禁用'}")
++    print("-" * 65)
++    print("JS散度 (Jensen-Shannon Divergence):")
++    print(f"  平均值: {js_stats['avg']:.6f}  |  最大值: {js_stats['max']:.6f}")
++    print(f"  最小值: {js_stats['min']:.6f}  |  标准差: {js_stats['std']:.6f}")
++    print("-" * 65)
++    print("Wasserstein距离:")
++    print(f"  平均值: {wasserstein_stats['avg']:.6f}  |  最大值: {wasserstein_stats['max']:.6f}")
++    print(f"  最小值: {wasserstein_stats['min']:.6f}  |  标准差: {wasserstein_stats['std']:.6f}")
++    print("=" * 65)
++    
++    # 2. 记录去掉对角线的相似度矩阵热力图
++    task_ids = divergence_data['task_ids']
++    n_tasks = divergence_data['n_tasks']
++    
++    if n_tasks <= 25:  # 限制矩阵大小避免过大热力图
++        try:
++            # JS散度矩阵热力图（无对角线）
++            js_heatmap = create_similarity_heatmap_no_diagonal(
++                divergence_data['js_matrix'], 
++                task_ids, 
++                'js_divergence',
++                f'(Immediate-{n_tasks} tasks)'
++            )
++            tb_logger.add_image(
++                'TaskSimilarity/Immediate_JS_Matrix_NoDiagonal',
++                js_heatmap,
++                global_step=train_iter,
++                dataformats='CHW'
++            )
++            
++            # Wasserstein距离矩阵热力图（无对角线）
++            wass_heatmap = create_similarity_heatmap_no_diagonal(
++                divergence_data['wasserstein_matrix'], 
++                task_ids, 
++                'wasserstein_distance',
++                f'(Immediate-{n_tasks} tasks)'
++            )
++            tb_logger.add_image(
++                'TaskSimilarity/Immediate_Wasserstein_Matrix_NoDiagonal',
++                wass_heatmap,
++                global_step=train_iter,
++                dataformats='CHW'
++            )
++            
++        except Exception as e:
++            print(f"Warning: 相似度矩阵热力图生成失败: {e}")
++    
++    # 3. 记录任务对指标（可选）
++    if n_tasks <= 20:
++        log_pairwise_optimized(tb_logger, divergence_data, train_iter)
++
++def collect_and_log_divergences_with_heatmaps(tb_logger, merged_stats, train_iter):
++    """
++    完整的分布差异计算和记录（包含无对角线热力图）
++    """
++    try:
++        # GPU优化计算
++        divergence_data = compute_distribution_divergences_optimized(merged_stats, 'immediate')
++        
++        if not divergence_data:
++            print(f"跳过分布差异计算 - 任务数不足 (需要>=2个任务)")
++            return
++        
++        # 记录指标和热力图
++        log_divergences_with_heatmaps(tb_logger, divergence_data, train_iter)
++        
++        # 汇总打印
++        print(f">> 分布差异统计已完成并记录到TensorBoard")
++        if divergence_data.get('n_tasks', 0) <= 25:
++            print(f">> 相似度矩阵热力图已生成 (去除对角线)")
++        if divergence_data.get('n_tasks', 0) <= 20:
++            print(f">> 任务对详细指标已记录")
++        print()  # 空行分隔
++        
++    except Exception as e:
++        print(f"ERROR: 分布差异计算失败 - {e}")
++        import traceback
++        traceback.print_exc()
++
++
++# ==================== GPU内存池优化模块 =============================
++class GPUTensorPool:
++    """
++    轻量级GPU张量池 - 针对8x8矩阵优化
++    
++    只缓存最常用的张量：
++    - 频率矩阵 (8, 8)
++    - JS散度矩阵 (8, 8) 
++    - Wasserstein矩阵 (8, 8)
++    - 临时计算缓冲区
++    """
++    def __init__(self, device):
++        self.device = device
++        self.tensor_cache = {}
++        self.max_cache_size = 20  # 限制缓存大小
++        self.hit_count = 0
++        self.miss_count = 0
++    
++    def get_tensor(self, shape, dtype=torch.float32, key="default"):
++        """获取缓存的张量或创建新的"""
++        cache_key = (tuple(shape), dtype, key)
++        
++        if cache_key in self.tensor_cache:
++            tensor = self.tensor_cache[cache_key]
++            if tensor.shape == shape and tensor.device == self.device:
++                self.hit_count += 1
++                return tensor.zero_()  # 复用并清零
++        
++        # 创建新张量并缓存
++        tensor = torch.zeros(shape, dtype=dtype, device=self.device)
++        if len(self.tensor_cache) < self.max_cache_size:
++            self.tensor_cache[cache_key] = tensor
++        
++        self.miss_count += 1
++        return tensor
++    
++    def get_cache_stats(self):
++        """获取缓存命中率统计"""
++        total = self.hit_count + self.miss_count
++        hit_rate = self.hit_count / total if total > 0 else 0
++        return {
++            'hit_count': self.hit_count,
++            'miss_count': self.miss_count, 
++            'hit_rate': hit_rate,
++            'cache_size': len(self.tensor_cache)
++        }
++    
++    def clear_cache(self):
++        """清理缓存"""
++        self.tensor_cache.clear()
++        self.hit_count = 0
++        self.miss_count = 0
++
++
++class BatchComputeOptimizer:
++    """
++    批量计算优化器 - GPU向量化处理
++    
++    优化目标：
++    - JS散度计算向量化
++    - Wasserstein距离计算向量化  
++    - 减少GPU内存分配
++    """
++    def __init__(self, tensor_pool):
++        self.pool = tensor_pool
++        self.compute_count = 0
++        self.total_compute_time = 0.0
++    
++    def optimized_js_divergence(self, distributions_tensor):
++        """优化的JS散度计算 - 复用内存"""
++        start_time = time.time() if hasattr(time, 'time') else 0
++        
++        n_tasks, n_experts = distributions_tensor.shape
++        device = distributions_tensor.device
++        
++        # 复用缓存的张量
++        js_matrix = self.pool.get_tensor((n_tasks, n_tasks), key="js_matrix")
++        
++        # 向量化计算（原有算法保持不变）
++        eps = 1e-8
++        distributions_tensor = distributions_tensor / (distributions_tensor.sum(dim=1, keepdim=True) + eps)
++        
++        P_i = distributions_tensor.unsqueeze(1)  
++        P_j = distributions_tensor.unsqueeze(0)  
++        M = 0.5 * (P_i + P_j)
++        
++        log_ratio_i = torch.log((P_i + eps) / (M + eps))
++        kl_i_m = torch.sum(P_i * log_ratio_i, dim=2)
++        
++        log_ratio_j = torch.log((P_j + eps) / (M + eps))
++        kl_j_m = torch.sum(P_j * log_ratio_j, dim=2)
++        
++        js_matrix.copy_(0.5 * (kl_i_m + kl_j_m))
++        
++        # 统计计算时间
++        if hasattr(time, 'time'):
++            self.total_compute_time += time.time() - start_time
++            self.compute_count += 1
++            
++        return js_matrix
++        
++    def optimized_wasserstein(self, distributions_tensor):
++        """优化的Wasserstein距离计算 - 复用内存"""
++        start_time = time.time() if hasattr(time, 'time') else 0
++        
++        n_tasks, n_experts = distributions_tensor.shape
++        
++        # 复用缓存的张量
++        wass_matrix = self.pool.get_tensor((n_tasks, n_tasks), key="wass_matrix")
++        cdf_buffer = self.pool.get_tensor((n_tasks, n_experts), key="cdf_buffer")
++        
++        # 向量化计算
++        eps = 1e-8
++        distributions_tensor = distributions_tensor / (distributions_tensor.sum(dim=1, keepdim=True) + eps)
++        
++        # 复用缓冲区计算CDF
++        torch.cumsum(distributions_tensor, dim=1, out=cdf_buffer)
++        
++        cdf_i = cdf_buffer.unsqueeze(1)
++        cdf_j = cdf_buffer.unsqueeze(0)
++        
++        wass_matrix.copy_(torch.sum(torch.abs(cdf_i - cdf_j), dim=2))
++        
++        # 统计计算时间
++        if hasattr(time, 'time'):
++            self.total_compute_time += time.time() - start_time
++            self.compute_count += 1
++            
++        return wass_matrix
++    
++    def get_performance_stats(self):
++        """获取性能统计"""
++        avg_time = self.total_compute_time / self.compute_count if self.compute_count > 0 else 0
++        return {
++            'compute_count': self.compute_count,
++            'total_time': self.total_compute_time,
++            'avg_time_per_compute': avg_time,
++            'cache_stats': self.pool.get_cache_stats()
++        }
++
++
++# 全局优化器实例
++_gpu_optimizer = None
++
++def get_gpu_optimizer():
++    """获取全局GPU优化器实例"""
++    global _gpu_optimizer
++    if _gpu_optimizer is None:
++        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
++        tensor_pool = GPUTensorPool(device)
++        _gpu_optimizer = BatchComputeOptimizer(tensor_pool)
++    return _gpu_optimizer
++
++def get_optimization_stats():
++    """获取优化性能统计（调试用）"""
++    if _gpu_optimizer is not None:
++        return _gpu_optimizer.get_performance_stats()
++    return None
+diff --git a/lzero/mcts/tree_search/mcts_ctree.py b/lzero/mcts/tree_search/mcts_ctree.py
+index 97c3528..60f389d 100644
+--- a/lzero/mcts/tree_search/mcts_ctree.py
++++ b/lzero/mcts/tree_search/mcts_ctree.py
+@@ -46,7 +46,7 @@ class UniZeroMCTSCtree(object):
+         cfg.cfg_type = cls.__name__ + 'Dict'
+         return cfg
+ 
+-    def __init__(self, cfg: EasyDict = None) -> None:
++    def __init__(self, cfg: EasyDict = None,eval=False) -> None:
+         """
+         Overview:
+             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+@@ -56,9 +56,13 @@ class UniZeroMCTSCtree(object):
+         default_config = self.default_config()
+         default_config.update(cfg)
+         self._cfg = default_config
++        if eval:
++            self._cfg.num_simulations=self._cfg.eval_num_simulations
++        
+         self.inverse_scalar_transform_handle = InverseScalarTransform(
+             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
+         )
++        
+ 
+     @classmethod
+     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "mz_ctree":
+diff --git a/lzero/model/unizero_world_models/transformer.py b/lzero/model/unizero_world_models/transformer.py
+index 6a3c74d..4cdd1f1 100644
+--- a/lzero/model/unizero_world_models/transformer.py
++++ b/lzero/model/unizero_world_models/transformer.py
+@@ -579,11 +579,10 @@ class Transformer(nn.Module):
+     
+     # added by tangjia :
+     def get_block_before_moe_gradients(self) -> Dict[int, torch.Tensor]:
+-        block_before_moe_grad_list=[]
+-        for block_id, block in enumerate(self.blocks):
+-            if block.block_before_moe_grad is not None:
+-                block_before_moe_grad_list.append(block.block_before_moe_grad)
+-        return block_before_moe_grad_list        
++        # 把最后一个返回即可
++        
++        return self.blocks[-1].block_before_moe_grad
++          
+ 
+     def get_last_shared_expert_gradients(self) -> List[Dict[str, torch.Tensor]]:
+         """
+@@ -756,8 +755,14 @@ class Block(nn.Module):
+         else:
+             x = x + x_attn
+             block_before_moe=self.ln2(x)
+-            if self.training:
+-                block_before_moe.register_hook(lambda grad: setattr(self, 'block_before_moe_grad', grad)) #note: register hook to save gradients of before_moe
++            if self.training and is_last_block:
++                # 清除之前的梯度
++                self.block_before_moe_grad = None
++                # 使用更安全的hook注册方式，避免闭包问题
++                def grad_hook(grad):
++                    self.block_before_moe_grad = grad.clone()  # 克隆梯度避免引用问题
++                    return None
++                block_before_moe.register_hook(grad_hook)
+             
+             # 在最后一层且使用MOE时，传递task_id以收集专家选择统计
+             if is_last_block and self.config.multiplication_moe_in_transformer and hasattr(self.feed_forward, 'forward'):
+diff --git a/lzero/policy/unizero_multitask.py b/lzero/policy/unizero_multitask.py
+index 0c74381..c9b1496 100644
+--- a/lzero/policy/unizero_multitask.py
++++ b/lzero/policy/unizero_multitask.py
+@@ -14,7 +14,7 @@ from lzero.policy import prepare_obs_stack_for_unizero
+ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
+     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
+ from lzero.policy.unizero import UniZeroPolicy
+-from .utils import configure_optimizers_nanogpt, compute_gradient_conflict_distributed
++from .utils import configure_optimizers_nanogpt, compute_gradient_conflict_distributed, log_gradient_conflict_heatmaps_distributed_fast
+ import sys
+ 
+ # sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
+@@ -27,109 +27,6 @@ from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
+ from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
+ import torch.distributed as dist
+ 
+-# 预导入matplotlib模块，避免重复导入开销
+-import matplotlib
+-matplotlib.use('Agg')
+-import matplotlib.pyplot as plt
+-import numpy as np
+-
+-# 全局figure缓存
+-_GLOBAL_FIG_CACHE = None
+-_GLOBAL_AX_CACHE = None
+-
+-def _get_or_create_figure(figsize=(8, 6)):
+-    """获取或创建复用的matplotlib figure"""
+-    global _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
+-    if _GLOBAL_FIG_CACHE is None:
+-        _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE = plt.subplots(figsize=figsize)
+-    return _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
+-
+-def _fast_tensor_heatmap(matrix_np, tag):
+-    """快速生成热力图tensor - 跳过文本标注以提升性能"""
+-    fig, ax = _get_or_create_figure()
+-    
+-    # 清除之前的内容
+-    ax.clear()
+-    
+-    # 使用Blues colormap
+-    im = ax.imshow(matrix_np, cmap='Blues', vmin=-1, vmax=1)
+-    ax.set_title(f'{tag}', fontsize=12)
+-    
+-    # 只在小矩阵时添加数值标注（避免O(n²)开销）
+-    if matrix_np.size <= 64:  # 8x8或更小
+-        for row in range(matrix_np.shape[0]):
+-            for col in range(matrix_np.shape[1]):
+-                value = matrix_np[row, col]
+-                text_color = "white" if value > 0.5 else "black"
+-                ax.text(col, row, f'{value:.2f}',
+-                       ha="center", va="center", color=text_color, fontsize=8)
+-    
+-    # 快速转换为tensor
+-    fig.canvas.draw()
+-    try:
+-        if hasattr(fig.canvas, 'buffer_rgba'):
+-            buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+-            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+-            img_tensor = torch.from_numpy(buf[:, :, :3]).permute(2, 0, 1).float() / 255.0
+-        else:
+-            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+-            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+-            img_tensor = torch.from_numpy(buf).permute(2, 0, 1).float() / 255.0
+-    except Exception:
+-        # 回退方案：创建简单的蓝色矩阵
+-        h, w = matrix_np.shape
+-        img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
+-        img_tensor[2] = torch.from_numpy(matrix_np).repeat_interleave(50, 0).repeat_interleave(50, 1)
+-    
+-    return img_tensor
+-
+-
+-def log_gradient_conflict_heatmaps_distributed_fast(tb_logger, matrix_list, step):
+-    """
+-    高性能分布式热力图处理 - 优化版本
+-    
+-    优化点:
+-    1. 预导入matplotlib模块，避免重复导入开销
+-    2. 复用figure对象，减少内存分配
+-    3. 大矩阵跳过文本标注，避免O(n²)性能损失
+-    4. 条件barrier，减少等待时间
+-    5. 异常时快速回退，保证鲁棒性
+-    
+-    Args:
+-        tb_logger: TensorBoard logger
+-        matrix_list: list of (tag, matrix) tuples
+-        step: int, 全局步数
+-    """
+-    if not matrix_list:
+-        return
+-    
+-    rank = dist.get_rank()
+-    world_size = dist.get_world_size()
+-    
+-    try:
+-        # 批处理：每个GPU处理自己的矩阵
+-        processed_any = False
+-        for i in range(rank, len(matrix_list), world_size):
+-            tag, matrix = matrix_list[i]
+-            if matrix is not None and matrix.numel() > 0:
+-                matrix_np = matrix.detach().cpu().numpy()
+-                
+-                # 使用优化的热力图生成
+-                img_tensor = _fast_tensor_heatmap(matrix_np, tag)
+-                tb_logger.add_image(f'gradient_conflicts/{tag}', img_tensor, global_step=step)
+-                processed_any = True
+-        
+-        # 条件性同步：只有处理了数据的GPU才需要barrier
+-        if processed_any or rank == 0:  # rank 0始终参与同步以防死锁
+-            dist.barrier()
+-        
+-    except Exception as e:
+-        print(f"Rank {rank}: Error in optimized heatmap logging: {e}")
+-        # 紧急同步避免死锁
+-        try:
+-            dist.barrier()
+-        except:
+-            pass
+ 
+ 
+ 
+@@ -247,7 +144,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
+     def __init__(self, cfg, model = None, enable_field = None):
+         super().__init__(cfg, model, enable_field)
+         self.step=0
+-        self.save_freq=100
++        self.save_freq=200
+         
+         self.cal_profile=False
+         if self.cal_profile:
+@@ -435,8 +332,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
+         n_episode=8,
+         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+         num_segments=8,
+-        # (int) the number of simulations in MCTS.
++        # (int) the number of simulations in MCTS for collect.
+         num_simulations=50,
++        # (int) the number of simulations in MCTS for eval. If not set, use num_simulations.
++        eval_num_simulations=50,
+         # (float) Discount factor (gamma) for returns.
+         discount_factor=0.997,
+         # (int) The number of steps for calculating target q_value.
+@@ -931,14 +830,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
+                 # 每次计算前清零梯度，确保梯度独立
+                 self._optimizer_world_model.zero_grad()
+                 
+-                # 对每个任务的 loss 调用 backward 计算全网络梯度
++                # 计算encoder上的梯度冲突
+                 losses_list[i].backward(retain_graph=True) #保留梯度图，因为后面还有backward
+                 local_encoder_grad_list.append(self._learn_model.world_model.obs_embeddings_grad.view(-1).detach().clone())
+                 
+                 
+-                # self_attention
+-                attention_before_moe_list=self._learn_model.world_model.transformer.get_block_before_moe_gradients()
+-                before_moe_grad=attention_before_moe_list[0]
++                # self_attention 最后一个transformer block
++                before_moe_grad=self._learn_model.world_model.transformer.get_block_before_moe_gradients()
+                 local_before_moe_grad_list.append(before_moe_grad.view(-1).detach().clone())
+                 
+                 # 获取共享 expert 的梯度 
+@@ -1127,11 +1025,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
+             # 转换为list，准备分布式处理
+             matrix_list = list(matrix_dict.items())
+             log_gradient_conflict_heatmaps_distributed_fast(self.logger, matrix_list, self.step)
+-                
+-                    
+-                    
++            
+         if self.log_conflict_var:    
+-            return_loss_dict.update(gradient_conflict_log_dict)
++            # 在TensorBoard中记录gradient_conflict_log_dict中的标量数据
++            for key, value in gradient_conflict_log_dict.items():
++                self.logger.add_scalar(f'gradient_conflict/{key}', value, self.step)
++
++ 
+             
+         # print(f'Rank {rank} 正在根据冲突记录日志')
+         # print(gradient_conflict_log_dict)
+@@ -1273,24 +1173,24 @@ class UniZeroMTPolicy(UniZeroPolicy):
+             'weighted_total_loss',
+             'total_grad_norm_before_clip_wm',
+             # modified by tangjia
+-            'avg_encoder_grad_conflict',
+-            'avg_before_moe_grad_conflict',
+-            'avg_shared_expert_grad_conflict',
+-
+-             'max_encoder_grad_conflict',
+-            'max_before_moe_grad_conflict',
+-            'max_shared_expert_grad_conflict',
+-            "avg_moe_layer_grad_conflict",
+-            "max_moe_layer_grad_conflict",
++            # 'avg_encoder_grad_conflict',
++            # 'avg_before_moe_grad_conflict',
++            # 'avg_shared_expert_grad_conflict',
++
++            # 'max_encoder_grad_conflict',
++            # 'max_before_moe_grad_conflict',
++            # 'max_shared_expert_grad_conflict',
++            # "avg_moe_layer_grad_conflict",
++            # "max_moe_layer_grad_conflict",
+         ]
+         
+-        # # If the model uses MoE, add expert gradient conflict variables
+-        if self._learn_model.world_model.transformer.shared_expert > 0:
+-            monitored_vars.append('avg_shared_expert_grad_conflict')
+-            monitored_vars.append('max_shared_expert_grad_conflict')
+-        for i in range(self._learn_model.world_model.transformer.num_experts):
+-            monitored_vars.append(f'avg_expert_{i}_grad_conflict')
+-            monitored_vars.append(f'max_expert_{i}_grad_conflict')
++        # # # If the model uses MoE, add expert gradient conflict variables
++        # if self._learn_model.world_model.transformer.shared_expert > 0:
++        #     monitored_vars.append('avg_shared_expert_grad_conflict')
++        #     monitored_vars.append('max_shared_expert_grad_conflict')
++        # for i in range(self._learn_model.world_model.transformer.num_experts):
++        #     monitored_vars.append(f'avg_expert_{i}_grad_conflict')
++        #     monitored_vars.append(f'max_expert_{i}_grad_conflict')
+ 
+ 
+         # rank = get_rank()
+@@ -1520,10 +1420,23 @@ class UniZeroMTPolicy(UniZeroPolicy):
+             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
+         """
+         self._eval_model = self._model
++        
++        # 创建eval专用的配置对象，使用eval_num_simulations
++        # eval_cfg = copy.deepcopy(self._cfg)
++        # eval_num_simulations = getattr(self._cfg, 'eval_num_simulations', self._cfg.num_simulations)
++        # eval_cfg.num_simulations = eval_num_simulations
++        
++        # # 打印collect和eval的num_simulations设置
++        # print(f"=== MCTS Simulations Config ===")
++        # print(f"Collect num_simulations: {self._cfg.num_simulations}")
++        # print(f"Eval num_simulations: {eval_num_simulations}")
++        # print(f"===============================")
++        
+         if self._cfg.mcts_ctree:
+-            self._mcts_eval = MCTSCtree(self._cfg)
++            self._mcts_eval = MCTSCtree(self._cfg,eval=True)  # 使用eval专用配置
+         else:
+-            self._mcts_eval = MCTSPtree(self._cfg)
++            self._mcts_eval = MCTSPtree(self._cfg)   # 使用eval专用配置
++        
+         self.evaluator_env_num = self._cfg.evaluator_env_num
+ 
+         if self._cfg.model.model_type == 'conv':
+diff --git a/lzero/policy/utils.py b/lzero/policy/utils.py
+index de0787e..f621ac2 100644
+--- a/lzero/policy/utils.py
++++ b/lzero/policy/utils.py
+@@ -700,6 +700,139 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
+ # ==================== modified by tangjia=============================
+ import torch.distributed as dist
+ 
++# ==================== 梯度冲突矩阵可视化模块 =============================
++# 预导入matplotlib模块，避免重复导入开销
++import matplotlib
++matplotlib.use('Agg')
++
++# 全局figure缓存
++_GLOBAL_FIG_CACHE = None
++_GLOBAL_AX_CACHE = None
++
++def _get_or_create_figure(figsize=(8, 6)):
++    """获取或创建复用的matplotlib figure"""
++    global _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
++    if _GLOBAL_FIG_CACHE is None:
++        _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE = plt.subplots(figsize=figsize)
++    return _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
++
++def _fast_tensor_heatmap(matrix_np, tag):
++    """快速生成热力图tensor - 跳过文本标注以提升性能，移除对角线元素"""
++    # 复制矩阵以避免修改原始数据
++    matrix_no_diag = matrix_np.copy()
++    
++    # 移除对角线元素（设为0）
++    if matrix_no_diag.shape[0] == matrix_no_diag.shape[1]:  # 方阵才有对角线
++        np.fill_diagonal(matrix_no_diag, 0)
++    
++    # 创建新的figure而不是复用全局缓存
++    fig, ax = plt.subplots(figsize=(8, 6))
++    
++    # 直接使用矩阵，对角线已设为0
++    # 使用Blues colormap，调整颜色范围为-0.2到0.2
++    im = ax.imshow(matrix_no_diag, cmap='Blues', vmin=-0.2, vmax=0.2)
++    ax.set_title(f'{tag}', fontsize=12)
++    
++    # 只在小矩阵时添加数值标注（避免O(n²)开销）
++    if matrix_no_diag.size <= 64:  # 8x8或更小
++        for row in range(matrix_no_diag.shape[0]):
++            for col in range(matrix_no_diag.shape[1]):
++                if row != col:  # 跳过对角线元素
++                    value = matrix_no_diag[row, col]
++                    text_color = "white" if value > 0.5 else "black"
++                    ax.text(col, row, f'{value:.2f}',
++                           ha="center", va="center", color=text_color, fontsize=8)
++    
++    # 快速转换为tensor
++    fig.canvas.draw()
++    try:
++        # 尝试新版matplotlib的方法
++        if hasattr(fig.canvas, 'buffer_rgba'):
++            buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
++            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
++            img_tensor = torch.from_numpy(buf[:, :, :3]).permute(2, 0, 1).float() / 255.0
++        elif hasattr(fig.canvas, 'tostring_rgb'):
++            # 旧版matplotlib方法
++            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
++            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
++            img_tensor = torch.from_numpy(buf).permute(2, 0, 1).float() / 255.0
++        else:
++            # PIL回退方案
++            try:
++                from PIL import Image
++                import io
++                buf = io.BytesIO()
++                fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
++                buf.seek(0)
++                pil_img = Image.open(buf).convert('RGB')
++                img_array = np.array(pil_img)
++                img_tensor = torch.from_numpy(img_array).permute(2, 0, 1).float() / 255.0
++            except Exception:
++                # 最终回退方案：创建简单的蓝色矩阵
++                h, w = matrix_no_diag.shape
++                img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
++                img_tensor[2] = torch.from_numpy(matrix_no_diag).repeat_interleave(50, 0).repeat_interleave(50, 1)
++    except Exception:
++        # 回退方案：创建简单的蓝色矩阵
++        h, w = matrix_no_diag.shape
++        img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
++        img_tensor[2] = torch.from_numpy(matrix_no_diag).repeat_interleave(50, 0).repeat_interleave(50, 1)
++    finally:
++        # 关闭图形释放内存
++        plt.close(fig)
++    
++    return img_tensor
++
++
++def log_gradient_conflict_heatmaps_distributed_fast(tb_logger, matrix_list, step):
++    """
++    高性能分布式热力图处理 - 优化版本
++    
++    优化点:
++    1. 预导入matplotlib模块，避免重复导入开销
++    2. 复用figure对象，减少内存分配
++    3. 大矩阵跳过文本标注，避免O(n²)性能损失
++    4. 条件barrier，减少等待时间
++    5. 异常时快速回退，保证鲁棒性
++    
++    Args:
++        tb_logger: TensorBoard logger
++        matrix_list: list of (tag, matrix) tuples
++        step: int, 全局步数
++    """
++    if not matrix_list:
++        return
++    
++    rank = dist.get_rank()
++    world_size = dist.get_world_size()
++    
++    try:
++        # 批处理：每个GPU处理自己的矩阵
++        processed_any = False
++        for i in range(rank, len(matrix_list), world_size):
++            tag, matrix = matrix_list[i]
++            if matrix is not None and matrix.numel() > 0:
++                matrix_np = matrix.detach().cpu().numpy()
++                
++                # 使用优化的热力图生成
++                img_tensor = _fast_tensor_heatmap(matrix_np, tag)
++                tb_logger.add_image(f'gradient_conflict_matrix/{tag}', img_tensor, global_step=step)
++                processed_any = True
++        
++        # 条件性同步：只有处理了数据的GPU才需要barrier
++        if processed_any or rank == 0:  # rank 0始终参与同步以防死锁
++            dist.barrier()
++        
++    except Exception as e:
++        print(f"Rank {rank}: Error in optimized heatmap logging: {e}")
++        # 紧急同步避免死锁
++        try:
++            dist.barrier()
++        except:
++            pass
++
++# ==================== 原有的梯度冲突计算模块 =============================
++
+ 
+ 
+ def example_usage():
+@@ -885,5 +1018,128 @@ def compute_gradient_conflict_distributed(local_grads, multi_gpu=True, device=0)
+         'cosine_similarity_matrix': similarity
+     })
+ 
++def compute_gradient_conflicts_batch(gradient_groups: Dict[str, torch.Tensor], device=0) -> Dict[str, dict]:
++    """
++    批量计算多组梯度的冲突，减少分布式通信开销
++    
++    Args:
++        gradient_groups: 字典，key为组名，value为梯度tensor (local_task_num, grad_dim)
++        device: 设备
++        
++    Returns:
++        results: 字典，key为组名，value为冲突计算结果
++    """
++    rank = dist.get_rank() if dist.is_initialized() else 0
++    world_size = dist.get_world_size() if dist.is_initialized() else 1
++    
++    results = {}
++    
++    if world_size == 1:
++        # 单GPU模式
++        for group_name, local_grads in gradient_groups.items():
++            if local_grads.numel() == 0:
++                results[group_name] = EasyDict({'avg_conflict_score': 0.0})
++                continue
++                
++            # 过滤零梯度
++            norms = torch.norm(local_grads, dim=1)
++            valid_mask = norms > 1e-8
++            local_grads_filtered = local_grads[valid_mask]
++            
++            if local_grads_filtered.shape[0] <= 1:
++                results[group_name] = EasyDict({
++                    'avg_conflict_score': 0.0, 
++                    'max_conflict_score': 0.0, 
++                    'min_conflict_score': 0.0,
++                    'cosine_similarity_matrix': torch.zeros(1, 1, device=device)
++                })
++            else:
++                grad_list = [local_grads_filtered[i] for i in range(local_grads_filtered.shape[0])]
++                results[group_name] = compute_gradient_conflicts(grad_list)
++        return results
++    
++    # 多GPU模式 - 一次性收集所有梯度组
++    # 准备本地数据：过滤零梯度并记录有效数量
++    local_filtered_groups = {}
++    local_valid_counts = {}
++    
++    for group_name, local_grads in gradient_groups.items():
++        if local_grads.numel() == 0:
++            local_filtered_groups[group_name] = torch.empty(0, 0, device=device)
++            local_valid_counts[group_name] = 0
++            continue
++            
++        norms = torch.norm(local_grads, dim=1)
++        valid_mask = norms > 1e-8
++        filtered = local_grads[valid_mask]
++        local_filtered_groups[group_name] = filtered
++        local_valid_counts[group_name] = filtered.shape[0]
++    
++    # 收集所有rank的有效数量
++    all_valid_counts = [None for _ in range(world_size)]
++    dist.all_gather_object(all_valid_counts, local_valid_counts)
++    
++    # 计算每组的最大任务数，用于填充
++    max_counts = {}
++    for group_name in gradient_groups.keys():
++        counts = [counts_dict.get(group_name, 0) for counts_dict in all_valid_counts]
++        max_counts[group_name] = max(counts) if counts else 0
++    
++    # 填充并准备发送数据
++    local_padded_groups = {}
++    for group_name, filtered_grads in local_filtered_groups.items():
++        max_count = max_counts[group_name]
++        if max_count == 0:
++            local_padded_groups[group_name] = torch.empty(0, 0)
++            continue
++            
++        if filtered_grads.shape[0] < max_count:
++            if filtered_grads.numel() > 0:
++                pad_size = max_count - filtered_grads.shape[0]
++                grad_dim = filtered_grads.shape[1]
++                pad_tensor = torch.zeros(pad_size, grad_dim, device=device)
++                padded = torch.cat([filtered_grads, pad_tensor], dim=0)
++            else:
++                grad_dim = gradient_groups[group_name].shape[1] if gradient_groups[group_name].numel() > 0 else 1
++                padded = torch.zeros(max_count, grad_dim, device=device)
++        else:
++            padded = filtered_grads
++            
++        local_padded_groups[group_name] = padded.cpu()
++    
++    # 一次性收集所有组的数据
++    all_gradient_groups = [None for _ in range(world_size)]
++    dist.all_gather_object(all_gradient_groups, local_padded_groups)
++    
++    if rank == 0:
++        # 处理每个梯度组
++        for group_name in gradient_groups.keys():
++            # 收集该组的所有有效梯度
++            valid_grad_list = []
++            for rank_idx, rank_data in enumerate(all_gradient_groups):
++                if group_name in rank_data:
++                    valid_count = all_valid_counts[rank_idx].get(group_name, 0)
++                    if valid_count > 0:
++                        tensor_valid = rank_data[group_name][:valid_count, :].to(device)
++                        valid_grad_list.append(tensor_valid)
++            
++            if len(valid_grad_list) == 0:
++                results[group_name] = EasyDict({'avg_conflict_score': 0.0})
++            else:
++                all_grads = torch.cat(valid_grad_list, dim=0)
++                if all_grads.shape[0] <= 1:
++                    results[group_name] = EasyDict({'avg_conflict_score': 0.0})
++                else:
++                    grad_list = [all_grads[i] for i in range(all_grads.shape[0])]
++                    results[group_name] = compute_gradient_conflicts(grad_list)
++    else:
++        results = None
++    
++    # 广播结果到所有rank
++    results_list = [results]
++    dist.broadcast_object_list(results_list, src=0)
++    return results_list[0]
++
++
+ if __name__ == "__main__":
+     example_usage()
+diff --git a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
+index 31ed634..d355df1 100644
+--- a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
++++ b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
+@@ -55,7 +55,7 @@ def compute_batch_config(
+     return batch_sizes, grad_acc_steps
+ 
+ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
+-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
+                   total_batch_size, num_layers):
+     return EasyDict(dict(
+@@ -192,6 +192,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             cos_lr_scheduler=False,
+             num_segments=num_segments,
+             num_simulations=num_simulations,
++            eval_num_simulations=eval_num_simulations,
+             reanalyze_ratio=reanalyze_ratio,
+             n_episode=n_episode,
+             replay_buffer_size=int(5e5),
+@@ -204,9 +205,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             reanalyze_partition=reanalyze_partition,
+         ),
+     ))
+-
+ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                      num_segments, total_batch_size, num_layers):
+     configs = []
+@@ -247,7 +247,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
+     for task_id, env_id in enumerate(env_id_list):
+         config = create_config(
+             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
+-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
++            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
+         )
+         config.policy.task_id = task_id
+@@ -346,7 +346,8 @@ if __name__ == "__main__":
+     num_segments = 8
+     n_episode = 8
+     evaluator_env_num = 3
+-    num_simulations = 50
++    num_simulations = 25          # collect时使用的模拟次数
++    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
+     max_env_step = int(4e5)
+     reanalyze_ratio = 0.0
+ 
+@@ -380,7 +381,7 @@ if __name__ == "__main__":
+             effective_batch_size = 512 # nlayer8 需要设置replay_ratio=0.5对应的upc=80
+             # effective_batch_size = 256 # moco nlayer8 需要设置replay_ratio=0.5对应的upc=80
+         elif num_layers == 1:
+-            effective_batch_size = 512 
++            effective_batch_size = 256 
+     elif len(env_id_list) == 26:
+         # effective_batch_size = 832  # cnn-encoder
+         # effective_batch_size = 1024  # base-vit-encoder transformer-nlayer4  or cnn-encoder
+@@ -426,9 +427,9 @@ if __name__ == "__main__":
+ 
+     import torch.distributed as dist
+     # for seed in [1]:
+-    for seed in [1]:
++    for seed in [0]:
+         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
++                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                                    num_segments, total_batch_size, num_layers)
+ 
+diff --git a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_fintune_tangjia.py b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_fintune_tangjia.py
+index 1ef6fd2..0633404 100644
+--- a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_fintune_tangjia.py
++++ b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_fintune_tangjia.py
+@@ -40,7 +40,7 @@ def compute_batch_config(env_id_list, effective_batch_size):
+ 
+ 
+ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
+-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
+                   total_batch_size):
+     return EasyDict(dict(
+@@ -190,6 +190,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             cos_lr_scheduler=False,
+             num_segments=num_segments,
+             num_simulations=num_simulations,
++            eval_num_simulations=eval_num_simulations,
+             reanalyze_ratio=reanalyze_ratio,
+             n_episode=n_episode,
+             replay_buffer_size=int(5e5),
+@@ -205,7 +206,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+     ))
+ 
+ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                      num_segments, total_batch_size):
+     configs = []
+@@ -218,7 +219,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
+     for task_id, env_id in enumerate(env_id_list):
+         config = create_config(
+             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
+-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
++            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size
+         )
+         config.policy.task_id = task_id
+@@ -428,7 +429,8 @@ if __name__ == "__main__":
+     num_segments = 8
+     n_episode = 8
+     evaluator_env_num = 3
+-    num_simulations = 50
++    num_simulations = 25          # collect时使用的模拟次数
++    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
+     max_env_step = int(4e5)
+     reanalyze_ratio = 0.0
+     if len(env_id_list) == 1:
+@@ -473,7 +475,7 @@ if __name__ == "__main__":
+ 
+     for seed in [0]:
+         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
++                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                                    num_segments, total_batch_size)
+         pretrained_model_path = '/fs-computility/niuyazhe/tangjia/github/LightZero/ckpt/ckpt_best.pth.tar'
+diff --git a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe.py b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe.py
+index 0155389..63a26f5 100644
+--- a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe.py
++++ b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe.py
+@@ -55,7 +55,7 @@ def compute_batch_config(
+     return batch_sizes, grad_acc_steps
+ 
+ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
+-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
+                   total_batch_size, num_layers):
+     return EasyDict(dict(
+@@ -80,7 +80,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             only_use_moco_stats=False,
+             use_moco=False,  # ==============TODO==============
+             # use_moco=True,  # ==============TODO: moco==============
+-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
++            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000))),
+             grad_correct_params=dict(
+                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
+                 calpha=0.5, rescale=1,
+@@ -192,6 +192,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             cos_lr_scheduler=False,
+             num_segments=num_segments,
+             num_simulations=num_simulations,
++            eval_num_simulations=eval_num_simulations,
+             reanalyze_ratio=reanalyze_ratio,
+             n_episode=n_episode,
+             replay_buffer_size=int(5e5),
+@@ -204,9 +205,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             reanalyze_partition=reanalyze_partition,
+         ),
+     ))
+-
+ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                      num_segments, total_batch_size, num_layers):
+     configs = []
+@@ -247,7 +247,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
+     for task_id, env_id in enumerate(env_id_list):
+         config = create_config(
+             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
+-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
++            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
+         )
+         config.policy.task_id = task_id
+@@ -340,13 +340,14 @@ if __name__ == "__main__":
+ 
+ 
+     num_games = 8 # 26 # 8
+-    num_layers = 1 # ==============TODO==============
++    num_layers = 4 # ==============TODO==============
+     action_space_size = 18
+     collector_env_num = 8
+     num_segments = 8
+     n_episode = 8
+     evaluator_env_num = 3
+-    num_simulations = 25
++    num_simulations = 25          # collect时使用的模拟次数
++    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
+     max_env_step = int(4e5)
+     reanalyze_ratio = 0.0
+ 
+@@ -426,9 +427,9 @@ if __name__ == "__main__":
+ 
+     import torch.distributed as dist
+     # for seed in [1]:
+-    for seed in [100]:
++    for seed in [0]:
+         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
++                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                                    num_segments, total_batch_size, num_layers)
+ 
+diff --git a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_noshare.py b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_noshare.py
+index 770ceaa..4b32b74 100644
+--- a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_noshare.py
++++ b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_noshare.py
+@@ -55,7 +55,7 @@ def compute_batch_config(
+     return batch_sizes, grad_acc_steps
+ 
+ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
+-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
+                   total_batch_size, num_layers):
+     return EasyDict(dict(
+@@ -192,6 +192,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             cos_lr_scheduler=False,
+             num_segments=num_segments,
+             num_simulations=num_simulations,
++            eval_num_simulations=eval_num_simulations,
+             reanalyze_ratio=reanalyze_ratio,
+             n_episode=n_episode,
+             replay_buffer_size=int(5e5),
+@@ -204,9 +205,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             reanalyze_partition=reanalyze_partition,
+         ),
+     ))
+-
+ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                      num_segments, total_batch_size, num_layers):
+     configs = []
+@@ -247,7 +247,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
+     for task_id, env_id in enumerate(env_id_list):
+         config = create_config(
+             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
+-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
++            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
+         )
+         config.policy.task_id = task_id
+@@ -346,7 +346,8 @@ if __name__ == "__main__":
+     num_segments = 8
+     n_episode = 8
+     evaluator_env_num = 3
+-    num_simulations = 25
++    num_simulations = 25          # collect时使用的模拟次数
++    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
+     max_env_step = int(4e5)
+     reanalyze_ratio = 0.0
+ 
+@@ -428,7 +429,7 @@ if __name__ == "__main__":
+     # for seed in [1]:
+     for seed in [100]:
+         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
++                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                                    num_segments, total_batch_size, num_layers)
+ 
+diff --git a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_only_share.py b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_only_share.py
+index 35e80b7..0698baa 100644
+--- a/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_only_share.py
++++ b/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_only_share.py
+@@ -55,7 +55,7 @@ def compute_batch_config(
+     return batch_sizes, grad_acc_steps
+ 
+ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
+-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
+                   total_batch_size, num_layers):
+     return EasyDict(dict(
+@@ -192,6 +192,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             cos_lr_scheduler=False,
+             num_segments=num_segments,
+             num_simulations=num_simulations,
++            eval_num_simulations=eval_num_simulations,
+             reanalyze_ratio=reanalyze_ratio,
+             n_episode=n_episode,
+             replay_buffer_size=int(5e5),
+@@ -204,9 +205,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
+             reanalyze_partition=reanalyze_partition,
+         ),
+     ))
+-
+ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
++                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                      num_segments, total_batch_size, num_layers):
+     configs = []
+@@ -247,7 +247,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
+     for task_id, env_id in enumerate(env_id_list):
+         config = create_config(
+             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
+-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
++            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
+         )
+         config.policy.task_id = task_id
+@@ -346,7 +346,8 @@ if __name__ == "__main__":
+     num_segments = 8
+     n_episode = 8
+     evaluator_env_num = 3
+-    num_simulations = 25
++    num_simulations = 25          # collect时使用的模拟次数
++    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
+     max_env_step = int(4e5)
+     reanalyze_ratio = 0.0
+ 
+@@ -428,7 +429,7 @@ if __name__ == "__main__":
+     # for seed in [1]:
+     for seed in [100]:
+         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
+-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
++                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
+                                    num_segments, total_batch_size, num_layers)
+ 

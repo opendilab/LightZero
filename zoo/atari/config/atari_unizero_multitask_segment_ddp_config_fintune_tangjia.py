@@ -40,7 +40,7 @@ def compute_batch_config(env_id_list, effective_batch_size):
 
 
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
                   total_batch_size):
     return EasyDict(dict(
@@ -190,6 +190,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             cos_lr_scheduler=False,
             num_segments=num_segments,
             num_simulations=num_simulations,
+            eval_num_simulations=eval_num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
@@ -205,7 +206,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
     ))
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
@@ -218,7 +219,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size
         )
         config.policy.task_id = task_id
@@ -428,7 +429,8 @@ if __name__ == "__main__":
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
-    num_simulations = 50
+    num_simulations = 25          # collect时使用的模拟次数
+    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
     max_env_step = int(4e5)
     reanalyze_ratio = 0.0
     if len(env_id_list) == 1:
@@ -473,7 +475,7 @@ if __name__ == "__main__":
 
     for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                                    num_segments, total_batch_size)
         pretrained_model_path = '/fs-computility/niuyazhe/tangjia/github/LightZero/ckpt/ckpt_best.pth.tar'

@@ -55,7 +55,7 @@ def compute_batch_config(
     return batch_sizes, grad_acc_steps
 
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
                   total_batch_size, num_layers):
     return EasyDict(dict(
@@ -80,7 +80,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             only_use_moco_stats=False,
             use_moco=False,  # ==============TODO==============
             # use_moco=True,  # ==============TODO: moco==============
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
                 calpha=0.5, rescale=1,
@@ -192,6 +192,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             cos_lr_scheduler=False,
             num_segments=num_segments,
             num_simulations=num_simulations,
+            eval_num_simulations=eval_num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
@@ -204,9 +205,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_partition=reanalyze_partition,
         ),
     ))
-
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size, num_layers):
     configs = []
@@ -247,7 +247,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
         )
         config.policy.task_id = task_id
@@ -340,13 +340,14 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 1 # ==============TODO==============
+    num_layers = 4 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
-    num_simulations = 25
+    num_simulations = 25          # collect时使用的模拟次数
+    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
     max_env_step = int(4e5)
     reanalyze_ratio = 0.0
 
@@ -426,9 +427,9 @@ if __name__ == "__main__":
 
     import torch.distributed as dist
     # for seed in [1]:
-    for seed in [100]:
+    for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                                    num_segments, total_batch_size, num_layers)
 

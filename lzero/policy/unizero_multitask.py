@@ -14,7 +14,7 @@ from lzero.policy import prepare_obs_stack_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
-from .utils import configure_optimizers_nanogpt, compute_gradient_conflict_distributed
+from .utils import configure_optimizers_nanogpt, compute_gradient_conflict_distributed, log_gradient_conflict_heatmaps_distributed_fast
 import sys
 
 # sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
@@ -27,109 +27,6 @@ from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
 from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
 import torch.distributed as dist
 
-# 预导入matplotlib模块，避免重复导入开销
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import numpy as np
-
-# 全局figure缓存
-_GLOBAL_FIG_CACHE = None
-_GLOBAL_AX_CACHE = None
-
-def _get_or_create_figure(figsize=(8, 6)):
-    """获取或创建复用的matplotlib figure"""
-    global _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
-    if _GLOBAL_FIG_CACHE is None:
-        _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE = plt.subplots(figsize=figsize)
-    return _GLOBAL_FIG_CACHE, _GLOBAL_AX_CACHE
-
-def _fast_tensor_heatmap(matrix_np, tag):
-    """快速生成热力图tensor - 跳过文本标注以提升性能"""
-    fig, ax = _get_or_create_figure()
-    
-    # 清除之前的内容
-    ax.clear()
-    
-    # 使用Blues colormap
-    im = ax.imshow(matrix_np, cmap='Blues', vmin=-1, vmax=1)
-    ax.set_title(f'{tag}', fontsize=12)
-    
-    # 只在小矩阵时添加数值标注（避免O(n²)开销）
-    if matrix_np.size <= 64:  # 8x8或更小
-        for row in range(matrix_np.shape[0]):
-            for col in range(matrix_np.shape[1]):
-                value = matrix_np[row, col]
-                text_color = "white" if value > 0.5 else "black"
-                ax.text(col, row, f'{value:.2f}',
-                       ha="center", va="center", color=text_color, fontsize=8)
-    
-    # 快速转换为tensor
-    fig.canvas.draw()
-    try:
-        if hasattr(fig.canvas, 'buffer_rgba'):
-            buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
-            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
-            img_tensor = torch.from_numpy(buf[:, :, :3]).permute(2, 0, 1).float() / 255.0
-        else:
-            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            img_tensor = torch.from_numpy(buf).permute(2, 0, 1).float() / 255.0
-    except Exception:
-        # 回退方案：创建简单的蓝色矩阵
-        h, w = matrix_np.shape
-        img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
-        img_tensor[2] = torch.from_numpy(matrix_np).repeat_interleave(50, 0).repeat_interleave(50, 1)
-    
-    return img_tensor
-
-
-def log_gradient_conflict_heatmaps_distributed_fast(tb_logger, matrix_list, step):
-    """
-    高性能分布式热力图处理 - 优化版本
-    
-    优化点:
-    1. 预导入matplotlib模块，避免重复导入开销
-    2. 复用figure对象，减少内存分配
-    3. 大矩阵跳过文本标注，避免O(n²)性能损失
-    4. 条件barrier，减少等待时间
-    5. 异常时快速回退，保证鲁棒性
-    
-    Args:
-        tb_logger: TensorBoard logger
-        matrix_list: list of (tag, matrix) tuples
-        step: int, 全局步数
-    """
-    if not matrix_list:
-        return
-    
-    rank = dist.get_rank()
-    world_size = dist.get_world_size()
-    
-    try:
-        # 批处理：每个GPU处理自己的矩阵
-        processed_any = False
-        for i in range(rank, len(matrix_list), world_size):
-            tag, matrix = matrix_list[i]
-            if matrix is not None and matrix.numel() > 0:
-                matrix_np = matrix.detach().cpu().numpy()
-                
-                # 使用优化的热力图生成
-                img_tensor = _fast_tensor_heatmap(matrix_np, tag)
-                tb_logger.add_image(f'gradient_conflicts/{tag}', img_tensor, global_step=step)
-                processed_any = True
-        
-        # 条件性同步：只有处理了数据的GPU才需要barrier
-        if processed_any or rank == 0:  # rank 0始终参与同步以防死锁
-            dist.barrier()
-        
-    except Exception as e:
-        print(f"Rank {rank}: Error in optimized heatmap logging: {e}")
-        # 紧急同步避免死锁
-        try:
-            dist.barrier()
-        except:
-            pass
 
 
 
@@ -247,7 +144,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
     def __init__(self, cfg, model = None, enable_field = None):
         super().__init__(cfg, model, enable_field)
         self.step=0
-        self.save_freq=100
+        self.save_freq=200
         
         self.cal_profile=False
         if self.cal_profile:
@@ -435,8 +332,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # (int) the number of simulations in MCTS.
+        # (int) the number of simulations in MCTS for collect.
         num_simulations=50,
+        # (int) the number of simulations in MCTS for eval. If not set, use num_simulations.
+        eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -931,14 +830,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # 每次计算前清零梯度，确保梯度独立
                 self._optimizer_world_model.zero_grad()
                 
-                # 对每个任务的 loss 调用 backward 计算全网络梯度
+                # 计算encoder上的梯度冲突
                 losses_list[i].backward(retain_graph=True) #保留梯度图，因为后面还有backward
                 local_encoder_grad_list.append(self._learn_model.world_model.obs_embeddings_grad.view(-1).detach().clone())
                 
                 
-                # self_attention
-                attention_before_moe_list=self._learn_model.world_model.transformer.get_block_before_moe_gradients()
-                before_moe_grad=attention_before_moe_list[0]
+                # self_attention 最后一个transformer block
+                before_moe_grad=self._learn_model.world_model.transformer.get_block_before_moe_gradients()
                 local_before_moe_grad_list.append(before_moe_grad.view(-1).detach().clone())
                 
                 # 获取共享 expert 的梯度 
@@ -1127,11 +1025,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 转换为list，准备分布式处理
             matrix_list = list(matrix_dict.items())
             log_gradient_conflict_heatmaps_distributed_fast(self.logger, matrix_list, self.step)
-                
-                    
-                    
+            
         if self.log_conflict_var:    
-            return_loss_dict.update(gradient_conflict_log_dict)
+            # 在TensorBoard中记录gradient_conflict_log_dict中的标量数据
+            for key, value in gradient_conflict_log_dict.items():
+                self.logger.add_scalar(f'gradient_conflict/{key}', value, self.step)
+
+ 
             
         # print(f'Rank {rank} 正在根据冲突记录日志')
         # print(gradient_conflict_log_dict)
@@ -1273,24 +1173,24 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
             # modified by tangjia
-            'avg_encoder_grad_conflict',
-            'avg_before_moe_grad_conflict',
-            'avg_shared_expert_grad_conflict',
+            # 'avg_encoder_grad_conflict',
+            # 'avg_before_moe_grad_conflict',
+            # 'avg_shared_expert_grad_conflict',
 
-             'max_encoder_grad_conflict',
-            'max_before_moe_grad_conflict',
-            'max_shared_expert_grad_conflict',
-            "avg_moe_layer_grad_conflict",
-            "max_moe_layer_grad_conflict",
+            # 'max_encoder_grad_conflict',
+            # 'max_before_moe_grad_conflict',
+            # 'max_shared_expert_grad_conflict',
+            # "avg_moe_layer_grad_conflict",
+            # "max_moe_layer_grad_conflict",
         ]
         
-        # # If the model uses MoE, add expert gradient conflict variables
-        if self._learn_model.world_model.transformer.shared_expert > 0:
-            monitored_vars.append('avg_shared_expert_grad_conflict')
-            monitored_vars.append('max_shared_expert_grad_conflict')
-        for i in range(self._learn_model.world_model.transformer.num_experts):
-            monitored_vars.append(f'avg_expert_{i}_grad_conflict')
-            monitored_vars.append(f'max_expert_{i}_grad_conflict')
+        # # # If the model uses MoE, add expert gradient conflict variables
+        # if self._learn_model.world_model.transformer.shared_expert > 0:
+        #     monitored_vars.append('avg_shared_expert_grad_conflict')
+        #     monitored_vars.append('max_shared_expert_grad_conflict')
+        # for i in range(self._learn_model.world_model.transformer.num_experts):
+        #     monitored_vars.append(f'avg_expert_{i}_grad_conflict')
+        #     monitored_vars.append(f'max_expert_{i}_grad_conflict')
 
 
         # rank = get_rank()
@@ -1520,10 +1420,23 @@ class UniZeroMTPolicy(UniZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+        
+        # 创建eval专用的配置对象，使用eval_num_simulations
+        # eval_cfg = copy.deepcopy(self._cfg)
+        # eval_num_simulations = getattr(self._cfg, 'eval_num_simulations', self._cfg.num_simulations)
+        # eval_cfg.num_simulations = eval_num_simulations
+        
+        # # 打印collect和eval的num_simulations设置
+        # print(f"=== MCTS Simulations Config ===")
+        # print(f"Collect num_simulations: {self._cfg.num_simulations}")
+        # print(f"Eval num_simulations: {eval_num_simulations}")
+        # print(f"===============================")
+        
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTSCtree(self._cfg,eval=True)  # 使用eval专用配置
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTSPtree(self._cfg)   # 使用eval专用配置
+        
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':

@@ -19,7 +19,7 @@ def compute_batch_config(
         max_micro_batch_one_gpu (int): 单卡能接受的最大 micro-batch
     Returns:
         batch_sizes (list[int]): 每个 env 的 micro-batch
-        grad_acc_steps (int): 梯度累积步数
+        grad_acc_steps (int): 梯度累积步数/fs-computility/niuyazhe/tangjia/github/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe.py
     """
     n_env = len(env_id_list)
     # 每张卡要同时跑多少个 env
@@ -148,7 +148,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     env_num=8,
                     task_num=len(env_id_list),
                     encoder_type='vit', # =======TODO: vit=======
-                    # encoder_type='resnet', # ==============TODO:orig==============/fs-computility/niuyazhe/tangjia/github/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_moe_only_share.py
+                    # encoder_type='resnet', # ==============TODO:orig==============
 
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -156,11 +156,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    # multiplication_moe_in_transformer=False, # ==============TODO:orig==============
-                    multiplication_moe_in_transformer=True, # =======TODO: moe8=======
+                    multiplication_moe_in_transformer=True, # ==============TODO:orig==============
+                    # multiplication_moe_in_transformer=True, # =======TODO: moe8=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
-                    num_experts_of_moe_in_transformer=0,
+                    num_experts_of_moe_in_transformer=8,
 
                     # LoRA 参数：
                     moe_use_lora=False, # TDO
@@ -217,7 +217,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # ========= TODO: global BENCHMARK_NAME =========
     # exp_name_prefix = f'data_unizero_atari_mt_20250605/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
-    exp_name_prefix = "debug/moe_onlyshare/"
+    exp_name_prefix = 'debug/moe/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250612/atari_{len(env_id_list)}games_orig_moco_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     # exp_name_prefix = f'data_unizero_atari_mt_20250611/atari_{len(env_id_list)}games_orig_vit_moe8_tbs256_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
@@ -340,7 +340,7 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 1 # ==============TODO==============
+    num_layers = 4 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
