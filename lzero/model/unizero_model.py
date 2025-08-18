@@ -127,7 +127,7 @@ class UniZeroModel(nn.Module):
                 norm_type=norm_type,
                 embedding_dim=world_model_cfg.embed_dim,
                 group_size=world_model_cfg.group_size,
-                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
             )
 
             # ====== for analysis ======
