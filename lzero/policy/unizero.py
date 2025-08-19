@@ -761,10 +761,10 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = batch_action
 
             # ========= TODO: for muzero_segment_collector now =========
-            if active_collect_env_num < self.collector_env_num:
+            if active_collect_env_num < self.collector_env_num: # 先有环境done,再到下一步的forward出现这个这个条件满足
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
-                self._reset_collect(reset_init_data=True)
+                self._reset_collect(reset_init_data=True) # TODO(pu): 所有环境全部重置是否合理呢？
                 if getattr(self._cfg, 'sample_type', '') == 'episode':
                     print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
@@ -941,12 +941,15 @@ class UniZeroPolicy(MuZeroPolicy):
                     world_model.keys_values_wm_list.clear()
 
                 torch.cuda.empty_cache()
+            # --- END ROBUST FIX ---
 
-        # --- END ROBUST FIX ---
+
+        # # Return immediately if env_id is None or a list
+        # if env_id is None or isinstance(env_id, list):
+        #     return
 
         # # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
-
         # # Clear caches if the current steps are a multiple of the clear interval
         # if current_steps % clear_interval == 0:
         #     print(f'clear_interval: {clear_interval}')
@@ -1012,9 +1015,13 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 torch.cuda.empty_cache()
                 return
-        # --- END ROBUST FIX ---
+            # --- END ROBUST FIX ---
 
-        # # # Determine the clear interval based on the environment's sample type
+        # Return immediately if env_id is None or a list
+        # if env_id is None or isinstance(env_id, list):
+        #     return
+
+        # # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
 
         # # # Clear caches if the current steps are a multiple of the clear interval
