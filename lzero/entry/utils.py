@@ -462,7 +462,25 @@ def create_heatmap_with_values_fast(matrix, task_ids, title="Task-Expert Selecti
         return np.zeros((3, 100, 100), dtype=np.uint8)
 
 def create_heatmap_with_values(matrix, task_ids, title="Task-Expert Selection Frequencies"):
-    """创建带数值标注的蓝色系热力图 - 原始版本（回退用）"""
+    """
+    Overview:
+        创建带数值标注的蓝色系热力图，作为高效版本的稳定回退方案
+    
+    Args:
+        matrix (numpy.ndarray): 热力图数据矩阵，形状为 (n_tasks, n_experts)
+        task_ids (list): 任务ID列表，用于Y轴标签
+        title (str, optional): 热力图标题，默认为 "Task-Expert Selection Frequencies"
+    
+    Returns:
+        numpy.ndarray: 图像数组，形状为 (3, height, width)，CHW格式用于TensorBoard
+    
+    Note:
+        - 使用seaborn创建热力图，始终显示数值标注
+        - 通过BytesIO和PIL进行图像转换
+        - 作为create_heatmap_with_values_fast的稳定回退版本
+        - 适用于对稳定性要求高于性能的场景
+        - 不进行内存复用优化，但保证生成结果的可靠性
+    """
     fig, ax = plt.subplots(figsize=(max(8, matrix.shape[1]), max(6, matrix.shape[0])))
     
     # 使用蓝色系颜色映射
@@ -499,7 +517,28 @@ def create_heatmap_with_values(matrix, task_ids, title="Task-Expert Selection Fr
     return img_array
 
 def log_expert_selection_details(tb_logger, merged_stats, valid_task_ids, matrix, window_type, train_iter):
-    """记录每个任务的详细专家选择统计"""
+    """
+    Overview:
+        记录每个任务的详细专家选择统计信息到TensorBoard，提供任务级别的MOE性能分析
+    
+    Args:
+        tb_logger (SummaryWriter): TensorBoard日志记录器
+        merged_stats (dict): 合并后的MOE统计数据，格式为 {task_id: {window_type: stats}}
+        valid_task_ids (list): 有效任务ID列表
+        matrix (numpy.ndarray): 专家选择频率矩阵，形状为 (n_tasks, n_experts)
+        window_type (str): 时间窗口类型，如 'immediate', 'short', 'medium', 'long'
+        train_iter (int): 当前训练迭代次数
+    
+    Returns:
+        None
+    
+    Note:
+        - 为每个任务计算专家选择的熵值（均匀性指标）
+        - 计算专家选择的方差（分散程度指标）
+        - 记录任务级别的汇总统计（总选择次数、数据点数量）
+        - 所有指标按任务和时间窗口分类记录到TensorBoard
+        - 支持MOE模块的细粒度性能分析和调优
+    """
     for i, task_id in enumerate(valid_task_ids):
         frequencies = matrix[i]
         stats = merged_stats[task_id][window_type]
@@ -531,7 +570,27 @@ def log_expert_selection_details(tb_logger, merged_stats, valid_task_ids, matrix
         )
 
 def log_global_moe_statistics(tb_logger, matrix, window_type, valid_task_ids, train_iter):
-    """记录全局MOE统计信息"""
+    """
+    Overview:
+        记录全局MOE统计信息到TensorBoard，提供整体模块性能的宏观视图
+    
+    Args:
+        tb_logger (SummaryWriter): TensorBoard日志记录器
+        matrix (numpy.ndarray): 专家选择频率矩阵，形状为 (n_tasks, n_experts)
+        window_type (str): 时间窗口类型，如 'immediate', 'short', 'medium', 'long'
+        valid_task_ids (list): 有效任务ID列表
+        train_iter (int): 当前训练迭代次数
+    
+    Returns:
+        None
+    
+    Note:
+        - 记录活跃任务数量和专家数量
+        - 计算专家使用均匀性（熵值）
+        - 识别最常用和最少用的专家ID
+        - 提供MOE模块整体性能的全局视图
+        - 帮助识别专家负载不均衡问题
+    """
     # 记录基本信息
     tb_logger.add_scalar(
         f'MOE_Global/{window_type}/NumActiveTasks',
@@ -564,13 +623,24 @@ def log_global_moe_statistics(tb_logger, matrix, window_type, valid_task_ids, tr
 
 def process_and_log_moe_heatmaps_fast(tb_logger, merged_stats, window_type, train_iter):
     """
-    高效处理和记录MOE热力图 - 优化版本
+    Overview:
+        高效处理和记录MOE热力图，优化的主入口函数用于可视化MOE统计数据
     
-    优化点:
-    1. 向量化数据处理，减少循环
-    2. 使用高效的热力图生成函数
-    3. 条件性热力图生成
-    4. 批量处理统计数据
+    Args:
+        tb_logger (SummaryWriter): TensorBoard日志记录器
+        merged_stats (dict): 合并后的MOE统计数据
+        window_type (str): 时间窗口类型
+        train_iter (int): 当前训练迭代次数
+    
+    Returns:
+        None
+    
+    Note:
+        - 向量化数据处理，减少循环操作
+        - 使用高效的热力图生成函数
+        - 条件性热力图生成（小矩阵才生成）
+        - 批量处理统计数据
+        - 始终记录详细统计和全局统计
     """
     # 快速筛选有效任务
     valid_task_data = [(tid, stats[window_type]['frequencies']) 
@@ -607,7 +677,25 @@ def process_and_log_moe_heatmaps_fast(tb_logger, merged_stats, window_type, trai
     log_global_moe_statistics(tb_logger, matrix, window_type, valid_task_ids, train_iter)
 
 def process_and_log_moe_heatmaps(tb_logger, merged_stats, window_type, train_iter):
-    """处理和记录MOE热力图 - 原始版本（回退用）"""
+    """
+    Overview:
+        处理和记录MOE热力图，作为高效版本的稳定回退方案
+    
+    Args:
+        tb_logger (SummaryWriter): TensorBoard日志记录器
+        merged_stats (dict): 合并后的MOE统计数据
+        window_type (str): 时间窗口类型
+        train_iter (int): 当前训练迭代次数
+    
+    Returns:
+        None
+    
+    Note:
+        - 传统循环处理方式，稳定可靠
+        - 始终生成热力图无条件限制
+        - 作为process_and_log_moe_heatmaps_fast的回退方案
+        - 不进行性能优化但保证功能完整性
+    """
     all_task_ids = sorted(merged_stats.keys())
     task_expert_matrix = []
     valid_task_ids = []
@@ -643,7 +731,22 @@ def process_and_log_moe_heatmaps(tb_logger, merged_stats, window_type, train_ite
     log_expert_selection_details(tb_logger, merged_stats, valid_task_ids, matrix, window_type, train_iter)
 
 def convert_stats_to_serializable(moe_stats):
-    """将MOE统计数据中的tensor转换为可序列化的numpy格式"""
+    """
+    Overview:
+        将MOE统计数据中的PyTorch tensor转换为可序列化的numpy格式
+    
+    Args:
+        moe_stats (dict): 包含tensor的MOE统计数据
+    
+    Returns:
+        dict: 转换后的可序列化统计数据
+    
+    Note:
+        - 将GPU上tensor转移到CPU再转换为numpy
+        - 支持分布式训练中的数据交换
+        - 保持原有数据结构不变
+        - 处理空数据的边界情况
+    """
     if not moe_stats:
         return {}
     
@@ -660,7 +763,23 @@ def convert_stats_to_serializable(moe_stats):
     return converted
 
 def gather_distributed_moe_stats(local_stats, world_size):
-    """在分布式训练中收集和合并MOE统计数据"""
+    """
+    Overview:
+        在分布式训练中收集和合并MOE统计数据，实现跨GPU的数据同步
+    
+    Args:
+        local_stats (dict): 本地GPU的MOE统计数据
+        world_size (int): 总进程数（GPU数量）
+    
+    Returns:
+        dict: 合并后的全局MOE统计数据
+    
+    Note:
+        - 单GPU训练时直接返回本地数据
+        - 多GPU训练时进行数据聚合
+        - 自动处理tensor到numpy的转换
+        - 为未来的完整分布式实现预留接口
+    """
     if world_size == 1:
         return local_stats
     
@@ -670,9 +789,25 @@ def gather_distributed_moe_stats(local_stats, world_size):
 
 def collect_and_log_moe_statistics(policy, tb_logger, train_iter, world_size, rank):
     """
-    收集和记录MOE统计信息 - 主要入口函数
+    Overview:
+        收集和记录MOE统计信息，主MOE监控系统的核心入口函数
     
-    优化版本，增加了异常处理和性能监控
+    Args:
+        policy: 策略对象，包含MOE模型
+        tb_logger (SummaryWriter): TensorBoard日志记录器
+        train_iter (int): 当前训练迭代次数
+        world_size (int): 总进程数（分布式训练）
+        rank (int): 当前进程rank
+    
+    Returns:
+        None
+    
+    Note:
+        - 从策略中提取MOE层的统计数据
+        - 支持分布式训练中的数据收集
+        - 只在rank 0进程中记录到TensorBoard
+        - 对多个时间窗口进行统计处理
+        - 包含完整的异常处理和错误日志
     """
     try:
         # 从policy收集本地MOE统计
@@ -710,33 +845,62 @@ def collect_and_log_moe_statistics(policy, tb_logger, train_iter, world_size, ra
 # ====== GPU优化的分布差异计算和可视化函数 ======
 def jensen_shannon_divergence_batch_gpu(distributions_tensor):
     """
-    GPU批量计算JS散度矩阵 - 使用GPU优化器的内存池
+    Overview:
+        GPU批量计算Jensen-Shannon散度矩阵，使用内存池优化性能
     
     Args:
-        distributions_tensor: shape (n_tasks, n_experts), GPU张量
+        distributions_tensor (torch.Tensor): 专家选择分布张量，形状 (n_tasks, n_experts)
     
     Returns:
-        js_matrix: shape (n_tasks, n_tasks), 对称矩阵
+        torch.Tensor: JS散度矩阵，形状 (n_tasks, n_tasks)，对称矩阵
+    
+    Note:
+        - 使用GPU优化器的内存池减少内存分配
+        - 支持向量化计算，无需循环
+        - JS散度范围为[0,1]，越小表示越相似
+        - 主要用于衡量任务间专家选择的相似性
     """
     # 使用GPU优化器提升性能
     return get_gpu_optimizer().optimized_js_divergence(distributions_tensor)
 
 def wasserstein_distance_batch_gpu(distributions_tensor):
     """
-    GPU批量计算Wasserstein距离矩阵 - 使用GPU优化器的内存池
+    Overview:
+        GPU批量计算Wasserstein距离矩阵，使用内存池优化性能
     
     Args:
-        distributions_tensor: shape (n_tasks, n_experts), GPU张量
+        distributions_tensor (torch.Tensor): 专家选择分布张量，形状 (n_tasks, n_experts)
     
     Returns:
-        wasserstein_matrix: shape (n_tasks, n_tasks), 对称矩阵
+        torch.Tensor: Wasserstein距离矩阵，形状 (n_tasks, n_tasks)，对称矩阵
+    
+    Note:
+        - 使用GPU优化器的内存池减少内存分配
+        - 通过CDF计算Wasserstein-1距离
+        - 支持向量化计算，高效处理大批量数据
+        - 主要用于衡量任务间专家选择的差异性
     """
     # 使用GPU优化器提升性能
     return get_gpu_optimizer().optimized_wasserstein(distributions_tensor)
 
 def compute_distribution_divergences_optimized(merged_stats, window_type='immediate'):
     """
-    GPU优化版本 - 高效分布差异计算
+    Overview:
+        GPU优化的高效分布差异计算，同时计算JS散度和Wasserstein距离
+    
+    Args:
+        merged_stats (dict): 合并后的MOE统计数据
+        window_type (str, optional): 时间窗口类型，默认 'immediate'
+    
+    Returns:
+        dict: 包含散度矩阵和统计信息的字典，空字典表示任务数不足
+    
+    Note:
+        - 自动检测GPU可用性并选择最佳设备
+        - 向量化处理，无需循环计算
+        - 支持异构数据格式（tensor/numpy）自动转换
+        - 提供详细的性能统计和设备信息
+        - 需要至少两个任务才能计算分布差异
     """
     # 1. 数据预处理
     valid_tasks = [(tid, stats[window_type]['frequencies']) 
