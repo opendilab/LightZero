@@ -364,6 +364,8 @@ class MuZeroCollector(ISerialCollector):
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
         timestep_dict = {}
+        manual_embeds_dict = {i: to_ndarray(init_obs[i].get('manual_embeds', None)) for i in range(env_nums)}
+
         for i in range(env_nums):
             if 'timestep' not in init_obs[i]:
                 print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
@@ -386,7 +388,7 @@ class MuZeroCollector(ISerialCollector):
                 [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
                 maxlen=self.policy_config.model.frame_stack_num
             )
-            game_segments[env_id].reset(observation_window_stack[env_id])
+            game_segments[env_id].reset(observation_window_stack[env_id], init_manual_embeds=init_obs[env_id].get('manual_embeds', None))
 
         dones = np.array([False for _ in range(env_nums)])
         last_game_segments = [None for _ in range(env_nums)]
@@ -430,10 +432,12 @@ class MuZeroCollector(ISerialCollector):
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
                 timestep_dict = {env_id: timestep_dict[env_id] for env_id in ready_env_id}
+                manual_embeds_dict = {env_id: manual_embeds_dict[env_id] for env_id in ready_env_id}
                 
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
                 timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+                manual_embeds = [manual_embeds_dict[env_id] for env_id in ready_env_id]
                 
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
@@ -447,7 +451,7 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep, manual_embeds=manual_embeds)
                 
                 pred_next_text_with_env_id = {k: v['predicted_next_text'] for k, v in policy_output.items()}
                     
@@ -566,12 +570,12 @@ class MuZeroCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], chance_dict[env_id], timestep_dict[env_id]
+                            to_play_dict[env_id], timestep_dict[env_id],chance_dict[env_id], manual_embeds=manual_embeds_dict[env_id]
                         )
                     else:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], timestep_dict[env_id]
+                            to_play_dict[env_id], timestep_dict[env_id], manual_embeds=manual_embeds_dict[env_id]
                         )
 
                     # NOTE: the position of code snippet is very important.
@@ -579,6 +583,7 @@ class MuZeroCollector(ISerialCollector):
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
                     timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
+
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         chance_dict[env_id] = to_ndarray(obs['chance'])
 
@@ -638,7 +643,7 @@ class MuZeroCollector(ISerialCollector):
                             game_segment_length=self.policy_config.game_segment_length,
                             config=self.policy_config
                         )
-                        game_segments[env_id].reset(observation_window_stack[env_id])
+                        game_segments[env_id].reset(observation_window_stack[env_id], init_manual_embeds=obs.get('manual_embeds', None))
 
                     self._env_info[env_id]['step'] += 1
                     if self.policy_config.model.world_model_cfg.obs_type == 'text':
@@ -729,7 +734,7 @@ class MuZeroCollector(ISerialCollector):
                             [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
                             maxlen=self.policy_config.model.frame_stack_num
                         )
-                        game_segments[env_id].reset(observation_window_stack[env_id])
+                        game_segments[env_id].reset(observation_window_stack[env_id], init_manual_embeds=init_obs[env_id].get('manual_embeds', None))
                         last_game_segments[env_id] = None
                         last_game_priorities[env_id] = None
 

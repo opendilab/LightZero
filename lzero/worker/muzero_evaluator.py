@@ -246,6 +246,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
 
             timestep_dict = {}
+            manual_embeds_dict = {i: to_ndarray(init_obs[i].get('manual_embeds', None)) for i in range(env_nums)}
             for i in range(env_nums):
                 if 'timestep' not in init_obs[i]:
                     print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
@@ -287,6 +288,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     to_play = [to_play_dict[env_id] for env_id in ready_env_id]
                     timestep = [timestep_dict[env_id] for env_id in ready_env_id]
 
+                    manual_embeds_dict = {env_id: manual_embeds_dict[env_id] for env_id in ready_env_id}
+                    manual_embeds = [manual_embeds_dict[env_id] for env_id in ready_env_id]
+
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
                     stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
@@ -294,7 +298,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep, manual_embeds=manual_embeds)
                     
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}

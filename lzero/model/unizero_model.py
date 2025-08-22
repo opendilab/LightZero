@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import torch
 import torch.nn as nn
@@ -177,7 +177,7 @@ class UniZeroModel(nn.Module):
             print('==' * 20)
 
     def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
-                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:
+                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0, manual_embeds: List[torch.Tensor] = None) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of the UniZero model, which is the first step of the UniZero model.
@@ -205,7 +205,8 @@ class UniZeroModel(nn.Module):
         obs_act_dict = {
             'obs': obs_batch,
             'action': action_batch,
-            'current_obs': current_obs_batch
+            'current_obs': current_obs_batch,
+            'manual_embeds': manual_embeds
         }
         
         # Perform initial inference using the world model

@@ -64,7 +64,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         policy._target_model.eval()
 
         # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch, batch_manual_embeds = self._make_batch(
             batch_size, self._cfg.reanalyze_ratio
         )
 
@@ -72,7 +72,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2], current_batch[-1]  # current_batch[2] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[2], current_batch[-1], batch_manual_embeds=batch_manual_embeds  # current_batch[2] is batch_target_action
         )
 
         # target policy
@@ -92,7 +92,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         target_batch = [batch_rewards, batch_target_values, batch_target_policies]
 
         # a batch contains the current_batch and the target_batch
-        train_data = [current_batch, target_batch]
+        train_data = [current_batch, target_batch, batch_manual_embeds]
         return train_data
 
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
@@ -120,6 +120,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         obs_list, action_list, mask_list = [], [], []
         timestep_list = []
         bootstrap_action_list = []
+        manual_embeds_list = []
 
         # prepare the inputs of a batch
         for i in range(batch_size):
@@ -156,6 +157,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
                 )
             )
+            manual_embeds_tmp = game.manual_embeds_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                  self._cfg.num_unroll_steps+1]
+            manual_embeds_tmp2 = np.array([torch.zeros(self._cfg.model.world_model_cfg.manual_embed_dim) for _ in range(self._cfg.num_unroll_steps +1 - len(manual_embeds_tmp))])
+            if len(manual_embeds_tmp2) > 0:
+                manual_embeds_tmp = np.concatenate([manual_embeds_tmp, manual_embeds_tmp2], axis=0)
+            manual_embeds_list.append(manual_embeds_tmp)
+
             action_list.append(actions_tmp)
 
             mask_list.append(mask_tmp)
@@ -214,7 +222,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         else:
             policy_non_re_context = None
 
-        context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
+        manual_embeds_array = np.asarray(manual_embeds_list)
+        context = reward_value_context, policy_re_context, policy_non_re_context, current_batch, manual_embeds_array 
         return context
 
     def reanalyze_buffer(
@@ -432,7 +441,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
-            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num], manual_embeds=self.manual_embeds)  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -514,7 +523,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep, batch_manual_embeds=None) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -540,7 +549,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
-            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
+            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, manual_embeds=batch_manual_embeds)
             # ======================================================================
 
             # if not in training, obtain the scalars of the value/reward

@@ -372,7 +372,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, train_iter = data
+        current_batch, target_batch, batch_manual_embeds, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
 
@@ -423,6 +423,8 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+
+        batch_for_gpt['manual_embeds'] = batch_manual_embeds[:, :-1] if batch_manual_embeds is not None else None
         batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
                                             device=self._cfg.device)
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
@@ -605,7 +607,8 @@ class UniZeroPolicy(MuZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.ndarray = None,
-            timestep: List = [0]
+            timestep: List = [0],
+            manual_embeds: List[torch.Tensor] = None,
     ) -> Dict:
         """
         Overview:
@@ -642,7 +645,7 @@ class UniZeroPolicy(MuZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep, manual_embeds=manual_embeds)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -755,7 +758,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
-                      ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
+                      ready_env_id: np.array = None, timestep: List = [0], manual_embeds: List[torch.Tensor] = None,) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -786,7 +789,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep, manual_embeds=manual_embeds)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward

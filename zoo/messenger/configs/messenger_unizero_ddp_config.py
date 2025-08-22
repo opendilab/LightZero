@@ -17,13 +17,13 @@ def main(env_id: str = 'messenger', seed: int = 0, max_env_step: int = int(1e6))
         None
     """
     gpu_num = 4
-    collector_env_num: int = 4       # Number of collector environments
+    collector_env_num: int = 1     # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     batch_size = int(64*gpu_num)
     env_id = 'messenger'             
     action_space_size = 5
     max_steps = 100
-    use_manual=False
+    use_manual=True
     task='s1'
     max_seq_len=256
 
@@ -31,7 +31,7 @@ def main(env_id: str = 'messenger', seed: int = 0, max_env_step: int = int(1e6))
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
-    evaluator_env_num: int = 3       # Number of evaluator environments
+    evaluator_env_num: int = 1       # Number of evaluator environments
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
@@ -72,8 +72,6 @@ def main(env_id: str = 'messenger', seed: int = 0, max_env_step: int = int(1e6))
             use_wandb=False,
             accumulation_steps=1,
             model=dict(
-                use_manual=use_manual,
-                manual_dim=768,
                 observation_shape=(17, 10, 10),
                 action_space_size=action_space_size,
                 downsample=False,
@@ -95,6 +93,8 @@ def main(env_id: str = 'messenger', seed: int = 0, max_env_step: int = int(1e6))
                     embed_dim=embed_dim,
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
+                    use_manual=use_manual,
+                    manual_embed_dim=768,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -137,7 +137,7 @@ def main(env_id: str = 'messenger', seed: int = 0, max_env_step: int = int(1e6))
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_messenger/{env_id}_{use_manual}/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_messenger/{env_id}_use_manual_{use_manual}/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )

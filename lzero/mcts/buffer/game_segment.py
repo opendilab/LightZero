@@ -69,6 +69,7 @@ class GameSegment:
         self.action_mask_segment = []
         self.to_play_segment = []
         self.timestep_segment = []
+        self.manual_embeds_segment = []
 
         self.target_values = []
         self.target_rewards = []
@@ -138,6 +139,7 @@ class GameSegment:
             to_play: int = -1,
             timestep: int = 0,
             chance: int = 0,
+            manual_embeds = None,
     ) -> None:
         """
         Overview:
@@ -150,6 +152,7 @@ class GameSegment:
         self.action_mask_segment.append(action_mask)
         self.to_play_segment.append(to_play)
         self.timestep_segment.append(timestep)
+        self.manual_embeds_segment.append(manual_embeds)
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment.append(chance)
@@ -285,6 +288,7 @@ class GameSegment:
         self.obs_segment = np.array(self.obs_segment)
         self.action_segment = np.array(self.action_segment)
         self.reward_segment = np.array(self.reward_segment)
+        self.manual_embeds_segment = np.array(self.manual_embeds_segment)
 
         # Check if all elements in self.child_visit_segment have the same length
         if all(len(x) == len(self.child_visit_segment[0]) for x in self.child_visit_segment):
@@ -305,7 +309,7 @@ class GameSegment:
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = np.array(self.chance_segment)
 
-    def reset(self, init_observations: np.ndarray) -> None:
+    def reset(self, init_observations: np.ndarray, init_manual_embeds = None) -> None:
         """
         Overview:
             Initialize the game segment using ``init_observations``,
@@ -323,6 +327,7 @@ class GameSegment:
         self.action_mask_segment = []
         self.to_play_segment = []
         self.timestep_segment = []
+        self.manual_embeds_segment = []
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
@@ -331,6 +336,7 @@ class GameSegment:
 
         for observation in init_observations:
             self.obs_segment.append(copy.deepcopy(observation))
+        self.manual_embeds_segment.append(init_manual_embeds)
 
     def is_full(self) -> bool:
         """

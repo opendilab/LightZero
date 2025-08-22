@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Union, Optional, List, Tuple, Any
+from typing import Dict, Union, Optional, List, Tuple, Any, Set
 
 import numpy as np
 import torch
@@ -65,7 +65,14 @@ class WorldModel(nn.Module):
             self.precompute_pos_emb_diff_kv()
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
+
         self.continuous_action_space = self.config.continuous_action_space
+        if self.use_manual:
+            self.manual_fuse_proj = nn.Linear(self.embed_dim + self.manual_embed_dim, self.embed_dim, bias=False)
+            # self.manual_fuse_proj = nn.Sequential(
+            #     nn.Linear(self.embed_dim + self.manual_embed_dim, self.embed_dim, bias=False),
+            #     nn.GELU(approximate='tanh')
+            # )
 
         # Initialize action embedding table
         if self.continuous_action_space:
@@ -291,6 +298,11 @@ class WorldModel(nn.Module):
         self.num_layers = self.config.num_layers
         self.obs_per_embdding_dim = self.config.embed_dim
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
+
+        # ====== [NEW] manual fusion 开关与层 ======
+        self.use_manual = self.config.use_manual
+        self.manual_embed_dim = self.config.manual_embed_dim
+
 
     def _initialize_patterns(self) -> None:
         """Initialize patterns for block masks."""
@@ -750,6 +762,34 @@ class WorldModel(nn.Module):
         else:
             return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths, start_pos=start_pos)
 
+    def manual_fuse(self, obs_embeddings: torch.Tensor, manual_embeds: List[torch.Tensor] = None):
+        """
+        Fuse manual embeddings with observation embeddings.
+
+        Arguments:
+            - obs_embeddings (:obj:`torch.Tensor`): Observation embeddings.
+            - ready_env_id (:obj:`torch.Tensor`): IDs of environments that are ready.
+        Returns:
+            - torch.Tensor: Fused embeddings.
+        """
+        b, s, _ = obs_embeddings.shape
+        if manual_embeds is not None:
+            if isinstance(manual_embeds, list):
+                manual_embeds_array = manual_embeds[0]
+                manual_embeds_expanded = torch.from_numpy(manual_embeds_array).view(1, 1, -1)
+                manual_embeds_expanded = manual_embeds_expanded.expand(b, s, manual_embeds_expanded.shape[-1]).to(obs_embeddings.device)
+        
+            elif isinstance(manual_embeds, np.ndarray):
+
+                manual_embeds_expanded = torch.from_numpy(manual_embeds).reshape(b, s, -1).to(obs_embeddings.device)
+
+                
+                
+        
+        new_obs_embeddings = torch.cat([manual_embeds_expanded, obs_embeddings], dim=-1)
+        return self.manual_fuse_proj(new_obs_embeddings)
+
+
     @torch.no_grad()
     def reset_for_initial_inference(self, obs_act_dict: torch.FloatTensor, start_pos: int = 0) -> torch.FloatTensor:
         """
@@ -765,14 +805,20 @@ class WorldModel(nn.Module):
             batch_obs = obs_act_dict['obs']  # obs_act_dict['obs'] is at timestep t
             batch_action = obs_act_dict['action'] # obs_act_dict['action'] is at timestep t
             batch_current_obs = obs_act_dict['current_obs'] # obs_act_dict['current_obs'] is at timestep t+1
+            manual_embeds = obs_act_dict['manual_embeds'] if 'manual_embeds' in obs_act_dict else None
+
 
         # Encode observations to latent embeddings.
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_obs)
+        if self.use_manual:
+            obs_embeddings = self.manual_fuse(obs_embeddings, manual_embeds)
 
         if batch_current_obs is not None:
             # ================ Collect and Evaluation Phase ================
             # Encode current observations to latent embeddings
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_current_obs)
+            if self.use_manual:
+                current_obs_embeddings = self.manual_fuse(current_obs_embeddings, manual_embeds)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
@@ -823,7 +869,7 @@ class WorldModel(nn.Module):
                     ready_env_num = current_obs_embeddings.shape[0]
                     self.keys_values_wm_list = []
                     self.keys_values_wm_size_list = []
-
+                    assert len(last_obs_embeddings) == len(current_obs_embeddings)
                     for i in range(ready_env_num):
                         # Retrieve latent state for a single environment
                         # TODO: len(last_obs_embeddings) may smaller than len(current_obs_embeddings), because some environments may have done
@@ -1294,6 +1340,8 @@ class WorldModel(nn.Module):
         start_pos = batch['timestep']
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
+        if self.use_manual:
+            obs_embeddings = self.manual_fuse(obs_embeddings, manual_embeds=batch['manual_embeds'])
 
         # ========= for visual analysis =========
         # Uncomment the lines below for visual analysis in Pong
@@ -1437,6 +1485,8 @@ class WorldModel(nn.Module):
         # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
             target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
+            if self.use_manual:
+                target_obs_embeddings = self.manual_fuse(target_obs_embeddings, manual_embeds=batch['manual_embeds'])
 
         # Compute labels for observations, rewards, and ends
         labels_observations, labels_rewards, _ = self.compute_labels_world_model(target_obs_embeddings,
