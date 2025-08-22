@@ -232,9 +232,6 @@ class UniZeroModel(nn.Module):
         reward = logits_rewards
         policy_logits = logits_policy.squeeze(1)
         value = logits_value.squeeze(1)
-        if torch.isnan(value).any() or torch.isnan(latent_state).any() or torch.isnan(policy_logits).any():
-            print(f'NaN detected in value, latent_state, or policy_logits at start_pos {start_pos}')
-            print(f'value: {value}, latent_state: {latent_state}, policy_logits: {policy_logits}')
 
         return MZNetworkOutput(
             value=value,

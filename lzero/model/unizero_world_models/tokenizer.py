@@ -164,24 +164,32 @@ class Tokenizer(nn.Module):
         elif self.encoder_option == 'qwen':
             hidden = self.projection_layer(embeddings)  
             lm = self.decoder_network.pretrained_model
-            param = next(lm.parameters())
+            # Get a reference parameter for device/dtype info
+            param = next(lm.parameters()) 
 
             try:
+                # Retrieve the input embedding layer of the language model
                 input_embedding_layer = lm.get_input_embeddings()
             except:
                 raise ValueError('Error... Could not retrieve input embedding layer from the decoder network.')
-                
+            
+            # Convert target token IDs into embeddings using the LM's input embedding layer
             target_embeds = input_embedding_layer(target_ids)
+
+            # Concatenate the projected hidden embeddings (prompt) with target embeddings
+            # hidden: (B, 1, D), target_embeds: (B, L, D) → inputs_embeds: (B, 1+L, D)
             inputs_embeds = torch.cat([hidden, target_embeds.detach()], dim=1)
 
             inputs_embeds = inputs_embeds.to(device=param.device, dtype=param.dtype)
 
             prompt_attention_mask = torch.ones(hidden.size(0), 1, device=param.device, dtype=torch.long)
             target_attention_mask = (target_ids != self.decoder_network.tokenizer.pad_token_id).to(device=param.device, dtype=torch.long)
+            # Concatenate prompt mask and target mask along sequence length
             attention_mask = torch.cat([prompt_attention_mask, target_attention_mask], dim=1)
-
+            # Construct labels: for the prompt part, use -100 (ignored by loss function)
             prompt_labels = torch.full((hidden.size(0), 1), -100, device=param.device, dtype=torch.long)
 
+            # Copy target token IDs as labels, masking pad positions with -100
             labels = target_ids.clone().to(param.device)
             labels[labels == self.decoder_network.tokenizer.pad_token_id] = -100
 

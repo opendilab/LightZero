@@ -15,13 +15,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from ding.torch_utils import MLP, ResBlock
 from ding.torch_utils.network.normalization import build_normalization
 from ding.utils import SequenceType
 from ditk import logging
 from ding.utils import set_pkg_seed, get_rank, get_world_size
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+
 
 
 def MLP_V2(
@@ -423,16 +423,17 @@ class QwenNetwork(nn.Module):
     def encode(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
         """
         Overview:
-            Encode the input tensor `x` to a latent state.
+            Encode the input token sequence `x` into a latent representation
+            using a pretrained language model backbone followed by a projection head.
         Arguments:
-            - x (:obj:`torch.Tensor`): Input tensor of shape (B, C_in, W, H).
+            - x (:obj:`torch.Tensor`):  Input token ids of shape (B, L)
+            - no_grad (:obj:`bool`, optional, default=True): If True, encoding is performed under `torch.no_grad()` to save memory and computation (no gradient tracking).
         Returns:
-            - latent_state (:obj:`torch.Tensor`): Encoded latent state of shape (B, embedding_dim).
+            - latent (:obj:`torch.Tensor`): Encoded latent state of shape (B, D).
         """
         pad_id = self.tokenizer.pad_token_id
         attention_mask = (x != pad_id).long().to(x.device)
         context = {'input_ids': x.long(), 'attention_mask': attention_mask}
-        no_grad = True
         if no_grad:
             with torch.no_grad():
                 outputs = self.pretrained_model(**context, output_hidden_states=True, return_dict=True)

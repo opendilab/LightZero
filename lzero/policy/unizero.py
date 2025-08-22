@@ -699,7 +699,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 next_latent_state = next_latent_state_with_env[i][action]
                 
-                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
                     predicted_next = self._collect_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
                 else:
@@ -832,7 +832,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # Predict the next latent state based on the selected action and policy
                 next_latent_state = next_latent_state_with_env[i][action]
 
-                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
                     predicted_next = self._eval_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
                 else:

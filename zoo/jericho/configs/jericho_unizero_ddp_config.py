@@ -19,7 +19,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     gpu_num = 4
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
-    batch_size = int(64*gpu_num)
+    batch_size = int(1*gpu_num)
+    accumulation_steps=1
 
     # TODO
     # batch_size = batch_size * 2
@@ -110,7 +111,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     ),
                 ),
             ),
-            accumulation_steps=1,  # TODO: Accumulated gradient steps (currently default)
+            accumulation_steps=accumulation_steps,  # TODO: Accumulated gradient steps (currently default)
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
@@ -140,7 +141,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                 ),
             ),
             # TODO 
-            update_per_collect=int(collector_env_num*max_steps*replay_ratio*1),  # Important for DDP
+            update_per_collect=int(collector_env_num*max_steps*replay_ratio*accumulation_steps),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
             num_unroll_steps=num_unroll_steps,

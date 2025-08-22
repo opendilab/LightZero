@@ -1506,9 +1506,6 @@ class WorldModel(nn.Module):
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
 
-        if batch['mask_padding'].sum() == 0:
-            assert False, "mask_padding is all zeros"
-
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
         middle_step_losses = {}
@@ -1547,7 +1544,6 @@ class WorldModel(nn.Module):
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
-
         # Calculate overall discounted loss
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ batch['mask_padding'][:,1:].sum()
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
