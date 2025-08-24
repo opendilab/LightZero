@@ -951,7 +951,11 @@ class UniZeroPolicy(MuZeroPolicy):
         # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         # TODO:==========
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
+
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
+
+        
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
@@ -1027,7 +1031,8 @@ class UniZeroPolicy(MuZeroPolicy):
         # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         # TODO:==========
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
         # # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:

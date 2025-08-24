@@ -262,7 +262,7 @@ class LossWithIntermediateLosses:
 
         # NOTE: Define the weights for each loss type
         if not continuous_action_space:
-            # like EZV2, for atari and memory
+            # orig, for atari and memory
             # self.obs_loss_weight = 10
             # self.value_loss_weight = 0.5
             # self.reward_loss_weight = 1.
@@ -276,12 +276,13 @@ class LossWithIntermediateLosses:
             self.policy_loss_weight = 1
             self.ends_loss_weight = 0.
 
-            # like TD-MPC2 for DMC
-            # self.obs_loss_weight = 10
-            # self.value_loss_weight = 0.1
-            # self.reward_loss_weight = 0.1
-            # self.policy_loss_weight = 0.1
+            # EZV2, for atari and memory
+            # self.obs_loss_weight = 5
+            # self.value_loss_weight = 0.5
+            # self.reward_loss_weight = 1.
+            # self.policy_loss_weight = 1.
             # self.ends_loss_weight = 0.
+
         else:
             # like TD-MPC2 for DMC
             self.obs_loss_weight = 10
@@ -289,6 +290,12 @@ class LossWithIntermediateLosses:
             self.reward_loss_weight = 0.1
             self.policy_loss_weight = 0.1
             self.ends_loss_weight = 0.
+
+            # TD-MPC2 for DMC, only for reference
+            # self.obs_loss_weight = 20
+            # self.value_loss_weight = 0.1
+            # self.reward_loss_weight = 0.1
+            # self.ends_loss_weight = 0.
         
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight

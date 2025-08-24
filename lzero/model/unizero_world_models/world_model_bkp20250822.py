@@ -15,41 +15,9 @@ from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
-from collections import OrderedDict 
+
 logging.getLogger().setLevel(logging.DEBUG)
 
-from collections import OrderedDict, defaultdict
-
-            
-class LRUCache(OrderedDict):
-    """
-    一个固定容量的、遵循LRU（最近最少使用）原则的有序字典。
-    非常适合用于管理与环形缓冲区同步的缓存映射。
-    """
-    def __init__(self, capacity: int=2):
-        """
-        初始化LRU缓存。
-        参数:
-            - capacity (int): 缓存的最大容量。
-        """
-        self.capacity = capacity
-        super().__init__()
-
-    def __setitem__(self, key: Any, value: Any) -> None:
-        """
-        重写设置条目的方法，以实现LRU逻辑。
-        """
-        # 如果键已存在，先删除旧条目，以确保后续添加时它会成为最新项。
-        if key in self:
-            self.move_to_end(key)
-        
-        # 调用父类的方法来实际设置键值对。
-        super().__setitem__(key, value)
-
-        # 检查是否超出容量。如果超出，则删除最旧的条目。
-        # popitem(last=False) 会移除并返回字典中第一个（最旧的）条目。
-        if len(self) > self.capacity:
-            self.popitem(last=False)
 
 class WorldModel(nn.Module):
     """
@@ -93,9 +61,9 @@ class WorldModel(nn.Module):
 
         # Position embedding
         if not self.config.rotary_emb:
-            # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             # TODO(pu)
-            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
+            # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
             self.precompute_pos_emb_diff_kv()
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
@@ -109,9 +77,9 @@ class WorldModel(nn.Module):
                 SimNorm(simnorm_dim=self.group_size))
         else:
             # for discrete action space
-            # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             # TODO(pu)
-            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
+            # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
 
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
@@ -153,25 +121,9 @@ class WorldModel(nn.Module):
 
         # self.apply(init_weights)
 
+
         self._initialize_last_layer()
 
-        # for self.kv_cache_init_infer
-        # In contrast, init_infer only needs to retain the results of the most recent step.
-        # self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        # 先设置为game_segment_length，以保持self.shared_pool_init_infer都是有效的kv
-         # TODO: 非常重要，应该改为和segment_length一样
-        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-
-        # self.shared_pool_size_init = int(20)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        # self.shared_pool_size_init = int(200)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-       
-        self.num_simulations = getattr(self.config, 'num_simulations', 50)
-
-        self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
-
-        # self.shared_pool_size_init = int(50)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        self.stale_pointer_detections = 0
-        self.stale_pointer_detections_recur = 0
         # Cache structures
         self._initialize_cache_structures()
 
@@ -190,19 +142,18 @@ class WorldModel(nn.Module):
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
         # If needed, recurrent_infer should store the results of the one MCTS search.
-
-        # self.shared_pool_size_recur = int(2)
-
-        self.shared_pool_recur_infer = [None] * self.shared_pool_size_recur
+        self.num_simulations = getattr(self.config, 'num_simulations', 50)
+        self.shared_pool_size = int(self.num_simulations*self.env_num)
+        self.shared_pool_recur_infer = [None] * self.shared_pool_size
         self.shared_pool_index = 0
 
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
-        # self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+        # self.shared_pool_size_init = int(2*self.env_num)
+        self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
         # TODO
-        # self.shared_pool_size_init = int(50)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+        self.shared_pool_size_init = int(50)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
 
-        # TODO: 分析self.env_num>1的情况，不同env之间的相同latent-state hash对应的kv_cache可以公用吗
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -213,53 +164,6 @@ class WorldModel(nn.Module):
 
         self.reanalyze_phase = False
 
-    def _debug_check_for_stale_pointers(self, env_id: int, current_key: Any, index_to_be_written: int):
-        """
-        调试函数：检查即将被写入的索引是否存在过时的指针。
-        """
-        # 获取对应环境的指针映射表
-        cache_map = self.past_kv_cache_init_infer_envs[env_id]
-        
-        # 遍历映射表中的所有条目 (旧哈希 -> 旧索引)
-        for old_key, old_index in cache_map.items():
-            # 检查条件：
-            # 1. 旧索引 == 即将被覆盖的索引
-            # 2. 旧哈希 != 当前要写入的新哈希
-            if old_index == index_to_be_written and old_key != current_key:
-                # 如果条件满足，说明我们找到了一个过时指针
-                self.stale_pointer_detections += 1
-                
-                # 打印详细的调试信息
-                print("="*60)
-                print(f"!!! BUG CONDITION DETECTED (Detection #{self.stale_pointer_detections}) !!!")
-                print(f"    Environment ID: {env_id}")
-                print(f"    Pool Index to be overwritten: {index_to_be_written}")
-                print(f"    New state hash being written: '{current_key}'")
-                print(f"    Stale pointer found in cache_map: '{old_key}' also points to index {old_index}.")
-                print(f"    This means the data for '{old_key}' is about to be lost, but its pointer remains.")
-                print(f"    Current cache_map size: {len(cache_map)}")
-                print("="*60)
-                
-                # 找到一个就足够了，可以提前退出循环以提高效率
-                return
-
-    def _debug_check_for_stale_pointers_recur(self, current_key: Any, index_to_be_written: int):
-        """
-        调试函数：检查 recurrent cache 中是否存在过时的指针。
-        """
-        cache_map = self.past_kv_cache_recurrent_infer
-        
-        for old_key, old_index in cache_map.items():
-            if old_index == index_to_be_written and old_key != current_key:
-                self.stale_pointer_detections_recur += 1
-                print("="*60)
-                print(f"!!! RECURRENT BUG DETECTED (Detection #{self.stale_pointer_detections_recur}) !!!")
-                print(f"    Pool Index to be overwritten: {index_to_be_written}")
-                print(f"    New state hash being written: '{current_key}'")
-                print(f"    Stale pointer found: '{old_key}' also points to index {old_index}.")
-                print("="*60)
-                return
-
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
         Return the corresponding normalization module based on the specified normalization option.
@@ -269,6 +173,7 @@ class WorldModel(nn.Module):
         elif norm_option == 'SimNorm':
             return SimNorm(simnorm_dim=self.config.group_size)
         elif norm_option == 'L2Norm':
+            # L2Norm 是一个函数式操作，不需要在 init 中定义模块
             return L2Norm(eps=1e-6)
         else:
             raise ValueError(f"Unsupported final_norm_option_in_obs_head: {norm_option}")
@@ -374,7 +279,7 @@ class WorldModel(nn.Module):
             dst_layer._v_cache._size = src_layer._v_cache._size
         
         index = self.shared_pool_index
-        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size_recur
+        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
         
         return index
 
@@ -464,34 +369,8 @@ class WorldModel(nn.Module):
     def _initialize_cache_structures(self) -> None:
         """Initialize cache structures for past keys and values."""
         from collections import defaultdict
-        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
-        # 使用 LRUCache 替换 defaultdict，并同步容量
-        self.past_kv_cache_recurrent_infer = LRUCache(self.shared_pool_size_recur)
-
-        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
-
-        # TODO(pu): 非常重要  self.past_kv_cache_init_infer_envs应该改成和(shared_pool_size_init)完全一致，
-        # 目前是将shared_pool_size_init设置为segment_length以在一次collect后 清空self.past_kv_cache_init_infer_envs
-        # 来避免self.past_kv_cache_init_infer_envs里面存有kv索引过期的问题
-
-        # ========================= 核心修复与注释 =========================
-        # 原来的实现:
-        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
-        #
-        # 问题: defaultdict 会无限增长，并且不会自动删除与环形缓冲区中
-        #       被覆盖数据相关的旧“指针”，导致Episode内部的缓存污染。
-        #
-        # 修复方案:
-        # 使用我们定义的LRUCache，其容量与环形缓冲区的大小(shared_pool_size_init)完全一致。
-        #
-        # 效果:
-        # 1. 自动淘汰: 当添加第 N+1 个新条目时，LRUCache会自动删除最旧的那个条目。
-        # 2. 生命周期同步: 这确保了“指针字典”中的映射关系，与“数据池”中实际存储的数据
-        #    完全同步。当数据池的索引0被新数据覆盖时，指向旧索引0的指针也已被自动清除。
-        # 3. 杜绝污染: 从根本上解决了Episode内部的状态哈希碰撞问题。
-        
-        self.past_kv_cache_init_infer_envs = [LRUCache(self.shared_pool_size_init) for _ in range(self.env_num)]
-        # ========================== 修复结束 ==========================
+        self.past_kv_cache_recurrent_infer = defaultdict(dict)
+        self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -505,12 +384,10 @@ class WorldModel(nn.Module):
 
     def _initialize_statistics(self) -> None:
         """Initialize counters for hit count and query count statistics."""
-        self.recur_hit_count = 0
-        self.recur_total_query_count = 0
+        self.hit_count = 0
+        self.total_query_count = 0
         self.length_largethan_maxminus5_context_cnt = 0
         self.length_largethan_maxminus7_context_cnt = 0
-        self.length_largethan_contextminus3_cnt = 0
-
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
 
@@ -981,11 +858,6 @@ class WorldModel(nn.Module):
                         if matched_value is not None:
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
-                            # if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 50 == 0:
-                            #     self.root_hit_freq = self.root_hit_cnt / self.root_total_query_cnt
-                            #     print('root total_query_count:', self.root_total_query_cnt)
-                            #     print('root root_hit_freq:', self.root_hit_freq)
-
                             # NOTE: deepcopy is needed because forward modifies matched_value in place
                             self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                             self.keys_values_wm_size_list.append(matched_value.size)
@@ -1077,8 +949,6 @@ class WorldModel(nn.Module):
         """
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, start_pos)
-        # TODO(pu): 由于预测误差的存在，不clear，也很可能不能检索到上次mcts 树搜索中的节点
-        # 所有collect env公用应该也是合理的，不同环境很难遇到完全一致的预测的latent state？
         self.past_kv_cache_recurrent_infer.clear()
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
@@ -1111,26 +981,20 @@ class WorldModel(nn.Module):
             token = action.reshape(-1, self.action_space_size)
 
         # ======= Print statistics for debugging =============
-        min_size = min(self.keys_values_wm_size_list)
-        # # if min_size >= self.config.max_tokens - 5:
-        # #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
-        # # if min_size >= self.config.max_tokens - 7:
-        # #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
-        # if min_size >= self.config.context_length - 3:
-        #     self.length_largethan_contextminus3_cnt += len(self.keys_values_wm_size_list)
-        # # if self.recur_total_query_count > 0 and self.recur_total_query_count % 10000 == 0:
-        # if self.recur_total_query_count > 0 and self.recur_total_query_count % 1000 == 0:
-        #     self.hit_freq = self.recur_hit_count / self.recur_total_query_count
-        #     print('recur total_query_count:', self.recur_total_query_count)
-        #     # length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.recur_total_query_count
-        #     # print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-        #     # print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
-        #     # length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.recur_total_query_count
-        #     # print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-        #     # print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
-        #     length_largethan_contextminus3_cnt_ratio = self.length_largethan_contextminus3_cnt / self.recur_total_query_count
-        #     print('recurrent length_largethan_contextminus3_cnt_ratio:', length_largethan_contextminus3_cnt_ratio)
-        #     print('recurrent length_largethan_contextminus3_cnt:', self.length_largethan_contextminus3_cnt)
+        # min_size = min(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 5:
+        #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 7:
+        #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
+        # if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
+        #     self.hit_freq = self.hit_count / self.total_query_count
+        #     print('total_query_count:', self.total_query_count)
+        #     length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+        #     print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+        #     length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+        #     print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # Trim and pad kv_cache: modify self.keys_values_wm in-place
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
@@ -1175,7 +1039,7 @@ class WorldModel(nn.Module):
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
-    # TODO: precompute_pos_emb_diff_kv 与 update_cache_context 的硬编码不匹配,collect_env_num=1应该没有问题
+
     def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
         """
         Adjusts the key-value cache for each environment to ensure they all have the same size.
@@ -1249,8 +1113,6 @@ class WorldModel(nn.Module):
             context_length = self.context_length
 
             if not is_init_infer:
-
-
                 # ============ Internal Node ============
                 # Retrieve KV from global KV cache self.keys_values_wm to single environment KV cache self.keys_values_wm_single_env, ensuring correct positional encoding
                 current_max_context_length = max(self.keys_values_wm_size_list_current)
@@ -1364,32 +1226,10 @@ class WorldModel(nn.Module):
                         self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length - 3
 
             if is_init_infer:
-                # TODO
-                # ==================== DEBUG CODE INSERTION ====================
-                # 在写入之前，先获取将要写入的索引
-                index_to_write = self.shared_pool_index_init_envs[i]
-                # 调用调试函数进行检查
-                self._debug_check_for_stale_pointers(env_id=i, current_key=cache_key, index_to_be_written=index_to_write)
-                # ============================================================
-
                 # Store the latest key-value cache for initial inference
                 cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
                 self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
             else:
-                # TODO 获取要存入的cache的某个唯一标识，例如tensor的和
-                # cache_to_store = self.keys_values_wm_single_env._keys_values[0]._k_cache._cache
-                # cache_sum = torch.sum(cache_to_store).item()
-                # cache_shape = cache_to_store.shape
-                # print(f"[CACHE WRITE] Storing for key={cache_key}, cache_shape={cache_shape}, cache_sum={cache_sum:.4f}")
-                
-                # ==================== DEBUG CODE INSERTION ====================
-                # 在写入之前，获取将要写入的索引
-                index_to_write = self.shared_pool_index
-                # 调用调试函数进行检查
-                self._debug_check_for_stale_pointers_recur(current_key=cache_key, index_to_be_written=index_to_write)
-                # ============================================================
-
-
                 # Store the latest key-value cache for recurrent inference
                 cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
                 self.past_kv_cache_recurrent_infer[cache_key] = cache_index
@@ -1412,7 +1252,7 @@ class WorldModel(nn.Module):
             - list: Sizes of the key-value caches for each environment.
         """
         for index in range(ready_env_num):
-            self.recur_total_query_count += 1
+            self.total_query_count += 1
             state_single_env = latent_state[index]  # latent_state[i] is np.array
             cache_key = hash_state(state_single_env)
 
@@ -1424,14 +1264,6 @@ class WorldModel(nn.Module):
                 cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
                 if cache_index is not None:
                     matched_value = self.shared_pool_init_infer[index][cache_index]
-
-                    # TODO
-                    # retrieved_cache = matched_value._keys_values[0]._k_cache._cache
-                    # retrieved_sum = torch.sum(retrieved_cache).item()
-                    # retrieved_shape = retrieved_cache.shape
-                    # print(f"[CACHE HIT]   Found for key={cache_key}, retrieved_shape={retrieved_shape}, retrieved_sum={retrieved_sum:.4f}")
-
-
                 else:
                     matched_value = None
 
@@ -1439,22 +1271,13 @@ class WorldModel(nn.Module):
                 if matched_value is None:
                     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
 
-                    # # TODO
-                    # retrieved_cache = matched_value._keys_values[0]._k_cache._cache
-                    # retrieved_sum = torch.sum(retrieved_cache).item()
-                    # retrieved_shape = retrieved_cache.shape
-                    # print(f"[CACHE HIT]   Found for key={cache_key}, retrieved_shape={retrieved_shape}, retrieved_sum={retrieved_sum:.4f}")
-
-
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
-                self.recur_hit_count += 1
+                self.hit_count += 1
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
                 self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
-                # print(f"[CACHE MISS]  Not found for key={cache_key}. Generating new cache.")
-
                 # If no matching cache is found, generate a new one using zero reset
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
                     n=1, max_tokens=self.context_length
