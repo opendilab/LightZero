@@ -697,16 +697,16 @@ class GameBuffer(ABC, object):
             f"  - base_idx: {base_idx_after}\n"
             f"------------------------------\n\n"
         )
-
+        # TODO
         # 5. Print to console and write to file
-        print(log_message)
+        # print(log_message)
         
-        log_filename = f"game_buffer_remove_log_{timestamp.strftime('%Y%m%d_%H%M%S')}.txt"
-        try:
-            with open(log_filename, 'a', encoding='utf-8') as f:
-                f.write(log_message)
-        except Exception as e:
-            print(f"[ERROR] Failed to write to log file {log_filename}: {e}")
+        # log_filename = f"game_buffer_remove_log_{timestamp.strftime('%Y%m%d_%H%M%S')}.txt"
+        # try:
+        #     with open(log_filename, 'a', encoding='utf-8') as f:
+        #         f.write(log_message)
+        # except Exception as e:
+        #     print(f"[ERROR] Failed to write to log file {log_filename}: {e}")
 
         # --- End of logging modification ---
 

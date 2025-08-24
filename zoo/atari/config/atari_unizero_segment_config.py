@@ -17,23 +17,25 @@ def main(env_id, seed):
     num_segments = 1
     evaluator_env_num = 1
 
-    game_segment_length = 20
     num_simulations = 50
     collect_num_simulations = 25
+    # collect_num_simulations = 50
     eval_num_simulations = 50
     # max_env_step = int(5e5)
     max_env_step = int(50e6)
-    batch_size = 256
-    # batch_size = 64
+    # batch_size = 256
+    batch_size = 64 # debug
     num_layers = 2
     # replay_ratio = 0.25
     replay_ratio = 0.1
 
-    # num_unroll_steps = 10
-    # infer_context_length = 4
-
+    game_segment_length = 20
     num_unroll_steps = 10
-    infer_context_length = 5
+    infer_context_length = 4
+
+    # game_segment_length = 200
+    # num_unroll_steps = 16
+    # infer_context_length = 8
 
     # num_unroll_steps = 4 # TODO
     # infer_context_length = 2
@@ -79,6 +81,7 @@ def main(env_id, seed):
         policy=dict(
             # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
+            # sample_type='episode',  # NOTE: very important for memory env
             model=dict(
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
@@ -104,17 +107,18 @@ def main(env_id, seed):
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
                     rotary_emb=False,
+                    # rotary_emb=True,
                     # final_norm_option_in_encoder='LayerNorm_Tanh',
                     # final_norm_option_in_obs_head="LayerNorm",
                     # predict_latent_loss_type='mse',
 
-                    # final_norm_option_in_encoder='L2Norm',
-                    # final_norm_option_in_obs_head="L2Norm",
-                    # predict_latent_loss_type='mse',
-
-                    final_norm_option_in_encoder="LayerNorm",
-                    final_norm_option_in_obs_head="LayerNorm",
+                    final_norm_option_in_encoder='L2Norm',
+                    final_norm_option_in_obs_head="L2Norm",
                     predict_latent_loss_type='mse',
+
+                    # final_norm_option_in_encoder="LayerNorm",
+                    # final_norm_option_in_obs_head="LayerNorm",
+                    # predict_latent_loss_type='mse',
 
                     # final_norm_option_in_encoder="SimNorm",
                     # final_norm_option_in_obs_head="SimNorm",
@@ -148,8 +152,8 @@ def main(env_id, seed):
             eval_num_simulations=eval_num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            # train_start_after_envsteps=0,
-            train_start_after_envsteps=2000,
+            train_start_after_envsteps=0,
+            # train_start_after_envsteps=2000, # TODO
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
@@ -186,9 +190,13 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
+    main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_clear40_muzerolossweight_spsi20_envnum1_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_spsi20_envnum1_fixreset_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
     # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_envnum1_fixreset_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_envnum1_matchvalue-none_fixreset_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_envnum1_fixreset_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_clear40_spsi50_envnum1_fixreset_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250819_debug/{env_id[:-14]}/{env_id[:-14]}_uz_spsi20_envnum1_fixreset_encoder-LN-head-LN_soft-target-005_encoder-LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250812/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-LN-head-LN_soft-target-005_fix-reset-v2_collect-forward-noreset_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -209,6 +217,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
+    # args.env = 'PongNoFrameskip-v4'
+
     args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'QbertNoFrameskip-v4'
 
@@ -227,7 +237,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=3
+    export CUDA_VISIBLE_DEVICES=2
     cd /fs-computility/niuyazhe/puyuan/code/LightZero
     python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_segment_config.py
     """

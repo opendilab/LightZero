@@ -948,24 +948,27 @@ class UniZeroPolicy(MuZeroPolicy):
         # if env_id is None or isinstance(env_id, list):
         #     return
 
-        # # Determine the clear interval based on the environment's sample type
+        # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
-        # # Clear caches if the current steps are a multiple of the clear interval
-        # if current_steps % clear_interval == 0:
-        #     print(f'clear_interval: {clear_interval}')
+        # TODO:==========
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
 
-        #     # Clear various caches in the collect model's world model
-        #     world_model = self._collect_model.world_model
-        #     for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-        #         kv_cache_dict_env.clear()
-        #     world_model.past_kv_cache_recurrent_infer.clear()
-        #     world_model.keys_values_wm_list.clear()
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps is not None and current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
 
-        #     # Free up GPU memory
-        #     torch.cuda.empty_cache()
+            # Clear various caches in the collect model's world model
+            world_model = self._collect_model.world_model
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
 
-        #     print('collector: collect_model clear()')
-        #     print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('collector: collect_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
@@ -1021,25 +1024,27 @@ class UniZeroPolicy(MuZeroPolicy):
         # if env_id is None or isinstance(env_id, list):
         #     return
 
-        # # Determine the clear interval based on the environment's sample type
+        # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # TODO:==========
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
 
-        # # # Clear caches if the current steps are a multiple of the clear interval
-        # if current_steps % clear_interval == 0:
-        #     print(f'clear_interval: {clear_interval}')
+        # # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps is not None and current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
 
-        #     # Clear various caches in the eval model's world model
-        #     world_model = self._eval_model.world_model
-        #     for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-        #         kv_cache_dict_env.clear()
-        #     world_model.past_kv_cache_recurrent_infer.clear()
-        #     world_model.keys_values_wm_list.clear()
+            # Clear various caches in the eval model's world model
+            world_model = self._eval_model.world_model
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
 
-        #     # Free up GPU memory
-        #     torch.cuda.empty_cache()
+            # Free up GPU memory
+            torch.cuda.empty_cache()
 
-        #     print('evaluator: eval_model clear()')
-        #     print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            print('evaluator: eval_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """
