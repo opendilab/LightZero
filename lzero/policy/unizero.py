@@ -955,7 +955,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
-        
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
@@ -971,8 +970,7 @@ class UniZeroPolicy(MuZeroPolicy):
             # Free up GPU memory
             torch.cuda.empty_cache()
 
-            print('collector: collect_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
 
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:

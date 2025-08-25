@@ -603,9 +603,9 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                     # ============ TODO(pu): only for UniZero now ============
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
-                        if eps_steps_lst[env_id]>=self.policy_config.game_segment_length:
+                        if eps_steps_lst[env_id]>self.policy_config.game_segment_length:
                             self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
-                            print("eps_steps_lst[env_id]>=self.policy_config.game_segment_length")
+                            print(f"eps_steps_lst[env_id]>self.policy_config.game_segment_length:{eps_steps_lst[env_id]}>{self.policy_config.game_segment_length}")
 
                     # if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
                     #     self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)

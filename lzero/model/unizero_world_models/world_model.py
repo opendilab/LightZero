@@ -231,7 +231,7 @@ class WorldModel(nn.Module):
                 
                 # 打印详细的调试信息
                 print("="*60)
-                print(f"!!! BUG CONDITION DETECTED (Detection #{self.stale_pointer_detections}) !!!")
+                print(f"!!! INIT BUG CONDITION DETECTED (Detection #{self.stale_pointer_detections}) !!!")
                 print(f"    Environment ID: {env_id}")
                 print(f"    Pool Index to be overwritten: {index_to_be_written}")
                 print(f"    New state hash being written: '{current_key}'")
@@ -466,7 +466,18 @@ class WorldModel(nn.Module):
         from collections import defaultdict
         # self.past_kv_cache_recurrent_infer = defaultdict(dict)
         # 使用 LRUCache 替换 defaultdict，并同步容量
-        self.past_kv_cache_recurrent_infer = LRUCache(self.shared_pool_size_recur)
+
+        # ========================= 核心修复与注释 (Recurrent Infer) =========================
+        # 问题: recurrent_infer 缓存同样存在 LRUCache 与环形缓冲区逻辑不匹配的问题。
+        #
+        # 修复方案:
+        # 1. 将 past_kv_cache_recurrent_infer 从 LRUCache 改为标准字典。
+        # 2. 引入辅助列表 pool_idx_to_key_map_recur_infer 来维护反向映射。
+        #    这确保了在覆写 recurrent 数据池中的条目时，可以同步删除旧的指针。
+        
+        self.past_kv_cache_recurrent_infer = {}
+        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+        # ========================== 修复结束 ==========================
 
         # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
 
@@ -490,7 +501,23 @@ class WorldModel(nn.Module):
         #    完全同步。当数据池的索引0被新数据覆盖时，指向旧索引0的指针也已被自动清除。
         # 3. 杜绝污染: 从根本上解决了Episode内部的状态哈希碰撞问题。
         
-        self.past_kv_cache_init_infer_envs = [LRUCache(self.shared_pool_size_init) for _ in range(self.env_num)]
+        # self.past_kv_cache_init_infer_envs = [LRUCache(self.shared_pool_size_init-1) for _ in range(self.env_num)]
+        # ========================== 修复结束 ==========================
+
+        # ========================= 核心修复与注释 =========================
+        # 问题: LRUCache 的淘汰逻辑（基于访问顺序）与环形缓冲区的覆写逻辑（基于写入顺序）不匹配，导致指针过时。
+        #
+        # 修复方案:
+        # 1. 使用一个标准的字典 `past_kv_cache_init_infer_envs` 来存储 {state_hash -> pool_index}。
+        # 2. 引入一个辅助列表 `pool_idx_to_key_map_init_envs` 来维护反向映射 {pool_index -> state_hash}。
+        #
+        # 效果:
+        # 在向环形缓冲区的某个索引写入新数据之前，我们可以通过辅助列表立即找到即将被覆盖的旧 state_hash，
+        # 并从主字典中精确地删除这个过时的条目。这确保了字典和数据池的完全同步。
+        
+        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
+        # 辅助数据结构，用于反向查找：pool_index -> key
+        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         # ========================== 修复结束 ==========================
 
         self.keys_values_wm_list = []
@@ -1365,16 +1392,33 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # TODO
-                # ==================== DEBUG CODE INSERTION ====================
-                # 在写入之前，先获取将要写入的索引
+                # ==================== 主动淘汰修复逻辑 ====================
+                # 1. 获取即将被覆写的物理索引
                 index_to_write = self.shared_pool_index_init_envs[i]
+
+                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
+
+                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                if old_key_to_evict is not None:
+                    # 确保要删除的键确实存在，避免意外错误
+                    if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
+                        del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
+
+                # 现在可以安全地写入新数据了
+                cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+                
+                # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
+                self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+                self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
+
                 # 调用调试函数进行检查
                 self._debug_check_for_stale_pointers(env_id=i, current_key=cache_key, index_to_be_written=index_to_write)
                 # ============================================================
 
                 # Store the latest key-value cache for initial inference
-                cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
-                self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+                # cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+                # self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
             else:
                 # TODO 获取要存入的cache的某个唯一标识，例如tensor的和
                 # cache_to_store = self.keys_values_wm_single_env._keys_values[0]._k_cache._cache
@@ -1382,17 +1426,34 @@ class WorldModel(nn.Module):
                 # cache_shape = cache_to_store.shape
                 # print(f"[CACHE WRITE] Storing for key={cache_key}, cache_shape={cache_shape}, cache_sum={cache_sum:.4f}")
                 
-                # ==================== DEBUG CODE INSERTION ====================
-                # 在写入之前，获取将要写入的索引
+                # ==================== RECURRENT INFER FIX ====================
+                # 1. 获取即将被覆写的物理索引
                 index_to_write = self.shared_pool_index
+
+                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
+
+                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                if old_key_to_evict is not None:
+                    if old_key_to_evict in self.past_kv_cache_recurrent_infer:
+                        del self.past_kv_cache_recurrent_infer[old_key_to_evict]
+
+                # 4. 现在可以安全地写入新数据了
+                cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+
+                # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
+                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
+                # ============================================================
+
+                # ==================== DEBUG CODE INSERTION ====================
                 # 调用调试函数进行检查
                 self._debug_check_for_stale_pointers_recur(current_key=cache_key, index_to_be_written=index_to_write)
                 # ============================================================
 
-
                 # Store the latest key-value cache for recurrent inference
-                cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
-                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                # cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+                # self.past_kv_cache_recurrent_infer[cache_key] = cache_index
 
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,

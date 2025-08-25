@@ -26,8 +26,8 @@ def main(env_id, seed):
     # batch_size = 256
     batch_size = 64 # debug
     num_layers = 2
-    # replay_ratio = 0.25
-    replay_ratio = 0.1
+    replay_ratio = 0.25
+    # replay_ratio = 0.1
 
     game_segment_length = 20
     num_unroll_steps = 10
@@ -192,7 +192,11 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_lrucache-init-recur_clear20_muzerolossweight_spsi20_envnum{collector_env_num}_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_fix-init-recur_clear20_muzerolossweight_spsi20_envnum{collector_env_num}_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_lrucache-init-recur_clear20_muzerolossweight_spsi20_envnum{collector_env_num}_encoder-head-ln_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_lrucache-init-recur_clear20_muzerolossweight_spsi20_envnum{collector_env_num}_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250819_debug/{env_id[:-14]}/{env_id[:-14]}_uz_lrucache_clear20_muzerolossweight_spsi20_envnum{collector_env_num}_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_clear40_muzerolossweight_spsi20_envnum8_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
@@ -226,13 +230,13 @@ if __name__ == "__main__":
 
     args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'SeaquestNoFrameskip-v4' 
 
     # args.env = 'SpaceInvadersNoFrameskip-v4'
+
     # args.env = 'BeamRiderNoFrameskip-v4'
     # args.env = 'GravitarNoFrameskip-v4'
 
-
-    # args.env = 'SeaquestNoFrameskip-v4' 
     # args.env = 'BreakoutNoFrameskip-v4'
 
 
@@ -242,7 +246,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=6
+    export CUDA_VISIBLE_DEVICES=4
     cd /fs-computility/niuyazhe/puyuan/code/LightZero
     python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_segment_config.py
     """
