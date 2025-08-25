@@ -129,6 +129,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 rope_theta=10000,
                 # (int) The maximum sequence length for position encoding.
                 max_seq_len=8192,
+                # Controls where to compute reconstruction loss: 'after_backbone', 'before_backbone', or None.
+                #   - after_backbone: The reconstruction loss is computed after the encoded representation passes through the backbone.
+		        #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
+                decode_loss_mode=None,
             ),
         ),
         # ****** common ******
