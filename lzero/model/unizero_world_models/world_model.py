@@ -167,6 +167,7 @@ class WorldModel(nn.Module):
        
         self.num_simulations = getattr(self.config, 'num_simulations', 50)
 
+        # TODO: recur kv pool是否应该分成不同的环境有不同的pool呢
         self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
 
         # self.shared_pool_size_init = int(50)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
@@ -1497,9 +1498,22 @@ class WorldModel(nn.Module):
                     matched_value = None
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                # if matched_value is None:
+                #     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
 
+                # ==================== 核心修复 ====================
+                # 步骤 2: 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
+                if matched_value is None:
+                    # 2.1 安全地从字典中获取索引，它可能返回 None
+                    recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    # 2.2 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
+                    if recur_cache_index is not None:
+                        matched_value = self.shared_pool_recur_infer[recur_cache_index]
+                    
+                    if recur_cache_index is None:
+                        print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
+
+                # =================================================
                     # # TODO
                     # retrieved_cache = matched_value._keys_values[0]._k_cache._cache
                     # retrieved_sum = torch.sum(retrieved_cache).item()
