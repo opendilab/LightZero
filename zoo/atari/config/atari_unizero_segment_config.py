@@ -9,13 +9,13 @@ def main(env_id, seed):
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
-    collector_env_num = 8
-    num_segments = 8
-    evaluator_env_num = 3
+    # collector_env_num = 8
+    # num_segments = 8
+    # evaluator_env_num = 3
 
-    # collector_env_num = 1
-    # num_segments = 1
-    # evaluator_env_num = 1
+    collector_env_num = 1
+    num_segments = 1
+    evaluator_env_num = 1
 
     num_simulations = 50
     collect_num_simulations = 25
@@ -25,6 +25,8 @@ def main(env_id, seed):
     max_env_step = int(50e6)
     batch_size = 256
     # batch_size = 64 # debug
+    # batch_size = 4 # debug
+
     num_layers = 2
     # replay_ratio = 0.25
     replay_ratio = 0.1
@@ -32,6 +34,10 @@ def main(env_id, seed):
     game_segment_length = 20
     num_unroll_steps = 10
     infer_context_length = 4
+
+    # game_segment_length = 40
+    # num_unroll_steps = 20
+    # infer_context_length = 8
 
     # game_segment_length = 200
     # num_unroll_steps = 16
@@ -93,6 +99,8 @@ def main(env_id, seed):
                     norm_type=norm_type,
                     num_res_blocks=2,
                     num_channels=128,
+                    # num_res_blocks=1, # TODO
+                    # num_channels=64,
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     # policy_entropy_weight=5e-2, # TODO(pu)
@@ -125,6 +133,13 @@ def main(env_id, seed):
                     # final_norm_option_in_encoder="SimNorm",
                     # final_norm_option_in_obs_head="SimNorm",
                     # predict_latent_loss_type='group_kl',
+
+                    # weight_decay=1e-2,
+                    # latent_norm_loss=True,
+
+                    latent_norm_loss=False,
+                    weight_decay=1e-4, # TODO
+
                 ),
             ),
             # gradient_scale=True, #TODO
@@ -160,8 +175,8 @@ def main(env_id, seed):
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
-            # eval_freq=int(1e4),
-            eval_freq=int(2e4),
+            eval_freq=int(1e4), # TODO
+            # eval_freq=int(2e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -193,8 +208,10 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
 
-    main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_fix-init-recur_clear20_mulossweight_spsi20_envnum{collector_env_num}_encoder-head-ln_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250827/{env_id[:-14]}/{env_id[:-14]}_uz_wd1e-2_fix-init-recur_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_encoder-head-ln_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250827/{env_id[:-14]}/{env_id[:-14]}_uz_lnlw001_fix-init-recur_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_encoder-head-ln_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
+    # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_fix-init-recur_clear{game_segment_length}_mulossweight_spsi{game_segment_length}_envnum{collector_env_num}_encoder-head-ln_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250819/{env_id[:-14]}/{env_id[:-14]}_uz_fix-init-recur_clear20_origlossweight_spsi20_envnum{collector_env_num}_encoder-head-l2norm_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -256,7 +273,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=0
+    export CUDA_VISIBLE_DEVICES=6
     cd /fs-computility/niuyazhe/puyuan/code/LightZero
     python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_unizero_segment_config.py
     """

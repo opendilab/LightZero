@@ -30,8 +30,10 @@ def main(env_id, seed):
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1
+    buffer_reanalyze_freq = 1/2
+    # buffer_reanalyze_freq = 1/10
     # buffer_reanalyze_freq = 1/50
-    buffer_reanalyze_freq = 1/10000000000
+    # buffer_reanalyze_freq = 1/10000000000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -165,8 +167,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    args.env = 'MsPacmanNoFrameskip-v4'
-    # args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'MsPacmanNoFrameskip-v4'
+    args.env = 'QbertNoFrameskip-v4'
     # args.env = 'SeaquestNoFrameskip-v4'
     # args.env = 'BreakoutNoFrameskip-v4'
 
@@ -174,7 +176,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=4
+    export CUDA_VISIBLE_DEVICES=3
     cd /fs-computility/niuyazhe/puyuan/code/LightZero
     python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_muzero_segment_config.py
     """

@@ -1596,6 +1596,39 @@ class WorldModel(nn.Module):
             # Calculate the L2 norm of the latent action
             latent_action_l2_norms = torch.norm(self.act_embedding_table(act_tokens), p=2, dim=2).mean()
 
+        if self.config.latent_norm_loss:
+            # ==================== L2惩罚损失计算（最终修复版 v2） ====================
+            # 1. 计算每个 latent_state 向量的L2范数的平方。
+            #    根据调试信息，obs_embeddings shape: (B*L, 1, E)
+            #    所以 latent_norm_sq shape: (B*L, 1)
+            latent_norm_sq = torch.norm(obs_embeddings, p=2, dim=-1).pow(2)
+            # 2. 获取源掩码。
+            #    根据调试信息，mask_source shape: (B, L)
+            mask_source = batch['mask_padding']
+            # 3. 将源掩码从 (B, L) reshape 为 (B*L, 1)，以匹配 latent_norm_sq 的形状。
+            #    这是解决维度不匹配错误的关键。
+            #    我们使用 view(-1, 1) 来实现这个变形。
+            correct_mask = mask_source.contiguous().view(-1, 1)
+            # 4. 检查变形后的形状是否匹配。
+            #    这是一个防御性编程，确保两个张量的第一个维度是相同的。
+            if latent_norm_sq.shape[0] != correct_mask.shape[0]:
+                # 如果形状不匹配，打印错误信息并抛出异常，这能帮助我们更快地定位未来可能出现的新问题。
+                raise RuntimeError(
+                    f"Shape mismatch for L2 norm loss calculation! "
+                    f"latent_norm_sq shape: {latent_norm_sq.shape}, "
+                    f"but correct_mask shape after reshape is: {correct_mask.shape}. "
+                    f"Original mask_source shape was: {mask_source.shape}"
+                )
+            # 5. 直接进行逐元素乘法。因为现在它们的形状都是 (B*L, 1)，所以可以安全相乘。
+            masked_latent_norm_sq = latent_norm_sq * correct_mask
+            # 6. 计算平均损失。分母是掩码中所有“1”的总和，代表有效的元素数量。
+            #    增加一个极小值 epsilon (1e-8) 防止分母为零。
+            latent_norm_loss = masked_latent_norm_sq.sum() / (correct_mask.sum() + 1e-8)
+            # =================================================================
+        else:
+            latent_norm_loss = torch.tensor(0.)
+
+
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
@@ -1849,6 +1882,7 @@ class WorldModel(nn.Module):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
+        latent_norm_loss=latent_norm_loss, # 新增
             )
         else:
             return LossWithIntermediateLosses(
@@ -1870,6 +1904,7 @@ class WorldModel(nn.Module):
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
                 latent_action_l2_norms=latent_action_l2_norms,
+        latent_norm_loss=latent_norm_loss, # 新增
 
             )
 
