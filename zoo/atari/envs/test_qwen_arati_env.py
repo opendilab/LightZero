@@ -103,7 +103,7 @@ class QwenPongPolicy:
 
 
     def __init__(self, model_name: str, dtype: torch.dtype, history_n: int,
-                 use_pil: bool, channel_last: bool, device: torch.device, save_dir: str = "pong_ddp_frames", save_image=False, rank: int = 0):
+                 use_pil: bool, channel_last: bool, device: torch.device, save_dir: str = "pong_ddp_frames", save_image=False, rank: int = 0, topk: int = 1):
         self.processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
 
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
@@ -125,6 +125,7 @@ class QwenPongPolicy:
         self.save_dir = save_dir
         self.rank = rank
         self.rank_dir = os.path.join(self.save_dir, f"rank{rank:02d}")
+        self.topk = topk
         if os.path.exists(self.rank_dir):
             shutil.rmtree(self.rank_dir)
 
@@ -136,18 +137,16 @@ class QwenPongPolicy:
         os.makedirs(d, exist_ok=True)
         img.save(os.path.join(d, f"frame_{step:06d}.png"))
     
-    def log_step(self, step: int, action_id: int, action_str: str, reward: float):
-        """
-        Append one record to a single per-rank trajectory file in the same directory as frames.
-        - If meta_format == 'jsonl': one JSON object per line
-        - If meta_format == 'csv': a single CSV with header 'step,action_id,action,reward'
-        """
+    
+    def log_step(self, step: int, action_id: int, action_str: str, reward: float, topk_seq=None):
         rec = {
             "step": int(step),
             "action_id": int(action_id),
             "action": str(action_str),
             "reward": float(reward),
         }
+        if topk_seq is not None:
+            rec["topk_seq"] = topk_seq       # 新增：不受约束的 top-k 序列及概率
         with open(self.meta_path, "a") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
@@ -243,7 +242,7 @@ class QwenPongPolicy:
         return random.choice(allowed_names)
 
     @torch.inference_mode()
-    def decide(self, obs_dict: dict, step: int) -> Tuple[int, str, str]:
+    def decide(self, obs_dict: dict, step: int):
         allowed_ids = [i for i, v in enumerate(obs_dict.get("action_mask", [1]*6)) if int(v) == 1]
         allowed_names = [self.ID2NAME[i] for i in allowed_ids]
 
@@ -258,25 +257,48 @@ class QwenPongPolicy:
             return_tensors="pt"
         ).to(self.device)
 
-        out_ids = self.model.generate(
+        tok = self.processor.tokenizer
+        gen_out = self.model.generate(
             **inputs,
             max_new_tokens=16,
-            temperature=0.0,
-            do_sample=False,
-            top_p=1.0,
+            num_beams=self.topk,
+            num_return_sequences=self.topk,
+            do_sample=False,                 # 纯测概率，不采样
+            output_scores=True,
+            return_dict_in_generate=True,
+            length_penalty=1.0,              # 不做长度归一
+            early_stopping=True,
+            eos_token_id=getattr(tok, "eos_token_id", None),
+            pad_token_id=getattr(tok, "pad_token_id", getattr(tok, "eos_token_id", None)),
         )
-        input_len = int(inputs["input_ids"].shape[1])
-        gen_only = out_ids[:, input_len:]
 
-        out_text = self.processor.batch_decode(gen_only, skip_special_tokens=True)[0]
+        prompt_len = int(inputs["input_ids"].shape[1])
+        seq_new = gen_out.sequences[:, prompt_len:]
+        decoded = self.processor.tokenizer.batch_decode(seq_new, skip_special_tokens=True)
+        decoded = [s.strip() for s in decoded]
 
+        trans = self.model.compute_transition_scores(
+            gen_out.sequences, gen_out.scores, gen_out.beam_indices, normalize_logits=True
+        )  # shape: [num_return, gen_steps]
+        gen_steps = len(gen_out.scores)
+        logps = trans[:, -gen_steps:].sum(dim=1)  # 每条序列的 log P
+
+        # 在 top-k 集合里归一化成概率
+        probs = torch.softmax(logps, dim=0).tolist()
+
+        # 组装 top-3（序列 + 概率）
+        topk_seq = [{"text": txt, "prob": float(p)} for txt, p in zip(decoded, probs)]
+
+        # 仍然用你已有的正则从“top-1 文本”解析动作作为实际执行的动作
+        out_text = decoded[0]
         action_str = self._parse_action_string(out_text, allowed_names)
-        action_id = self.NAME2ID[action_str]
+        action_id = self.NAME2ID.get(action_str, random.choice(allowed_ids))
 
         if self.use_pil and self.save_image:
             self.save_pil_if_enabled(cur_img, self.save_dir, step)
 
-        return action_id, action_str, out_text
+        # 返回 topk_seq，供日志写入
+        return action_id, action_str, out_text, topk_seq
 
     def record(self, prev_obs: dict, action_id: int, step: int):
         img = to_model_image(prev_obs["observation"], channel_last=False, use_pil=self.use_pil)
@@ -299,7 +321,7 @@ if __name__ == "__main__":
         n_evaluator_episode=3,
         env_id='PongNoFrameskip-v4',
         env_type='Atari',
-        observation_shape=[3, 64, 64],
+        observation_shape=[3, 96, 96],
         collect_max_episode_steps=int(1.08e5),
         eval_max_episode_steps=int(1.08e5),
         gray_scale=False,
@@ -325,22 +347,23 @@ if __name__ == "__main__":
         model_name="/fs-computility/niuyazhe/shared/xiongjyu/model/Qwen2.5-VL-3B-Instruct",
         dtype=torch.bfloat16,
         history_n=5,
-        use_pil=False,
+        use_pil=True,
         channel_last=config.channel_last,
         device=device,
         save_dir="/fs-computility/niuyazhe/shared/xiongjyu/jericho/LightZero/pong_ddp_frames",
         save_image=True,
-        rank=rank
+        rank=rank,
+        topk=3
     )
 
     obs = env.reset()
     episode_return, steps = 0.0, 0
 
     while True:
-        action_id, action_str, raw = policy.decide(obs, step=steps)
+        action_id, action_str, raw, topk_seq = policy.decide(obs, step=steps)
         prev_obs = obs
         obs, reward, done, info = env.step(action_id)
-        policy.log_step(steps, action_id, action_str, reward)
+        policy.log_step(steps, action_id, action_str, reward, topk_seq=topk_seq)
 
         policy.record(prev_obs, action_id, step=steps)
 
