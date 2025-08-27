@@ -168,9 +168,7 @@ class QwenPongPolicy:
             "type": "text",
             "text": (
                 "Environment: Atari Pong (ALE) — two paddles rally a ball.\n"
-                "Task: You control the RIGHT paddle. Keep your paddle vertically aligned with the ball to return it and avoid conceding.\n"
-                "Serving rule: when a new point starts and the ball is not yet in play, you must SERVE using FIRE or *_FIRE; "
-                "during an active rally, do NOT use FIRE actions and instead move appropriately."
+                "Task: You control the right green paddle. Keep the paddle aligned vertically with the ball to return the ball and avoid losing it. The left paddle will hit the white ball, and you should try to land the white ball in the center of the right green paddle to return the ball and score.\n"
             )
         })
 
@@ -193,24 +191,26 @@ class QwenPongPolicy:
             "type": "text",
             "text": (
                 f"Available actions (choose exactly one string): {allowed_str}\n"
-                "Action semantics:\n"
-                f"{explain_text}\n"
-                "Heuristic (to guide your choice): if the ball is above your paddle, choose an UP action (RIGHT/RIGHTFIRE when serving); "
-                "if the ball is below, choose a DOWN action (LEFT/LEFTFIRE when serving); if perfectly aligned and rally is active, NOOP briefly is acceptable."
+                # "Action semantics:\n"
+                # f"{explain_text}\n"
+                "Heuristic (to guide your choice): if the ball is above your paddle, choose an RIGHT action; "
+                "if the ball is below, choose a LEFT action; if perfectly aligned and rally is active, NOOP briefly is acceptable."
             )
         })
-
+        
         # 4) 历史交互轨迹（只包含：历史图片 + 当时选择的动作字符串）
         if len(self.buffer) > 0:
-            content.append({"type": "text", "text": "Recent interaction history (most recent first):"})
-            for tr in list(self.buffer)[::-1]:  # 近 -> 远
+            # 在输出历史之前，先加一句说明
+            content.append({"type": "text", "text":
+                f"Now you are at step t. The following shows the previous {len(self.buffer)} steps of history (from most recent to oldest):\n"
+            })
+
+            # 然后再逐条列出历史轨迹
+            for k, tr in enumerate(list(self.buffer)[::-1], start=1):  # k=1 表示 t−1
+                content.append({"type": "text", "text": f"(t−{k}) observation:"})
                 content.append({"type": "image", "image": tr.image})
+                content.append({"type": "text", "text": f"(t−{k}) you chose: {tr.action_str}\n"})
                 images_for_processor.append(tr.image)
-                # 再给该状态下我们选过的动作（仅动作字符串）
-                content.append({
-                    "type": "text",
-                    "text": f"You chose the action: {tr.action_str}"
-                })
 
         # 5) 输出格式要求（只返回一行 {ACTION: <action_str>}）
         content.append({
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     policy = QwenPongPolicy(
         model_name="/fs-computility/niuyazhe/shared/xiongjyu/model/Qwen2.5-VL-3B-Instruct",
         dtype=torch.bfloat16,
-        history_n=5,
+        history_n=2,
         use_pil=True,
         channel_last=config.channel_last,
         device=device,
