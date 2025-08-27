@@ -7,7 +7,7 @@ import numpy as np
 from ding.torch_utils.data_helper import to_list
 from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
-import datetime 
+
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumbelMuZeroPolicy
 
@@ -616,114 +616,53 @@ class GameBuffer(ABC, object):
         # print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')
 
     def remove_oldest_data_to_fit(self) -> None:
-        assert self.replay_buffer_size > self._cfg.batch_size, "Replay buffer size should be larger than batch size"
+        """
+        Overview:
+            remove some oldest data if the replay buffer is full.
+        """
+        assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
         nums_of_game_segments = self.get_num_of_game_segments()
         total_transition = self.get_num_of_transitions()
         if total_transition > self.replay_buffer_size:
-            index = -1
-            current_transitions = total_transition
+            index = 0
             for i in range(nums_of_game_segments):
-                try:
-                    length_data = len(self.game_segment_buffer[i].action_segment)
-                except AttributeError:
-                    length_data = len(self.game_segment_buffer[i])
-                
-                length_data = min(length_data, self._cfg.game_segment_length)
-                
-                current_transitions -= length_data
-                if current_transitions <= self.replay_buffer_size * self.keep_ratio:
+                length_data = len(self.game_segment_buffer[i].action_segment) if len(self.game_segment_buffer[i].action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+                total_transition -= length_data
+                if total_transition <= self.replay_buffer_size * self.keep_ratio:
+                    # find the max game_segment index to keep in the buffer
                     index = i
                     break
-            
-            if index != -1 and total_transition >= self._cfg.batch_size:
+            if total_transition >= self._cfg.batch_size:
                 self._remove(index + 1)
 
-    def _remove(self, excess_game_segment_index: int) -> None:
+    def _remove(self, excess_game_segment_index: List[int]) -> None:
         """
         Overview:
-            Delete game segments in index [0: excess_game_segment_index] and log the operation.
+            delete game segments in index [0: excess_game_segment_index]
         Arguments:
-            - excess_game_segment_index (:obj:`int`): The number of game segments to remove from the beginning.
+            - excess_game_segment_index (:obj:`List[str]`): Index of data.
         """
-        if excess_game_segment_index <= 0:
-            return
-
-        # --- Start of logging modification ---
-        
-        # 1. Gather information BEFORE removal
-        timestamp = datetime.datetime.now()
-        base_idx_before = self.base_idx
-        segments_before = self.get_num_of_game_segments()
-        transitions_before = self.get_num_of_transitions()
-        
-        # Calculate the exact number of transitions to be removed
-        excess_game_positions = 0
-        for i in range(excess_game_segment_index):
-            try:
-                length_data = len(self.game_segment_buffer[i].action_segment)
-            except AttributeError:
-                length_data = len(self.game_segment_buffer[i])
-            excess_game_positions += min(length_data, self._cfg.game_segment_length)
-
-        # 2. Perform the removal operations
+        excess_game_positions = sum(
+            [len(game_segment) for game_segment in self.game_segment_buffer[:excess_game_segment_index]]
+        )
         del self.game_segment_buffer[:excess_game_segment_index]
         self.game_pos_priorities = self.game_pos_priorities[excess_game_positions:]
         del self.game_segment_game_pos_look_up[:excess_game_positions]
         self.base_idx += excess_game_segment_index
+        print(f"self.base_idx: {self.base_idx} ")
         self.clear_time = time.time()
 
-        # 3. Gather information AFTER removal
-        base_idx_after = self.base_idx
-        segments_after = self.get_num_of_game_segments()
-        transitions_after = self.get_num_of_transitions()
-
-        # 4. Format the log message
-        log_message = (
-            f"--- GameBuffer Removal Log ---\n"
-            f"Timestamp: {timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')}\n"
-            f"Total collected episodes: {self.num_of_collected_episodes}\n"
-            f"\n"
-            f"Action: Removing {excess_game_segment_index} oldest game segment(s).\n"
-            f"        This corresponds to removing {excess_game_positions} transitions.\n"
-            f"\n"
-            f"State BEFORE removal:\n"
-            f"  - Segments: {segments_before}\n"
-            f"  - Transitions: {transitions_before}\n"
-            f"  - base_idx: {base_idx_before}\n"
-            f"\n"
-            f"State AFTER removal:\n"
-            f"  - Segments: {segments_after}\n"
-            f"  - Transitions: {transitions_after}\n"
-            f"  - base_idx: {base_idx_after}\n"
-            f"------------------------------\n\n"
-        )
-        # TODO
-        # 5. Print to console and write to file
-        # print(log_message)
-        
-        # log_filename = f"game_buffer_remove_log_{timestamp.strftime('%Y%m%d_%H%M%S')}.txt"
-        # try:
-        #     with open(log_filename, 'a', encoding='utf-8') as f:
-        #         f.write(log_message)
-        # except Exception as e:
-        #     print(f"[ERROR] Failed to write to log file {log_filename}: {e}")
-
-        # --- End of logging modification ---
-
     def get_num_of_episodes(self) -> int:
+        # number of collected episodes
         return self.num_of_collected_episodes
 
     def get_num_of_game_segments(self) -> int:
+        # num of game segments
         return len(self.game_segment_buffer)
 
     def get_num_of_transitions(self) -> int:
+        # total number of transitions
         return len(self.game_segment_game_pos_look_up)
 
     def __repr__(self):
-        return (
-            f'GameBuffer Statistics:\n'
-            f'  - All collected episodes: {self.num_of_collected_episodes}\n'
-            f'  - Current game segments: {self.get_num_of_game_segments()}\n'
-            f'  - Current transitions: {self.get_num_of_transitions()}\n'
-            f'  - base_idx (offset): {self.base_idx}'
-        )
+        return f'current buffer statistics is: num_of_all_collected_episodes: {self.num_of_collected_episodes}, num of game segments: {len(self.game_segment_buffer)}, number of transitions: {len(self.game_segment_game_pos_look_up)}'

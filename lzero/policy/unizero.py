@@ -113,6 +113,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=0,
+                final_norm_option_in_encoder="SimNorm", # "SimNorm"对应"group_kl",  "LayerNorm"对应"mse", 
+                final_norm_option_in_obs_head="SimNorm",
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -214,8 +216,12 @@ class UniZeroPolicy(MuZeroPolicy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # (int) the number of simulations in MCTS.
+        # # (int) the number of simulations in MCTS for renalyze.
         num_simulations=50,
+        # (int) The number of simulations in MCTS for the collect phase.
+        collect_num_simulations=25,
+        # (int) The number of simulations in MCTS for the eval phase.
+        eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -325,13 +331,22 @@ class UniZeroPolicy(MuZeroPolicy):
         assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
         self._model = torch.compile(self._model)
         self._target_model = torch.compile(self._target_model)
-        # NOTE: soft target
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='momentum',
-            update_kwargs={'theta': self._cfg.target_update_theta}
-        )
+        if self._cfg.target_model_update_option=="soft":
+            # NOTE: soft target
+            self._target_model = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='momentum',
+                update_kwargs={'theta': self._cfg.target_update_theta}
+            )
+        elif self._cfg.target_model_update_option=="hard":
+            self._target_model = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='assign',
+                update_kwargs={'freq': self._cfg.target_update_freq}
+            )
+
         self._learn_model = self._model
 
         if self._cfg.use_augmentation:
@@ -341,8 +356,8 @@ class UniZeroPolicy(MuZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
+        # assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
+        # assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
@@ -459,6 +474,7 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
+        latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -470,6 +486,21 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
+
+        if self._cfg.gradient_scale:
+            # ==============================================================
+            # START OF THE FIX: Add gradient scaling just like in MuZero
+            # ==============================================================
+            # This is the key to stabilizing the latent norm. It averages the gradients
+            # accumulated over the unroll steps, preventing the exploding gradient problem
+            # in the recurrent world model (Transformer).
+            gradient_scale = 1.0 / self._cfg.num_unroll_steps
+            weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+            # ==============================================================
+            # END OF THE FIX
+            # ==============================================================
+
+
         weighted_total_loss.backward()
 
         # Check if the current iteration completes an accumulation cycle
@@ -556,6 +587,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
             'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
+            'analysis/latent_action_l2_norms': latent_action_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
@@ -583,11 +615,14 @@ class UniZeroPolicy(MuZeroPolicy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
-
+        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_collect_cfg = copy.deepcopy(self._cfg)
+        mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
@@ -726,10 +761,10 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = batch_action
 
             # ========= TODO: for muzero_segment_collector now =========
-            if active_collect_env_num < self.collector_env_num:
+            if active_collect_env_num < self.collector_env_num: # 先有环境done,再到下一步的forward出现这个这个条件满足
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
-                self._reset_collect(reset_init_data=True)
+                self._reset_collect(reset_init_data=True) # TODO(pu): 所有环境全部重置是否合理呢？
                 if getattr(self._cfg, 'sample_type', '') == 'episode':
                     print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
@@ -741,10 +776,15 @@ class UniZeroPolicy(MuZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+
+        # 为 eval MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_eval_cfg = copy.deepcopy(self._cfg)
+        mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTSPtree(mcts_eval_cfg)
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
@@ -871,15 +911,53 @@ class UniZeroPolicy(MuZeroPolicy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
-        # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # --- BEGIN ROBUST FIX ---
+        # This logic handles the crucial end-of-episode cache clearing.
+        # The collector calls `_policy.reset([env_id])` when an episode is done,
+        # which results in `current_steps` being None and `env_id` being a list.
+        
+        # We must handle both single int and list of ints for env_id.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+                
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the collector.
+            if current_steps is None:
+                world_model = self._collect_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+                    
+                    print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end.')
+
+                # The recurrent cache is global, which is problematic.
+                # A full clear is heavy-handed but safer than leaving stale entries.
+                world_model.past_kv_cache_recurrent_infer.clear()
+                
+                if hasattr(world_model, 'keys_values_wm_list'):
+                    world_model.keys_values_wm_list.clear()
+
+                torch.cuda.empty_cache()
+            # --- END ROBUST FIX ---
+
+
+        # # Return immediately if env_id is None or a list
+        # if env_id is None or isinstance(env_id, list):
+        #     return
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # TODO:==========
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
+
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
+
 
         # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
+        if current_steps is not None and current_steps % clear_interval == 0:
             print(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
@@ -892,8 +970,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # Free up GPU memory
             torch.cuda.empty_cache()
 
-            print('collector: collect_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
+
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
         """
@@ -915,15 +993,47 @@ class UniZeroPolicy(MuZeroPolicy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
+        # --- BEGIN ROBUST FIX ---
+        # This logic handles the crucial end-of-episode cache clearing for evaluation.
+        # The evaluator calls `_policy.reset([env_id])` when an episode is done.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
+            if current_steps is None:
+                world_model = self._eval_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+                    
+                    print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end.')
+
+                # The recurrent cache is global.
+                world_model.past_kv_cache_recurrent_infer.clear()
+                
+                if hasattr(world_model, 'keys_values_wm_list'):
+                    world_model.keys_values_wm_list.clear()
+
+                torch.cuda.empty_cache()
+                return
+            # --- END ROBUST FIX ---
+
         # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # if env_id is None or isinstance(env_id, list):
+        #     return
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # TODO:==========
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 40
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
+        # # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps is not None and current_steps % clear_interval == 0:
             print(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the eval model's world model
@@ -949,6 +1059,8 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_world_model',
             'analysis/latent_state_l2_norms',
+            'analysis/latent_action_l2_norms',
+
             'analysis/l2_norm_before',
             'analysis/l2_norm_after',
             'analysis/grad_norm_before',

@@ -22,6 +22,29 @@ from ditk import logging
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 import torch
 
+# 1. 将 L2-Norm 封装成一个 nn.Module 类
+class L2Norm(nn.Module):
+    """
+    对输入的最后一个维度进行 L2 归一化。
+    """
+    def __init__(self, eps=1e-6):
+        """
+        初始化 L2Norm 模块。
+        
+        :param eps: 一个小的浮点数，用于防止在归一化时除以零。
+        """
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播函数。
+        
+        :param x: 输入张量。
+        :return: 经过 L2 归一化后的张量。
+        """
+        return F.normalize(x, p=2, dim=-1, eps=self.eps)
+        
 def MLP_V2(
         in_channels: int,
         hidden_channels: List[int],
@@ -534,13 +557,26 @@ class RepresentationNetworkUniZero(nn.Module):
         elif self.observation_shape[1] in [84, 96]:
             self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
 
-        self.final_norm_option_in_encoder = final_norm_option_in_encoder
-        if self.final_norm_option_in_encoder == 'LayerNorm':
+        self.final_norm_option_in_encoder=final_norm_option_in_encoder 
+        # 2. 在 __init__ 中统一初始化 final_norm
+        if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
+            self.final_norm = nn.LayerNorm(
+                self.embedding_dim, eps=1e-5, elementwise_affine=False
+            )
         elif self.final_norm_option_in_encoder == 'SimNorm':
+            # 确保 SimNorm 已被定义
             self.final_norm = SimNorm(simnorm_dim=group_size)
+        elif self.final_norm_option_in_encoder == 'L2Norm':
+            # 直接实例化我们自定义的 L2Norm 模块
+            self.final_norm = L2Norm(eps=1e-6)
+        elif self.final_norm_option_in_encoder is None:
+            # 如果不需要归一化，可以设置为 nn.Identity() 或 None
+            self.final_norm = nn.Identity()
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -568,7 +604,16 @@ class RepresentationNetworkUniZero(nn.Module):
         x = x.view(-1, self.embedding_dim)
 
         # NOTE: very important for training stability.
-        x = self.final_norm(x)
+        # x = self.final_norm(x)
+
+        # 3. 在 forward 中统一调用 self.final_norm
+        # 这种结构更加清晰和可扩展
+        if self.final_norm is not None:
+            x = self.final_norm(x)
+
+        # 针对 LayerNorm_Tanh 的特殊处理
+        if self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
+            x = torch.tanh(x)
 
         return x
 

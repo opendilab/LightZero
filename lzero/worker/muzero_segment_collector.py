@@ -600,9 +600,15 @@ class MuZeroSegmentCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
+
+                    # ============ TODO(pu): only for UniZero now ============
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
-                        # ============ only for UniZero now ============
-                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+                        if eps_steps_lst[env_id]>self.policy_config.game_segment_length:
+                            self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+                            print(f"eps_steps_lst[env_id]>self.policy_config.game_segment_length:{eps_steps_lst[env_id]}>{self.policy_config.game_segment_length}")
+
+                    # if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
+                    #     self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
                     total_transitions += 1
 
@@ -703,9 +709,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                     eps_steps_lst[env_id] = 0
                     visit_entropies_lst[env_id] = 0
 
-                    # Env reset is done by env_manager automatically
+                    # TODO Env reset is done by env_manager automatically
                     # NOTE: ============ reset the policy for the env_id. Default reset_init_data=True. ================
-                    self._policy.reset([env_id])
+                    self._policy.reset([env_id]) 
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
