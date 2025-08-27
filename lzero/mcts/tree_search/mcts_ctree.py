@@ -185,7 +185,7 @@ class UniZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
-            
+ 
             return first_action_latent_map
 
 

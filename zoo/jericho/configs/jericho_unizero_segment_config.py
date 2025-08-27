@@ -22,7 +22,16 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # Frequently changed configurations (user-specified)
     # ==============================================================
     # Model name or path - configurable according to the predefined model paths or names
-    model_name: str = 'BAAI/bge-base-en-v1.5'
+    encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
+
+    if encoder_option == 'qwen':
+        model_name: str = 'Qwen/Qwen3-0.6B'
+    elif encoder_option == 'legacy':
+        model_name: str = 'BAAI/bge-base-en-v1.5'
+    else:
+        raise ValueError(f"Unsupported encoder option: {encoder_option}")  
+
+
     collector_env_num = 8
     game_segment_length = 20
     evaluator_env_num = 5
@@ -86,6 +95,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
+                encoder_option=encoder_option,
                 encoder_url=model_name,
                 model_type="mlp",
                 world_model_cfg=dict(
@@ -104,6 +114,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                     embed_dim=embed_dim,
                     obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),
+                    decode_loss_mode='None', # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
+                    latent_recon_loss_weight=0.1 
                 ),
             ),
             action_type="varied_action_space",

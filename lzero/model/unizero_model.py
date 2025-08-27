@@ -8,7 +8,7 @@ from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
-    HFLanguageRepresentationNetwork
+    HFLanguageRepresentationNetwork, QwenNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
@@ -96,21 +96,37 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'text':
-            self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
-            # print(self.representation_network.model.encoder.layer[0].attention.output.LayerNorm.weight)
-
-            if self.rank == 0:
-                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
-                self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
-            if self.world_size > 1:
-                # Wait until rank 0 finishes loading the tokenizer
-                torch.distributed.barrier()
-            if self.rank != 0:
-                self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
-                self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
-
-            projection = [self.representation_network.pretrained_model.config.hidden_size, self.decoder_network.config.d_model]
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, with_lpips=False, projection=projection)
+            if kwargs['encoder_option'] == 'legacy':
+                self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
+                if world_model_cfg.decode_loss_mode is None or world_model_cfg.decode_loss_mode.lower() == 'none':
+                    self.decoder_network = None
+                    self.decoder_network_tokenizer = None
+                    projection = None
+                else:
+                    if self.rank == 0:
+                        self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
+                        self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
+                    if self.world_size > 1:
+                        # Wait until rank 0 finishes loading the tokenizer
+                        torch.distributed.barrier()
+                    if self.rank != 0:
+                        self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
+                        self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
+                    projection = [world_model_cfg.embed_dim, self.decoder_network.config.d_model]
+            elif kwargs['encoder_option'] == 'qwen':
+                self.representation_network = QwenNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
+                if world_model_cfg.decode_loss_mode is None or world_model_cfg.decode_loss_mode.lower() == 'none':
+                    self.decoder_network = None
+                    self.decoder_network_tokenizer = None
+                    projection = None
+                else:
+                    projection = [world_model_cfg.embed_dim, self.representation_network.pretrained_model.config.hidden_size]
+                    self.decoder_network = self.representation_network
+                    self.decoder_network_tokenizer = None
+            else:
+                raise ValueError(f"Unsupported encoder option: {kwargs['encoder_option']}")     
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, 
+                                    with_lpips=False, projection=projection, encoder_option=kwargs['encoder_option'])     
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)

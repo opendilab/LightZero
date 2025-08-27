@@ -156,19 +156,22 @@ class GameBuffer(ABC, object):
                 # For some environments (e.g., Jericho), the action space size may be different.
                 # To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),
                 # we avoid sampling from the last `num_unroll_steps` steps of the game segment. 
-                if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-                    pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
+                if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
+                    pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
+                if pos_in_game_segment >= len(game_segment.action_segment) - 1:
+                    pos_in_game_segment = np.random.choice(len(game_segment.action_segment) - 1, 1).item()
             else:
                 # For environments with a fixed action space (e.g., Atari),
                 # we can safely sample from the entire game segment range.
                 if pos_in_game_segment >= self._cfg.game_segment_length:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
+                if pos_in_game_segment >= len(game_segment.action_segment) - 1:
+                    pos_in_game_segment = np.random.choice(len(game_segment.action_segment) - 1, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
-
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
 

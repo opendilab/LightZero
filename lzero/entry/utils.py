@@ -111,6 +111,36 @@ def initialize_zeros_batch(observation_shape: Union[int, List[int], Tuple[int]],
 
     return torch.zeros(shape).to(device)
 
+def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str, pad_token_id: int = 0) -> torch.Tensor:
+    """
+    Overview:
+        Initialize a tensor filled with `pad_token_id` for batch observations. 
+        This function is designed to be flexible and can handle both textual 
+        and non-textual observations:
+        
+        - For textual observations: it initializes `input_ids` with padding tokens, 
+        ensuring consistent sequence lengths within a batch.
+        - For non-textual observations: it provides a convenient way to fill 
+        observation tensors with a default of 0, 
+        ensuring shape compatibility and preventing uninitialized values.
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
+        - batch_size (:obj:`int`): The batch size.
+        - device (:obj:`str`): The device to store the tensor.
+        - pad_token_id (:obj:`int`): The token ID (or placeholder value) used for padding.
+    Returns:
+        - padded_tensor (:obj:`torch.Tensor`): A tensor of the given shape, 
+        filled with `pad_token_id`.
+    """
+    if isinstance(observation_shape, (list, tuple)):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError(f"observation_shape must be int, list, or tuple, but got {type(observation_shape).__name__}")
+
+    return torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
+
 def random_collect(
         policy_cfg: 'EasyDict',  # noqa
         policy: 'Policy',  # noqa

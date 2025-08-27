@@ -39,7 +39,7 @@ class Tokenizer(nn.Module):
         Can operate on visual or textual data, supporting optional LPIPS perceptual loss.
         It optionally includes a linear projection layer and can be paired with a decoder tokenizer.
     """
-    def __init__(self, encoder=None, decoder_network=None, decoder_network_tokenizer=None, with_lpips: bool = False, projection: list = None) -> None:
+    def __init__(self, encoder=None, decoder_network=None, decoder_network_tokenizer=None, with_lpips: bool = False, projection: list = None, encoder_option='legacy') -> None:
         """Initialize the Tokenizer.
 
         Arguments:
@@ -49,6 +49,7 @@ class Tokenizer(nn.Module):
             with_lpips (bool, optional): If True, enable perceptual loss computation via LPIPS. Defaults to False.
             projection (list[int], optional): If provided, defines a linear projection layer from projection[0] → projection[1]. 
                                               If None, an identity layer is used.
+            encoder_option (str, optional): Option to specify the encoder type, e.g., 'legacy' for T5 decoder or 'qwen' for Qwen decoder. Defaults to 'legacy'.
         """
         super().__init__()
         if with_lpips:
@@ -59,26 +60,13 @@ class Tokenizer(nn.Module):
 
         self.encoder = encoder
         self.decoder_network = decoder_network
-        self.decoder_network_tokenizer = decoder_network_tokenizer 
+        self.decoder_network_tokenizer = decoder_network_tokenizer
+        self.encoder_option = encoder_option
 
         if projection is None:
             self.projection_layer = nn.Identity()
         else:
             self.projection_layer = nn.Linear(projection[0], projection[1])
-
-
-    def decode_to_plain_text(self, x) -> str:
-        """
-        Decode the input tensor to plain text.
-
-        Arguments:
-            x (torch.Tensor): Input tensor of shape (B, ...).
-
-        Returns:
-            str: Decoded plain text.
-        """
-        # Convert the input tensor to a numpy array and decode it
-        return self.encoder.tokenizer.batch_decode(x, skip_special_tokens=True)
 
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -146,34 +134,77 @@ class Tokenizer(nn.Module):
             embeddings = embeddings.reshape(B*T,1,E)
             target_ids = target_ids.reshape(B*T, -1)
 
-        # Instead of using raw target_ids, convert them to plain text and re-tokenize using the decoder's tokenizer.
-        # This guarantees alignment with the decoder's vocabulary, special tokens, and tokenization rules.
-        text_list = self.decode_to_plain_text(target_ids)
-        t5_target_ids = self.decoder_network_tokenizer(text_list, 
-                                                       padding="max_length",
-                                                       truncation=True, 
-                                                       max_length=512, 
-                                                       return_tensors="pt")
-        labels = t5_target_ids.input_ids
-        labels[labels == self.decoder_network_tokenizer.pad_token_id] = -100 
+        if self.encoder_option == 'legacy':  # T5 decoder
+            # Instead of using raw target_ids, convert them to plain text and re-tokenize using the decoder's tokenizer.
+            # This guarantees alignment with the decoder's vocabulary, special tokens, and tokenization rules.
+            text_list = self.encoder.tokenizer.batch_decode(target_ids, skip_special_tokens=True)
+            t5_target_ids = self.decoder_network_tokenizer(text_list, 
+                                                        padding="max_length",
+                                                        truncation=True, 
+                                                        max_length=512, 
+                                                        return_tensors="pt")
+            labels = t5_target_ids.input_ids
+            labels[labels == self.decoder_network_tokenizer.pad_token_id] = -100 
 
-        embeddings = self.projection_layer(embeddings)     # (B', 1, E) -> (B', 1, E'), B' = B*T
-        encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
-        encoder_attention_mask = torch.ones(
-            embeddings.size(0), embeddings.size(1),
-            device=embeddings.device, dtype=torch.long
-        )
+            embeddings = self.projection_layer(embeddings)     # (B', 1, E) -> (B', 1, E'), B' = B*T
+            encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
+            encoder_attention_mask = torch.ones(
+                embeddings.size(0), embeddings.size(1),
+                device=embeddings.device, dtype=torch.long
+            )
 
-        labels = labels.to(embeddings.device)
+            labels = labels.to(embeddings.device)
 
-        outputs = self.decoder_network(encoder_outputs=encoder_outputs_tuple,
-                                       attention_mask=encoder_attention_mask,
-                                       labels=labels,
-                                       return_dict=True)
-        
-        return outputs
+            outputs = self.decoder_network(encoder_outputs=encoder_outputs_tuple,
+                                        attention_mask=encoder_attention_mask,
+                                        labels=labels,
+                                        return_dict=True)
+            return outputs
+
+        elif self.encoder_option == 'qwen':
+            hidden = self.projection_layer(embeddings)  
+            lm = self.decoder_network.pretrained_model
+            # Get a reference parameter for device/dtype info
+            param = next(lm.parameters()) 
+
+            try:
+                # Retrieve the input embedding layer of the language model
+                input_embedding_layer = lm.get_input_embeddings()
+            except:
+                raise ValueError('Error... Could not retrieve input embedding layer from the decoder network.')
+            
+            # Convert target token IDs into embeddings using the LM's input embedding layer
+            target_embeds = input_embedding_layer(target_ids)
+
+            # Concatenate the projected hidden embeddings (prompt) with target embeddings
+            # hidden: (B, 1, D), target_embeds: (B, L, D) → inputs_embeds: (B, 1+L, D)
+            inputs_embeds = torch.cat([hidden, target_embeds.detach()], dim=1)
+
+            inputs_embeds = inputs_embeds.to(device=param.device, dtype=param.dtype)
+
+            prompt_attention_mask = torch.ones(hidden.size(0), 1, device=param.device, dtype=torch.long)
+            target_attention_mask = (target_ids != self.decoder_network.tokenizer.pad_token_id).to(device=param.device, dtype=torch.long)
+            # Concatenate prompt mask and target mask along sequence length
+            attention_mask = torch.cat([prompt_attention_mask, target_attention_mask], dim=1)
+            # Construct labels: for the prompt part, use -100 (ignored by loss function)
+            prompt_labels = torch.full((hidden.size(0), 1), -100, device=param.device, dtype=torch.long)
+
+            # Copy target token IDs as labels, masking pad positions with -100
+            labels = target_ids.clone().to(param.device)
+            labels[labels == self.decoder_network.tokenizer.pad_token_id] = -100
+
+            final_labels = torch.cat([prompt_labels, labels], dim=1)
+
+            outputs = lm(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                labels=final_labels,
+                return_dict=True
+            )
+
+            return outputs
     
-    def decode_to_plain_text_for_decoder(
+    def decode_to_plain_text(
             self, embeddings: torch.Tensor,
             max_length: int = 512
         ) -> List[List[int]]:
@@ -209,29 +240,31 @@ class Tokenizer(nn.Module):
                 embeddings = embeddings.unsqueeze(1)
 
             embeddings = self.projection_layer(embeddings)
+            if self.encoder_option == 'legacy': # T5 decoder
+                encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
+                encoder_attention_mask = torch.ones(
+                    embeddings.size(0), embeddings.size(1),
+                    device=device, dtype=torch.long
+                )
 
-            encoder_outputs_tuple = BaseModelOutput(last_hidden_state=embeddings)
-            encoder_attention_mask = torch.ones(
-                embeddings.size(0), embeddings.size(1),
-                device=device, dtype=torch.long
-            )
+                # Use the decoder's generate() method to autoregressively decode text from the input embeddings.
+                # The projected embeddings serve as encoder outputs in a typical encoder-decoder architecture,
+                # where the decoder attends to them via cross-attention at each step until max_length or EOS is reached.
+                generated_t5_ids = self.decoder_network.generate(
+                    encoder_outputs=encoder_outputs_tuple,
+                    attention_mask=encoder_attention_mask,
+                    max_length=max_length
+                )
 
-            # Use the decoder's generate() method to autoregressively decode text from the input embeddings.
-            # The projected embeddings serve as encoder outputs in a typical encoder-decoder architecture,
-            # where the decoder attends to them via cross-attention at each step until max_length or EOS is reached.
-            generated_t5_ids = self.decoder_network.generate(
-                encoder_outputs=encoder_outputs_tuple,
-                attention_mask=encoder_attention_mask,
-                max_length=max_length
-            )
+                # Convert the generated output to a list of strings on CPU, skipping special tokens.
+                generated_text = self.decoder_network_tokenizer.batch_decode(
+                    generated_t5_ids, skip_special_tokens=True)
 
-            # Convert the generated output to a list of strings on CPU, skipping special tokens.
-            generated_text = self.decoder_network_tokenizer.batch_decode(
-                generated_t5_ids, skip_special_tokens=True)
-
-            assert len(generated_text) == 1, f"Expected 1 generated text, got {len(generated_text)}"
+                assert len(generated_text) == 1, f"Expected 1 generated text, got {len(generated_text)}"
+                return generated_text[0]
             
-            return generated_text[0]
+            elif self.encoder_option == 'qwen':
+                return self.decoder_network.decode(embeddings=embeddings, max_length=max_length)
 
     @staticmethod
     def reconstruction_loss(original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
