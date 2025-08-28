@@ -786,3 +786,4 @@ class MuZeroGameBuffer(GameBuffer):
             if metas['make_time'][i] > self.clear_time:
                 idx, prio = indices[i], metas['batch_priorities'][i]
                 self.game_pos_priorities[idx] = prio
+

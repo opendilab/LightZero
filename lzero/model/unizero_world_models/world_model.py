@@ -1632,6 +1632,29 @@ class WorldModel(nn.Module):
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
+        if self.config.use_priority:
+            # ==================== START MODIFICATION 5 ====================
+            # Calculate value_priority, similar to MuZero.
+            with torch.no_grad():
+                # 1. Get the predicted value logits for the first step of the sequence (t=0).
+                # The shape is (B, support_size).
+                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+
+                # 2. Convert the categorical prediction to a scalar value.
+                # The shape becomes (B, 1).
+                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+
+                # 3. Get the target scalar value for the first step from the batch.
+                # The shape is (B, num_unroll_steps), so we take the first column.
+                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+
+                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
+                # This is the priority. We use reduction='none' to get per-sample priorities.
+                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
+            # ===================== END MODIFICATION 5 =====================
+        else:
+            value_priority = torch.tensor(0.)
+
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
@@ -1737,9 +1760,10 @@ class WorldModel(nn.Module):
         # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
         #  ========== for visualization ==========
 
-        # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
+            # For training stability, use target_tokenizer to compute the true next latent state representations
             target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
+            # target_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # Compute labels for observations, rewards, and ends
         labels_observations, labels_rewards, _ = self.compute_labels_world_model(target_obs_embeddings,
@@ -1883,6 +1907,7 @@ class WorldModel(nn.Module):
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
         latent_norm_loss=latent_norm_loss, # 新增
+        value_priority=value_priority,
             )
         else:
             return LossWithIntermediateLosses(
@@ -1905,6 +1930,7 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
                 latent_action_l2_norms=latent_action_l2_norms,
         latent_norm_loss=latent_norm_loss, # 新增
+        value_priority=value_priority,
 
             )
 

@@ -303,6 +303,7 @@ class LossWithIntermediateLosses:
         self.latent_norm_loss_weight = 0.01
 
 
+
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
 

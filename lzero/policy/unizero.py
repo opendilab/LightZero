@@ -446,6 +446,11 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
+        # ==================== START MODIFICATION 1 ====================
+        # Pass the original scalar target_value to compute_loss for priority calculation.
+        batch_for_gpt['scalar_target_value'] = target_value
+        # ===================== END MODIFICATION 1 =====================
+
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
@@ -456,7 +461,17 @@ class UniZeroPolicy(MuZeroPolicy):
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
 
-        weighted_total_loss = losses.loss_total
+        # ==================== START MODIFICATION 2 ====================
+        # Extract the calculated value_priority from the returned losses.
+        value_priority_tensor = losses.intermediate_losses['value_priority']
+        # Convert to numpy array for the replay buffer, adding a small epsilon.
+        value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
+        # ===================== END MODIFICATION 2 =====================
+
+        # weighted_total_loss = losses.loss_total
+        # TODO:
+        weighted_total_loss = (weights * losses.loss_total).mean()
+
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -578,7 +593,11 @@ class UniZeroPolicy(MuZeroPolicy):
             'target_policy_entropy': average_target_policy_entropy.item(),
             'reward_loss': reward_loss.item(),
             'value_loss': value_loss.item(),
-            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            # ==================== START MODIFICATION 3 ====================
+            # Add value_priority to the log dictionary.
+            'value_priority': value_priority_np.mean().item(),
+            'value_priority_orig': value_priority_np,
+            # ===================== END MODIFICATION 3 =====================
             'target_reward': target_reward.mean().item(),
             'target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
@@ -1098,7 +1117,9 @@ class UniZeroPolicy(MuZeroPolicy):
             'reward_loss',
             'value_loss',
             'consistency_loss',
+            # ==================== START MODIFICATION 4 ====================
             'value_priority',
+            # ===================== END MODIFICATION 4 =====================
             'target_reward',
             'target_value',
             'total_grad_norm_before_clip_wm',
