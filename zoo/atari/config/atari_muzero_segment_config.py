@@ -10,8 +10,6 @@ def main(env_id, seed):
     collector_env_num = 8
     num_segments = 8
     game_segment_length = 20
-    # game_segment_length = 400
-
     evaluator_env_num = 3
     # num_simulations = 50
 
@@ -28,12 +26,16 @@ def main(env_id, seed):
     # batch_size = 1024 # orig 256
 
     # max_env_step = int(5e5)
-    max_env_step = int(50e6)
+    # max_env_step = int(50e6)
+    max_env_step = int(2e6)
+
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1
+    # buffer_reanalyze_freq = 1/2
+    # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/50
-    # buffer_reanalyze_freq = 1/10000
+    # buffer_reanalyze_freq = 1/10000000000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -67,10 +69,13 @@ def main(env_id, seed):
             # TODO: debug
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
+            # only for breakout
+            # collect_max_episode_steps=int(2e4),
+            # eval_max_episode_steps=int(2e4),
         ),
         policy=dict(
             # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
             analysis_sim_norm=False,
             cal_dormant_ratio=False,
             model=dict(
@@ -81,19 +86,19 @@ def main(env_id, seed):
                 observation_shape=(12, 64, 64),
                 image_channel=3,
                 gray_scale=False,
+                frame_stack_num=4,
+
 
                 # num_res_blocks=1,
                 # num_channels=64,
                 num_res_blocks=2,
                 num_channels=128,
 
-                frame_stack_num=4,
                 action_space_size=action_space_size,
                 downsample=True,
                 self_supervised_learning_loss=True,  # default is False
                 discrete_action_encoding_type='one_hot',
                 norm_type='BN',
-                # use_sim_norm=True, # NOTE
                 use_sim_norm_kl_loss=False,
                 model_type='conv'
             ),
@@ -103,7 +108,8 @@ def main(env_id, seed):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             random_collect_episode_num=0,
-            use_augmentation=True,
+            # use_augmentation=True,
+            use_augmentation=False,
             # use_priority=False,
             use_priority=True, # TODO(pu): test
             priority_prob_alpha=1,
@@ -154,7 +160,9 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_muzero_20250731/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_fix-reanalyze_seed{seed}'
+    main_config.exp_name = f'data_muzero_20250805/{env_id[:-14]}/{env_id[:-14]}_mz_no-aug_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
+
+    # main_config.exp_name = f'data_muzero_20250805/{env_id[:-14]}/{env_id[:-14]}_mz_no-per_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
     train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
 if __name__ == "__main__":
@@ -165,5 +173,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.env = 'MsPacmanNoFrameskip-v4'
+    # args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'SeaquestNoFrameskip-v4'
+    # args.env = 'BreakoutNoFrameskip-v4'
+
     args.seed = 0
     main(args.env, args.seed)
+
+    """
+    export CUDA_VISIBLE_DEVICES=4
+    cd /fs-computility/niuyazhe/puyuan/code/LightZero
+    python /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/atari/config/atari_muzero_segment_config.py
+    """

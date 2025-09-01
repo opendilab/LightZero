@@ -1,7 +1,6 @@
 import copy
-import logging
 from collections import defaultdict
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
@@ -9,30 +8,21 @@ import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
-from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
+from lzero.entry.utils import initialize_zeros_batch
+from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
     prepare_obs_stack_for_unizero
-from lzero.policy.unizero import UniZeroPolicy
+from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
-from lzero.entry.utils import initialize_zeros_batch
 
 
-def get_action(roots_sampled_actions, i, action):
-    try:
-        # Attempt to access the action assuming it's an attribute
-        return roots_sampled_actions[i][action].value  # for ctrre
-    except (AttributeError, KeyError, TypeError):
-        # Fallback if the previous access fails
-        return np.array(roots_sampled_actions[i][action])  # for ptree
-
-
-@POLICY_REGISTRY.register('sampled_unizero')
-class SampledUniZeroPolicy(UniZeroPolicy):
+@POLICY_REGISTRY.register('unizero')
+class UniZeroPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for Sampled UniZero, official implementation for paper UniZero: Generalized and Efficient Planning
+        The policy class for UniZero, official implementation for paper UniZero: Generalized and Efficient Planning
         with Scalable LatentWorld Models. UniZero aims to enhance the planning capabilities of reinforcement learning agents
         by addressing the limitations found in MuZero-style algorithms, particularly in environments requiring the
         capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
@@ -40,7 +30,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
-        type='sampled_unizero',
+        type='unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -69,12 +59,14 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
-            norm_type='LN',
+            norm_type='BN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model_cfg=dict(
+                # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+                continuous_action_space=False,
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
                 # (int) The maximum number of blocks.
@@ -120,7 +112,9 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
-                policy_entropy_weight=5e-3,
+                policy_entropy_weight=0,
+                final_norm_option_in_encoder="SimNorm", # "SimNorm"对应"group_kl",  "LayerNorm"对应"mse", 
+                final_norm_option_in_obs_head="SimNorm",
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -129,11 +123,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
-                # (str) The type of policy loss. Options could be ['kl', 'simple'].
-                policy_loss_type='kl',
                 # (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.
                 # If False, nn.Embedding is used for absolute position encoding.
                 # For more details on RoPE, refer to the author's blog: https://spaces.ac.cn/archives/8265/
+                # TODO: If you want to use rotary_emb in an environment, you need to include the timestep as a return key from the environment.
                 rotary_emb=False,
                 # (int) The base value for calculating RoPE angles. Commonly set to 10000.
                 rope_theta=10000,
@@ -148,7 +141,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         multi_gpu=False,
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
-        sampled_algo=True,
+        sampled_algo=False,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
         gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
@@ -177,7 +170,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         eval_freq=int(2e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
-
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
@@ -204,12 +196,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam']
+        # (str) Optimizer for training policy network.
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
-        # (float) Weight uniform initialization range in the last output layer
-        init_w=3e-3,
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -221,11 +211,17 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
-        grad_clip_value=5,
-        # (int) The number of episodes in each collecting stage.
+        grad_clip_value=20,
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
-        # (int) the number of simulations in MCTS.
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
+        # # (int) the number of simulations in MCTS for renalyze.
         num_simulations=50,
+        # (int) The number of simulations in MCTS for the collect phase.
+        collect_num_simulations=25,
+        # (int) The number of simulations in MCTS for the eval phase.
+        eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -250,12 +246,14 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
-        threshold_training_steps_for_final_temperature=int(1e5),
+        threshold_training_steps_for_final_temperature=int(5e4),
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
+        # (int) The number of steps to accumulate gradients before performing an optimization step.
+        accumulation_steps=1,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -306,7 +304,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
-        return 'SampledUniZeroModel', ['lzero.model.sampled_unizero_model']
+        return 'UniZeroModel', ['lzero.model.unizero_model']
 
     def _init_learn(self) -> None:
         """
@@ -327,30 +325,28 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # TODO: check the total training steps
             self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
 
-        if self._cfg.model.continuous_action_space:
-            # Weight Init for the last output layer of gaussian policy head in prediction network.
-            init_w = self._cfg.init_w
-            self._model.world_model.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
-            self._model.world_model.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
-            try:
-                self._model.world_model.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
-                self._model.world_model.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
-            except Exception as exception:
-                logging.warning(exception)
-
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         # Ensure that the installed torch version is greater than or equal to 2.0
         assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
         self._model = torch.compile(self._model)
         self._target_model = torch.compile(self._target_model)
-        # NOTE: soft target
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='momentum',
-            update_kwargs={'theta': self._cfg.target_update_theta}
-        )
+        if self._cfg.target_model_update_option=="soft":
+            # NOTE: soft target
+            self._target_model = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='momentum',
+                update_kwargs={'theta': self._cfg.target_update_theta}
+            )
+        elif self._cfg.target_model_update_option=="hard":
+            self._target_model = model_wrap(
+                self._target_model,
+                wrapper_name='target',
+                update_type='assign',
+                update_kwargs={'freq': self._cfg.target_update_freq}
+            )
+
         self._learn_model = self._model
 
         if self._cfg.use_augmentation:
@@ -360,8 +356,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
+        # assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
+        # assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
@@ -370,6 +366,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+        
+        if self._cfg.use_wandb:
+            # TODO: add the model to wandb
+            wandb.watch(self._learn_model.representation_network, log="all")
+
+        self.accumulation_steps = self._cfg.accumulation_steps
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -388,18 +390,15 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, _ = data
-        # ==============================================================
-        # sampled related core code
-        # ==============================================================
-        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time, batch_timestep = current_batch
+        current_batch, target_batch, train_iter = data
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
             obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
         else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
@@ -408,29 +407,15 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # Prepare action batch and convert to torch tensor
-        if self._cfg.model.continuous_action_space:
-            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
-                -1)  # For continuous action space
-        else:
-            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
-                -1).long()  # For discrete action space
-        batch_timestep = torch.from_numpy(batch_timestep).to(self._cfg.device).unsqueeze(
-            -1).long() 
-        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
-                     weights]
-        [mask_batch, target_reward, target_value, target_policy,
-         weights] = to_torch_float_tensor(data_list, self._cfg.device)
-
-        # ==============================================================
-        # sampled related core code
-        # ==============================================================
-        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
-        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
-
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+            -1).long()  # For discrete action space
+        timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
+            -1).long()
+        data_list = [mask_batch, target_reward, target_value, target_policy, weights]
+        mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
+                                                                                                self._cfg.device)
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
-
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
         # Transform rewards and values to their scaled forms
         transformed_target_reward = scalar_transform(target_reward)
@@ -450,7 +435,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['timestep'] = batch_timestep.squeeze(-1)
+        batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
@@ -461,12 +446,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
-        batch_for_gpt['child_sampled_actions'] = child_sampled_actions_batch[:, :-1]
-
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean().item()
+        average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -491,51 +474,67 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
-        policy_mu = self.intermediate_losses['policy_mu']
-        policy_sigma = self.intermediate_losses['policy_sigma']
-        target_sampled_actions = self.intermediate_losses['target_sampled_actions']
-
-        if self._cfg.model.continuous_action_space:
-            policy_mu_max = policy_mu[:, 0].max().item()
-            policy_mu_min = policy_mu[:, 0].min().item()
-            policy_mu_mean = policy_mu[:, 0].mean().item()
-            policy_sigma_max = policy_sigma.max().item()
-            policy_sigma_min = policy_sigma.min().item()
-            policy_sigma_mean = policy_sigma.mean().item()
-            # take the fist dim in action space
-            target_sampled_actions_max = target_sampled_actions[:, :, 0].max().item()
-            target_sampled_actions_min = target_sampled_actions[:, :, 0].min().item()
-            target_sampled_actions_mean = target_sampled_actions[:, :, 0].mean().item()
+        latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
-        # Core learn model update step
-        self._optimizer_world_model.zero_grad()
+        # Core learning model update step
+        # Reset gradients at the start of each accumulation cycle
+        if (train_iter % self.accumulation_steps) == 0:
+            self._optimizer_world_model.zero_grad()
+
+        # Scale the loss by the number of accumulation steps
+        weighted_total_loss = weighted_total_loss / self.accumulation_steps
+
+        if self._cfg.gradient_scale:
+            # ==============================================================
+            # START OF THE FIX: Add gradient scaling just like in MuZero
+            # ==============================================================
+            # This is the key to stabilizing the latent norm. It averages the gradients
+            # accumulated over the unroll steps, preventing the exploding gradient problem
+            # in the recurrent world model (Transformer).
+            gradient_scale = 1.0 / self._cfg.num_unroll_steps
+            weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+            # ==============================================================
+            # END OF THE FIX
+            # ==============================================================
+
+
         weighted_total_loss.backward()
 
-        #  ========== for debugging ==========
-        # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
-        #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
-        #     if param.requires_grad:
-        #         print(name, param.grad.norm())
+        # Check if the current iteration completes an accumulation cycle
+        if (train_iter + 1) % self.accumulation_steps == 0:
+            # Analyze gradient norms if simulation normalization analysis is enabled
+            if self._cfg.analysis_sim_norm:
+                # Clear previous analysis results to prevent memory overflow
+                del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
+                self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+                self._target_model.encoder_hook.clear_data()
+            
+            # Clip gradients to prevent exploding gradients
+            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
+                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            )
 
-        if self._cfg.analysis_sim_norm:
-            del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
-            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-            self._target_model.encoder_hook.clear_data()
+            # Synchronize gradients across multiple GPUs if enabled
+            if self._cfg.multi_gpu:
+                self.sync_gradients(self._learn_model)
 
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
-                                                                        self._cfg.grad_clip_value)
+            # Update model parameters
+            self._optimizer_world_model.step()
 
-        self._optimizer_world_model.step()
-        
+            # Clear CUDA cache if using gradient accumulation
+            if self.accumulation_steps > 1:
+                torch.cuda.empty_cache()
+        else:
+            total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+        # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
-        # Core target model update step
+        # Update the target model with the current model's parameters
         self._target_model.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():
@@ -570,47 +569,31 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             'collect_epsilon': self._collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
-            'obs_loss': obs_loss,
-            'latent_recon_loss': latent_recon_loss,
-            'perceptual_loss': perceptual_loss,
-            'policy_loss': policy_loss,
-            'orig_policy_loss': orig_policy_loss,
-            'policy_entropy': policy_entropy,
-            'target_policy_entropy': average_target_policy_entropy,
-            'reward_loss': reward_loss,
-            'value_loss': value_loss,
-            'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            'obs_loss': obs_loss.item(),
+            'latent_recon_loss': latent_recon_loss.item(),
+            'perceptual_loss': perceptual_loss.item(),
+            'policy_loss': policy_loss.item(),
+            'orig_policy_loss': orig_policy_loss.item(),
+            'policy_entropy': policy_entropy.item(),
+            'target_policy_entropy': average_target_policy_entropy.item(),
+            'reward_loss': reward_loss.item(),
+            'value_loss': value_loss.item(),
+            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
             'target_reward': target_reward.mean().item(),
             'target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model,
-            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
+            'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
+            'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
+            'analysis/latent_action_l2_norms': latent_action_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
-
-        if self._cfg.model.continuous_action_space:
-            return_log_dict.update({
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_mu_max': policy_mu_max,
-                'policy_mu_min': policy_mu_min,
-                'policy_mu_mean': policy_mu_mean,
-                'policy_sigma_max': policy_sigma_max,
-                'policy_sigma_min': policy_sigma_min,
-                'policy_sigma_mean': policy_sigma_mean,
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions_max,
-                'target_sampled_actions_min': target_sampled_actions_min,
-                'target_sampled_actions_mean': target_sampled_actions_mean
-            })
-
+        
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
             wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
@@ -632,32 +615,33 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
-
+        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_collect_cfg = copy.deepcopy(self._cfg)
+        mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros(
-                [self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(
-                self._cfg.device)
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
     # @profile
     def _forward_collect(
             self,
             data: torch.Tensor,
-            action_mask: list = None,
+            action_mask: List = None,
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.array = None,
+            ready_env_id: np.ndarray = None,
             timestep: List = [0]
     ) -> Dict:
         """
@@ -670,7 +654,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - timestep (:obj:`list`): The step index of the env in one episode
+            - timestep (:obj:`list`): The step index of the env in one episode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -702,70 +686,57 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            if self._cfg.model.continuous_action_space is True:
-                # when the action space of the environment is continuous, action_mask[:] is None.
-                # NOTE: in continuous action space env: we set all legal_actions as -1
-                legal_actions = [
-                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
-                ]
-            else:
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
-                ]
-
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                     ).astype(np.float32).tolist() for j in range(active_collect_env_num)
             ]
-
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                roots = MCTSCtree.roots(
-                    active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
-                )
+                roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
 
+            next_latent_state_with_env = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
+            
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            # ==============================================================
-            # sampled related core code
-            # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.mcts_ctree:
-                    # In ctree, the method roots.get_sampled_actions() returns a list object.
-                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
+                
+                if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    # eps greedy collect
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                    )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    if np.random.rand() < self._collect_epsilon:
+                        action = np.random.choice(legal_actions[i])
                 else:
-                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
-                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                    # normal collect
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                    )
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                # the index within the legal action set, rather than the index in the entire action set.
-                action, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                )
-
-                if self._cfg.mcts_ctree:
-                    # In ctree, the method roots.get_sampled_actions() returns a list object.
-                    action = np.array(roots_sampled_actions[i][action])
+                next_latent_state = next_latent_state_with_env[i][action]
+                
+                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._collect_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
                 else:
-                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
-                    action = roots_sampled_actions[i][action].value
-
-                if not self._cfg.model.continuous_action_space:
-                    action = int(action.item())
+                    predicted_next = None
 
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
@@ -777,12 +748,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
-                    'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
+                    'timestep': timestep[i],
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 
@@ -793,7 +764,9 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             if active_collect_env_num < self.collector_env_num:
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
-                self._reset_collect(reset_init_data=True) 
+                self._reset_collect(reset_init_data=True)
+                if getattr(self._cfg, 'sample_type', '') == 'episode':
+                    print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
         return output
 
@@ -803,23 +776,26 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+
+        # 为 eval MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_eval_cfg = copy.deepcopy(self._cfg)
+        mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTSPtree(mcts_eval_cfg)
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros(
-                [self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(
-                self._cfg.device)
+            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
-                      ready_env_id: np.array = None, timestep: int = 0) -> Dict:
+                      ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -828,15 +804,18 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
-            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - ready_env_id (:obj:`list`): The id of the env that is ready to eval.
+            - timestep (:obj:`list`): The step index of the env in one episode.
         Shape:
             - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of eval_env, C is the number of channels, \
                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
-            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+                - For lunarlander, :math:`(N, O)`, where N is the number of eval_env, O is the observation space size.
+            - action_mask: :math:`(N, action_space_size)`, where N is the number of eval_env.
+            - to_play: :math:`(N, 1)`, where N is the number of eval_env.
             - ready_env_id: None
+            - timestep: :math:`(N, 1)`, where N is the number of eval_env.
+
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -850,74 +829,60 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            if self._cfg.model.continuous_action_space is True:
-                # when the action space of the environment is continuous, action_mask[:] is None.
-                # NOTE: in continuous action space env: we set all legal_actions as -1
-                legal_actions = [
-                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_eval_env_num)
-                ]
-            else:
-                legal_actions = [
-                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
-                ]
-
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                roots = MCTSCtree.roots(
-                    active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
-                )
+                roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
+            next_latent_state_with_env = self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-            # ==============================================================
-            # sampled related core code
-            # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
-            batch_action = []
 
+            batch_action = []
+            
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                root_sampled_actions = np.array([
-                    getattr(action, 'value', action) for action in roots_sampled_actions[i]
-                ])
+                # print("roots_visit_count_distributions:", distributions, "root_value:", value)
 
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
-                # Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
-                action, visit_count_distribution_entropy = select_action(
+                #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
+                # sampling during the evaluation phase.
+                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                action = get_action(roots_sampled_actions, i, action)
+                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
+                # entire action set.
+                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                if not self._cfg.model.continuous_action_space:
-                    action = int(action.item())
+                # Predict the next latent state based on the selected action and policy
+                next_latent_state = next_latent_state_with_env[i][action]
+
+                if self._cfg.model.world_model_cfg.obs_type == 'text':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._eval_model.tokenizer.decode_to_plain_text_for_decoder(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
 
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
-                    'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
+                    'timestep': timestep[i],
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 
@@ -926,6 +891,94 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
         return output
 
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+        """
+        Overview:
+            This method resets the collection process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True, the initial data
+            will be reset.
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+        """
+        if reset_init_data:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.collector_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the collect model's world model
+            world_model = self._collect_model.world_model
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('collector: collect_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+
+
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+        """
+        Overview:
+            This method resets the evaluation process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True,
+            the initial data will be reset.
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+        """
+        if reset_init_data:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.evaluator_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the eval model's world model
+            world_model = self._eval_model.world_model
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('evaluator: eval_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """
@@ -933,121 +986,91 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        if self._cfg.model.continuous_action_space:
-            return [
-                'analysis/dormant_ratio_encoder',
-                'analysis/dormant_ratio_world_model',
-                'analysis/latent_state_l2_norms',
-                'analysis/l2_norm_before',
-                'analysis/l2_norm_after',
-                'analysis/grad_norm_before',
-                'analysis/grad_norm_after',
+        return [
+            'analysis/dormant_ratio_encoder',
+            'analysis/dormant_ratio_world_model',
+            'analysis/latent_state_l2_norms',
+            'analysis/latent_action_l2_norms',
 
-                'analysis/first_step_loss_value',
-                'analysis/first_step_loss_policy',
-                'analysis/first_step_loss_rewards',
-                'analysis/first_step_loss_obs',
+            'analysis/l2_norm_before',
+            'analysis/l2_norm_after',
+            'analysis/grad_norm_before',
+            'analysis/grad_norm_after',
 
-                'analysis/middle_step_loss_value',
-                'analysis/middle_step_loss_policy',
-                'analysis/middle_step_loss_rewards',
-                'analysis/middle_step_loss_obs',
+            'analysis/first_step_loss_value',
+            'analysis/first_step_loss_policy',
+            'analysis/first_step_loss_rewards',
+            'analysis/first_step_loss_obs',
 
-                'analysis/last_step_loss_value',
-                'analysis/last_step_loss_policy',
-                'analysis/last_step_loss_rewards',
-                'analysis/last_step_loss_obs',
+            'analysis/middle_step_loss_value',
+            'analysis/middle_step_loss_policy',
+            'analysis/middle_step_loss_rewards',
+            'analysis/middle_step_loss_obs',
 
-                'Current_GPU',
-                'Max_GPU',
-                'collect_epsilon',
-                'collect_mcts_temperature',
-                'cur_lr_world_model',
-                'cur_lr_tokenizer',
+            'analysis/last_step_loss_value',
+            'analysis/last_step_loss_policy',
+            'analysis/last_step_loss_rewards',
+            'analysis/last_step_loss_obs',
 
-                'weighted_total_loss',
-                'obs_loss',
-                'policy_loss',
-                'orig_policy_loss',
-                'policy_entropy',
-                'latent_recon_loss',
-                'target_policy_entropy',
-                'reward_loss',
-                'value_loss',
-                'consistency_loss',
-                'value_priority',
-                'target_reward',
-                'target_value',
-                'total_grad_norm_before_clip_wm',
-                # tokenizer
-                'commitment_loss',
-                'reconstruction_loss',
-                'perceptual_loss',
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_entropy',
-                'target_policy_entropy',
-                'policy_mu_max',
-                'policy_mu_min',
-                'policy_mu_mean',
-                'policy_sigma_max',
-                'policy_sigma_min',
-                'policy_sigma_mean',
-                # take the fist dim in action space
-                'target_sampled_actions_max',
-                'target_sampled_actions_min',
-                'target_sampled_actions_mean',
-                'total_grad_norm_before_clip',
-            ]
-        else:
-            return [
-                'analysis/dormant_ratio_encoder',
-                'analysis/dormant_ratio_world_model',
-                'analysis/latent_state_l2_norms',
-                'analysis/l2_norm_before',
-                'analysis/l2_norm_after',
-                'analysis/grad_norm_before',
-                'analysis/grad_norm_after',
+            'Current_GPU',
+            'Max_GPU',
+            'collect_epsilon',
+            'collect_mcts_temperature',
+            'cur_lr_world_model',
+            'cur_lr_tokenizer',
 
-                'analysis/first_step_loss_value',
-                'analysis/first_step_loss_policy',
-                'analysis/first_step_loss_rewards',
-                'analysis/first_step_loss_obs',
+            'weighted_total_loss',
+            'obs_loss',
+            'policy_loss',
+            'orig_policy_loss',
+            'policy_entropy',
+            'latent_recon_loss',
+            'target_policy_entropy',
+            'reward_loss',
+            'value_loss',
+            'consistency_loss',
+            'value_priority',
+            'target_reward',
+            'target_value',
+            'total_grad_norm_before_clip_wm',
+            # tokenizer
+            'commitment_loss',
+            'reconstruction_loss',
+            'perceptual_loss',
+        ]
 
-                'analysis/middle_step_loss_value',
-                'analysis/middle_step_loss_policy',
-                'analysis/middle_step_loss_rewards',
-                'analysis/middle_step_loss_obs',
+    def _state_dict_learn(self) -> Dict[str, Any]:
+        """
+        Overview:
+            Return the state_dict of learn mode, usually including model, target_model and optimizer.
+        Returns:
+            - state_dict (:obj:`Dict[str, Any]`): The dict of current policy learn state, for saving and restoring.
+        """
+        return {
+            'model': self._learn_model.state_dict(),
+            'target_model': self._target_model.state_dict(),
+            'optimizer_world_model': self._optimizer_world_model.state_dict(),
+        }
 
-                'analysis/last_step_loss_value',
-                'analysis/last_step_loss_policy',
-                'analysis/last_step_loss_rewards',
-                'analysis/last_step_loss_obs',
+    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+        """
+        Overview:
+            Load the state_dict variable into policy learn mode.
+        Arguments:
+            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+        """
+        self._learn_model.load_state_dict(state_dict['model'])
+        self._target_model.load_state_dict(state_dict['target_model'])
+        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
-                'Current_GPU',
-                'Max_GPU',
-                'collect_epsilon',
-                'collect_mcts_temperature',
-                'cur_lr_world_model',
-                'cur_lr_tokenizer',
-
-                'weighted_total_loss',
-                'obs_loss',
-                'policy_loss',
-                'orig_policy_loss',
-                'policy_entropy',
-                'latent_recon_loss',
-                'target_policy_entropy',
-                'reward_loss',
-                'value_loss',
-                'consistency_loss',
-                'value_priority',
-                'target_reward',
-                'target_value',
-                'total_grad_norm_before_clip_wm',
-                # tokenizer
-                'commitment_loss',
-                'reconstruction_loss',
-                'perceptual_loss',
-            ]
+    def recompute_pos_emb_diff_and_clear_cache(self) -> None:
+        """
+        Overview:
+            Clear the caches and precompute positional embedding matrices in the model.
+        """
+        for model in [self._collect_model, self._target_model]:
+            if not self._cfg.model.world_model_cfg.rotary_emb:
+                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+                model.world_model.precompute_pos_emb_diff_kv()
+            model.world_model.clear_caches()
+        torch.cuda.empty_cache()

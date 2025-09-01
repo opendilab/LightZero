@@ -215,8 +215,12 @@ def init_weights(module, norm_type='BN'):
             module.bias.data.zero_()
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
         print(f"Init {module} using zero bias, 1 weight")
-        module.bias.data.zero_()
-        module.weight.data.fill_(1.0)
+        try:
+            module.weight.data.fill_(1.0)
+            module.bias.data.zero_()
+        except Exception as e:
+            print(e)
+
     elif isinstance(module, nn.BatchNorm2d):
         print(f"Init nn.BatchNorm2d using zero bias, 1 weight")
         module.weight.data.fill_(1.0)
@@ -253,17 +257,33 @@ class LossWithIntermediateLosses:
         if not kwargs:
             raise ValueError("At least one loss must be provided")
 
+
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
 
         # NOTE: Define the weights for each loss type
         if not continuous_action_space:
-            # like EZV2, for atari and memory
+            # orig, for atari and memory
             self.obs_loss_weight = 10
             self.value_loss_weight = 0.5
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
             self.ends_loss_weight = 0.
+
+            # muzero loss weight
+            # self.obs_loss_weight = 2
+            # self.value_loss_weight = 0.25
+            # self.reward_loss_weight = 1
+            # self.policy_loss_weight = 1
+            # self.ends_loss_weight = 0.
+
+            # EZV2, for atari and memory
+            # self.obs_loss_weight = 5
+            # self.value_loss_weight = 0.5
+            # self.reward_loss_weight = 1.
+            # self.policy_loss_weight = 1.
+            # self.ends_loss_weight = 0.
+
         else:
             # like TD-MPC2 for DMC
             self.obs_loss_weight = 10
@@ -271,6 +291,19 @@ class LossWithIntermediateLosses:
             self.reward_loss_weight = 0.1
             self.policy_loss_weight = 0.1
             self.ends_loss_weight = 0.
+
+            # TD-MPC2 for DMC, only for reference
+            # self.obs_loss_weight = 20
+            # self.value_loss_weight = 0.1
+            # self.reward_loss_weight = 0.1
+            # self.ends_loss_weight = 0.
+        
+        # TODO(pu)
+        # self.latent_norm_loss_weight = 0.1
+        # self.latent_norm_loss_weight = 0.01
+        self.latent_norm_loss_weight = 0.001
+
+
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
@@ -292,6 +325,8 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.latent_recon_loss_weight * v
             elif k == 'perceptual_loss':
                 self.loss_total += self.perceptual_loss_weight * v
+            elif k == 'latent_norm_loss':
+                self.loss_total += self.latent_norm_loss_weight * v
 
         self.intermediate_losses = {
             k: v if isinstance(v, dict) or isinstance(v, torch.Tensor) else (v if isinstance(v, float) else v.item())

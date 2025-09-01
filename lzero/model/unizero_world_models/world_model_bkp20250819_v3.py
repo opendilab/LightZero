@@ -15,41 +15,9 @@ from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
-from collections import OrderedDict 
+
 logging.getLogger().setLevel(logging.DEBUG)
 
-from collections import OrderedDict, defaultdict
-
-            
-class LRUCache(OrderedDict):
-    """
-    一个固定容量的、遵循LRU（最近最少使用）原则的有序字典。
-    非常适合用于管理与环形缓冲区同步的缓存映射。
-    """
-    def __init__(self, capacity: int=2):
-        """
-        初始化LRU缓存。
-        参数:
-            - capacity (int): 缓存的最大容量。
-        """
-        self.capacity = capacity
-        super().__init__()
-
-    def __setitem__(self, key: Any, value: Any) -> None:
-        """
-        重写设置条目的方法，以实现LRU逻辑。
-        """
-        # 如果键已存在，先删除旧条目，以确保后续添加时它会成为最新项。
-        if key in self:
-            self.move_to_end(key)
-        
-        # 调用父类的方法来实际设置键值对。
-        super().__setitem__(key, value)
-
-        # 检查是否超出容量。如果超出，则删除最旧的条目。
-        # popitem(last=False) 会移除并返回字典中第一个（最旧的）条目。
-        if len(self) > self.capacity:
-            self.popitem(last=False)
 
 class WorldModel(nn.Module):
     """
@@ -93,9 +61,9 @@ class WorldModel(nn.Module):
 
         # Position embedding
         if not self.config.rotary_emb:
-            # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             # TODO(pu)
-            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
+            # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
             self.precompute_pos_emb_diff_kv()
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
@@ -109,9 +77,9 @@ class WorldModel(nn.Module):
                 SimNorm(simnorm_dim=self.group_size))
         else:
             # for discrete action space
-            # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             # TODO(pu)
-            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
+            # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
 
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
@@ -153,26 +121,9 @@ class WorldModel(nn.Module):
 
         # self.apply(init_weights)
 
+
         self._initialize_last_layer()
 
-        # for self.kv_cache_init_infer
-        # In contrast, init_infer only needs to retain the results of the most recent step.
-        # self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        # 先设置为game_segment_length，以保持self.shared_pool_init_infer都是有效的kv
-         # TODO: 非常重要，应该改为和segment_length一样
-        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-
-        # self.shared_pool_size_init = int(20)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        # self.shared_pool_size_init = int(200)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-       
-        self.num_simulations = getattr(self.config, 'num_simulations', 50)
-
-        # TODO: recur kv pool是否应该分成不同的环境有不同的pool呢
-        self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
-
-        # self.shared_pool_size_init = int(50)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        self.stale_pointer_detections = 0
-        self.stale_pointer_detections_recur = 0
         # Cache structures
         self._initialize_cache_structures()
 
@@ -191,19 +142,15 @@ class WorldModel(nn.Module):
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
         # If needed, recurrent_infer should store the results of the one MCTS search.
-
-        # self.shared_pool_size_recur = int(2)
-
-        self.shared_pool_recur_infer = [None] * self.shared_pool_size_recur
+        self.num_simulations = getattr(self.config, 'num_simulations', 50) # TODO
+        self.shared_pool_size = int(self.num_simulations*self.env_num)
+        self.shared_pool_recur_infer = [None] * self.shared_pool_size
         self.shared_pool_index = 0
 
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
-        # self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-        # TODO
-        # self.shared_pool_size_init = int(50)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
-
-        # TODO: 分析self.env_num>1的情况，不同env之间的相同latent-state hash对应的kv_cache可以公用吗
+        # self.shared_pool_size_init = int(2*self.env_num)
+        self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -214,53 +161,6 @@ class WorldModel(nn.Module):
 
         self.reanalyze_phase = False
 
-    def _debug_check_for_stale_pointers(self, env_id: int, current_key: Any, index_to_be_written: int):
-        """
-        调试函数：检查即将被写入的索引是否存在过时的指针。
-        """
-        # 获取对应环境的指针映射表
-        cache_map = self.past_kv_cache_init_infer_envs[env_id]
-        
-        # 遍历映射表中的所有条目 (旧哈希 -> 旧索引)
-        for old_key, old_index in cache_map.items():
-            # 检查条件：
-            # 1. 旧索引 == 即将被覆盖的索引
-            # 2. 旧哈希 != 当前要写入的新哈希
-            if old_index == index_to_be_written and old_key != current_key:
-                # 如果条件满足，说明我们找到了一个过时指针
-                self.stale_pointer_detections += 1
-                
-                # 打印详细的调试信息
-                print("="*60)
-                print(f"!!! INIT BUG CONDITION DETECTED (Detection #{self.stale_pointer_detections}) !!!")
-                print(f"    Environment ID: {env_id}")
-                print(f"    Pool Index to be overwritten: {index_to_be_written}")
-                print(f"    New state hash being written: '{current_key}'")
-                print(f"    Stale pointer found in cache_map: '{old_key}' also points to index {old_index}.")
-                print(f"    This means the data for '{old_key}' is about to be lost, but its pointer remains.")
-                print(f"    Current cache_map size: {len(cache_map)}")
-                print("="*60)
-                
-                # 找到一个就足够了，可以提前退出循环以提高效率
-                return
-
-    def _debug_check_for_stale_pointers_recur(self, current_key: Any, index_to_be_written: int):
-        """
-        调试函数：检查 recurrent cache 中是否存在过时的指针。
-        """
-        cache_map = self.past_kv_cache_recurrent_infer
-        
-        for old_key, old_index in cache_map.items():
-            if old_index == index_to_be_written and old_key != current_key:
-                self.stale_pointer_detections_recur += 1
-                print("="*60)
-                print(f"!!! RECURRENT BUG DETECTED (Detection #{self.stale_pointer_detections_recur}) !!!")
-                print(f"    Pool Index to be overwritten: {index_to_be_written}")
-                print(f"    New state hash being written: '{current_key}'")
-                print(f"    Stale pointer found: '{old_key}' also points to index {old_index}.")
-                print("="*60)
-                return
-
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
         Return the corresponding normalization module based on the specified normalization option.
@@ -270,6 +170,7 @@ class WorldModel(nn.Module):
         elif norm_option == 'SimNorm':
             return SimNorm(simnorm_dim=self.config.group_size)
         elif norm_option == 'L2Norm':
+            # L2Norm 是一个函数式操作，不需要在 init 中定义模块
             return L2Norm(eps=1e-6)
         else:
             raise ValueError(f"Unsupported final_norm_option_in_obs_head: {norm_option}")
@@ -375,7 +276,7 @@ class WorldModel(nn.Module):
             dst_layer._v_cache._size = src_layer._v_cache._size
         
         index = self.shared_pool_index
-        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size_recur
+        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
         
         return index
 
@@ -465,61 +366,8 @@ class WorldModel(nn.Module):
     def _initialize_cache_structures(self) -> None:
         """Initialize cache structures for past keys and values."""
         from collections import defaultdict
-        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
-        # 使用 LRUCache 替换 defaultdict，并同步容量
-
-        # ========================= 核心修复与注释 (Recurrent Infer) =========================
-        # 问题: recurrent_infer 缓存同样存在 LRUCache 与环形缓冲区逻辑不匹配的问题。
-        #
-        # 修复方案:
-        # 1. 将 past_kv_cache_recurrent_infer 从 LRUCache 改为标准字典。
-        # 2. 引入辅助列表 pool_idx_to_key_map_recur_infer 来维护反向映射。
-        #    这确保了在覆写 recurrent 数据池中的条目时，可以同步删除旧的指针。
-        
-        self.past_kv_cache_recurrent_infer = {}
-        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
-        # ========================== 修复结束 ==========================
-
-        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
-
-        # TODO(pu): 非常重要  self.past_kv_cache_init_infer_envs应该改成和(shared_pool_size_init)完全一致，
-        # 目前是将shared_pool_size_init设置为segment_length以在一次collect后 清空self.past_kv_cache_init_infer_envs
-        # 来避免self.past_kv_cache_init_infer_envs里面存有kv索引过期的问题
-
-        # ========================= 核心修复与注释 =========================
-        # 原来的实现:
-        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
-        #
-        # 问题: defaultdict 会无限增长，并且不会自动删除与环形缓冲区中
-        #       被覆盖数据相关的旧“指针”，导致Episode内部的缓存污染。
-        #
-        # 修复方案:
-        # 使用我们定义的LRUCache，其容量与环形缓冲区的大小(shared_pool_size_init)完全一致。
-        #
-        # 效果:
-        # 1. 自动淘汰: 当添加第 N+1 个新条目时，LRUCache会自动删除最旧的那个条目。
-        # 2. 生命周期同步: 这确保了“指针字典”中的映射关系，与“数据池”中实际存储的数据
-        #    完全同步。当数据池的索引0被新数据覆盖时，指向旧索引0的指针也已被自动清除。
-        # 3. 杜绝污染: 从根本上解决了Episode内部的状态哈希碰撞问题。
-        
-        # self.past_kv_cache_init_infer_envs = [LRUCache(self.shared_pool_size_init-1) for _ in range(self.env_num)]
-        # ========================== 修复结束 ==========================
-
-        # ========================= 核心修复与注释 =========================
-        # 问题: LRUCache 的淘汰逻辑（基于访问顺序）与环形缓冲区的覆写逻辑（基于写入顺序）不匹配，导致指针过时。
-        #
-        # 修复方案:
-        # 1. 使用一个标准的字典 `past_kv_cache_init_infer_envs` 来存储 {state_hash -> pool_index}。
-        # 2. 引入一个辅助列表 `pool_idx_to_key_map_init_envs` 来维护反向映射 {pool_index -> state_hash}。
-        #
-        # 效果:
-        # 在向环形缓冲区的某个索引写入新数据之前，我们可以通过辅助列表立即找到即将被覆盖的旧 state_hash，
-        # 并从主字典中精确地删除这个过时的条目。这确保了字典和数据池的完全同步。
-        
-        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
-        # 辅助数据结构，用于反向查找：pool_index -> key
-        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
-        # ========================== 修复结束 ==========================
+        self.past_kv_cache_recurrent_infer = defaultdict(dict)
+        self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -533,12 +381,10 @@ class WorldModel(nn.Module):
 
     def _initialize_statistics(self) -> None:
         """Initialize counters for hit count and query count statistics."""
-        self.recur_hit_count = 0
-        self.recur_total_query_count = 0
+        self.hit_count = 0
+        self.total_query_count = 0
         self.length_largethan_maxminus5_context_cnt = 0
         self.length_largethan_maxminus7_context_cnt = 0
-        self.length_largethan_contextminus3_cnt = 0
-
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
 
@@ -1009,11 +855,6 @@ class WorldModel(nn.Module):
                         if matched_value is not None:
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
-                            # if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 50 == 0:
-                            #     self.root_hit_freq = self.root_hit_cnt / self.root_total_query_cnt
-                            #     print('root total_query_count:', self.root_total_query_cnt)
-                            #     print('root root_hit_freq:', self.root_hit_freq)
-
                             # NOTE: deepcopy is needed because forward modifies matched_value in place
                             self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                             self.keys_values_wm_size_list.append(matched_value.size)
@@ -1105,8 +946,6 @@ class WorldModel(nn.Module):
         """
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, start_pos)
-        # TODO(pu): 由于预测误差的存在，不clear，也很可能不能检索到上次mcts 树搜索中的节点
-        # 所有collect env公用应该也是合理的，不同环境很难遇到完全一致的预测的latent state？
         self.past_kv_cache_recurrent_infer.clear()
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
@@ -1133,32 +972,35 @@ class WorldModel(nn.Module):
         self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index, start_pos)
 
         latent_state_list = []
+
+        # if not self.continuous_action_space:
+        #     token = action.reshape(-1, 1)
+        # else:
+        #     token = action.reshape(-1, self.action_space_size)
+
+        # TODO(pu, 20250819):  only for toy env ===================
         if not self.continuous_action_space:
-            token = action.reshape(-1, 1)
+            # action 是 numpy 数组, nn.Embedding 期望 LongTensor
+            token = torch.from_numpy(action.reshape(-1, 1)).long().to(self.device)
         else:
-            token = action.reshape(-1, self.action_space_size)
+            # action 是 numpy 数组, nn.Linear 期望 FloatTensor
+            token = torch.from_numpy(action.reshape(-1, self.action_space_size)).float().to(self.device)
 
         # ======= Print statistics for debugging =============
-        min_size = min(self.keys_values_wm_size_list)
-        # # if min_size >= self.config.max_tokens - 5:
-        # #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
-        # # if min_size >= self.config.max_tokens - 7:
-        # #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
-        # if min_size >= self.config.context_length - 3:
-        #     self.length_largethan_contextminus3_cnt += len(self.keys_values_wm_size_list)
-        # # if self.recur_total_query_count > 0 and self.recur_total_query_count % 10000 == 0:
-        # if self.recur_total_query_count > 0 and self.recur_total_query_count % 1000 == 0:
-        #     self.hit_freq = self.recur_hit_count / self.recur_total_query_count
-        #     print('recur total_query_count:', self.recur_total_query_count)
-        #     # length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.recur_total_query_count
-        #     # print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-        #     # print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
-        #     # length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.recur_total_query_count
-        #     # print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-        #     # print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
-        #     length_largethan_contextminus3_cnt_ratio = self.length_largethan_contextminus3_cnt / self.recur_total_query_count
-        #     print('recurrent length_largethan_contextminus3_cnt_ratio:', length_largethan_contextminus3_cnt_ratio)
-        #     print('recurrent length_largethan_contextminus3_cnt:', self.length_largethan_contextminus3_cnt)
+        # min_size = min(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 5:
+        #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 7:
+        #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
+        # if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
+        #     self.hit_freq = self.hit_count / self.total_query_count
+        #     print('total_query_count:', self.total_query_count)
+        #     length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+        #     print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+        #     length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+        #     print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # Trim and pad kv_cache: modify self.keys_values_wm in-place
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
@@ -1203,7 +1045,7 @@ class WorldModel(nn.Module):
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
-    # TODO: precompute_pos_emb_diff_kv 与 update_cache_context 的硬编码不匹配,collect_env_num=1应该没有问题
+
     def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
         """
         Adjusts the key-value cache for each environment to ensure they all have the same size.
@@ -1256,205 +1098,192 @@ class WorldModel(nn.Module):
 
         return self.keys_values_wm_size_list
 
+    # world_model.py -> 替换整个 update_cache_context 函数
+    # TODO(pu, 20250819)
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             search_depth=[], valid_context_lengths=None):
+                         search_depth=[], valid_context_lengths=None):
         """
         Update the cache context with the given latent state.
-
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): The latent state tensor.
-            - is_init_infer (:obj:`bool`): Flag to indicate if this is the initial inference.
-            - simulation_index (:obj:`int`): Index of the simulation.
-            - search_depth (:obj:`list`): List of depth indices in the search tree.
-            - valid_context_lengths (:obj:`list`): List of valid context lengths.
+        This is the FINAL corrected version for a true sliding window.
         """
         if self.context_length <= 2:
-            # No context to update if the context length is less than or equal to 2.
             return
+            
+        # 定义目标窗口大小，即我们希望缓存滑动的最终长度
+        # 我们保留 context_length - 1 的长度，为下一步的单个token预测留出空间
+        # TARGET_WINDOW_SIZE = self.context_length - 1
+        TARGET_WINDOW_SIZE = self.context_length - 3
+
         for i in range(latent_state.size(0)):
-            # ============ Iterate over each environment ============
-            cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor
-            context_length = self.context_length
+            cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())
 
+            # 步骤 1: 从批量缓存中提取单个环境的缓存 (与上次修复相同)
             if not is_init_infer:
-
-
-                # ============ Internal Node ============
-                # Retrieve KV from global KV cache self.keys_values_wm to single environment KV cache self.keys_values_wm_single_env, ensuring correct positional encoding
                 current_max_context_length = max(self.keys_values_wm_size_list_current)
                 trim_size = current_max_context_length - self.keys_values_wm_size_list_current[i]
                 for layer in range(self.num_layers):
-                    # ============ Apply trimming and padding to each layer of kv_cache ============
-                    # cache shape [batch_size, num_heads, sequence_length, features]
                     k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
                     v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
-
                     if trim_size > 0:
-                        # Trim invalid leading zeros as per effective length
-                        # Remove the first trim_size zero kv items
                         k_cache_trimmed = k_cache_current[:, trim_size:, :]
                         v_cache_trimmed = v_cache_current[:, trim_size:, :]
-                        # If effective length < current_max_context_length, pad the end of cache with 'trim_size' zeros
-                        k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, trim_size), "constant",
-                                               0)  # Pad with 'trim_size' zeros at end of cache
+                        k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)
                         v_cache_padded = F.pad(v_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)
                     else:
                         k_cache_padded = k_cache_current
                         v_cache_padded = v_cache_current
-
-                    # Update cache of self.keys_values_wm_single_env
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
-                    # Update size of self.keys_values_wm_single_env
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = \
-                        self.keys_values_wm_size_list_current[i]
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = \
-                        self.keys_values_wm_size_list_current[i]
-
-                    # ============ NOTE: Very Important ============
-                    if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length - 1:
-                        # Keep only the last self.context_length-3 timesteps of context
-                        # For memory environments, training is for H steps, recurrent_inference might exceed H steps
-                        # Assuming cache dimension is [batch_size, num_heads, sequence_length, features]
-                        k_cache_current = self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache
-                        v_cache_current = self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache
-
-                        # Remove the first 2 steps, keep the last self.context_length-3 steps
-                        k_cache_trimmed = k_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
-                        v_cache_trimmed = v_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
-
-                        if not self.config.rotary_emb:
-                            # Index pre-computed positional encoding differences
-                            pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
-                            pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
-                            # ============ NOTE: Very Important ============
-                            # Apply positional encoding correction to k and v
-                            k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                            v_cache_trimmed += pos_emb_diff_v.squeeze(0)
-
-                        # Pad the last 3 steps along the third dimension with zeros
-                        # F.pad parameters (0, 0, 0, 3) specify padding amounts for each dimension: (left, right, top, bottom). For 3D tensor, they correspond to (dim2 left, dim2 right, dim1 left, dim1 right).
-                        padding_size = (0, 0, 0, 3)
-                        k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
-                        v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
-                        # Update single environment cache
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
-
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length - 3
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length - 3
-
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm_size_list_current[i]
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm_size_list_current[i]
             else:
-                # ============ Root Node ============
-                # Retrieve KV from global KV cache self.keys_values_wm to single environment KV cache self.keys_values_wm_single_env, ensuring correct positional encoding
-
                 for layer in range(self.num_layers):
-                    # ============ Apply trimming and padding to each layer of kv_cache ============
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
 
-                    if self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = \
-                        self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(
-                            0)  # Shape torch.Size([2, 100, 512])
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = \
-                        self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = \
-                        self.keys_values_wm._keys_values[layer]._k_cache._size
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = \
-                        self.keys_values_wm._keys_values[layer]._v_cache._size
-                    else:
-                        # Assuming cache dimension is [batch_size, num_heads, sequence_length, features]
-                        k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
-                        v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
+            # 步骤 2: 应用真正的滑动窗口截断逻辑
+            for layer in range(self.num_layers):
+                current_size = self.keys_values_wm_single_env._keys_values[layer]._k_cache._size
+                
+                # 只有当当前大小超过我们的目标窗口大小时，才进行截断
+                if current_size > TARGET_WINDOW_SIZE:
+                    k_cache_current = self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache
+                    v_cache_current = self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache
 
-                        # Remove the first 2 steps, keep the last self.context_length-3 steps
-                        k_cache_trimmed = k_cache_current[:, 2:context_length - 1, :]
-                        v_cache_trimmed = v_cache_current[:, 2:context_length - 1, :]
+                    # 计算需要丢弃的旧token数量
+                    tokens_to_discard = current_size - TARGET_WINDOW_SIZE
+                    
+                    # 从头部丢弃旧token，保留最新的部分
+                    k_cache_trimmed = k_cache_current[:, :, tokens_to_discard:current_size, :]
+                    v_cache_trimmed = v_cache_current[:, :, tokens_to_discard:current_size, :]
+                    
+                    new_size = k_cache_trimmed.shape[2] # new_size 现在是 TARGET_WINDOW_SIZE
 
-                        if not self.config.rotary_emb:
-                            # Index pre-computed positional encoding differences
-                            pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
-                            pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
-                            # ============ NOTE: Very Important ============
-                            # Apply positional encoding correction to k and v
-                            k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                            v_cache_trimmed += pos_emb_diff_v.squeeze(0)
+                    # !! 警告: 原始的位置编码校正可能不再精确 !!
+                    # 原始的校正是为“丢弃2个”而设计的。现在我们动态丢弃，这个校正会不匹配。
+                    # 对于RoPE，这不成问题。对于非RoPE，这会引入一些误差，但通常好于不滑动。
+                    # 在此，我们选择不应用可能错误的校正，以支持正确的滑动行为。
+                    if not self.config.rotary_emb:
+                        # 对截断后的部分应用位置编码校正
+                        # 注意：这里的实现假设了固定的截断大小，对于动态截断可能需要更复杂的处理
+                        # 但对于当前逻辑是正确的
+                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, 2 + new_size)]
+                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, 2 + new_size)]
+                        k_cache_trimmed += pos_emb_diff_k
+                        v_cache_trimmed += pos_emb_diff_v
 
-                        # Pad the last 3 steps along the third dimension with zeros
-                        # F.pad parameters (0, 0, 0, 3) specify padding amounts for each dimension: (left, right, top, bottom). For 3D tensor, they correspond to (dim2 left, dim2 right, dim1 left, dim1 right).
-                        padding_size = (0, 0, 0, 3)
-                        k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
-                        v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
-                        # Update cache of self.keys_values_wm_single_env
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
-                        # Update size of self.keys_values_wm_single_env
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length - 3
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length - 3
+                    # 用0填充到原始缓存张量的长度，以保持形状一致
+                    padding_size = k_cache_current.shape[2] - new_size
+                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, padding_size), 'constant', 0)
+                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, 0, padding_size), 'constant', 0)
 
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = new_size
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = new_size
+
+            # 步骤 3: 存储处理好的缓存 (与上次修复相同)
             if is_init_infer:
-                # TODO
-                # ==================== 主动淘汰修复逻辑 ====================
-                # 1. 获取即将被覆写的物理索引
-                index_to_write = self.shared_pool_index_init_envs[i]
-
-                # 2. 使用辅助列表查找该索引上存储的旧的 key
-                old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
-
-                # 3. 如果存在旧 key，就从主 cache map 中删除它
-                if old_key_to_evict is not None:
-                    # 确保要删除的键确实存在，避免意外错误
-                    if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
-                        del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
-
-                # 现在可以安全地写入新数据了
                 cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
-                
-                # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
                 self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
-                self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
-
-                # 调用调试函数进行检查
-                self._debug_check_for_stale_pointers(env_id=i, current_key=cache_key, index_to_be_written=index_to_write)
-                # ============================================================
-
-                # Store the latest key-value cache for initial inference
-                # cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
-                # self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
             else:
-                # TODO 获取要存入的cache的某个唯一标识，例如tensor的和
-                # cache_to_store = self.keys_values_wm_single_env._keys_values[0]._k_cache._cache
-                # cache_sum = torch.sum(cache_to_store).item()
-                # cache_shape = cache_to_store.shape
-                # print(f"[CACHE WRITE] Storing for key={cache_key}, cache_shape={cache_shape}, cache_sum={cache_sum:.4f}")
-                
-                # ==================== RECURRENT INFER FIX ====================
-                # 1. 获取即将被覆写的物理索引
-                index_to_write = self.shared_pool_index
-
-                # 2. 使用辅助列表查找该索引上存储的旧的 key
-                old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
-
-                # 3. 如果存在旧 key，就从主 cache map 中删除它
-                if old_key_to_evict is not None:
-                    if old_key_to_evict in self.past_kv_cache_recurrent_infer:
-                        del self.past_kv_cache_recurrent_infer[old_key_to_evict]
-
-                # 4. 现在可以安全地写入新数据了
                 cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
-
-                # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
                 self.past_kv_cache_recurrent_infer[cache_key] = cache_index
-                self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
-                # ============================================================
 
-                # ==================== DEBUG CODE INSERTION ====================
-                # 调用调试函数进行检查
-                self._debug_check_for_stale_pointers_recur(current_key=cache_key, index_to_be_written=index_to_write)
-                # ============================================================
+    # TODO(pu, 20250819)
+    # def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
+    #                         search_depth=[], valid_context_lengths=None):
+    #     """
+    #     Update the cache context with the given latent state.
+    #     This version contains the corrected truncation logic.
+    #     """
+    #     if self.context_length <= 2:
+    #         # No context to update if the context length is less than or equal to 2.
+    #         return
+            
+    #     context_length = self.context_length
 
-                # Store the latest key-value cache for recurrent inference
-                # cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
-                # self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+    #     for i in range(latent_state.size(0)):
+    #         # ============ Iterate over each environment ============
+    #         cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())
+
+    #         # 1. 首先，从全局批量缓存 (self.keys_values_wm) 中提取单个环境的缓存
+    #         #    并放入 self.keys_values_wm_single_env，同时处理好多环境推理中可能存在的 padding
+    #         if not is_init_infer:
+    #             # For Internal Nodes, we need to handle potential padding from batching
+    #             current_max_context_length = max(self.keys_values_wm_size_list_current)
+    #             trim_size = current_max_context_length - self.keys_values_wm_size_list_current[i]
+    #             for layer in range(self.num_layers):
+    #                 k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
+    #                 v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
+
+    #                 if trim_size > 0:
+    #                     k_cache_trimmed = k_cache_current[:, trim_size:, :]
+    #                     v_cache_trimmed = v_cache_current[:, trim_size:, :]
+    #                     k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)
+    #                     v_cache_padded = F.pad(v_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)
+    #                 else:
+    #                     k_cache_padded = k_cache_current
+    #                     v_cache_padded = v_cache_current
+                    
+    #                 self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
+    #                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
+    #                 self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm_size_list_current[i]
+    #                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm_size_list_current[i]
+    #         else:
+    #             # For Root Nodes, the batch is aligned, so we can just extract the slice
+    #             for layer in range(self.num_layers):
+    #                 self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)
+    #                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
+    #                 self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
+    #                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
+
+    #         # 2. 其次，对提取出的单个环境缓存应用统一的截断逻辑
+    #         for layer in range(self.num_layers):
+    #             # ============ NOTE: This is the corrected and unified truncation logic ============
+    #             current_size = self.keys_values_wm_single_env._keys_values[layer]._k_cache._size
+                
+    #             # 只有当缓存大小达到或超过截断阈值时才进行操作
+    #             # 阈值 context_length - 1 是因为一个 (obs, act) 对会增加2个token，我们需要提前截断以留出空间
+    #             if current_size >= context_length - 1:
+    #                 k_cache_current = self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache
+    #                 v_cache_current = self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache
+
+    #                 # 从第2个token开始，保留最新的 context_length-3 个token
+    #                 # 这实现了滑动窗口：丢弃最旧的2个token
+    #                 k_cache_trimmed = k_cache_current[:, :, 2:current_size, :]
+    #                 v_cache_trimmed = v_cache_current[:, :, 2:current_size, :]
+                    
+    #                 new_size = k_cache_trimmed.shape[2]
+
+    #                 if not self.config.rotary_emb:
+    #                     # 对截断后的部分应用位置编码校正
+    #                     # 注意：这里的实现假设了固定的截断大小，对于动态截断可能需要更复杂的处理
+    #                     # 但对于当前逻辑是正确的
+    #                     pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, 2 + new_size)]
+    #                     pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, 2 + new_size)]
+    #                     k_cache_trimmed += pos_emb_diff_k
+    #                     v_cache_trimmed += pos_emb_diff_v
+
+    #                 # 用0填充到原始缓存张量的长度，以保持形状一致
+    #                 padding_size = k_cache_current.shape[2] - new_size
+    #                 k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, padding_size), 'constant', 0)
+    #                 v_cache_padded = F.pad(v_cache_trimmed, (0, 0, 0, padding_size), 'constant', 0)
+
+    #                 self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded
+    #                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded
+    #                 self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = new_size
+    #                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = new_size
+
+    #         # 3. 最后，将处理好的单环境缓存存入相应的池中
+    #         if is_init_infer:
+    #             cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+    #             self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+    #         else:
+    #             cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+    #             self.past_kv_cache_recurrent_infer[cache_key] = cache_index
 
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -1474,7 +1303,7 @@ class WorldModel(nn.Module):
             - list: Sizes of the key-value caches for each environment.
         """
         for index in range(ready_env_num):
-            self.recur_total_query_count += 1
+            self.total_query_count += 1
             state_single_env = latent_state[index]  # latent_state[i] is np.array
             cache_key = hash_state(state_single_env)
 
@@ -1486,50 +1315,23 @@ class WorldModel(nn.Module):
                 cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
                 if cache_index is not None:
                     matched_value = self.shared_pool_init_infer[index][cache_index]
-
-                    # TODO
-                    # retrieved_cache = matched_value._keys_values[0]._k_cache._cache
-                    # retrieved_sum = torch.sum(retrieved_cache).item()
-                    # retrieved_shape = retrieved_cache.shape
-                    # print(f"[CACHE HIT]   Found for key={cache_key}, retrieved_shape={retrieved_shape}, retrieved_sum={retrieved_sum:.4f}")
-
-
                 else:
                     matched_value = None
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                # if matched_value is None:
-                #     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
-
-                # ==================== 核心修复 ====================
-                # 步骤 2: 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
                 if matched_value is None:
-                    # 2.1 安全地从字典中获取索引，它可能返回 None
-                    recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
-                    # 2.2 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
-                    if recur_cache_index is not None:
-                        matched_value = self.shared_pool_recur_infer[recur_cache_index]
-                    
-                    if recur_cache_index is None:
-                        print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
+                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
 
-                # =================================================
-                    # # TODO
-                    # retrieved_cache = matched_value._keys_values[0]._k_cache._cache
-                    # retrieved_sum = torch.sum(retrieved_cache).item()
-                    # retrieved_shape = retrieved_cache.shape
-                    # print(f"[CACHE HIT]   Found for key={cache_key}, retrieved_shape={retrieved_shape}, retrieved_sum={retrieved_sum:.4f}")
-
+            #  ==================== TODO(pu): only for debug ====================
+            # matched_value = None # Force cache miss
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
-                self.recur_hit_count += 1
+                self.hit_count += 1
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
                 self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
-                # print(f"[CACHE MISS]  Not found for key={cache_key}. Generating new cache.")
-
                 # If no matching cache is found, generate a new one using zero reset
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
                     n=1, max_tokens=self.context_length
@@ -1596,64 +1398,8 @@ class WorldModel(nn.Module):
             # Calculate the L2 norm of the latent action
             latent_action_l2_norms = torch.norm(self.act_embedding_table(act_tokens), p=2, dim=2).mean()
 
-        if self.config.latent_norm_loss:
-            # ==================== L2惩罚损失计算（最终修复版 v2） ====================
-            # 1. 计算每个 latent_state 向量的L2范数的平方。
-            #    根据调试信息，obs_embeddings shape: (B*L, 1, E)
-            #    所以 latent_norm_sq shape: (B*L, 1)
-            latent_norm_sq = torch.norm(obs_embeddings, p=2, dim=-1).pow(2)
-            # 2. 获取源掩码。
-            #    根据调试信息，mask_source shape: (B, L)
-            mask_source = batch['mask_padding']
-            # 3. 将源掩码从 (B, L) reshape 为 (B*L, 1)，以匹配 latent_norm_sq 的形状。
-            #    这是解决维度不匹配错误的关键。
-            #    我们使用 view(-1, 1) 来实现这个变形。
-            correct_mask = mask_source.contiguous().view(-1, 1)
-            # 4. 检查变形后的形状是否匹配。
-            #    这是一个防御性编程，确保两个张量的第一个维度是相同的。
-            if latent_norm_sq.shape[0] != correct_mask.shape[0]:
-                # 如果形状不匹配，打印错误信息并抛出异常，这能帮助我们更快地定位未来可能出现的新问题。
-                raise RuntimeError(
-                    f"Shape mismatch for L2 norm loss calculation! "
-                    f"latent_norm_sq shape: {latent_norm_sq.shape}, "
-                    f"but correct_mask shape after reshape is: {correct_mask.shape}. "
-                    f"Original mask_source shape was: {mask_source.shape}"
-                )
-            # 5. 直接进行逐元素乘法。因为现在它们的形状都是 (B*L, 1)，所以可以安全相乘。
-            masked_latent_norm_sq = latent_norm_sq * correct_mask
-            # 6. 计算平均损失。分母是掩码中所有“1”的总和，代表有效的元素数量。
-            #    增加一个极小值 epsilon (1e-8) 防止分母为零。
-            latent_norm_loss = masked_latent_norm_sq.sum() / (correct_mask.sum() + 1e-8)
-            # =================================================================
-        else:
-            latent_norm_loss = torch.tensor(0.)
-
-
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
-
-        if self.config.use_priority:
-            # ==================== START MODIFICATION 5 ====================
-            # Calculate value_priority, similar to MuZero.
-            with torch.no_grad():
-                # 1. Get the predicted value logits for the first step of the sequence (t=0).
-                # The shape is (B, support_size).
-                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
-
-                # 2. Convert the categorical prediction to a scalar value.
-                # The shape becomes (B, 1).
-                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
-
-                # 3. Get the target scalar value for the first step from the batch.
-                # The shape is (B, num_unroll_steps), so we take the first column.
-                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
-
-                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
-                # This is the priority. We use reduction='none' to get per-sample priorities.
-                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
-            # ===================== END MODIFICATION 5 =====================
-        else:
-            value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
@@ -1760,10 +1506,9 @@ class WorldModel(nn.Module):
         # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
         #  ========== for visualization ==========
 
+        # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
-            # For training stability, use target_tokenizer to compute the true next latent state representations
             target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
-            # target_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # Compute labels for observations, rewards, and ends
         labels_observations, labels_rewards, _ = self.compute_labels_world_model(target_obs_embeddings,
@@ -1906,8 +1651,6 @@ class WorldModel(nn.Module):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
-        latent_norm_loss=latent_norm_loss, # 新增
-        value_priority=value_priority,
             )
         else:
             return LossWithIntermediateLosses(
@@ -1929,8 +1672,6 @@ class WorldModel(nn.Module):
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
                 latent_action_l2_norms=latent_action_l2_norms,
-        latent_norm_loss=latent_norm_loss, # 新增
-        value_priority=value_priority,
 
             )
 
