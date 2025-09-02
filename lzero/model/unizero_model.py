@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
-from transformers import T5ForConditionalGeneration, T5Tokenizer
+# from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
@@ -216,6 +216,11 @@ class UniZeroModel(nn.Module):
         reward = logits_rewards
         policy_logits = logits_policy.squeeze(1)
         value = logits_value.squeeze(1)
+
+        # print(f"latent_state.mean():{latent_state.mean()}")
+        # print(f"logits_rewards.mean():{logits_rewards.mean()}")
+        # print(f"logits_policy.mean():{logits_policy.mean()}")
+        # print(f"logits_value.mean():{logits_value.mean()}")
 
         return MZNetworkOutput(
             value=value,

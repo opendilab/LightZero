@@ -20,6 +20,30 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 from collections import OrderedDict, defaultdict
 
+# In unizero_world_model.py
+
+import torch
+import torch.nn as nn
+
+# --- HOOK FUNCTION FOR DEBUGGING ---
+def print_intermediate_activation_hook(module, input, output):
+    """
+    A PyTorch hook that prints the mean and std of a module's output.
+    This function will be registered to a specific layer (e.g., the first Linear layer in a Head).
+    
+    Args:
+        module: The module the hook is registered on.
+        input: The input to the module's forward pass.
+        output: The output from the module's forward pass.
+    """
+    # output is the tensor we want to inspect
+    mean = output.mean().item()
+    std = output.std().item()
+    # We add the module name for clarity, to know which layer's output we are seeing.
+    print(f"  [HOOK DEBUG] Layer '{module.__class__.__name__}' Output -> mean: {mean:.6f}, std: {std:.6f}")
+    
+
+
             
 class LRUCache(OrderedDict):
     """
@@ -118,7 +142,7 @@ class WorldModel(nn.Module):
         self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
 
         # Head modules
-        self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
+        self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size, use_norm_in_head=True) # TODO
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
                                                     self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
                                                    )
@@ -128,7 +152,28 @@ class WorldModel(nn.Module):
             self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
         else:
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
-        self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+        self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size, use_norm_in_head=True)
+
+        # # ==================== NEW DEBUGGING CODE VIA HOOKS ====================
+        # # We will attach our hook to the first Linear layer inside the head_value and head_rewards modules.
+        # # The head_module is an nn.Sequential, so its layers can be accessed by index.
+        # # Index 0: First nn.Linear
+        # # Index 1: nn.GELU
+        # # Index 2: Second nn.Linear
+
+        # # Get the first linear layer from the sequential module
+        # first_linear_layer_value = self.head_value.head_module[0]
+        # first_linear_layer_rewards = self.head_rewards.head_module[0]
+
+        # # Register the forward hook
+        # print("--- Attaching DEBUG hooks to head_value and head_rewards ---")
+        # self.value_hook_handle = first_linear_layer_value.register_forward_hook(print_intermediate_activation_hook)
+        # self.rewards_hook_handle = first_linear_layer_rewards.register_forward_hook(print_intermediate_activation_hook)
+
+        # # NOTE: It's good practice to store the hook handle so you can remove it later if needed, e.g., during evaluation or after debugging.
+        # # To remove the hook: self.value_hook_handle.remove()
+        # # ====================================================================
+
 
         # Build the set of modules to skip during re-initialization.
         # This is compatible with cases where self.tokenizer.encoder does not have 'pretrained_model',
@@ -412,15 +457,43 @@ class WorldModel(nn.Module):
         self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
         self.value_policy_tokens_pattern[-2] = 1
 
-    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+    # def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+    #     """Create head modules for the transformer."""
+    #     modules = [
+    #         nn.Linear(self.config.embed_dim, self.config.embed_dim),
+    #         nn.GELU(approximate='tanh'),
+    #         nn.Linear(self.config.embed_dim, output_dim)
+    #     ]
+    #     if norm_layer:
+    #         modules.append(norm_layer)
+    #     return Head(
+    #         max_blocks=self.config.max_blocks,
+    #         block_mask=block_mask,
+    #         head_module=nn.Sequential(*modules)
+    #     )
+
+    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
         """Create head modules for the transformer."""
         modules = [
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            nn.GELU(approximate='tanh'),
-            nn.Linear(self.config.embed_dim, output_dim)
         ]
+        
+        # ==================== PROPOSED FIX ====================
+        # Add a LayerNorm after the first linear layer and before the activation.
+        # This stabilizes the activations within the head, preventing drift.
+        if use_norm_in_head:
+            modules.append(nn.LayerNorm(self.config.embed_dim))
+        # ======================================================
+
+        modules.extend([
+            nn.GELU(approximate='tanh'),
+            nn.Linear(self.config.embed_dim, output_dim),
+            nn.LayerNorm(output_dim)
+        ])
+
         if norm_layer:
             modules.append(norm_layer)
+            
         return Head(
             max_blocks=self.config.max_blocks,
             block_mask=block_mask,
@@ -787,12 +860,18 @@ class WorldModel(nn.Module):
         x = self._transformer_pass(
             sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos_adjusted
         )
+        print(f"x.mean(): {x.mean().item():.6f}, x.std(): {x.std().item():.6f}")
 
         # Generate logits for various components.
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+
+        # print(f"logits_observations.mean(): {logits_observations.mean().item():.6f}")
+        # print(f"logits_rewards.mean(): {logits_rewards.mean().item():.6f}")
+        # print(f"logits_policy.mean(): {logits_policy.mean().item():.6f}")
+        print(f"logits_value.mean(): {logits_value.mean().item():.6f}")
 
         # The 'logits_ends' is intentionally set to None.
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)

@@ -269,6 +269,12 @@ class MuZeroModel(nn.Module):
          """
         next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
+
+        print(f"next_latent_state.mean():{next_latent_state.mean()}")
+        print(f"logits_rewards.mean():{reward.mean()}")
+        print(f"logits_policy.mean():{policy_logits.mean()}")
+        print(f"logits_value.mean():{value.mean()}")
+
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:

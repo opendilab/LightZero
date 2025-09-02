@@ -301,8 +301,8 @@ class LossWithIntermediateLosses:
         # TODO(pu)
         # self.latent_norm_loss_weight = 0.1
         # self.latent_norm_loss_weight = 0.01
-        self.latent_norm_loss_weight = 0.001
-
+        # self.latent_norm_loss_weight = 0.001
+        self.latent_norm_loss_weight = 0.0001
 
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
