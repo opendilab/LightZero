@@ -72,7 +72,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2], current_batch[-1], batch_manual_embeds=batch_manual_embeds  # current_batch[2] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[2], current_batch[-1] # current_batch[2] is batch_target_action
         )
 
         # target policy
@@ -157,12 +157,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
                 )
             )
-            manual_embeds_tmp = game.manual_embeds_segment[pos_in_game_segment:pos_in_game_segment +
-                                                                  self._cfg.num_unroll_steps+1]
-            manual_embeds_tmp2 = np.array([torch.zeros(self._cfg.model.world_model_cfg.manual_embed_dim) for _ in range(self._cfg.num_unroll_steps +1 - len(manual_embeds_tmp))])
-            if len(manual_embeds_tmp2) > 0:
-                manual_embeds_tmp = np.concatenate([manual_embeds_tmp, manual_embeds_tmp2], axis=0)
-            manual_embeds_list.append(manual_embeds_tmp)
+            manual_embeds_list.append(
+                game_segment_list[i].get_unroll_manual(
+                    pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+                )
+            )
 
             action_list.append(actions_tmp)
 
@@ -441,7 +440,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
-            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num], manual_embeds=self.manual_embeds)  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -523,7 +522,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep, batch_manual_embeds=None) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -536,20 +535,21 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
-            to_play_segment = reward_value_context  # noqa
+            to_play_segment, value_manual_embeds_list = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
+            batch_manual = torch.from_numpy(np.array(value_manual_embeds_list))
             network_output = []
             batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
-            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, manual_embeds=batch_manual_embeds)
+            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, manual_embeds=batch_manual)
             # ======================================================================
 
             # if not in training, obtain the scalars of the value/reward

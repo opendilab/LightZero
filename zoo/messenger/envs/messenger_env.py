@@ -340,6 +340,7 @@ if __name__ == "__main__":
     while True:
         action = env.action_space.sample()
         obs, reward, done, info = env.step(action)
+        print(f"Step: {env._timestep}, Action: {action}, Reward: {reward}")
         if done:
             print(f"Episode done with return: {info['eval_episode_return']}")
             break

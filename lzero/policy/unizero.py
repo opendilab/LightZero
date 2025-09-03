@@ -437,7 +437,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, self._target_model.world_model
         )
 
         weighted_total_loss = losses.loss_total

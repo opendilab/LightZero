@@ -18,7 +18,7 @@ def main(env_id: str = 'messenger', seed: int = 0, max_env_step: int = int(1e6))
     """
     collector_env_num: int = 1       # Number of collector environments
     n_episode: int = collector_env_num
-    batch_size: int = 1
+    batch_size: int = 64
     env_id: str = 'messenger'             
     action_space_size: int = 5
     max_steps: int = 100

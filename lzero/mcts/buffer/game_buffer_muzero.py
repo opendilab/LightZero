@@ -279,7 +279,10 @@ class MuZeroGameBuffer(GameBuffer):
               td_steps_list, action_mask_segment, to_play_segment
         """
         zero_obs = game_segment_list[0].zero_obs()
+        zero_manual = game_segment_list[0].zero_manual()
+
         value_obs_list = []
+        value_manual_embeds_list = []
         # the value is valid or not (out of game_segment)
         value_mask = []
         rewards_list = []
@@ -300,6 +303,7 @@ class MuZeroGameBuffer(GameBuffer):
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
             game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            game_manual_embeds = game_segment.get_unroll_manual(state_index + td_steps, self._cfg.num_unroll_steps)
 
             rewards_list.append(game_segment.reward_segment)
             
@@ -321,15 +325,18 @@ class MuZeroGameBuffer(GameBuffer):
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
+                    manual_embeds = game_manual_embeds[beg_index:end_index]
                 else:
                     value_mask.append(0)
                     obs = zero_obs
+                    manual_embeds = zero_manual
 
                 value_obs_list.append(obs)
+                value_manual_embeds_list.append(manual_embeds)
 
         reward_value_context = [
             value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list,
-            action_mask_segment, to_play_segment
+            action_mask_segment, to_play_segment, value_manual_embeds_list
         ]
         return reward_value_context
 

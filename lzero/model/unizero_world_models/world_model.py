@@ -69,6 +69,13 @@ class WorldModel(nn.Module):
         self.continuous_action_space = self.config.continuous_action_space
         if self.use_manual:
             self.manual_fuse_proj = nn.Linear(self.embed_dim + self.manual_embed_dim, self.embed_dim, bias=False)
+            if self.final_norm_option_in_encoder == 'LayerNorm':
+                self.manual_embeds_norm =  nn.LayerNorm(self.config.embed_dim, eps=1e-5)
+            elif self.final_norm_option_in_encoder == 'SimNorm':
+                self.manual_embeds_norm =  SimNorm(simnorm_dim=self.group_size)
+            else:
+                raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+
             # self.manual_fuse_proj = nn.Sequential(
             #     nn.Linear(self.embed_dim + self.manual_embed_dim, self.embed_dim, bias=False),
             #     nn.GELU(approximate='tanh')
@@ -302,6 +309,7 @@ class WorldModel(nn.Module):
         # ====== [NEW] manual fusion 开关与层 ======
         self.use_manual = self.config.use_manual
         self.manual_embed_dim = self.config.manual_embed_dim
+        self.final_norm_option_in_encoder = self.config.final_norm_option_in_encoder 
 
 
     def _initialize_patterns(self) -> None:
@@ -780,12 +788,11 @@ class WorldModel(nn.Module):
                 manual_embeds_expanded = manual_embeds_expanded.expand(b, s, manual_embeds_expanded.shape[-1]).to(obs_embeddings.device)
         
             elif isinstance(manual_embeds, np.ndarray):
-
                 manual_embeds_expanded = torch.from_numpy(manual_embeds).reshape(b, s, -1).to(obs_embeddings.device)
+            elif isinstance(manual_embeds, torch.Tensor):
+                manual_embeds_expanded = manual_embeds.reshape(b, s, -1).to(obs_embeddings.device)
 
-                
-                
-        
+        manual_embeds_expanded = self.manual_embeds_norm(manual_embeds_expanded)
         new_obs_embeddings = torch.cat([manual_embeds_expanded, obs_embeddings], dim=-1)
         return self.manual_fuse_proj(new_obs_embeddings)
 
@@ -1335,7 +1342,7 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
 
-    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
+    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, target_model: nn.Module = None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
         start_pos = batch['timestep']
         # Encode observations into latent state representations
@@ -1486,7 +1493,7 @@ class WorldModel(nn.Module):
         with torch.no_grad():
             target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
             if self.use_manual:
-                target_obs_embeddings = self.manual_fuse(target_obs_embeddings, manual_embeds=batch['manual_embeds'])
+                target_obs_embeddings = target_model.manual_fuse(target_obs_embeddings, manual_embeds=batch['manual_embeds'])
 
         # Compute labels for observations, rewards, and ends
         labels_observations, labels_rewards, _ = self.compute_labels_world_model(target_obs_embeddings,

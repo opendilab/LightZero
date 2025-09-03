@@ -59,6 +59,7 @@ class GameSegment:
             # image obs input, e.g. atari environments
             self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
 
+        self.manual_embed_dim = config.model.world_model_cfg.manual_embed_dim
         self.obs_segment = []
         self.action_segment = []
         self.reward_segment = []
@@ -103,6 +104,23 @@ class GameSegment:
             stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
         return stacked_obs
 
+    def get_unroll_manual(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+        """
+        Overview:
+            Get an observation of the correct format: o[t, t + stack frames + num_unroll_steps].
+        Arguments:
+            - timestep (int): The time step.
+            - num_unroll_steps (int): The extra length of the observation frames.
+            - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
+        """
+        stacked_manual_embeds = self.manual_embeds_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps]
+        if padding:
+            pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_manual_embeds)
+            if pad_len > 0:
+                pad_frames = np.array([stacked_manual_embeds[-1] for _ in range(pad_len)])
+                stacked_manual_embeds = np.concatenate((stacked_manual_embeds, pad_frames))
+        return stacked_manual_embeds
+
     def zero_obs(self) -> List:
         """
         Overview:
@@ -111,6 +129,15 @@ class GameSegment:
             ndarray: An array filled with zeros.
         """
         return [np.zeros(self.zero_obs_shape, dtype=np.float32) for _ in range(self.frame_stack_num)]
+
+    def zero_manual(self) -> List:
+        """
+        Overview:
+            Return an manual embed frame filled with zeros.
+        Returns:
+            ndarray: An array filled with zeros.
+        """
+        return [np.zeros((self.manual_embed_dim, ), dtype=np.float32) for _ in range(self.frame_stack_num)]
 
     def get_obs(self) -> List:
         """
@@ -336,7 +363,7 @@ class GameSegment:
 
         for observation in init_observations:
             self.obs_segment.append(copy.deepcopy(observation))
-        self.manual_embeds_segment.append(init_manual_embeds)
+        self.manual_embeds_segment.append(copy.deepcopy(init_manual_embeds))
 
     def is_full(self) -> bool:
         """
