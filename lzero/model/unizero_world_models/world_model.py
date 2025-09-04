@@ -860,7 +860,8 @@ class WorldModel(nn.Module):
         x = self._transformer_pass(
             sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos_adjusted
         )
-        print(f"x.mean(): {x.mean().item():.6f}, x.std(): {x.std().item():.6f}")
+
+        # print(f"x.mean(): {x.mean().item():.6f}, x.std(): {x.std().item():.6f}")
 
         # Generate logits for various components.
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -871,7 +872,7 @@ class WorldModel(nn.Module):
         # print(f"logits_observations.mean(): {logits_observations.mean().item():.6f}")
         # print(f"logits_rewards.mean(): {logits_rewards.mean().item():.6f}")
         # print(f"logits_policy.mean(): {logits_policy.mean().item():.6f}")
-        print(f"logits_value.mean(): {logits_value.mean().item():.6f}")
+        # print(f"logits_value.mean(): {logits_value.mean().item():.6f}")
 
         # The 'logits_ends' is intentionally set to None.
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)

@@ -594,9 +594,17 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
+                    # orig
+                    # if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
+                    #     # only for UniZero now
+                    #     self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+                    
+                    # ============ TODO(pu): only for UniZero now ============
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
-                        # only for UniZero now
-                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+                        if eps_steps_lst[env_id]>self.policy_config.game_segment_length:
+                            self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+                            print(f"eps_steps_lst[env_id]>self.policy_config.game_segment_length:{eps_steps_lst[env_id]}>{self.policy_config.game_segment_length}")
+
 
                     total_transitions += 1
 
