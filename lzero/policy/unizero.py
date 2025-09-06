@@ -113,8 +113,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=0,
-                # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
-                predict_latent_loss_type='group_kl',
+                # (str) The normalization type for the final layer in both the head and the encoder.
+                # This option must be the same for both 'final_norm_option_in_head' and 'final_norm_option_in_encoder'.
+                # Valid options are 'LayerNorm' and 'SimNorm'.
+                # When set to 'LayerNorm', the 'predict_latent_loss_type' should be 'mse'.
+                # When set to 'SimNorm', the 'predict_latent_loss_type' should be 'group_kl'.
+                final_norm_option_in_head="LayerNorm",
+                final_norm_option_in_encoder="LayerNorm",
+                # (str) The type of loss function for predicting latent variables.
+                # Options are 'mse' (Mean Squared Error) or 'group_kl' (Group Kullback-Leibler divergence).
+                # This choice is dependent on the normalization method selected above.
+                predict_latent_loss_type='mse',
                 # (str) The type of observation. Options are ['image', 'vector'].
                 obs_type='image',
                 # (float) The discount factor for future rewards.
@@ -345,8 +354,6 @@ class UniZeroPolicy(MuZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 

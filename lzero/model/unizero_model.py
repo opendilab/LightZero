@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
-from transformers import T5ForConditionalGeneration, T5Tokenizer
+# from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
