@@ -13,15 +13,15 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     n_episode = 8
     evaluator_env_num = 3
 
-    # collector_env_num = 1
-    # n_episode = 1
-    # evaluator_env_num = 1
+    collector_env_num = 1
+    n_episode = 1
+    evaluator_env_num = 1
 
     num_simulations = 50
     collect_num_simulations = 25
     # collect_num_simulations = 50
     eval_num_simulations = 50
-    max_env_step = int(5e5)
+    max_env_step = int(5e6)
     # max_env_step = int(50e6)
     batch_size = 256
     # batch_size = 64 # debug
@@ -49,7 +49,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/50
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/1000000000000
+    # buffer_reanalyze_freq = 1/1000000000000
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -179,7 +179,9 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             train_start_after_envsteps=0,
             # train_start_after_envsteps=2000, # TODO
             game_segment_length=game_segment_length,
-            replay_buffer_size=int(1e6),
+            # replay_buffer_size=int(1e6),
+            replay_buffer_size=int(1e5), # TODO
+
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -202,7 +204,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_longrun_20250904/{env_id[:-14]}/{env_id[:-14]}_uz_episode_envnum{collector_env_num}_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250904/{env_id[:-14]}/{env_id[:-14]}_uz_episode_rbs1e5_envnum{collector_env_num}_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
@@ -237,7 +239,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=1
+    export CUDA_VISIBLE_DEVICES=2
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_config.py
     """

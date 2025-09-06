@@ -1476,10 +1476,8 @@ class WorldModel(nn.Module):
                 # ==================== 主动淘汰修复逻辑 ====================
                 # 1. 获取即将被覆写的物理索引
                 index_to_write = self.shared_pool_index_init_envs[i]
-
                 # 2. 使用辅助列表查找该索引上存储的旧的 key
                 old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
-
                 # 3. 如果存在旧 key，就从主 cache map 中删除它
                 if old_key_to_evict is not None:
                     # 确保要删除的键确实存在，避免意外错误
@@ -1510,10 +1508,8 @@ class WorldModel(nn.Module):
                 # ==================== RECURRENT INFER FIX ====================
                 # 1. 获取即将被覆写的物理索引
                 index_to_write = self.shared_pool_index
-
                 # 2. 使用辅助列表查找该索引上存储的旧的 key
                 old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
-
                 # 3. 如果存在旧 key，就从主 cache map 中删除它
                 if old_key_to_evict is not None:
                     if old_key_to_evict in self.past_kv_cache_recurrent_infer:
