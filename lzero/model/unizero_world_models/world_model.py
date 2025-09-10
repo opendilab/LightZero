@@ -339,7 +339,7 @@ class WorldModel(nn.Module):
             print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
 
         # 带图像和V/R值的 t-SNE 可视化
-        if step_counter > 0:
+        if step_counter >= 0:
         # if step_counter > 0 and step_counter % 200 == 0:
         
             print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
@@ -392,7 +392,9 @@ class WorldModel(nn.Module):
             sm.set_array([])
             fig.colorbar(sm, ax=ax, label='Predicted Value')
 
-            save_path = f'zoo/atari/unizero_mspacman_analyze/tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+            # save_path = f'zoo/atari/unizero_mspacman_analyze/tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+            save_path = f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_obs96_step_{step_counter}.png'
+
             plt.savefig(save_path)
             plt.close()
             print(f"t-SNE plot with V/R annotations saved to {save_path}")
@@ -624,7 +626,8 @@ class WorldModel(nn.Module):
         # ======================================================
 
         modules.extend([
-            nn.GELU(approximate='tanh'),
+            nn.GELU
+            (approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim),
             nn.LayerNorm(output_dim)
         ])
@@ -1870,10 +1873,12 @@ class WorldModel(nn.Module):
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
-        # TODO
+        # TODO============
         # ======================= 在这里插入分析代码 =======================
         # if global_step > 0 and global_step % 1000 == 0:
-        if global_step > 0 and global_step % 5000 == 0:
+        # if global_step > 0 and global_step % 5000 == 0:
+        # if global_step >= 0 and global_step % 5000 == 0: # 5k
+        if global_step >= 0 and global_step % 10000 == 0: # 10k
         
             with torch.no_grad():
                 # 将logits转换为标量值
@@ -2147,6 +2152,10 @@ class WorldModel(nn.Module):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
 
+        # 为了让外部的训练循环能够获取encoder的输出，我们将其加入返回字典
+        # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
+        detached_obs_embeddings = obs_embeddings.detach()
+
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
                 latent_recon_loss_weight=self.latent_recon_loss_weight,
@@ -2170,8 +2179,9 @@ class WorldModel(nn.Module):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
-        latent_norm_loss=latent_norm_loss, # 新增
-        value_priority=value_priority,
+                latent_norm_loss=latent_norm_loss, # 新增
+                value_priority=value_priority,
+                obs_embeddings=detached_obs_embeddings,  # <-- 新增
             )
         else:
             return LossWithIntermediateLosses(
@@ -2193,8 +2203,9 @@ class WorldModel(nn.Module):
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
                 latent_action_l2_norms=latent_action_l2_norms,
-        latent_norm_loss=latent_norm_loss, # 新增
-        value_priority=value_priority,
+                latent_norm_loss=latent_norm_loss, # 新增
+                value_priority=value_priority,
+                obs_embeddings=detached_obs_embeddings,  # <-- 新增
 
             )
 

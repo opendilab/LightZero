@@ -443,6 +443,9 @@ class UniZeroPolicy(MuZeroPolicy):
             wandb.watch(self._learn_model.representation_network, log="all")
 
         self.accumulation_steps = self._cfg.accumulation_steps
+        # 从配置中获取阈值，如果未设置则使用一个合理的默认值（例如20.0）
+        # 设置为0或负数则禁用此功能
+        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0) # TODO
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -602,9 +605,10 @@ class UniZeroPolicy(MuZeroPolicy):
         # 我们可以只关注 Encoder 的梯度
         encoder = self._learn_model.world_model.tokenizer.encoder
         total_grad_norm = 0.0
-        if (train_iter % 1000) == 0:
+
+        # if (train_iter % 5000) == 0:
+        if (train_iter % 10000) == 0: # 10k
         # if (train_iter % 1) == 0:
-        
             print(f"\n--- Gradient Analysis for Step {train_iter} ---")
             for name, param in encoder.named_parameters():
                 if param.grad is not None:
@@ -647,6 +651,40 @@ class UniZeroPolicy(MuZeroPolicy):
                 torch.cuda.empty_cache()
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+        # =================================================================
+        #              Encoder-Clip: Inspired by QK-Clip
+        # -----------------------------------------------------------------
+        # 直接控制Encoder输出的范数，防止其无界增长，以稳定训练。
+        # =================================================================
+        if self.latent_norm_clip_threshold > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            with torch.no_grad():
+                # 1. 从loss字典中获取已分离的encoder输出
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                if obs_embeddings is None:
+                    raise ValueError
+
+                # 2. 计算这批数据中，encoder输出L2范数的最大值
+                # obs_embeddings 的形状通常是 (B*L, 1, E) 或 (B*L, E)
+                # 我们在最后一个维度（embedding_dim）上计算范数
+                latent_norms = obs_embeddings.norm(p=2, dim=-1)
+                max_latent_norm = latent_norms.max()
+
+                # 3. 检查最大范数是否超过了我们设定的阈值
+                if max_latent_norm > self.latent_norm_clip_threshold:
+                    
+                    # 4. 计算缩放因子
+                    scale_factor = self.latent_norm_clip_threshold / max_latent_norm.item()
+                    
+                    # (可选) 打印日志，方便调试
+                    print(f"[Encoder-Clip] Max latent norm {max_latent_norm.item():.2f} > {self.latent_norm_clip_threshold}. Scaling encoder weights by {scale_factor:.4f}.")
+
+                    # 5. 将缩放因子应用到Encoder的所有权重上
+                    encoder = self._model.world_model.tokenizer.encoder
+                    for param in encoder.parameters():
+                        if param.requires_grad:
+                            param.data.mul_(scale_factor)
+
 
         # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:

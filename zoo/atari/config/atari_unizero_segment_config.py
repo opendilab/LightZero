@@ -74,6 +74,8 @@ def main(env_id, seed):
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
+            # observation_shape=(3, 96, 96),
+
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -89,6 +91,7 @@ def main(env_id, seed):
             # sample_type='episode',  # NOTE: very important for memory env
             model=dict(
                 observation_shape=(3, 64, 64),
+                # observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
@@ -134,9 +137,9 @@ def main(env_id, seed):
                     # predict_latent_loss_type='group_kl',
 
                     # weight_decay=1e-2,
-                    latent_norm_loss=True,
 
-                    # latent_norm_loss=False,
+                    # latent_norm_loss=True,
+                    latent_norm_loss=False,
                     weight_decay=1e-4, # TODO
 
                     use_priority=True, # TODO(pu): test
@@ -144,11 +147,15 @@ def main(env_id, seed):
                     # optim_type='SGD',
                     # learning_rate=0.01,
 
-                    # optim_type='AdamW',
+                    optim_type='AdamW',
                     # learning_rate=0.001,
+                    learning_rate=0.0001,
 
-                    optim_type='AdamW_mix_lr',
-                    learning_rate=0.001,
+
+
+
+                    # optim_type='AdamW_mix_lr',
+                    # learning_rate=0.001,
 
                 ),
             ),
@@ -169,14 +176,17 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
 
-            # piecewise_decay_lr_scheduler=False,
-            # optim_type='AdamW',
-            # learning_rate=0.001,
-            # learning_rate=0.0001,
-
             piecewise_decay_lr_scheduler=False,
-            optim_type='AdamW_mix_lr',
-            learning_rate=0.001,
+            optim_type='AdamW',
+            # learning_rate=0.001,
+            learning_rate=0.0001,
+
+            latent_norm_clip_threshold=20, # 768dim
+            # latent_norm_clip_threshold=30, # 768dim
+
+            # piecewise_decay_lr_scheduler=False,
+            # optim_type='AdamW_mix_lr',
+            # learning_rate=0.001,
 
 
             # optim_type='SGD', # TODO
@@ -240,9 +250,14 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adammixlr1e-3_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-20_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_sgd001_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamwlr1e-4_96_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adammixlr1e-3_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_sgd001_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-3_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     
@@ -286,12 +301,18 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=4
+    export CUDA_VISIBLE_DEVICES=6
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-20.log 2>&1
+
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_96.log 2>&1
+
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_sgd_02-0002.log 2>&1
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_sgd_001.log 2>&1
 
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-3.log 2>&1
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_96.log 2>&1
+
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw-mix-1e-3.log 2>&1
 
 
