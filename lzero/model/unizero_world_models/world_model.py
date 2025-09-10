@@ -766,6 +766,9 @@ class WorldModel(nn.Module):
             batch_action = obs_act_dict['action'] # obs_act_dict['action'] is at timestep t
             batch_current_obs = obs_act_dict['current_obs'] # obs_act_dict['current_obs'] is at timestep t+1
 
+        # # 在调用 tokenizer 之前 TODO
+        # if batch_obs.dtype != torch.long:
+        #     batch_obs = batch_obs.long()
         # Encode observations to latent embeddings.
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_obs)
 
@@ -778,6 +781,7 @@ class WorldModel(nn.Module):
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
                                                                                    current_obs_embeddings, start_pos)
         else:
+
             # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
             self.latent_state = obs_embeddings
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action, None, start_pos)

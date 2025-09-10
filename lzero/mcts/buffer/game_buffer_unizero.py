@@ -534,17 +534,43 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
 
+        # ======================= 调试步骤 1: 检查输入数据 =======================
+        # 检查传入的 rewards_list 和 root_values 是否包含 nan
+        for i, r_list in enumerate(rewards_list):
+            if np.isnan(r_list).any():
+                print(f"[DEBUG] Input `rewards_list` at index {i} contains nan!")
+        if np.isnan(root_values).any():
+            print(f"[DEBUG] Input `root_values` contains nan!")
+        # ======================================================================
+
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             network_output = []
             batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
+            # ======================= 调试步骤 2: 检查模型输入 =======================
+            if torch.isnan(batch_obs).any():
+                print(f"[DEBUG] `batch_obs` fed to the model contains nan!")
+                # 如果这里有nan，说明问题出在 prepare_observation 或更早
+            # ======================================================================
+
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
             m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
+
+            # ======================= 调试步骤 3: 检查模型原始输出 =======================
+            # 这是最关键的检查点！
+            if torch.isnan(m_output.value).any():
+                print("[DEBUG] `m_output.value` (raw from model) contains nan!")
+                # 找出是哪些样本导致了nan
+                nan_indices = torch.where(torch.isnan(m_output.value))[0]
+                print(f"[DEBUG] Indices of nan values in batch: {nan_indices.unique().cpu().numpy()}")
+                # 如果在这里发现nan，说明是模型本身的问题（训练不稳定或结构问题）
+            # =========================================================================
+
 
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
@@ -554,6 +580,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     m_output.policy_logits
                 ]
             )
+
+            # ======================= 调试步骤 4: 检查值变换后 =======================
+            if np.isnan(m_output.value).any():
+                print("[DEBUG] `m_output.value` after `inverse_scalar_transform` contains nan!")
+                # 如果步骤3正常而这里异常，说明是 inverse_scalar_transform 的问题
+            # =====================================================================
+
             network_output.append(m_output)
 
             if self._cfg.use_root_value:
@@ -561,6 +594,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             else:
                 # use the predicted values
                 value_numpy = concat_output_value(network_output)
+
+            # ======================= 调试步骤 5: 检查初始 value_numpy =======================
+            if np.isnan(value_numpy).any():
+                print("[DEBUG] `value_numpy` (from model or root_values) contains nan!")
+                nan_indices_np = np.where(np.isnan(value_numpy))[0]
+                print(f"[DEBUG] Indices of nan values in `value_numpy`: {np.unique(nan_indices_np)}")
+                # 这将确认 ipdb 中看到的那个带nan的张量是否就是 value_numpy
+            # ============================================================================
+
 
             # get last state value
             if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
@@ -577,6 +619,12 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 value_numpy = value_numpy.reshape(-1) * (
                         np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
                 )
+
+            # ======================= 调试步骤 6: 检查折扣计算后 =======================
+            if np.isnan(value_numpy).any():
+                print("[DEBUG] `value_numpy` after discounting contains nan!")
+                # 如果之前正常但这里异常，可能是 inf * 0 的情况
+            # ========================================================================
 
             value_numpy= value_numpy * np.array(value_mask)
             value_list = value_numpy.tolist()
@@ -628,5 +676,10 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         batch_rewards = np.asarray(batch_rewards)
         batch_target_values = np.asarray(batch_target_values)
+
+        # ======================= 调试步骤 7: 检查最终输出 =======================
+        if np.isnan(batch_target_values).any():
+            print("[DEBUG] Final `batch_target_values` contains nan!")
+        # ====================================================================
 
         return batch_rewards, batch_target_values

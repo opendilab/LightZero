@@ -531,7 +531,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
         else:
             raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
                                       f"Choose 'simnorm' or 'layernorm'.")
-
+    
     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
         """
         Forward Propagation:
@@ -545,28 +545,142 @@ class HFLanguageRepresentationNetwork(nn.Module):
         Returns:
         - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
         """
+        # 1. 识别有效和无效的行
+        is_all_padding = (x == self.tokenizer.pad_token_id).all(dim=1)
+        valid_indices = torch.where(~is_all_padding)[0]
 
-        # Construct the attention mask to exclude padding tokens.
-        attention_mask = x != self.tokenizer.pad_token_id
+        # 如果所有样本都是无效的，直接返回一个全零张量，避免后续计算
+        if len(valid_indices) == 0:
+            return torch.zeros(x.shape[0], self.embedding_size, device=x.device, dtype=torch.float32)
 
-        # Use no_grad context if specified to disable gradient computation.
+        # 2. 只筛选出有效的输入进行处理
+        valid_x = x[valid_indices]
+
+        # 3. 创建一个与原始输入批次大小相同的全零输出张量
+        final_output = torch.zeros(x.shape[0], self.embedding_size, device=x.device, dtype=torch.float32)
+
+        # --- 接下来，对 valid_x 执行所有计算 ---
+        attention_mask = valid_x != self.tokenizer.pad_token_id
+
         if no_grad:
             with torch.no_grad():
-                x = x.long()  # Ensure the input tensor is of type long.
-                outputs = self.pretrained_model(x, attention_mask=attention_mask)
-                # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+                valid_x = valid_x.long()
+                outputs = self.pretrained_model(valid_x, attention_mask=attention_mask)
                 cls_embedding = outputs.last_hidden_state[:, 0, :]
         else:
-            x = x.long()
-            outputs = self.pretrained_model(x, attention_mask=attention_mask)
+            valid_x = valid_x.long()
+            outputs = self.pretrained_model(valid_x, attention_mask=attention_mask)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
 
-        # Apply linear projection to obtain the desired output dimension.
         cls_embedding = self.embed_proj_head(cls_embedding)
-        # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
         cls_embedding = self.norm(cls_embedding)
         
-        return cls_embedding
+        # 4. 将计算结果放回最终输出张量的正确位置
+        final_output[valid_indices] = cls_embedding
+        
+        return final_output
+
+    # def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+        # """
+        # Forward Propagation:
+        #     Compute the language representation based on the input token sequence.
+        #     The [CLS] token’s representation is extracted from the output of the pretrained model,
+        #     then passed through a linear projection and final normalization layer (SimNorm or LayerNorm).
+
+        # Arguments:
+        #     - x (torch.Tensor): Input token sequence of shape [batch_size, seq_len].
+        #     - no_grad (bool): Whether to run in no-gradient mode for memory efficiency. Default is True.
+        # Returns:
+        # - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
+        # """
+    #     # --- 推荐的防御性代码 ---
+    #     # 识别全填充的行
+    #     is_all_padding = (x == self.tokenizer.pad_token_id).all(dim=1)
+    #     # 创建一个最终形状的零向量作为模板
+    #     final_output = torch.zeros(x.shape[0], self.embedding_size, device=x.device, dtype=torch.float32)
+    #     # 如果所有行都是全填充，直接返回零向量
+    #     if is_all_padding.all():
+    #         return final_output
+    #     # 筛选出需要正常处理的行
+    #     valid_indices = ~is_all_padding
+    #     valid_x = x[valid_indices]
+    #     # --- 原始逻辑处理有效数据 ---
+    #     attention_mask = valid_x != self.tokenizer.pad_token_id
+
+    #     # ======================= 调试代码开始 =======================
+    #     # 检查输入是否包含全零行
+    #     is_all_zero = torch.all(x == 0, dim=1)
+    #     if torch.any(is_all_zero):
+    #         zero_indices = torch.where(is_all_zero)[0].cpu().numpy()
+    #         print(f"[DEBUG HFLang] Input `x` has all-zero rows at indices: {zero_indices}")
+    #         import ipdb;ipdb.set_trace()
+
+    #     # 检查 pad_token_id
+    #     pad_token_id = self.tokenizer.pad_token_id
+    #     print(f"[DEBUG HFLang] Tokenizer pad_token_id is: {pad_token_id}")
+        
+    #     # attention_mask = x != pad_token_id
+
+    #     # 检查为全零输入生成的 attention_mask
+    #     if torch.any(is_all_zero):
+    #          print(f"[DEBUG HFLang] Attention mask for first all-zero row ({zero_indices[0]}): {attention_mask[zero_indices[0]]}")
+    #          if not torch.any(attention_mask[zero_indices[0]]):
+    #              print("[DEBUG HFLang] Confirmed: Attention mask is all False for the all-zero row.")
+    #     # ============================================================
+
+
+    #     # # Construct the attention mask to exclude padding tokens.
+    #     # attention_mask = x != self.tokenizer.pad_token_id
+    #     x = valid_x
+
+    #     # Use no_grad context if specified to disable gradient computation.
+    #     if no_grad:
+    #         with torch.no_grad():
+    #             x = x.long()  # Ensure the input tensor is of type long.
+    #             outputs = self.pretrained_model(x, attention_mask=attention_mask)
+    #             # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+    #             cls_embedding = outputs.last_hidden_state[:, 0, :]
+    #     else:
+    #         x = x.long()
+    #         outputs = self.pretrained_model(x, attention_mask=attention_mask)
+    #         cls_embedding = outputs.last_hidden_state[:, 0, :]
+
+    #     # ======================= 调试代码开始 =======================
+    #     # 关键检查点：检查从预训练模型出来的 embedding 是否已经是 nan
+    #     if torch.isnan(cls_embedding).any():
+    #         nan_indices_after_model = torch.where(torch.isnan(cls_embedding).any(dim=1))[0].cpu().numpy()
+    #         print(f"[DEBUG HFLang] FATAL: `cls_embedding` from `pretrained_model` contains NaN at indices: {nan_indices_after_model}")
+    #     else:
+    #         print("[DEBUG HFLang] OK: `cls_embedding` from `pretrained_model` is clean (no NaN).")
+
+    #     # 如果上面没问题，再检查 norm 之前向量的状态
+    #     if torch.any(is_all_zero) and not torch.isnan(cls_embedding).any():
+    #         first_zero_idx = zero_indices[0]
+    #         problematic_vec = cls_embedding[first_zero_idx]
+    #         print(f"[DEBUG HFLang] Vector for all-zero input (idx {first_zero_idx}) before norm: mean={problematic_vec.mean()}, var={problematic_vec.var()}")
+    #         if problematic_vec.var() == 0:
+    #             print("[DEBUG HFLang] WARNING: Variance of the vector is zero before normalization!")
+    #     # ============================================================
+
+
+    #     # Apply linear projection to obtain the desired output dimension.
+    #     cls_embedding = self.embed_proj_head(cls_embedding)
+    #     # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
+    #     cls_embedding = self.norm(cls_embedding)
+        
+    #     # ======================= 调试代码开始 =======================
+    #     # 最终检查
+    #     if torch.isnan(cls_embedding).any():
+    #         nan_indices_final = torch.where(torch.isnan(cls_embedding).any(dim=1))[0].cpu().numpy()
+    #         print(f"[DEBUG HFLang] FATAL: Final `cls_embedding` after norm contains NaN at indices: {nan_indices_final}")
+    #     # ============================================================
+
+    #     # return cls_embedding
+
+    #     # 将计算结果放回最终输出张量的对应位置
+    #     final_output[valid_indices] = cls_embedding
+    #     return final_output
+
 
 
 class RepresentationNetworkUniZero(nn.Module):
