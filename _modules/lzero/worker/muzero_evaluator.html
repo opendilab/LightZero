@@ -374,6 +374,16 @@
                     <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">ready_env_id</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">)[:</span><span class="n">remain_episode</span><span class="p">]))</span>
                     <span class="n">remain_episode</span> <span class="o">-=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">),</span> <span class="n">remain_episode</span><span class="p">)</span>
 
+                    <span class="c1"># In a parallel evaluation setting, it&#39;s possible for all active environments to finish their</span>
+                    <span class="c1"># episodes simultaneously. This can leave `ready_env_id` temporarily empty while the environments</span>
+                    <span class="c1"># are being reset by the manager.</span>
+                    <span class="c1"># To prevent processing an empty batch, which would cause an IndexError or other errors downstream,</span>
+                    <span class="c1"># we check if `ready_env_id` is empty. If so, we sleep briefly to prevent a busy-wait,</span>
+                    <span class="c1"># and `continue` to the next loop iteration to wait for newly reset environments to become available.</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">ready_env_id</span><span class="p">:</span>
+                        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.01</span><span class="p">)</span>
+                        <span class="k">continue</span>
+
                     <span class="n">stack_obs</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get_obs</span><span class="p">()</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
                     <span class="n">stack_obs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stack_obs</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
 
