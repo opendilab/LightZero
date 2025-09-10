@@ -158,15 +158,36 @@ class GameBuffer(ABC, object):
                 # we avoid sampling from the last `num_unroll_steps` steps of the game segment. 
                 if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
-                if pos_in_game_segment >= len(game_segment.action_segment) - 1:
-                    pos_in_game_segment = np.random.choice(len(game_segment.action_segment) - 1, 1).item()
+                
+                segment_len = len(game_segment.action_segment)
+                if pos_in_game_segment >= segment_len - 1:
+                    # If the segment is very short (length 0 or 1), we can't randomly sample a position
+                    # before the last one. The only safe position is 0.
+                    if segment_len > 1:
+                        # If the segment has at least 2 actions, we can safely sample from [0, len-2].
+                        # The upper bound for np.random.choice is exclusive, so (segment_len - 1) is correct.
+                        pos_in_game_segment = np.random.choice(segment_len - 1, 1).item()
+                    else:
+                        # If segment length is 0 or 1, the only valid/safe position is 0.
+                        pos_in_game_segment = 0
+
             else:
                 # For environments with a fixed action space (e.g., Atari),
                 # we can safely sample from the entire game segment range.
                 if pos_in_game_segment >= self._cfg.game_segment_length:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
-                if pos_in_game_segment >= len(game_segment.action_segment) - 1:
-                    pos_in_game_segment = np.random.choice(len(game_segment.action_segment) - 1, 1).item()
+                
+                segment_len = len(game_segment.action_segment)
+                if pos_in_game_segment >= segment_len - 1:
+                    # If the segment is very short (length 0 or 1), we can't randomly sample a position
+                    # before the last one. The only safe position is 0.
+                    if segment_len > 1:
+                        # If the segment has at least 2 actions, we can safely sample from [0, len-2].
+                        # The upper bound for np.random.choice is exclusive, so (segment_len - 1) is correct.
+                        pos_in_game_segment = np.random.choice(segment_len - 1, 1).item()
+                    else:
+                        # If segment length is 0 or 1, the only valid/safe position is 0.
+                        pos_in_game_segment = 0
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
