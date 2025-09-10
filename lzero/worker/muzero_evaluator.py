@@ -281,6 +281,16 @@ class MuZeroEvaluator(ISerialEvaluator):
                     ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                     remain_episode -= min(len(new_available_env_id), remain_episode)
 
+                    # In a parallel evaluation setting, it's possible for all active environments to finish their
+                    # episodes simultaneously. This can leave `ready_env_id` temporarily empty while the environments
+                    # are being reset by the manager.
+                    # To prevent processing an empty batch, which would cause an IndexError or other errors downstream,
+                    # we check if `ready_env_id` is empty. If so, we sleep briefly to prevent a busy-wait,
+                    # and `continue` to the next loop iteration to wait for newly reset environments to become available.
+                    if not ready_env_id:
+                        time.sleep(0.01)
+                        continue
+
                     stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                     stack_obs = list(stack_obs.values())
 
