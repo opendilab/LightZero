@@ -304,98 +304,88 @@ class WorldModel(nn.Module):
         self._grad_hooks.clear()
         print("[INFO] All gradient hooks removed.")
 
-    def _analyze_latent_representation(
-        self, 
-        latent_states: torch.Tensor, 
-        timesteps: torch.Tensor, 
-        game_states: torch.Tensor, 
-        predicted_values: torch.Tensor,
-        predicted_rewards: torch.Tensor,
-        step_counter: int
-    ):
+    def _analyze_latent_representation(self, latent_states: torch.Tensor, timesteps: torch.Tensor, game_states: torch.Tensor, step_counter: int):
         """
         分析并记录 latent states 的统计信息和t-SNE可视化。
-        【新功能】：在t-SNE图上显示对应的游戏图像，并标注预测的Value和Reward。
+        【新功能】：在t-SNE图上直接显示对应的游戏图像。
         
         Args:
-            latent_states (torch.Tensor): Encoder的输出, shape (B*L, 1, E)
+            latent_states (torch.Tensor): Encoder的输出, shape (B, L, E) 或 (B*L, 1, E)
             timesteps (torch.Tensor): 对应的时间步, shape (B, L)
             game_states (torch.Tensor): 原始的游戏观测, shape (B, L, C, H, W)
-            predicted_values (torch.Tensor): 预测的标量Value, shape (B*L,)
-            predicted_rewards (torch.Tensor): 预测的标量Reward, shape (B*L,)
-            step_counter (int): 全局训练步数
+            step_counter (int): 全局训练步数，用于控制可视化频率
         """
-        # ... (统计分析部分保持不变) ...
-        # (确保 latent_states 和 game_states 的形状为 (N, ...))
+        # 确保 latent_states 和 game_states 的形状为 (N, ...)
         if latent_states.dim() > 2:
             latent_states = latent_states.reshape(-1, latent_states.shape[-1])
+        
+        # game_states shape is (B, L, C, H, W), reshape to (B*L, C, H, W)
         num_c, num_h, num_w = game_states.shape[-3:]
         game_states = game_states.reshape(-1, num_c, num_h, num_w)
-        
+
+        # 1. 统计分析 (Stability Check) - 这部分不变
         with torch.no_grad():
             l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
             mean = latent_states.mean()
             std = latent_states.std()
-            print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
+            abs_max = latent_states.abs().max()
+            
+            # 假设您有logger
+            # logger.add_scalar('debug/latent_l2_norm', l2_norm.item(), step_counter)
+            # ...
+            print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}, Max Abs: {abs_max:.4f}")
 
-        # 带图像和V/R值的 t-SNE 可视化
-        if step_counter > 0:
-        # if step_counter > 0 and step_counter % 200 == 0:
-        
-            print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
+        # 2. 带图像的 t-SNE 可视化 (Discriminability and Consistency Check)
+        if step_counter % 1000 == 0:
+            print(f"[Step {step_counter}] Performing t-SNE analysis with images...")
 
             # 将数据转换到CPU
             latents_np = latent_states.detach().cpu().numpy()
             images_np = game_states.detach().cpu().numpy()
-            values_np = predicted_values.detach().cpu().numpy()
-            rewards_np = predicted_rewards.detach().cpu().numpy()
             
+            # 执行 t-SNE
             tsne = TSNE(n_components=2, perplexity=30, n_iter=300, random_state=42)
             tsne_results = tsne.fit_transform(latents_np)
             
-            # --- 绘制带图像和标注的散点图 ---
+            # --- 新增：绘制带图像的散点图 ---
             
-            # 减少图像数量以保持清晰
-            num_points_to_plot = min(len(latents_np), 70) # 减少到70个点
+            # 为了性能和清晰度，随机抽样一部分点来显示图像
+            num_points_to_plot = min(len(latents_np), 150) # 最多绘制150张图
             indices = np.random.choice(len(latents_np), num_points_to_plot, replace=False)
             
-            fig, ax = plt.subplots(figsize=(20, 18)) # 增大画布尺寸
-            
-            # 先画出所有点的散点图作为背景
-            ax.scatter(tsne_results[:, 0], tsne_results[:, 1], c=values_np, cmap='viridis', alpha=0.3, s=10)
+            fig, ax = plt.subplots(figsize=(16, 14))
             
             for i in indices:
+                # 获取 t-SNE 坐标
                 x, y = tsne_results[i]
+                
+                # 获取对应的图像
+                # PyTorch (CHW) -> Matplotlib (HWC)
                 img = images_np[i].transpose(1, 2, 0)
+                
+                # 重要：确保图像数据是可显示的格式，例如 [0, 1] 的浮点数或 [0, 255] 的整数。
+                # 如果您的数据经过了标准化(例如到[-1, 1])，需要先反标准化。
+                # 假设数据是 [0, 1] 范围
                 img = np.clip(img, 0, 1)
 
-                # 放置图像
-                im = OffsetImage(img, zoom=0.7) # 稍微放大图像
-                ab = AnnotationBbox(im, (x, y), frameon=True, pad=0.0, bboxprops=dict(edgecolor='none'))
+                # 使用 OffsetImage 和 AnnotationBbox 将图像放置在图上
+                im = OffsetImage(img, zoom=0.5) # zoom 控制图像缩放比例
+                ab = AnnotationBbox(im, (x, y), frameon=False, pad=0.0)
                 ax.add_artist(ab)
-                
-                # 在图像下方添加文字标注
-                text_label = f"V:{values_np[i]:.1f} R:{rewards_np[i]:.1f}"
-                ax.text(x, y - 1.0, text_label, ha='center', va='top', fontsize=8, color='red',
-                        bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.5))
-
+            
+            # 更新图的边界并自动缩放
             ax.update_datalim(tsne_results)
             ax.autoscale()
             
-            ax.set_title(f't-SNE of Latent States (Value as Color) at Step {step_counter}', fontsize=16)
-            ax.set_xlabel('t-SNE dimension 1', fontsize=12)
-            ax.set_ylabel('t-SNE dimension 2', fontsize=12)
+            ax.set_title(f't-SNE of Latent States with Images at Step {step_counter}')
+            ax.set_xlabel('t-SNE dimension 1')
+            ax.set_ylabel('t-SNE dimension 2')
             
-            # 添加colorbar来解释背景点的颜色
-            norm = plt.Normalize(values_np.min(), values_np.max())
-            sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
-            sm.set_array([])
-            fig.colorbar(sm, ax=ax, label='Predicted Value')
-
-            save_path = f'zoo/atari/unizero_mspacman_analyze/tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+            # 保存图像
+            save_path = f'zoo/atari/unizero_mspacman_analyze/tsne_with_images_step_{step_counter}.png'
             plt.savefig(save_path)
             plt.close()
-            print(f"t-SNE plot with V/R annotations saved to {save_path}")
+            print(f"t-SNE plot with images saved to {save_path}")
 
     def _debug_check_for_stale_pointers(self, env_id: int, current_key: Any, index_to_be_written: int):
         """
@@ -1325,16 +1315,7 @@ class WorldModel(nn.Module):
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, start_pos)
         # TODO(pu): 由于预测误差的存在，不clear，也很可能不能检索到上次mcts 树搜索中的节点
         # 所有collect env公用应该也是合理的，不同环境很难遇到完全一致的预测的latent state？
-        # self.past_kv_cache_recurrent_infer.clear()
-
-        # ==================== 正确的修复位置 ====================
-        # 在每次新的MCTS搜索（即调用initial_inference）开始时，
-        # 清除上一次搜索遗留的 recurrent (MCTS) 缓存。
         self.past_kv_cache_recurrent_infer.clear()
-        if hasattr(self, 'pool_idx_to_key_map_recur_infer'):
-            # 同时也要清理辅助映射表
-            self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
-        # =========================================================
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
@@ -1786,19 +1767,18 @@ class WorldModel(nn.Module):
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
 
-        # # ======================= 在这里插入分析代码 =======================
-        # # 从kwargs获取全局step，假设您在训练循环中传入了它
+        # ======================= 在这里插入分析代码 =======================
+        # 从kwargs获取全局step，假设您在训练循环中传入了它
         global_step = kwargs.get('global_step', 0)
-
-        # # 为了避免影响训练，可以控制调用频率
-        # if global_step % 10 == 0: # 每100个training step分析一次
-        #     self._analyze_latent_representation(
-        #         latent_states=obs_embeddings,
-        #         timesteps=batch['timestep'],
-        #         game_states=batch['observations'], # 传入原始图像
-        #         step_counter=global_step
-        #     )
-        # # =================================================================
+        # 为了避免影响训练，可以控制调用频率
+        if global_step % 10 == 0: # 每100个training step分析一次
+            self._analyze_latent_representation(
+                latent_states=obs_embeddings,
+                timesteps=batch['timestep'],
+                game_states=batch['observations'], # 传入原始图像
+                step_counter=global_step
+            )
+        # =================================================================
 
         # ========= for visual analysis =========
         # Uncomment the lines below for visual analysis in Pong
@@ -1869,32 +1849,6 @@ class WorldModel(nn.Module):
 
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
-
-        # TODO
-        # ======================= 在这里插入分析代码 =======================
-        # if global_step > 0 and global_step % 1000 == 0:
-        if global_step > 0 and global_step % 5000 == 0:
-        
-            with torch.no_grad():
-                # 将logits转换为标量值
-                # 注意：outputs的形状是(B, L, E)，我们需要reshape
-                batch_size, seq_len = batch['actions'].shape[0], batch['actions'].shape[1]
-                
-                pred_val_logits = outputs.logits_value.view(batch_size * seq_len, -1)
-                pred_rew_logits = outputs.logits_rewards.view(batch_size * seq_len, -1)
-                
-                scalar_values = inverse_scalar_transform_handle(pred_val_logits).squeeze(-1)
-                scalar_rewards = inverse_scalar_transform_handle(pred_rew_logits).squeeze(-1)
-
-                self._analyze_latent_representation(
-                    latent_states=obs_embeddings,
-                    timesteps=batch['timestep'],
-                    game_states=batch['observations'],
-                    predicted_values=scalar_values, # 传入预测的Value
-                    predicted_rewards=scalar_rewards, # 传入预测的Reward
-                    step_counter=global_step
-                )
-        # =================================================================
 
         if self.config.use_priority:
             # ==================== START MODIFICATION 5 ====================
