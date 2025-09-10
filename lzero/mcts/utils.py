@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 from graphviz import Digraph
-
+import torch
 
 def generate_random_actions_discrete(num_actions: int, action_space_size: int, num_of_sampled_actions: int,
                                      reshape=False):
@@ -98,7 +98,61 @@ def prepare_observation(observation_list, model_type='conv'):
         - np.ndarray: Reshaped array of observations.
     """
     assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
-    observation_array = np.array(observation_list)
+
+    # import ipdb;ipdb.set_trace()
+    # observation_array = np.array(observation_list)
+
+
+    # ==============================================================================
+    # 阶段 1: 逐元素统一化 (Element-wise Normalization)
+    # 目标：遍历异构列表，根据每个元素自身的类型将其转换为 Tensor。
+    # 这是修复此问题的核心逻辑。
+    # ==============================================================================
+    
+    normalized_list = []
+    for i, obs in enumerate(observation_list):
+        if isinstance(obs, torch.Tensor):
+            # 元素已经是 Tensor，直接添加
+            normalized_list.append(obs)
+        elif isinstance(obs, list):
+            # 元素是 list (通常是 list of np.ndarray from collector)
+            # 使用 np.array 将其转换为单个 ndarray，然后转为 Tensor
+            try:
+                normalized_list.append(torch.from_numpy(np.array(obs)))
+            except ValueError as e:
+                # 添加更详细的错误信息，以防 list 内部也不均匀
+                print(f"FATAL: Failed to convert a list element at index {i} to a numpy array. The list might be inhomogeneous itself.")
+                print(f"Content of the problematic list: {obs}")
+                raise e
+        elif isinstance(obs, np.ndarray):
+            # 元素是 ndarray，直接转换为 Tensor
+            normalized_list.append(torch.from_numpy(obs))
+        else:
+            # 捕获任何未预料到的格式
+            raise TypeError(f"Unsupported data type '{type(obs)}' found in observation_list at index {i}")
+
+    # ==============================================================================
+    # 阶段 2: 堆叠与转换 (Stack & Convert)
+    # 此时，`normalized_list` 保证是一个纯粹的 "list of torch.Tensors"。
+    # ==============================================================================
+    try:
+        # 使用 PyTorch 自家的、最可靠的 stack 函数
+        stacked_tensor = torch.stack(normalized_list, dim=0)
+    except Exception as e:
+        # 如果这里仍然失败，几乎可以肯定是形状不一致问题
+        print("FATAL: torch.stack failed after element-wise normalization. This indicates a definite shape mismatch.")
+        from collections import Counter
+        # 我们现在可以安全地检查形状了
+        shape_counts = Counter(t.shape for t in normalized_list)
+        print(f"Shape distribution in normalized list: {shape_counts}")
+        raise e
+
+    # 将最终的单一 Tensor 转换为 NumPy 数组
+
+    # 将最终的单一 Tensor 转换为 NumPy 数组。
+    observation_array = stacked_tensor.numpy()
+
+
     batch_size = observation_array.shape[0]
 
     if model_type in ['conv', 'conv_context']:

@@ -19,7 +19,9 @@ from collections import OrderedDict
 logging.getLogger().setLevel(logging.DEBUG)
 
 from collections import OrderedDict, defaultdict
-
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from sklearn.manifold import TSNE
 # In unizero_world_model.py
 
 import torch
@@ -258,6 +260,132 @@ class WorldModel(nn.Module):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+
+        # 用于t-SNE可视化的计数器
+        self.tsne_visualization_step = 0
+
+        # 用于存储梯度hook的handle
+        self._grad_hooks = []
+        
+        # ======================= 注册梯度Hooks =======================
+        # self.register_gradient_hooks(self.tokenizer.representation_network)
+        # =============================================================
+
+
+    def register_gradient_hooks(self, model_to_hook: nn.Module):
+        """
+        递归地为模型中的可学习参数注册梯度hook。
+        """
+        
+        def hook_fn(grad):
+            # 这个hook会在该参数的梯度被计算出来后立即执行
+            if grad is not None:
+                grad_norm = grad.norm().item()
+                grad_mean = grad.mean().item()
+                grad_std = grad.std().item()
+                # 为了避免信息过载，我们可以只打印非零梯度的统计信息
+                if grad_norm > 1e-9:
+                    print(f"    [GRAD HOOK] Param: {name}, Shape: {grad.shape} | Norm: {grad_norm:.6f}, Mean: {grad_mean:.6f}, Std: {grad_std:.6f}")
+
+        # 遍历模型的所有命名参数
+        for name, param in model_to_hook.named_parameters():
+            if param.requires_grad:
+                # 使用 .register_hook() 为张量注册hook
+                handle = param.register_hook(hook_fn)
+                self._grad_hooks.append(handle)
+                print(f"  [INFO] Registered gradient hook for: {name}")
+
+    def remove_gradient_hooks(self):
+        """
+        移除所有已注册的梯度hook，在评估或部署时调用。
+        """
+        for handle in self._grad_hooks:
+            handle.remove()
+        self._grad_hooks.clear()
+        print("[INFO] All gradient hooks removed.")
+
+    def _analyze_latent_representation(self, latent_states: torch.Tensor, timesteps: torch.Tensor, game_states: torch.Tensor, step_counter: int):
+        """
+        分析并记录 latent states 的统计信息和t-SNE可视化。
+        【新功能】：在t-SNE图上直接显示对应的游戏图像。
+        
+        Args:
+            latent_states (torch.Tensor): Encoder的输出, shape (B, L, E) 或 (B*L, 1, E)
+            timesteps (torch.Tensor): 对应的时间步, shape (B, L)
+            game_states (torch.Tensor): 原始的游戏观测, shape (B, L, C, H, W)
+            step_counter (int): 全局训练步数，用于控制可视化频率
+        """
+        # 确保 latent_states 和 game_states 的形状为 (N, ...)
+        if latent_states.dim() > 2:
+            latent_states = latent_states.reshape(-1, latent_states.shape[-1])
+        
+        # game_states shape is (B, L, C, H, W), reshape to (B*L, C, H, W)
+        num_c, num_h, num_w = game_states.shape[-3:]
+        game_states = game_states.reshape(-1, num_c, num_h, num_w)
+
+        # 1. 统计分析 (Stability Check) - 这部分不变
+        with torch.no_grad():
+            l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
+            mean = latent_states.mean()
+            std = latent_states.std()
+            abs_max = latent_states.abs().max()
+            
+            # 假设您有logger
+            # logger.add_scalar('debug/latent_l2_norm', l2_norm.item(), step_counter)
+            # ...
+            print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}, Max Abs: {abs_max:.4f}")
+
+        # 2. 带图像的 t-SNE 可视化 (Discriminability and Consistency Check)
+        if step_counter % 1000 == 0:
+            print(f"[Step {step_counter}] Performing t-SNE analysis with images...")
+
+            # 将数据转换到CPU
+            latents_np = latent_states.detach().cpu().numpy()
+            images_np = game_states.detach().cpu().numpy()
+            
+            # 执行 t-SNE
+            tsne = TSNE(n_components=2, perplexity=30, n_iter=300, random_state=42)
+            tsne_results = tsne.fit_transform(latents_np)
+            
+            # --- 新增：绘制带图像的散点图 ---
+            
+            # 为了性能和清晰度，随机抽样一部分点来显示图像
+            num_points_to_plot = min(len(latents_np), 150) # 最多绘制150张图
+            indices = np.random.choice(len(latents_np), num_points_to_plot, replace=False)
+            
+            fig, ax = plt.subplots(figsize=(16, 14))
+            
+            for i in indices:
+                # 获取 t-SNE 坐标
+                x, y = tsne_results[i]
+                
+                # 获取对应的图像
+                # PyTorch (CHW) -> Matplotlib (HWC)
+                img = images_np[i].transpose(1, 2, 0)
+                
+                # 重要：确保图像数据是可显示的格式，例如 [0, 1] 的浮点数或 [0, 255] 的整数。
+                # 如果您的数据经过了标准化(例如到[-1, 1])，需要先反标准化。
+                # 假设数据是 [0, 1] 范围
+                img = np.clip(img, 0, 1)
+
+                # 使用 OffsetImage 和 AnnotationBbox 将图像放置在图上
+                im = OffsetImage(img, zoom=0.5) # zoom 控制图像缩放比例
+                ab = AnnotationBbox(im, (x, y), frameon=False, pad=0.0)
+                ax.add_artist(ab)
+            
+            # 更新图的边界并自动缩放
+            ax.update_datalim(tsne_results)
+            ax.autoscale()
+            
+            ax.set_title(f't-SNE of Latent States with Images at Step {step_counter}')
+            ax.set_xlabel('t-SNE dimension 1')
+            ax.set_ylabel('t-SNE dimension 2')
+            
+            # 保存图像
+            save_path = f'zoo/atari/unizero_mspacman_analyze/tsne_with_images_step_{step_counter}.png'
+            plt.savefig(save_path)
+            plt.close()
+            print(f"t-SNE plot with images saved to {save_path}")
 
     def _debug_check_for_stale_pointers(self, env_id: int, current_key: Any, index_to_be_written: int):
         """
@@ -1637,6 +1765,20 @@ class WorldModel(nn.Module):
         start_pos = batch['timestep']
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
+
+
+        # ======================= 在这里插入分析代码 =======================
+        # 从kwargs获取全局step，假设您在训练循环中传入了它
+        global_step = kwargs.get('global_step', 0)
+        # 为了避免影响训练，可以控制调用频率
+        if global_step % 10 == 0: # 每100个training step分析一次
+            self._analyze_latent_representation(
+                latent_states=obs_embeddings,
+                timesteps=batch['timestep'],
+                game_states=batch['observations'], # 传入原始图像
+                step_counter=global_step
+            )
+        # =================================================================
 
         # ========= for visual analysis =========
         # Uncomment the lines below for visual analysis in Pong

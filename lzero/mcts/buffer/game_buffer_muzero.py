@@ -765,7 +765,60 @@ class MuZeroGameBuffer(GameBuffer):
                     policy_index += 1
 
                 batch_target_policies_non_re.append(target_policies)
-        batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
+
+        # batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
+
+        #  =================== TODO ===================
+        # ==============================================================================
+        # 最终修复：应用“黄金模式”来处理异构的目标策略列表
+        # ==============================================================================
+        # 1. 逐元素统一化 (Element-wise Normalization)
+        #    `batch_target_policies_non_re` 是一个列表的列表，例如 [[p1, p2], [p3, p4], ...]。
+        #    我们需要确保每个内部的策略 pN 都是一个 Tensor。
+        normalized_policy_list = []
+        for policy_sequence in batch_target_policies_non_re:
+            # `policy_sequence` 是一个包含11个策略的列表
+            sequence_as_tensors = []
+            for policy_step in policy_sequence:
+                if isinstance(policy_step, torch.Tensor):
+                    sequence_as_tensors.append(policy_step)
+                elif isinstance(policy_step, np.ndarray):
+                    sequence_as_tensors.append(torch.from_numpy(policy_step))
+                else:
+                    # 如果策略是其他格式（例如 list），也尝试转换
+                    try:
+                        sequence_as_tensors.append(torch.from_numpy(np.array(policy_step)))
+                    except (TypeError, ValueError) as e:
+                        raise TypeError(f"Unsupported policy step type '{type(policy_step)}' in sequence.") from e
+            
+            # 2. 将统一化的序列堆叠成一个单一的 Tensor
+            #    例如，将 11 个 (18,) 的 Tensor 堆叠成一个 (11, 18) 的 Tensor
+            try:
+                stacked_sequence = torch.stack(sequence_as_tensors, dim=0)
+                normalized_policy_list.append(stacked_sequence)
+            except Exception as e:
+                # 如果堆叠失败，说明序列内部的策略形状不一致
+                print("FATAL: torch.stack failed for a policy sequence. This indicates shape mismatch within a sequence.")
+                from collections import Counter
+                shape_counts = Counter(p.shape for p in sequence_as_tensors)
+                print(f"Shape distribution in the problematic sequence: {shape_counts}")
+                raise e
+
+        # 3. 将所有序列的 Tensor 列表最终堆叠成一个批次 Tensor
+        #    例如，将 256 个 (11, 18) 的 Tensor 堆叠成 (256, 11, 18)
+        try:
+            final_stacked_tensor = torch.stack(normalized_policy_list, dim=0)
+        except Exception as e:
+            print("FATAL: Final torch.stack failed for the batch. This indicates sequence-level shape mismatch.")
+            from collections import Counter
+            shape_counts = Counter(p.shape for p in normalized_policy_list)
+            print(f"Shape distribution of stacked sequences: {shape_counts}")
+            raise e
+
+        # 4. 转换为 NumPy 数组
+        batch_target_policies_non_re = final_stacked_tensor.numpy()
+        # ==============================================================================
+
         return batch_target_policies_non_re
 
     def update_priority(self, train_data: List[np.ndarray], batch_priorities: Any) -> None:

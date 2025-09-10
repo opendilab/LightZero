@@ -458,7 +458,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
 
         # ==================== START MODIFICATION 2 ====================
@@ -517,6 +517,28 @@ class UniZeroPolicy(MuZeroPolicy):
 
 
         weighted_total_loss.backward()
+
+
+        # ======================= 梯度检查代码 =======================
+        # 我们可以只关注 Encoder 的梯度
+        encoder = self._learn_model.world_model.tokenizer.encoder
+        total_grad_norm = 0.0
+        if (train_iter % 1000) == 0:
+            print(f"\n--- Gradient Analysis for Step {train_iter} ---")
+            for name, param in encoder.named_parameters():
+                if param.grad is not None:
+                    grad_norm = param.grad.norm().item()
+                    total_grad_norm += grad_norm ** 2
+                    
+                    # 打印每一层的梯度范数，以定位问题层
+                    print(f"  Layer: {name} | Grad Norm: {grad_norm:.6f}")
+                else:
+                    print(f"  Layer: {name} | Grad is None")
+                    
+            total_grad_norm = total_grad_norm ** 0.5
+            print(f"--- Total Grad Norm for Encoder: {total_grad_norm:.6f} ---\n")
+        # =============================================================
+    
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:

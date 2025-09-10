@@ -29,7 +29,7 @@ def main(env_id, seed):
 
     # max_env_step = int(5e5)
     # max_env_step = int(50e6)
-    max_env_step = int(2e6)
+    max_env_step = int(5e6)
 
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
@@ -58,11 +58,16 @@ def main(env_id, seed):
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            frame_stack_num=4,
 
-            # observation_shape=(4, 64, 64),
-            # gray_scale=True,
-            observation_shape=(12, 64, 64),
+            # frame_stack_num=4,
+            # # observation_shape=(4, 64, 64),
+            # # gray_scale=True,
+            # frame_stack_num=4,
+            # observation_shape=(12, 64, 64),
+            # gray_scale=False,
+
+            frame_stack_num=1,
+            observation_shape=(3, 64, 64),
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -86,10 +91,15 @@ def main(env_id, seed):
                 # image_channel=1,
                 # gray_scale=True,
 
-                observation_shape=(12, 64, 64),
-                image_channel=3,
+                # observation_shape=(12, 64, 64),
+                # image_channel=3,
+                # gray_scale=False,
+                # frame_stack_num=4,
+
+                frame_stack_num=1,
+                observation_shape=(3, 64, 64),
                 gray_scale=False,
-                frame_stack_num=4,
+                image_channel=3,
 
 
                 # num_res_blocks=1,
@@ -132,7 +142,10 @@ def main(env_id, seed):
             eval_num_simulations=eval_num_simulations,
             ssl_loss_weight=2,
             eval_freq=int(5e3),
-            replay_buffer_size=int(1e6),
+            # replay_buffer_size=int(1e6),
+
+            replay_buffer_size=int(5e5),
+
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -163,7 +176,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_muzero_20250910/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
+    main_config.exp_name = f'data_muzero_20250910_save_buffer/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
 
     # main_config.exp_name = f'data_muzero_20250805/{env_id[:-14]}/{env_id[:-14]}_mz_no-per_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
     # train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)

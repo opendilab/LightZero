@@ -270,10 +270,20 @@ class MuZeroModel(nn.Module):
         next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
 
-        print(f"next_latent_state.mean():{next_latent_state.mean()}")
-        print(f"logits_rewards.mean():{reward.mean()}")
-        print(f"logits_policy.mean():{policy_logits.mean()}")
-        print(f"logits_value.mean():{value.mean()}")
+        # print(f"next_latent_state.mean():{next_latent_state.mean()}")
+        # print(f"logits_rewards.mean():{reward.mean()}")
+        # print(f"logits_policy.mean():{policy_logits.mean()}")
+        # print(f"logits_value.mean():{value.mean()}")
+
+        # with torch.no_grad():
+        #     l2_norm = torch.norm(next_latent_state, p=2, dim=1).mean()
+        #     mean = next_latent_state.mean()
+        #     std = next_latent_state.std()
+        #     abs_max = next_latent_state.abs().max()
+        #     # 假设您有logger
+        #     # logger.add_scalar('debug/latent_l2_norm', l2_norm.item(), step_counter)
+        #     # ...
+        #     print(f"next Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}, Max Abs: {abs_max:.4f}")
 
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
