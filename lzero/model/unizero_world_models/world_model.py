@@ -614,10 +614,19 @@ class WorldModel(nn.Module):
 
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
         """Create head modules for the transformer."""
+        # modules = [
+        #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
+        # ]
+        
+        # ==================== 头部优化：防御性设计 ====================
+        # 在头部入口处增加一个LayerNorm，以防止输入饱和。
         modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
         ]
-        
+        # =============================================================
+
+
         # ==================== PROPOSED FIX ====================
         # Add a LayerNorm after the first linear layer and before the activation.
         # This stabilizes the activations within the head, preventing drift.
@@ -626,10 +635,10 @@ class WorldModel(nn.Module):
         # ======================================================
 
         modules.extend([
-            nn.GELU
-            (approximate='tanh'),
+            nn.GELU(approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim),
-            nn.LayerNorm(output_dim)
+            # 最后的LayerNorm可以保留，也可以视情况移除，因为它主要影响输出的尺度
+            # nn.LayerNorm(output_dim) 
         ])
 
         if norm_layer:
