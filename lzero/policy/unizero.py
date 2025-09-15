@@ -447,6 +447,20 @@ class UniZeroPolicy(MuZeroPolicy):
         # 设置为0或负数则禁用此功能
         self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0) # TODO
 
+
+                # 1. 获取 world_model 的引用，方便后续操作
+        world_model = self._learn_model.world_model
+        # 2. 将参数明确地分为两组：预测头 (heads) 和 主干网络 (backbone)
+        #    - a. 获取所有预测头的参数
+        self.head_params = list(world_model.head_value.parameters()) + \
+                    list(world_model.head_rewards.parameters()) + \
+                    list(world_model.head_policy.parameters())
+                    # 如果有其他头，也一并加入
+        #    - b. 为了高效分离，我们使用参数的ID
+        head_param_ids = {id(p) for p in head_params}
+        #    - c. 获取主干网络的参数（所有不在 head_param_ids 中的参数）
+        self.backbone_params = [p for p in world_model.parameters() if id(p) not in head_param_ids]
+
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -502,11 +516,11 @@ class UniZeroPolicy(MuZeroPolicy):
         # TODO
         # ==================== 核心修复：标签平滑 ====================
         # alpha 是平滑系数，一个小的超参数，例如 0.01 或 0.1
-        alpha = 0.1 
-        num_classes = target_value_categorical.shape[-1]
-        # (1 - alpha) * original_target + alpha / num_classes
-        target_value_categorical = target_value_categorical * (1 - alpha) + (alpha / num_classes)
-        target_reward_categorical = target_reward_categorical * (1 - alpha) + (alpha / num_classes)
+        # alpha = 0.1 
+        # num_classes = target_value_categorical.shape[-1]
+        # # (1 - alpha) * original_target + alpha / num_classes
+        # target_value_categorical = target_value_categorical * (1 - alpha) + (alpha / num_classes)
+        # target_reward_categorical = target_reward_categorical * (1 - alpha) + (alpha / num_classes)
         # =============================================================
 
         # Prepare batch for GPT model
@@ -574,6 +588,15 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
         latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
+
+
+        logits_value_mean=self.intermediate_losses['logits_value_mean']
+        logits_value_max=self.intermediate_losses['logits_value_max']
+        logits_value_min=self.intermediate_losses['logits_value_min']
+
+        logits_policy_mean=self.intermediate_losses['logits_policy_mean']
+        logits_policy_max=self.intermediate_losses['logits_policy_max']
+        logits_policy_min=self.intermediate_losses['logits_policy_min']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -645,9 +668,24 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._target_model.encoder_hook.clear_data()
             
             # Clip gradients to prevent exploding gradients
-            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
-                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            # total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
+            #     self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            # )
+            total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+
+            # 3. 对两组参数分别进行梯度裁剪
+            #    - a. 对预测头应用一个更严格（更小）的裁剪阈值
+            #      您需要在配置文件中新增 `head_grad_clip_value`，例如设置为 1.0 或 0.5
+            head_grad_norm = torch.nn.utils.clip_grad_norm_(
+                self.head_params, self._cfg.get('head_grad_clip_value', 1.0)  # 示例：严格的阈值
             )
+            #    - b. 对主干网络应用一个相对宽松的裁剪阈值
+            #      您可以在配置文件中新增 `backbone_grad_clip_value`，例如设置为 10.0
+            backbone_grad_norm = torch.nn.utils.clip_grad_norm_(
+                self.backbone_params, self._cfg.get('backbone_grad_clip_value', 10.0) # 示例：标准的阈值
+            )
+
 
             # Synchronize gradients across multiple GPUs if enabled
             if self._cfg.multi_gpu:
@@ -754,6 +792,9 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
+            "head_grad_norm":head_grad_norm,
+            "backbone_grad_norm":backbone_grad_norm,
+
             'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
             'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
@@ -762,6 +803,13 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
+
+        "logits_value_mean":logits_value_mean,
+        "logits_value_max":logits_value_max,
+        "logits_value_min":logits_value_min,
+        "logits_policy_mean":logits_policy_mean,
+        "logits_policy_max":logits_policy_max,
+        "logits_policy_min":logits_policy_min,
         }
         
         if self._cfg.use_wandb:
@@ -1273,10 +1321,20 @@ class UniZeroPolicy(MuZeroPolicy):
             'target_reward',
             'target_value',
             'total_grad_norm_before_clip_wm',
+                        "head_grad_norm",
+            "backbone_grad_norm",
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',
             'perceptual_loss',
+
+
+        "logits_value_mean",
+        "logits_value_max",
+        "logits_value_min",
+        "logits_policy_mean",
+        "logits_policy_max",
+        "logits_policy_min",
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
@@ -1301,7 +1359,7 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+        # self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """

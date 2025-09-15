@@ -91,15 +91,15 @@ def train_unizero_segment(
         # ==================== 新增修改 ====================
         # 根据用户请求，在加载预训练模型后重新初始化 value head。
         # 这有助于排除 value head 可能陷入饱和区的问题。
-        logging.info("根据请求，正在重新初始化 value head...")
-        # 从策略的 learn_mode 访问底层的 world model。
-        # 在 LightZero 的结构中，这通常是 `policy.learn_mode._model`。
-        if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
-            policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads()
-            logging.info("Value head 已成功重新初始化。")
-        else:
-            logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
-        # ==========================================================
+        # logging.info("根据请求，正在重新初始化 value head...")
+        # # 从策略的 learn_mode 访问底层的 world model。
+        # # 在 LightZero 的结构中，这通常是 `policy.learn_mode._model`。
+        # if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
+        #     policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads(heads_to_reinit= ['value'])
+        #     logging.info("Value head 已成功重新初始化。")
+        # else:
+        #     logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
+        # # ==========================================================
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -167,8 +167,8 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        if learner.train_iter==0 or evaluator.should_eval(learner.train_iter):
         # if learner.train_iter==0 or evaluator.should_eval(learner.train_iter):
+        if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
@@ -197,7 +197,9 @@ def train_unizero_segment(
                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                 logging.info(f'Buffer reanalyze time: {timer.value}')
 
+        
         # Train the policy if sufficient data is available
+        # cfg.policy.train_start_after_envsteps=8000
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
@@ -230,6 +232,14 @@ def train_unizero_segment(
 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                
+                # if learner.train_iter % 1000: # 1k iter, 10k envsteps # TODO
+                #     if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
+                #         policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads(heads_to_reinit= ['value',"reward"])
+                #         logging.info("Value/reward head 已成功重新初始化。")
+                #     else:
+                #         logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
+
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()

@@ -90,7 +90,9 @@ def train_muzero_segment(
 
     # load pretrained model
     if model_path is not None:
+        logging.info(f'Loading model from {model_path} begin...')
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
+        logging.info(f'Loading model from {model_path} end!')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -173,7 +175,9 @@ def train_muzero_segment(
             collect_kwargs['epsilon'] = 0.0
 
         # Evaluate policy performance.
-        if evaluator.should_eval(learner.train_iter):
+        if learner.train_iter==0 or evaluator.should_eval(learner.train_iter):
+        # if evaluator.should_eval(learner.train_iter):
+
             if cfg.policy.eval_offline:
                 eval_train_iter_list.append(learner.train_iter)
                 eval_train_envstep_list.append(collector.envstep)

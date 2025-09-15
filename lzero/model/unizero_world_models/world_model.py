@@ -127,7 +127,8 @@ class WorldModel(nn.Module):
         if not self.config.rotary_emb:
             # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             # TODO(pu)
-            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
+            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+            # self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device, max_norm=1.0)
             self.precompute_pos_emb_diff_kv()
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
@@ -143,7 +144,8 @@ class WorldModel(nn.Module):
             # for discrete action space
             # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             # TODO(pu)
-            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
+            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+            # self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device, max_norm=1.0)
 
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
@@ -272,6 +274,9 @@ class WorldModel(nn.Module):
 
         # 用于存储梯度hook的handle
         self._grad_hooks = []
+
+        if self.config.entry_norm:
+            self.entry_norm = nn.LayerNorm(config.embed_dim) # <-- 新增
         
         # ======================= 注册梯度Hooks =======================
         # self.register_gradient_hooks(self.tokenizer.representation_network)
@@ -358,7 +363,8 @@ class WorldModel(nn.Module):
         }
 
         def _init_weights_for_head(module):
-            init_weights(module, norm_type=self.config.norm_type)
+            # TODO
+            init_weights(module, norm_type=self.config.norm_type, liner_weight_zero=True)
 
         for head_name in heads_to_reinit:
             if head_name in head_map and hasattr(head_map[head_name], 'head_module'):
@@ -718,6 +724,11 @@ class WorldModel(nn.Module):
         modules = [
             nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
+            # ==================== 核心修复点 ====================
+            # 在激活函数GELU之前，对第一个线性层的输出进行归一化
+            # 这可以防止激活值爆炸或饱和
+            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
+        # ======================================================
         ]
         # =============================================================
 
@@ -725,12 +736,13 @@ class WorldModel(nn.Module):
         # ==================== PROPOSED FIX ====================
         # Add a LayerNorm after the first linear layer and before the activation.
         # This stabilizes the activations within the head, preventing drift.
-        if use_norm_in_head: # TODO
-            modules.append(nn.LayerNorm(self.config.embed_dim))
+        # if use_norm_in_head: # TODO
+        #     modules.append(nn.LayerNorm(self.config.embed_dim))
         # ======================================================
 
         modules.extend([
             nn.GELU(approximate='tanh'),
+            # nn.ReLU(inplace=True),
             nn.Linear(self.config.embed_dim, output_dim),
             # 最后的LayerNorm可以保留，也可以视情况移除，因为它主要影响输出的尺度
             # nn.LayerNorm(output_dim) 
@@ -992,6 +1004,9 @@ class WorldModel(nn.Module):
         # Process observation embeddings if available.
         if "obs_embeddings" in obs_embeddings_or_act_tokens:
             obs_embeddings = obs_embeddings_or_act_tokens["obs_embeddings"]
+            if self.config.entry_norm:
+                obs_embeddings = self.entry_norm(obs_embeddings) # <-- 新增 TODO
+
             # If the observation embeddings have 2 dimensions, expand them to include a time dimension.
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
@@ -1054,6 +1069,10 @@ class WorldModel(nn.Module):
                 num_steps = act_tokens.size(1)
             # Convert action tokens to embeddings using the action embedding table.
             act_embeddings = self.act_embedding_table(act_tokens)
+            if self.config.entry_norm:
+                act_embeddings = self.entry_norm(act_embeddings) # <-- 新增 TODO
+
+
             if not self.config.rotary_emb:
                 sequences = self._add_position_embeddings(
                     act_embeddings, prev_steps, num_steps, kvcache_independent,
@@ -1102,6 +1121,11 @@ class WorldModel(nn.Module):
             start_pos_adjusted = [pos * 2 for pos in start_pos]
         else:
             raise ValueError("Input dictionary must contain one of 'obs_embeddings', 'act_tokens', or 'obs_embeddings_and_act_tokens'.")
+
+        # # ==================== 核心修复：应用入口归一化 ====================
+        # # 在添加位置编码之前，对拼接后的序列进行LayerNorm
+        # sequences = self.entry_norm(sequences)
+        # # =================================================================
 
         # Pass the sequence through the transformer.
         x = self._transformer_pass(
@@ -1186,6 +1210,9 @@ class WorldModel(nn.Module):
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
+        if self.config.entry_norm:
+            obs_act_embeddings = self.entry_norm(obs_act_embeddings) # <-- 新增 TODO
+
         return_result = obs_act_embeddings
         if not self.config.rotary_emb:
             return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
@@ -1217,7 +1244,12 @@ class WorldModel(nn.Module):
             act = act_embeddings[:, i, 0, :].unsqueeze(1)
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
-            
+        
+
+        if self.config.entry_norm:
+            obs_act_embeddings = self.entry_norm(obs_act_embeddings) # <-- 新增 TODO
+
+
         return_result = obs_act_embeddings
         if not self.config.rotary_emb:
             return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
@@ -1235,6 +1267,7 @@ class WorldModel(nn.Module):
         Returns:
             - torch.Tensor: Transformer output.
         """
+
         if kvcache_independent:
             x = [self.transformer(sequences[k].unsqueeze(0), past_kv,
                                   valid_context_lengths=valid_context_lengths[k].unsqueeze(0), start_pos=start_pos) for k, past_kv in
@@ -1894,7 +1927,6 @@ class WorldModel(nn.Module):
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
-
         # # ======================= 在这里插入分析代码 =======================
         # # 从kwargs获取全局step，假设您在训练循环中传入了它
         global_step = kwargs.get('global_step', 0)
@@ -2288,6 +2320,10 @@ class WorldModel(nn.Module):
                 latent_norm_loss=latent_norm_loss, # 新增
                 value_priority=value_priority,
                 obs_embeddings=detached_obs_embeddings,  # <-- 新增
+
+
+
+
             )
         else:
             return LossWithIntermediateLosses(
@@ -2312,6 +2348,14 @@ class WorldModel(nn.Module):
                 latent_norm_loss=latent_norm_loss, # 新增
                 value_priority=value_priority,
                 obs_embeddings=detached_obs_embeddings,  # <-- 新增
+
+                logits_value_mean=outputs.logits_value.mean(),
+                logits_value_max=outputs.logits_value.max(),
+                logits_value_min=outputs.logits_value.min(),
+
+                logits_policy_mean=outputs.logits_policy.mean(),
+                logits_policy_max=outputs.logits_policy.max(),
+                logits_policy_min=outputs.logits_policy.min(),
 
             )
 
@@ -2464,11 +2508,12 @@ class WorldModel(nn.Module):
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
         # TODO
-        # # ==================== 核心修复：温度缩放 ====================
-        # if element == 'value':
-        #     temperature = 2.0  # 这是一个需要调试的超参数，可以从2.0开始
-        #     logits = logits / temperature
-        # # =============================================================
+        # ==================== 核心修复：温度缩放 ====================
+        # 仅对 value 和 reward 应用，因为 policy 的目标已经是软的
+        if element in ['value', 'reward']:
+            temperature = 2.0  # 这是一个可以调整的超参数，可以从1.5或2.0开始
+            logits = logits / temperature
+        # =============================================================
 
 
         # Reshape your tensors
@@ -2494,6 +2539,7 @@ class WorldModel(nn.Module):
             return combined_loss, loss, policy_entropy
 
         return loss
+    
 
     def compute_policy_entropy_loss(self, logits, mask):
         # Compute entropy of the policy

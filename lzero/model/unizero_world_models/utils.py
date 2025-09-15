@@ -201,7 +201,7 @@ class WorldModelOutput:
     logits_value: torch.FloatTensor
 
 
-def init_weights(module, norm_type='BN'):
+def init_weights(module, norm_type='BN',liner_weight_zero=False):
     """
     Initialize the weights of the module based on the specified normalization type.
 
@@ -211,6 +211,10 @@ def init_weights(module, norm_type='BN'):
     """
     if isinstance(module, (nn.Linear, nn.Embedding)):
         module.weight.data.normal_(mean=0.0, std=0.02)
+
+        if liner_weight_zero and isinstance(module, nn.Linear): # TODO========
+            nn.init.zeros_(module.weight)
+    
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
