@@ -310,43 +310,77 @@ class WorldModel(nn.Module):
         self._grad_hooks.clear()
         print("[INFO] All gradient hooks removed.")
 
+    # ==================== 新增辅助方法 ====================
+    def _inspect_and_log_head_params(self, head_name: str, head_module: nn.Module, status: str):
+        """
+        检查并记录指定Head模块的参数统计信息。
+        
+        Args:
+            head_name (str): 要检查的Head的名称 (例如, "Value Head")。
+            head_module (nn.Module): Head的实际nn.Sequential模块。
+            status (str): 描述当前状态的字符串 (例如, "Before Re-init")。
+        """
+        logging.info(f"--- 检查 {head_name} 参数 ({status}) ---")
+        with torch.no_grad():
+            for param_name, param in head_module.named_parameters():
+                if param.numel() > 0:
+                    stats = {
+                        "mean": param.mean().item(),
+                        "std": param.std().item(),
+                        "abs_mean": param.abs().mean().item(),
+                        "max": param.max().item(),
+                        "min": param.min().item(),
+                    }
+                    logging.info(
+                        f"  -> {param_name:<20} | "
+                        f"Mean: {stats['mean']:.4f}, Std: {stats['std']:.4f}, "
+                        f"AbsMean: {stats['abs_mean']:.4f}, "
+                        f"Max: {stats['max']:.4f}, Min: {stats['min']:.4f}"
+                    )
+        logging.info("-" * (23 + len(head_name) + len(status)))
   
-      # ==================== 新增方法 ====================
-    def reinit_value_head(self) -> None:
+# ==================== 修改后的方法 ====================
+    def reinit_prediction_heads(self, heads_to_reinit: List[str] = ['value', 'reward']) -> None:
         """
-        Overview:
-            重新初始化Value Head的参数。这在加载预训练模型后，
-            希望重置Value Head以避免其陷入饱和区或进行微调时非常有用。
+        重新初始化指定的预测头（例如Value Head和Reward Head）的参数。
+        在重新初始化前后，会记录参数的统计信息以供分析。
+        
+        Args:
+            heads_to_reinit (List[str]): 一个包含要重新初始化的头的名称的列表。
+                                        默认为 ['value', 'reward']。
         """
-        logging.info("重新初始化Value Head的参数...")
+        logging.info(f"开始重新初始化预测头: {heads_to_reinit}")
 
-        # 定义一个将要被应用的初始化函数。
-        # 这里复用了模型其余部分所使用的权重初始化逻辑，以确保一致性。
+        head_map = {
+            'value': self.head_value,
+            'reward': self.head_rewards,
+            'policy': self.head_policy,
+        }
+
         def _init_weights_for_head(module):
-            # 我们使用与模型其余部分相同的 init_weights 函数，
-            # 以确保初始化方法的一致性。norm_type 从模型配置中读取。
             init_weights(module, norm_type=self.config.norm_type)
 
-        # `head_value` 是一个 `Head` 对象，其实际的层位于 `head_module` 中。
-        # 我们将初始化函数递归地应用于 `head_module` 内的所有模块。
-        if hasattr(self, 'head_value') and isinstance(self.head_value, Head):
-            self.head_value.head_module.apply(_init_weights_for_head)
-            
-            # 原始代码有一个选项可以对最后一层进行零初始化。
-            # 为了完整性，我们复制此逻辑，尽管在提供的配置中它被禁用了。
-            last_linear_layer_init_zero = False
-            if last_linear_layer_init_zero:
-                for layer in reversed(self.head_value.head_module):
-                    if isinstance(layer, nn.Linear):
-                        nn.init.zeros_(layer.weight)
-                        if layer.bias is not None:
-                            nn.init.zeros_(layer.bias)
-                        logging.info("Value head的最后一个线性层已被零初始化。")
-                        break
-            logging.info("Value head参数重新初始化完成。")
-        else:
-            logging.error("未能找到 'head_value' 或者它不是一个 'Head' 实例。")
-    # ===============================================
+        for head_name in heads_to_reinit:
+            if head_name in head_map and hasattr(head_map[head_name], 'head_module'):
+                head_instance = head_map[head_name]
+                capitalized_name = head_name.capitalize() + " Head"
+
+                # 1. 重新初始化前检查参数
+                self._inspect_and_log_head_params(capitalized_name, head_instance.head_module, "Before Re-init")
+
+                # 2. 应用重新初始化
+                logging.info(f"正在重新初始化 {capitalized_name}...")
+                head_instance.head_module.apply(_init_weights_for_head)
+                
+                # 3. 重新初始化后再次检查参数
+                self._inspect_and_log_head_params(capitalized_name, head_instance.head_module, "After Re-init")
+                
+                logging.info(f"{capitalized_name} 参数已成功重新初始化。")
+            else:
+                logging.warning(f"未能找到名为 '{head_name}' 的预测头或其 'head_module'。跳过。")
+        
+        logging.info("所有指定的预测头重新初始化完成。")
+    # ==========================================================
 
     def _analyze_latent_representation(
         self, 
@@ -2430,11 +2464,11 @@ class WorldModel(nn.Module):
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
         # TODO
-        # ==================== 核心修复：温度缩放 ====================
-        if element == 'value':
-            temperature = 2.0  # 这是一个需要调试的超参数，可以从2.0开始
-            logits = logits / temperature
-        # =============================================================
+        # # ==================== 核心修复：温度缩放 ====================
+        # if element == 'value':
+        #     temperature = 2.0  # 这是一个需要调试的超参数，可以从2.0开始
+        #     logits = logits / temperature
+        # # =============================================================
 
 
         # Reshape your tensors

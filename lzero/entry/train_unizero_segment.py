@@ -94,11 +94,11 @@ def train_unizero_segment(
         logging.info("根据请求，正在重新初始化 value head...")
         # 从策略的 learn_mode 访问底层的 world model。
         # 在 LightZero 的结构中，这通常是 `policy.learn_mode._model`。
-        if hasattr(policy.learn_mode, '_model') and hasattr(policy.learn_mode.learn_model, 'reinit_value_head'):
-            policy.learn_mode.learn_model.world_model.reinit_value_head()
+        if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
+            policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads()
             logging.info("Value head 已成功重新初始化。")
         else:
-            logging.warning("未能找到 'reinit_value_head' 方法。请检查模型结构。跳过重新初始化步骤。")
+            logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
         # ==========================================================
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
@@ -167,8 +167,8 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
+        if learner.train_iter==0 or evaluator.should_eval(learner.train_iter):
         # if learner.train_iter==0 or evaluator.should_eval(learner.train_iter):
-        if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
