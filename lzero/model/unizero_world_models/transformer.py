@@ -207,6 +207,7 @@ class Transformer(nn.Module):
             x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, freqs_cis)
         # Apply final layer normalization
         x = self.ln_f(x)
+        
         return x
 
 

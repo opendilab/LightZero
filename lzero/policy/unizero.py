@@ -499,6 +499,16 @@ class UniZeroPolicy(MuZeroPolicy):
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
+        # TODO
+        # ==================== 核心修复：标签平滑 ====================
+        # alpha 是平滑系数，一个小的超参数，例如 0.01 或 0.1
+        alpha = 0.1 
+        num_classes = target_value_categorical.shape[-1]
+        # (1 - alpha) * original_target + alpha / num_classes
+        target_value_categorical = target_value_categorical * (1 - alpha) + (alpha / num_classes)
+        target_reward_categorical = target_reward_categorical * (1 - alpha) + (alpha / num_classes)
+        # =============================================================
+
         # Prepare batch for GPT model
         batch_for_gpt = {}
         if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:

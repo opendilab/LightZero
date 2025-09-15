@@ -88,6 +88,19 @@ def train_unizero_segment(
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
         logging.info(f'Loading model from {model_path} end!')
 
+        # ==================== 新增修改 ====================
+        # 根据用户请求，在加载预训练模型后重新初始化 value head。
+        # 这有助于排除 value head 可能陷入饱和区的问题。
+        logging.info("根据请求，正在重新初始化 value head...")
+        # 从策略的 learn_mode 访问底层的 world model。
+        # 在 LightZero 的结构中，这通常是 `policy.learn_mode._model`。
+        if hasattr(policy.learn_mode, '_model') and hasattr(policy.learn_mode.learn_model, 'reinit_value_head'):
+            policy.learn_mode.learn_model.world_model.reinit_value_head()
+            logging.info("Value head 已成功重新初始化。")
+        else:
+            logging.warning("未能找到 'reinit_value_head' 方法。请检查模型结构。跳过重新初始化步骤。")
+        # ==========================================================
+
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
@@ -154,6 +167,7 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
+        # if learner.train_iter==0 or evaluator.should_eval(learner.train_iter):
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:

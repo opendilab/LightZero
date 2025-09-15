@@ -87,7 +87,9 @@ def main(env_id, seed):
         ),
         policy=dict(
             # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
+            # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),  # 10k
+
             # sample_type='episode',  # NOTE: very important for memory env
             model=dict(
                 observation_shape=(3, 64, 64),

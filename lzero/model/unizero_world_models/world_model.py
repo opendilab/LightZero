@@ -23,7 +23,13 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from sklearn.manifold import TSNE
 # In unizero_world_model.py
-
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import os
+import datetime
 import torch
 import torch.nn as nn
 
@@ -304,6 +310,44 @@ class WorldModel(nn.Module):
         self._grad_hooks.clear()
         print("[INFO] All gradient hooks removed.")
 
+  
+      # ==================== 新增方法 ====================
+    def reinit_value_head(self) -> None:
+        """
+        Overview:
+            重新初始化Value Head的参数。这在加载预训练模型后，
+            希望重置Value Head以避免其陷入饱和区或进行微调时非常有用。
+        """
+        logging.info("重新初始化Value Head的参数...")
+
+        # 定义一个将要被应用的初始化函数。
+        # 这里复用了模型其余部分所使用的权重初始化逻辑，以确保一致性。
+        def _init_weights_for_head(module):
+            # 我们使用与模型其余部分相同的 init_weights 函数，
+            # 以确保初始化方法的一致性。norm_type 从模型配置中读取。
+            init_weights(module, norm_type=self.config.norm_type)
+
+        # `head_value` 是一个 `Head` 对象，其实际的层位于 `head_module` 中。
+        # 我们将初始化函数递归地应用于 `head_module` 内的所有模块。
+        if hasattr(self, 'head_value') and isinstance(self.head_value, Head):
+            self.head_value.head_module.apply(_init_weights_for_head)
+            
+            # 原始代码有一个选项可以对最后一层进行零初始化。
+            # 为了完整性，我们复制此逻辑，尽管在提供的配置中它被禁用了。
+            last_linear_layer_init_zero = False
+            if last_linear_layer_init_zero:
+                for layer in reversed(self.head_value.head_module):
+                    if isinstance(layer, nn.Linear):
+                        nn.init.zeros_(layer.weight)
+                        if layer.bias is not None:
+                            nn.init.zeros_(layer.bias)
+                        logging.info("Value head的最后一个线性层已被零初始化。")
+                        break
+            logging.info("Value head参数重新初始化完成。")
+        else:
+            logging.error("未能找到 'head_value' 或者它不是一个 'Head' 实例。")
+    # ===============================================
+
     def _analyze_latent_representation(
         self, 
         latent_states: torch.Tensor, 
@@ -316,6 +360,7 @@ class WorldModel(nn.Module):
         """
         分析并记录 latent states 的统计信息和t-SNE可视化。
         【新功能】：在t-SNE图上显示对应的游戏图像，并标注预测的Value和Reward。
+        【已修改】：如果保存路径已存在同名文件，则在文件名后附加时间戳。
         
         Args:
             latent_states (torch.Tensor): Encoder的输出, shape (B*L, 1, E)
@@ -392,11 +437,27 @@ class WorldModel(nn.Module):
             sm.set_array([])
             fig.colorbar(sm, ax=ax, label='Predicted Value')
 
-            # save_path = f'zoo/atari/unizero_mspacman_analyze/tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
-            save_path = f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_obs96_step_{step_counter}.png'
+            # --- 修改部分：检查文件是否存在，如果存在则添加时间戳 ---
+            # 1. 构建基础路径
+            base_save_path = (
+                f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
+                f'tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+            )
 
+            # 2. 检查文件是否存在，并确定最终保存路径
+            if os.path.exists(base_save_path):
+                # 如果文件已存在，则生成时间戳并附加到文件名
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                path_root, path_ext = os.path.splitext(base_save_path)
+                save_path = f"{path_root}_{timestamp}{path_ext}"
+                print(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
+            else:
+                # 如果文件不存在，则使用原始路径
+                save_path = base_save_path
+
+            # 3. 保存图像
             plt.savefig(save_path)
-            plt.close()
+            plt.close(fig) # 明确关闭图形对象
             print(f"t-SNE plot with V/R annotations saved to {save_path}")
 
     def _debug_check_for_stale_pointers(self, env_id: int, current_key: Any, index_to_be_written: int):
@@ -630,7 +691,7 @@ class WorldModel(nn.Module):
         # ==================== PROPOSED FIX ====================
         # Add a LayerNorm after the first linear layer and before the activation.
         # This stabilizes the activations within the head, preventing drift.
-        if use_norm_in_head:
+        if use_norm_in_head: # TODO
             modules.append(nn.LayerNorm(self.config.embed_dim))
         # ======================================================
 
@@ -671,7 +732,9 @@ class WorldModel(nn.Module):
 
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
-        last_linear_layer_init_zero = True  # TODO
+        # last_linear_layer_init_zero = True  # TODO
+        last_linear_layer_init_zero = False  # TODO=====
+
         if last_linear_layer_init_zero:
             if self.continuous_action_space:
                 module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
@@ -2365,6 +2428,14 @@ class WorldModel(nn.Module):
         
         if torch.isnan(labels).any():
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
+
+        # TODO
+        # ==================== 核心修复：温度缩放 ====================
+        if element == 'value':
+            temperature = 2.0  # 这是一个需要调试的超参数，可以从2.0开始
+            logits = logits / temperature
+        # =============================================================
+
 
         # Reshape your tensors
         logits = rearrange(logits, 'b t e -> (b t) e')
