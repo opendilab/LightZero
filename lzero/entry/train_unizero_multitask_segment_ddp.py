@@ -1352,7 +1352,7 @@ def train_unizero_multitask_segment_ddp(
        
 
         # 创建共享的learner  #todo: cfg.policy.learn.learner.hook.log_show_after_iter
-        cfg.policy.learn.learner.hook.log_show_after_iter=1
+        cfg.policy.learn.learner.hook.log_show_after_iter=100
         learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
         policy_config = cfg.policy
@@ -1634,64 +1634,64 @@ def train_unizero_multitask_segment_ddp(
                     print("训练结束！！！")
                     
                     # +++++++++++++++++++++++++++++++++ MOE专家选择统计记录 +++++++++++++++++++++++++++++++++
-                    if cfg.policy.model.world_model_cfg.multiplication_moe_in_transformer:
-                        # 控制MoE统计记录频率
-                        moe_log_interval = getattr(cfg.policy, 'moe_log_interval', 500)  # 默认每500个iter记录一次
+                    # if cfg.policy.model.world_model_cfg.multiplication_moe_in_transformer and cfg.policy.model.world_model_cfg.num_experts_of_moe_in_transformer:
+                    #     # 控制MoE统计记录频率
+                    #     moe_log_interval = getattr(cfg.policy, 'moe_log_interval', 500)  # 默认每500个iter记录一次
                         
-                        if learner.train_iter % moe_log_interval == 0:
-                            # # 性能监控开始
-                            # if cal_moe_profile:
-                            #     import time
-                            #     moe_start_time = time.perf_counter()
+                    #     if learner.train_iter % moe_log_interval == 0:
+                    #         # # 性能监控开始
+                    #         # if cal_moe_profile:
+                    #         #     import time
+                    #         #     moe_start_time = time.perf_counter()
                             
-                            collect_and_log_moe_statistics(policy, tb_logger, learner.train_iter, world_size, rank)
+                    #         collect_and_log_moe_statistics(policy, tb_logger, learner.train_iter, world_size, rank)
                             
-                            if rank == 0:  # 只在rank 0打印日志
-                                print(f"MoE统计已记录 (train_iter={learner.train_iter})")
+                    #         if rank == 0:  # 只在rank 0打印日志
+                    #             print(f"MoE统计已记录 (train_iter={learner.train_iter})")
                         
-                        # global a
-                        # a+=1
-                        # 性能监控结束
-                        if cal_moe_profile :
+                    #     # global a
+                    #     # a+=1
+                    #     # 性能监控结束
+                    #     if cal_moe_profile :
                             
-                            if moe_profiler is not None:
-                                try:
-                                    # 禁用profiler
-                                    moe_profiler.disable_by_count()
+                    #         if moe_profiler is not None:
+                    #             try:
+                    #                 # 禁用profiler
+                    #                 moe_profiler.disable_by_count()
                                     
-                                    # 生成性能分析报告文件名
-                                    profile_filename = f'moe_profile_rank{rank}_train{learner.train_iter}.txt'
-                                    profile_path = os.path.join(cfg.exp_name, 'profile', profile_filename)
+                    #                 # 生成性能分析报告文件名
+                    #                 profile_filename = f'moe_profile_rank{rank}_train{learner.train_iter}.txt'
+                    #                 profile_path = os.path.join(cfg.exp_name, 'profile', profile_filename)
                                     
-                                    # 确保目录存在
-                                    os.makedirs(os.path.dirname(profile_path), exist_ok=True)
+                    #                 # 确保目录存在
+                    #                 os.makedirs(os.path.dirname(profile_path), exist_ok=True)
                                     
-                                    # 保存性能分析结果到文件
-                                    with open(profile_path, 'w') as f:
-                                        moe_profiler.print_stats(stream=f)
+                    #                 # 保存性能分析结果到文件
+                    #                 with open(profile_path, 'w') as f:
+                    #                     moe_profiler.print_stats(stream=f)
                                     
-                                    print(f"Rank {rank}: MOE性能分析结果已保存到 {profile_path}")
+                    #                 print(f"Rank {rank}: MOE性能分析结果已保存到 {profile_path}")
                                     
-                                    # 也输出到控制台（可选，用于调试）
-                                    if rank == 0:  # 只在rank 0输出到控制台，避免混乱
-                                        print(f"\n=== Rank {rank}: MOE性能分析摘要 ===")
-                                        moe_profiler.print_stats()
-                                        print("=" * 50)
+                    #                 # 也输出到控制台（可选，用于调试）
+                    #                 if rank == 0:  # 只在rank 0输出到控制台，避免混乱
+                    #                     print(f"\n=== Rank {rank}: MOE性能分析摘要 ===")
+                    #                     moe_profiler.print_stats()
+                    #                     print("=" * 50)
                                         
-                                except Exception as e:
-                                    print(f"Rank {rank}: 保存MOE性能分析失败: {e}")
+                    #             except Exception as e:
+                    #                 print(f"Rank {rank}: 保存MOE性能分析失败: {e}")
                             
                             
                             
-                            # moe_end_time = time.perf_counter()
-                            # moe_elapsed = (moe_end_time - moe_start_time) * 1000  # 转换为毫秒
+                    #         # moe_end_time = time.perf_counter()
+                    #         # moe_elapsed = (moe_end_time - moe_start_time) * 1000  # 转换为毫秒
                             
-                            # 记录性能指标
-                            # tb_logger.add_scalar('Performance/MOE_Statistics_Time_ms', moe_elapsed, global_step=learner.train_iter)
+                    #         # 记录性能指标
+                    #         # tb_logger.add_scalar('Performance/MOE_Statistics_Time_ms', moe_elapsed, global_step=learner.train_iter)
                             
-                            # 打印性能信息（每10次迭代打印一次，避免日志过多）
-                            # if learner.train_iter % 10 == 0:
-                            #     print(f"Rank {rank}: MOE统计耗时 {moe_elapsed:.2f}ms (train_iter={learner.train_iter})")
+                    #         # 打印性能信息（每10次迭代打印一次，避免日志过多）
+                    #         # if learner.train_iter % 10 == 0:
+                    #         #     print(f"Rank {rank}: MOE统计耗时 {moe_elapsed:.2f}ms (train_iter={learner.train_iter})")
                         
                     # +++++++++++++++++++++++++++++++++ MOE专家选择统计记录结束 +++++++++++++++++++++++++++++++++
                     

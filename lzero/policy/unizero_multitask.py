@@ -145,6 +145,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         super().__init__(cfg, model, enable_field)
         self.step=0
         self.save_freq=200
+        self.use_moe=False
         
         self.cal_profile=False
         if self.cal_profile:
@@ -473,9 +474,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         )
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
-        
-        global tb_logger
-        
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
@@ -806,8 +804,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self.log_conflict_matrix=False
         if self.step % self.save_freq==0:
             self.log_conflict_var=True
-        if self.step % (self.save_freq * 10) == 0:
-            self.log_conflict_matrix=True
+        # if self.step % (self.save_freq * 100) == 0:
+        #     self.log_conflict_matrix=True
         
         if self.log_conflict_var:
             matrix_dict={}
@@ -816,20 +814,16 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             local_task_num = len(losses_list)
             local_encoder_grad_list = []
-            local_before_moe_grad_list=[]
-            local_shared_expert_grad_list=[]
-
-            local_last_block_expert_grad_list=[[] for _ in range(num_experts)] 
+            local_before_moe_grad_list = []
+            local_shared_expert_grad_list = []
+            local_last_block_expert_grad_list = [[] for _ in range(num_experts)] 
             
             print(f'Rank {rank} 正在收集梯度')
-            gradient_conflict_log_dict = {
-            }
-
+            gradient_conflict_log_dict = {}
 
             for i in range(local_task_num):
                 # 每次计算前清零梯度，确保梯度独立
                 self._optimizer_world_model.zero_grad()
-                
                 # 计算encoder上的梯度冲突
                 losses_list[i].backward(retain_graph=True) #保留梯度图，因为后面还有backward
                 local_encoder_grad_list.append(self._learn_model.world_model.obs_embeddings_grad.view(-1).detach().clone())
@@ -1283,7 +1277,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         
         
         rank= dist.get_rank()
-        dist.barrier()
+        # dist.barrier()
         print(f"Rank {rank} 日志记录完毕")
         return monitored_vars
         

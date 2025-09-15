@@ -80,7 +80,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             only_use_moco_stats=False,
             use_moco=False,  # ==============TODO==============
             # use_moco=True,  # ==============TODO: moco==============
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
                 calpha=0.5, rescale=1,
@@ -340,7 +340,7 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 1 # ==============TODO==============
+    num_layers = 4 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -427,7 +427,7 @@ if __name__ == "__main__":
 
     import torch.distributed as dist
     # for seed in [1]:
-    for seed in [100]:
+    for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
