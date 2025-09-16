@@ -6,6 +6,8 @@ from .train_alphazero import train_alphazero
 from .train_muzero import train_muzero
 from .train_muzero_segment import train_muzero_segment
 from .train_muzero_segment_save_buffer import train_muzero_segment_save_buffer
+from .train_muzero_segment_save_buffer_from_ckpt import train_muzero_segment_save_buffer_from_ckpt
+
 
 from .train_muzero_with_gym_env import train_muzero_with_gym_env
 from .train_muzero_with_reward_model import train_muzero_with_reward_model

@@ -221,63 +221,67 @@ def train_unizero_segment_from_buffer(
                 break
 
         # Collect new data
-        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        # new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
         # Determine updates per collection
-        update_per_collect = calculate_update_per_collect(cfg, new_data, world_size)
+        # update_per_collect = calculate_update_per_collect(cfg, new_data, world_size)
+
+        # update_per_collect = 10000 # TODO
+        update_per_collect = 1000 # TODO
 
         # Update replay buffer
         # replay_buffer.push_game_segments(new_data)
         # replay_buffer.remove_oldest_data_to_fit()
 
         # Periodically reanalyze buffer
-        if cfg.policy.buffer_reanalyze_freq >= 1:
-            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
-        else:
-            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
-                with timer:
-                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
-                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
-                buffer_reanalyze_count += 1
-                logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
-                logging.info(f'Buffer reanalyze time: {timer.value}')
+        # if cfg.policy.buffer_reanalyze_freq >= 1:
+        #     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+        #     reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+        # else:
+        #     # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+        #     if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+        #         with timer:
+        #             # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+        #             replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+        #         buffer_reanalyze_count += 1
+        #         logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+        #         logging.info(f'Buffer reanalyze time: {timer.value}')
 
         # Train the policy if sufficient data is available
-        if collector.envstep > cfg.policy.train_start_after_envsteps:
-            if cfg.policy.sample_type == 'episode':
-                data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
-            else:
-                data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
-            if not data_sufficient:
-                logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
-                )
-                continue
+        # if collector.envstep > cfg.policy.train_start_after_envsteps:
+        if cfg.policy.sample_type == 'episode':
+            data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
+        else:
+            data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+        if not data_sufficient:
+            logging.warning(
+                f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
+            )
+            continue
 
-            for i in range(update_per_collect):
-                if cfg.policy.buffer_reanalyze_freq >= 1:
-                    # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
-                        with timer:
-                            # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
-                            replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
-                        buffer_reanalyze_count += 1
-                        logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
-                        logging.info(f'Buffer reanalyze time: {timer.value}')
+        for i in range(update_per_collect):
+            # learner._last_iter.add(1) # target net更新需要依靠这个变量 ============
+            # if cfg.policy.buffer_reanalyze_freq >= 1:
+            #     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+            #     if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+            #         with timer:
+            #             # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+            #             replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+            #         buffer_reanalyze_count += 1
+            #         logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+            #         logging.info(f'Buffer reanalyze time: {timer.value}')
 
-                # import ipdb;ipdb.set_trace()
-                train_data = replay_buffer.sample(batch_size, policy)
-                if cfg.policy.use_wandb:
-                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+            # import ipdb;ipdb.set_trace()
+            train_data = replay_buffer.sample(batch_size, policy)
+            if cfg.policy.use_wandb:
+                policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
-                train_data.append(learner.train_iter)
-                log_vars = learner.train(train_data, collector.envstep)
+            train_data.append(learner.train_iter)
+            log_vars = learner.train(train_data, collector.envstep)
 
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+            if cfg.policy.use_priority:
+                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()

@@ -288,8 +288,22 @@ def train_muzero_segment_save_buffer(
                 fully_serializable_data = deep_to_serializable(buffer_data_to_save_raw)
                 
                 # 3. 保存这个100%纯净的字典。
-                torch.save(fully_serializable_data, file_path)
-                logging.info(f"Game Buffer 纯数据已成功保存至: {file_path}")
+                # torch.save(fully_serializable_data, file_path)
+                # logging.info(f"Game Buffer 纯数据已成功保存至: {file_path}")
+
+                # 健壮的保存逻辑
+                temp_file_path = file_path + ".tmp"
+                try:
+                    torch.save(fully_serializable_data, temp_file_path)
+                    # 在某些文件系统上，可以强制同步到磁盘
+                    # os.sync() 
+                    os.rename(temp_file_path, file_path)
+                    logging.info(f"Game Buffer 纯数据已成功保存至: {file_path}")
+                except Exception as e:
+                    logging.error(f"保存失败: {e}")
+                    if os.path.exists(temp_file_path):
+                        os.remove(temp_file_path) # 清理临时文件
+
                 
             except Exception as e:
                 logging.error(f"在迭代次数 {current_milestone} 保存 Game Buffer 纯数据失败。错误: {e}", exc_info=True)

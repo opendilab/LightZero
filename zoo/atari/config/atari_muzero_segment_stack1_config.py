@@ -29,15 +29,17 @@ def main(env_id, seed):
 
     # max_env_step = int(5e5)
     # max_env_step = int(50e6)
-    max_env_step = int(5e6)
+    # max_env_step = int(5e6)
+
+    max_env_step = int(1e5)
 
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1
     # buffer_reanalyze_freq = 1/2
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/50
-    # buffer_reanalyze_freq = 1/10000000000
+    # buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/10000000000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -115,11 +117,13 @@ def main(env_id, seed):
                 use_sim_norm_kl_loss=False,
                 model_type='conv'
             ),
+            model_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250910_save_buffer/MsPacman/MsPacman_mz_brf0.02-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0/ckpt/iteration_100000.pth.tar",
             cuda=True,
             env_type='not_board_games',
             num_segments=num_segments,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
+            num_unroll_steps=num_unroll_steps, # TODO
             random_collect_episode_num=0,
             use_augmentation=True,
             # use_augmentation=False,
@@ -176,13 +180,17 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_muzero_20250910_save_buffer_debug/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
+    main_config.exp_name = f'data_muzero_20250917_save_buffer/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
 
     # main_config.exp_name = f'data_muzero_20250805/{env_id[:-14]}/{env_id[:-14]}_mz_no-per_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
     # train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)
     
-    from lzero.entry import train_muzero_segment_save_buffer
-    train_muzero_segment_save_buffer([main_config, create_config], seed=seed, max_env_step=max_env_step)
+    # from lzero.entry import train_muzero_segment_save_buffer
+    # train_muzero_segment_save_buffer([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+
+
+    from lzero.entry import train_muzero_segment_save_buffer_from_ckpt
+    train_muzero_segment_save_buffer_from_ckpt([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":
@@ -203,5 +211,5 @@ if __name__ == "__main__":
     """
     export CUDA_VISIBLE_DEVICES=1
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
-    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_muzero_segment_config.py
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_muzero_segment_stack1_config.py
     """

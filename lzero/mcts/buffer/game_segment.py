@@ -5,7 +5,7 @@ import numpy as np
 from easydict import EasyDict
 
 from ding.utils.compression_helper import jpeg_data_decompressor
-
+import torch
 
 class GameSegment:
     """
@@ -83,6 +83,8 @@ class GameSegment:
 
         self.reanalyze_time = 0
 
+    # lzero/mcts/game_segment.py
+
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
         Overview:
@@ -93,14 +95,64 @@ class GameSegment:
             - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
         """
         stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps]
+        
+        # 检查 stacked_obs 是否为 PyTorch 张量，以决定使用 torch 还是 numpy 操作
+        is_tensor = isinstance(stacked_obs, torch.Tensor)
+
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_obs)
             if pad_len > 0:
-                pad_frames = np.array([stacked_obs[-1] for _ in range(pad_len)])
-                stacked_obs = np.concatenate((stacked_obs, pad_frames))
+                last_frame = stacked_obs[-1]
+                if is_tensor:
+                    # 使用 PyTorch 的方式进行 padding
+                    # 1. 在第0维增加一个维度 (e.g., [C, H, W] -> [1, C, H, W])
+                    # 2. 使用 repeat 复制 pad_len 次
+                    pad_frames = last_frame.unsqueeze(0).repeat(pad_len, 1, 1, 1)
+                    # 3. 使用 torch.cat 进行拼接
+                    stacked_obs = torch.cat((stacked_obs, pad_frames), dim=0)
+                else:
+                    # 保持原有的 NumPy 逻辑
+                    pad_frames = np.array([last_frame for _ in range(pad_len)])
+                    stacked_obs = np.concatenate((stacked_obs, pad_frames))
+
         if self.transform2string:
-            stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
-        return stacked_obs
+            # 如果是张量，需要先转为numpy
+            if is_tensor:
+                # .cpu() 是为了确保数据在CPU上，.numpy() 需要CPU数据
+                stacked_obs_np = stacked_obs.cpu().numpy()
+            else:
+                stacked_obs_np = stacked_obs
+            stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs_np]
+            # 注意：经过 decompressor 后，stacked_obs 变成了 list of numpy arrays
+            # 为了与函数签名 -> np.ndarray 保持一致，最好再堆叠起来
+            return np.stack(stacked_obs, axis=0)
+
+        # 如果函数签名要求返回 np.ndarray，在最后进行转换
+        # 这样可以确保内部操作高效，同时不破坏外部接口的约定
+        if is_tensor:
+            return stacked_obs.cpu().numpy()
+        else:
+            # 如果原本就是numpy，直接返回
+            return stacked_obs
+    
+    # def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+    #     """
+    #     Overview:
+    #         Get an observation of the correct format: o[t, t + stack frames + num_unroll_steps].
+    #     Arguments:
+    #         - timestep (int): The time step.
+    #         - num_unroll_steps (int): The extra length of the observation frames.
+    #         - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
+    #     """
+    #     stacked_obs = self.obs_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps]
+    #     if padding:
+    #         pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_obs)
+    #         if pad_len > 0:
+    #             pad_frames = np.array([stacked_obs[-1] for _ in range(pad_len)])
+    #             stacked_obs = np.concatenate((stacked_obs, pad_frames))
+    #     if self.transform2string:
+    #         stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
+    #     return stacked_obs
 
     def zero_obs(self) -> List:
         """
