@@ -670,23 +670,25 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._target_model.encoder_hook.clear_data()
             
             # Clip gradients to prevent exploding gradients
-            # total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
-            #     self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
+                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            )
+            # total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+
+            # # 3. 对两组参数分别进行梯度裁剪
+            # #    - a. 对预测头应用一个更严格（更小）的裁剪阈值
+            # #      您需要在配置文件中新增 `head_grad_clip_value`，例如设置为 1.0 或 0.5
+            # head_grad_norm = torch.nn.utils.clip_grad_norm_(
+            #     self.head_params, self._cfg.get('head_grad_clip_value', 1.0)  # 示例：严格的阈值
             # )
-            total_grad_norm_before_clip_wm = torch.tensor(0.)
-
-
-            # 3. 对两组参数分别进行梯度裁剪
-            #    - a. 对预测头应用一个更严格（更小）的裁剪阈值
-            #      您需要在配置文件中新增 `head_grad_clip_value`，例如设置为 1.0 或 0.5
-            head_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.head_params, self._cfg.get('head_grad_clip_value', 1.0)  # 示例：严格的阈值
-            )
-            #    - b. 对主干网络应用一个相对宽松的裁剪阈值
-            #      您可以在配置文件中新增 `backbone_grad_clip_value`，例如设置为 10.0
-            backbone_grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.backbone_params, self._cfg.get('backbone_grad_clip_value', 10.0) # 示例：标准的阈值
-            )
+            # #    - b. 对主干网络应用一个相对宽松的裁剪阈值
+            # #      您可以在配置文件中新增 `backbone_grad_clip_value`，例如设置为 10.0
+            # backbone_grad_norm = torch.nn.utils.clip_grad_norm_(
+            #     self.backbone_params, self._cfg.get('backbone_grad_clip_value', 10.0) # 示例：标准的阈值
+            # )
+            head_grad_norm = torch.tensor(0.)
+            backbone_grad_norm = torch.tensor(0.)
 
 
             # Synchronize gradients across multiple GPUs if enabled
@@ -740,8 +742,6 @@ class UniZeroPolicy(MuZeroPolicy):
         # -----------------------------------------------------------------
         # 如果Value或Reward的Logits绝对值过大，则按比例缩放对应头的权重。
         # =================================================================
-
-
         if self.logit_clip_threshold > 0:
             with torch.no_grad():
                 # 从模型输出中获取原始的Logits (需要确保WorldModel的forward或compute_loss返回了它们)

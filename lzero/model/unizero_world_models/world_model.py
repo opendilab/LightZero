@@ -2038,7 +2038,7 @@ class WorldModel(nn.Module):
         #             predicted_rewards=scalar_rewards, # 传入预测的Reward
         #             step_counter=global_step
         #         )
-        
+
         # =================================================================
 
         if self.config.use_priority:
@@ -2514,12 +2514,12 @@ class WorldModel(nn.Module):
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
         # TODO
-        # ==================== 核心修复：温度缩放 ====================
-        # 仅对 value 和 reward 应用，因为 policy 的目标已经是软的
-        if element in ['value', 'reward']:
-            temperature = 2.0  # 这是一个可以调整的超参数，可以从1.5或2.0开始
-            logits = logits / temperature
-        # =============================================================
+        # # ==================== 核心修复：温度缩放 ====================
+        # # 仅对 value 和 reward 应用，因为 policy 的目标已经是软的
+        # if element in ['value', 'reward']:
+        #     temperature = 2.0  # 这是一个可以调整的超参数，可以从1.5或2.0开始
+        #     logits = logits / temperature
+        # # =============================================================
 
 
         # Reshape your tensors

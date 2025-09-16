@@ -258,15 +258,15 @@ class AtariEnvLightZero(BaseEnv):
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
 
-        # cfg.episode_life = True
-        # cfg.clip_rewards = True
+        cfg.episode_life = True
+        cfg.clip_rewards = True
 
-        # only for save buffer
+        # only for save buffer TODO ==================
         # cfg.episode_life = False
         # cfg.clip_rewards = False
 
-        cfg.episode_life = False
-        cfg.clip_rewards = True
+        # cfg.episode_life = False
+        # cfg.clip_rewards = True
 
         return [cfg for _ in range(collector_env_num)]
 
