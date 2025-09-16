@@ -175,10 +175,13 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         self._timestep += 1
-        # logging.info(f'self._timestep: {self._timestep}')
+        if self._timestep %100==0:
+            logging.info(f'self._timestep: {self._timestep}')
         observation = self.observe()
         if done:
             logging.info(f'one episode done! total episode length is: {self._timestep}')
+            logging.info(f'one episode done! self._eval_episode_return is: {self._eval_episode_return}')
+
             info['eval_episode_return'] = self._eval_episode_return
         return BaseEnvTimestep(observation, self.reward, done, info)
 
@@ -254,8 +257,17 @@ class AtariEnvLightZero(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
-        cfg.episode_life = True
+
+        # cfg.episode_life = True
+        # cfg.clip_rewards = True
+
+        # only for save buffer
+        # cfg.episode_life = False
+        # cfg.clip_rewards = False
+
+        cfg.episode_life = False
         cfg.clip_rewards = True
+
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod

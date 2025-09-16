@@ -175,7 +175,9 @@ def main(env_id, seed):
             latent_norm_clip_threshold=5, # 768dim latent
             logit_clip_threshold=10, # value reward
             # policy_logit_clip_threshold=0.1, # policy
-            policy_logit_clip_threshold=0.5, # policy
+            # policy_logit_clip_threshold=0.5, # policy
+            policy_logit_clip_threshold=5, # policy
+
             # piecewise_decay_lr_scheduler=False,
             # optim_type='AdamW_mix_lr',
             # learning_rate=0.001,
@@ -183,7 +185,6 @@ def main(env_id, seed):
             backbone_grad_clip_value=5,
             # head_grad_clip_value=0.5,
             head_grad_clip_value=5,  # TODO
-
 
             # replay_buffer_size=int(1e6),
             replay_buffer_size=int(5e5), # TODO
@@ -247,7 +248,8 @@ def main(env_id, seed):
 
     # expert_buffer_path="data_muzero_20250910/MsPacman/MsPacman_mz_brf0.02-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0_250910_154414/game_buffers/muzero_game_buffer_iter_32.pth"
     # expert_buffer_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250910_save_buffer/MsPacman/MsPacman_mz_brf0.02-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0/game_buffers/muzero_game_buffer_iter_100000.pth"
-    expert_buffer_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250917_save_buffer/MsPacman/MsPacman_mz_brf1e-10-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0_250916_171727/game_buffers/muzero_game_buffer_iter_120.pth"
+    # expert_buffer_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250917_save_buffer/MsPacman/MsPacman_mz_brf1e-10-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0_250916_171727/game_buffers/muzero_game_buffer_iter_120.pth"
+    expert_buffer_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250917_save_buffer/MsPacman/MsPacman_mz_brf1e-10-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim50-esim50_rgb_seed0/game_buffers/muzero_game_buffer_iter_16.pth"
     train_unizero_segment_from_buffer([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step, expert_buffer_path=expert_buffer_path)
 
 

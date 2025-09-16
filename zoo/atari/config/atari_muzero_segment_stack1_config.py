@@ -9,11 +9,18 @@ def main(env_id, seed):
     # ==============================================================
     collector_env_num = 8
     num_segments = 8
+
+    # collector_env_num = 3
+    # num_segments = 3
+
     game_segment_length = 20
     evaluator_env_num = 3
     # num_simulations = 50
 
-    collect_num_simulations = 25
+    # collect_num_simulations = 25
+
+    collect_num_simulations = 50
+
     eval_num_simulations = 50
 
     update_per_collect = None
@@ -117,7 +124,9 @@ def main(env_id, seed):
                 use_sim_norm_kl_loss=False,
                 model_type='conv'
             ),
-            model_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250910_save_buffer/MsPacman/MsPacman_mz_brf0.02-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0/ckpt/iteration_100000.pth.tar",
+            # model_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250910_save_buffer/MsPacman/MsPacman_mz_brf0.02-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0/ckpt/iteration_100000.pth.tar",
+            model_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_muzero_20250910_save_buffer/MsPacman/MsPacman_mz_brf0.02-rbs160-rp0.75_numsegments-8_gsl20_rr0.1_Htrain10_bs256_csim25-esim50_rgb_seed0/ckpt/ckpt_best.pth.tar",
+
             cuda=True,
             env_type='not_board_games',
             num_segments=num_segments,
