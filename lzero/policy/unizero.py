@@ -758,7 +758,7 @@ class UniZeroPolicy(MuZeroPolicy):
                         # 计算缩放因子
                         scale_factor = self.logit_clip_threshold / max_abs_logit.item()
                         
-                        print(f"[Head-Clip] Max abs logit {max_abs_logit.item():.2f} > {self.logit_clip_threshold}. Scaling head weights by {scale_factor:.4f}.")
+                        print(f"[Value-Reward-Head-Clip] Max abs logit {max_abs_logit.item():.2f} > {self.logit_clip_threshold}. Scaling head weights by {scale_factor:.4f}.")
 
                         # 获取需要裁剪的预测头
                         head_value_module = self._model.world_model.head_value
@@ -769,6 +769,43 @@ class UniZeroPolicy(MuZeroPolicy):
                             for param in head_module.parameters():
                                 if param.requires_grad:
                                     param.data.mul_(scale_factor)
+        # =================================================================
+
+
+        # =================================================================
+        #      【新功能】Policy-Head-Clip: 直接控制Policy预测头的权重以保持探索
+        # -----------------------------------------------------------------
+        # 此机制的目标是防止策略过早地变得过于确定，从而扼杀探索。
+        # 它通过限制Policy Logits的最大正值来实现。
+        # =================================================================
+        # 从配置中获取策略裁剪阈值，如果未设置则默认为0.1
+        policy_logit_clip_threshold = self._cfg.get('policy_logit_clip_threshold', 0.1)
+
+        if policy_logit_clip_threshold > 0:
+            with torch.no_grad():
+                # 1. 从模型输出中获取原始的Policy Logits
+                #    确保 WorldModel 的 compute_loss 返回了 'logits_policy'
+                logits_policy = losses.intermediate_losses.get('logits_policy')
+
+                if logits_policy is not None:
+                    # 2. 计算Policy Logits中的最大值 (我们只关心正向的最大值，不关心负值有多大)
+                    max_policy_logit = logits_policy.max()
+
+                    # 3. 检查是否超过了我们为“探索性”设定的阈值
+                    if max_policy_logit > policy_logit_clip_threshold:
+                        # 4. 计算缩放因子
+                        scale_factor = policy_logit_clip_threshold / max_policy_logit.item()
+                        
+                        # 打印日志，方便调试
+                        print(f"[Policy-Head-Clip] Max policy logit {max_policy_logit.item():.4f} > {policy_logit_clip_threshold}. Scaling policy head weights by {scale_factor:.4f}.")
+
+                        # 5. 获取Policy Head模块
+                        head_policy_module = self._model.world_model.head_policy
+
+                        # 6. 将缩放因子应用到Policy Head的所有权重上
+                        for param in head_policy_module.parameters():
+                            if param.requires_grad:
+                                param.data.mul_(scale_factor)
         # =================================================================
 
         # Update learning rate scheduler if applicable
