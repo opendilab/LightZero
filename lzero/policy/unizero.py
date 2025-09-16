@@ -448,6 +448,8 @@ class UniZeroPolicy(MuZeroPolicy):
         self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0) # TODO
 
 
+        # 从配置中获取阈值，例如 15.0 或 20.0
+        self.logit_clip_threshold = self._cfg.get('logit_clip_threshold', 10.0)
                 # 1. 获取 world_model 的引用，方便后续操作
         world_model = self._learn_model.world_model
         # 2. 将参数明确地分为两组：预测头 (heads) 和 主干网络 (backbone)
@@ -457,9 +459,9 @@ class UniZeroPolicy(MuZeroPolicy):
                     list(world_model.head_policy.parameters())
                     # 如果有其他头，也一并加入
         #    - b. 为了高效分离，我们使用参数的ID
-        head_param_ids = {id(p) for p in head_params}
+        self.head_param_ids = {id(p) for p in self.head_params}
         #    - c. 获取主干网络的参数（所有不在 head_param_ids 中的参数）
-        self.backbone_params = [p for p in world_model.parameters() if id(p) not in head_param_ids]
+        self.backbone_params = [p for p in world_model.parameters() if id(p) not in self.head_param_ids]
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -733,6 +735,41 @@ class UniZeroPolicy(MuZeroPolicy):
                         if param.requires_grad:
                             param.data.mul_(scale_factor)
 
+        # =================================================================
+        #              Head-Clip: 直接控制预测头的权重
+        # -----------------------------------------------------------------
+        # 如果Value或Reward的Logits绝对值过大，则按比例缩放对应头的权重。
+        # =================================================================
+
+
+        if self.logit_clip_threshold > 0:
+            with torch.no_grad():
+                # 从模型输出中获取原始的Logits (需要确保WorldModel的forward或compute_loss返回了它们)
+                # 假设它们存储在 losses.intermediate_losses 中
+                logits_value = losses.intermediate_losses.get('logits_value')
+                logits_reward = losses.intermediate_losses.get('logits_reward')
+
+                if logits_value is not None and logits_reward is not None:
+                    # 计算Value和Reward Logits中的最大绝对值
+                    max_abs_logit = max(logits_value.abs().max(), logits_reward.abs().max())
+
+                    # 检查是否超过阈值
+                    if max_abs_logit > self.logit_clip_threshold:
+                        # 计算缩放因子
+                        scale_factor = self.logit_clip_threshold / max_abs_logit.item()
+                        
+                        print(f"[Head-Clip] Max abs logit {max_abs_logit.item():.2f} > {self.logit_clip_threshold}. Scaling head weights by {scale_factor:.4f}.")
+
+                        # 获取需要裁剪的预测头
+                        head_value_module = self._model.world_model.head_value
+                        head_reward_module = self._model.world_model.head_rewards
+
+                        # 将缩放因子应用到这两个头的所有权重上
+                        for head_module in [head_value_module, head_reward_module]:
+                            for param in head_module.parameters():
+                                if param.requires_grad:
+                                    param.data.mul_(scale_factor)
+        # =================================================================
 
         # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:

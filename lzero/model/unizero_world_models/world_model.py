@@ -2356,6 +2356,8 @@ class WorldModel(nn.Module):
                 logits_policy_mean=outputs.logits_policy.mean(),
                 logits_policy_max=outputs.logits_policy.max(),
                 logits_policy_min=outputs.logits_policy.min(),
+                    logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+    logits_reward=outputs.logits_rewards.detach(),
 
             )
 

@@ -233,12 +233,12 @@ def train_unizero_segment(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
                 
-                # if learner.train_iter % 1000: # 1k iter, 10k envsteps # TODO
-                #     if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
-                #         policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads(heads_to_reinit= ['value',"reward"])
-                #         logging.info("Value/reward head 已成功重新初始化。")
-                #     else:
-                #         logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
+                if learner.train_iter % 50000==0: # 50k iter, 10k envsteps # TODO
+                    if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
+                        policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads(heads_to_reinit= ['value',"reward","policy"])
+                        logging.info("Value/reward head 已成功重新初始化。")
+                    else:
+                        logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
 
 
         train_epoch += 1
