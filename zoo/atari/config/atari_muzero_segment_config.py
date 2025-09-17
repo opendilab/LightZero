@@ -163,7 +163,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_muzero_20250910/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
+    main_config.exp_name = f'data_muzero_20250910_debug/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
 
     # main_config.exp_name = f'data_muzero_20250805/{env_id[:-14]}/{env_id[:-14]}_mz_no-per_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_csim{collect_num_simulations}-esim{eval_num_simulations}_rgb_seed{seed}'
     # train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)

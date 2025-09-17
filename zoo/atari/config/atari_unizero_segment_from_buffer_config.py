@@ -142,7 +142,9 @@ def main(env_id, seed):
                     weight_decay=1e-4, # TODO
 
                     use_priority=True, # TODO(pu): test
-                    entry_norm=True, # TODO========
+                    # entry_norm=True, # TODO========
+                    entry_norm=False, # TODO========
+
 
                 ),
             ),
@@ -170,15 +172,19 @@ def main(env_id, seed):
             # target_update_theta=0.005, # TODO
             # target_update_theta=0.01,
             target_update_theta=0.05,
-
             learning_rate=0.0001,
-            # learning_rate=0.0003, # TODO
-            # latent_norm_clip_threshold=3, # 768dim
-            latent_norm_clip_threshold=5, # 768dim latent
-            logit_clip_threshold=10, # value reward
-            # policy_logit_clip_threshold=0.1, # policy
-            # policy_logit_clip_threshold=0.5, # policy
-            policy_logit_clip_threshold=5, # policy
+
+            # # learning_rate=0.0003, # TODO
+            # # latent_norm_clip_threshold=3, # 768dim
+            # latent_norm_clip_threshold=5, # 768dim latent
+            # logit_clip_threshold=10, # value reward
+            # # policy_logit_clip_threshold=0.5, # policy
+            # policy_logit_clip_threshold=5, # policy
+
+
+            latent_norm_clip_threshold=999, # 768dim latent
+            logit_clip_threshold=999, # value reward
+            policy_logit_clip_threshold=999, # policy
 
             # piecewise_decay_lr_scheduler=False,
             # optim_type='AdamW_mix_lr',
@@ -237,7 +243,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment_from_buffer
-    main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_clear{game_segment_length}_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_noclip_clear{game_segment_length}_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250901_debug/{env_id[:-14]}/{env_id[:-14]}_uz_per_lnlw1e-4_enc-BN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'

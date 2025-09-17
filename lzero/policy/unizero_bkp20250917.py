@@ -16,23 +16,6 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
-from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
-
-def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
-    """
-    使用向量化操作高效地缩放一个模块的所有权重。
-    """
-    if not (0.0 < scale_factor < 1.0):
-        return # 如果缩放因子无效，则不执行任何操作
-
-    # 1. 将模块的所有参数展平成一个单一向量
-    params_vec = parameters_to_vector(module.parameters())
-    
-    # 2. 在这个向量上执行一次乘法操作
-    params_vec.data.mul_(scale_factor)
-    
-    # 3. 将缩放后的向量复制回模块的各个参数
-    vector_to_parameters(params_vec, module.parameters())
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
@@ -644,48 +627,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         weighted_total_loss.backward()
 
-        # =================================================================
-        #              高效的权重裁剪实现
-        # -----------------------------------------------------------------
-        # 仍然在 torch.no_grad() 环境下执行
-        # =================================================================
-        with torch.no_grad():
-            # 1. Encoder-Clip
-            if self.latent_norm_clip_threshold > 0 and 'obs_embeddings' in losses.intermediate_losses:
-                obs_embeddings = losses.intermediate_losses['obs_embeddings']
-                if obs_embeddings is not None:
-                    max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
-                    if max_latent_norm > self.latent_norm_clip_threshold:
-                        scale_factor = self.latent_norm_clip_threshold / max_latent_norm.item()
-                        print(f"[Encoder-Clip] Max latent norm {max_latent_norm.item():.2f} > {self.latent_norm_clip_threshold}. Scaling encoder weights by {scale_factor:.4f}.")
-                        # 调用高效的向量化函数
-                        scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
-
-            # 2. Value/Reward-Head-Clip
-            if self.logit_clip_threshold > 0:
-                logits_value = losses.intermediate_losses.get('logits_value')
-                logits_reward = losses.intermediate_losses.get('logits_reward')
-                if logits_value is not None and logits_reward is not None:
-                    max_abs_logit = max(logits_value.abs().max(), logits_reward.abs().max())
-                    if max_abs_logit > self.logit_clip_threshold:
-                        scale_factor = self.logit_clip_threshold / max_abs_logit.item()
-                        print(f"[Value-Reward-Head-Clip] Max abs logit {max_abs_logit.item():.2f} > {self.logit_clip_threshold}. Scaling head weights by {scale_factor:.4f}.")
-                        # 分别对两个头进行缩放
-                        scale_module_weights_vectorized(self._model.world_model.head_value, scale_factor)
-                        scale_module_weights_vectorized(self._model.world_model.head_rewards, scale_factor)
-
-            # 3. Policy-Head-Clip
-            policy_logit_clip_threshold = self._cfg.get('policy_logit_clip_threshold', 5)
-            if policy_logit_clip_threshold > 0:
-                logits_policy = losses.intermediate_losses.get('logits_policy')
-                if logits_policy is not None:
-                    max_policy_logit = logits_policy.max()
-                    if max_policy_logit > policy_logit_clip_threshold:
-                        scale_factor = policy_logit_clip_threshold / max_policy_logit.item()
-                        print(f"[Policy-Head-Clip] Max policy logit {max_policy_logit.item():.4f} > {policy_logit_clip_threshold}. Scaling policy head weights by {scale_factor:.4f}.")
-                        scale_module_weights_vectorized(self._model.world_model.head_policy, scale_factor)
-
-
         # # ======================= 学习率真实性检查 =======================
         # if (train_iter % 1000) == 0:
         #     print("\n--- Optimizer Learning Rate Analysis ---")
@@ -763,9 +704,109 @@ class UniZeroPolicy(MuZeroPolicy):
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
 
+        # =================================================================
+        #              Encoder-Clip: Inspired by QK-Clip
+        # -----------------------------------------------------------------
+        # 直接控制Encoder输出的范数，防止其无界增长，以稳定训练。
+        # =================================================================
+        if self.latent_norm_clip_threshold > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            with torch.no_grad():
+                # 1. 从loss字典中获取已分离的encoder输出
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                if obs_embeddings is None:
+                    raise ValueError
 
-        # 以前clip的位置 ==========
+                # 2. 计算这批数据中，encoder输出L2范数的最大值
+                # obs_embeddings 的形状通常是 (B*L, 1, E) 或 (B*L, E)
+                # 我们在最后一个维度（embedding_dim）上计算范数
+                latent_norms = obs_embeddings.norm(p=2, dim=-1)
+                max_latent_norm = latent_norms.max()
 
+                # 3. 检查最大范数是否超过了我们设定的阈值
+                if max_latent_norm > self.latent_norm_clip_threshold:
+                    
+                    # 4. 计算缩放因子
+                    scale_factor = self.latent_norm_clip_threshold / max_latent_norm.item()
+                    
+                    # (可选) 打印日志，方便调试
+                    print(f"[Encoder-Clip] Max latent norm {max_latent_norm.item():.2f} > {self.latent_norm_clip_threshold}. Scaling encoder weights by {scale_factor:.4f}.")
+
+                    # 5. 将缩放因子应用到Encoder的所有权重上
+                    encoder = self._model.world_model.tokenizer.encoder
+                    for param in encoder.parameters():
+                        if param.requires_grad:
+                            param.data.mul_(scale_factor)
+
+        # =================================================================
+        #              Head-Clip: 直接控制预测头的权重
+        # -----------------------------------------------------------------
+        # 如果Value或Reward的Logits绝对值过大，则按比例缩放对应头的权重。
+        # =================================================================
+        if self.logit_clip_threshold > 0:
+            with torch.no_grad():
+                # 从模型输出中获取原始的Logits (需要确保WorldModel的forward或compute_loss返回了它们)
+                # 假设它们存储在 losses.intermediate_losses 中
+                logits_value = losses.intermediate_losses.get('logits_value')
+                logits_reward = losses.intermediate_losses.get('logits_reward')
+
+                if logits_value is not None and logits_reward is not None:
+                    # 计算Value和Reward Logits中的最大绝对值
+                    max_abs_logit = max(logits_value.abs().max(), logits_reward.abs().max())
+
+                    # 检查是否超过阈值
+                    if max_abs_logit > self.logit_clip_threshold:
+                        # 计算缩放因子
+                        scale_factor = self.logit_clip_threshold / max_abs_logit.item()
+                        
+                        print(f"[Value-Reward-Head-Clip] Max abs logit {max_abs_logit.item():.2f} > {self.logit_clip_threshold}. Scaling head weights by {scale_factor:.4f}.")
+
+                        # 获取需要裁剪的预测头
+                        head_value_module = self._model.world_model.head_value
+                        head_reward_module = self._model.world_model.head_rewards
+
+                        # 将缩放因子应用到这两个头的所有权重上
+                        for head_module in [head_value_module, head_reward_module]:
+                            for param in head_module.parameters():
+                                if param.requires_grad:
+                                    param.data.mul_(scale_factor)
+        # =================================================================
+
+
+        # =================================================================
+        #      【新功能】Policy-Head-Clip: 直接控制Policy预测头的权重以保持探索
+        # -----------------------------------------------------------------
+        # 此机制的目标是防止策略过早地变得过于确定，从而扼杀探索。
+        # 它通过限制Policy Logits的最大正值来实现。
+        # =================================================================
+        # 从配置中获取策略裁剪阈值，如果未设置则默认为0.1
+        policy_logit_clip_threshold = self._cfg.get('policy_logit_clip_threshold', 0.1)
+
+        if policy_logit_clip_threshold > 0:
+            with torch.no_grad():
+                # 1. 从模型输出中获取原始的Policy Logits
+                #    确保 WorldModel 的 compute_loss 返回了 'logits_policy'
+                logits_policy = losses.intermediate_losses.get('logits_policy')
+
+                if logits_policy is not None:
+                    # 2. 计算Policy Logits中的最大值 (我们只关心正向的最大值，不关心负值有多大)
+                    max_policy_logit = logits_policy.max()
+
+                    # 3. 检查是否超过了我们为“探索性”设定的阈值
+                    if max_policy_logit > policy_logit_clip_threshold:
+                        # 4. 计算缩放因子
+                        scale_factor = policy_logit_clip_threshold / max_policy_logit.item()
+                        
+                        # 打印日志，方便调试
+                        print(f"[Policy-Head-Clip] Max policy logit {max_policy_logit.item():.4f} > {policy_logit_clip_threshold}. Scaling policy head weights by {scale_factor:.4f}.")
+
+                        # 5. 获取Policy Head模块
+                        head_policy_module = self._model.world_model.head_policy
+
+                        # 6. 将缩放因子应用到Policy Head的所有权重上
+                        for param in head_policy_module.parameters():
+                            if param.requires_grad:
+                                param.data.mul_(scale_factor)
+        # =================================================================
 
         # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:

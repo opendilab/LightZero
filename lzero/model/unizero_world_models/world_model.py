@@ -32,6 +32,7 @@ import os
 import datetime
 import torch
 import torch.nn as nn
+from lzero.model.common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook, MLP_V2
 
 # --- HOOK FUNCTION FOR DEBUGGING ---
 def print_intermediate_activation_hook(module, input, output):
@@ -712,50 +713,74 @@ class WorldModel(nn.Module):
     #         block_mask=block_mask,
     #         head_module=nn.Sequential(*modules)
     #     )
-
+    
+    #_create_head_muzero
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
         """Create head modules for the transformer."""
-        # modules = [
-        #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
-        # ]
+
         
-        # ==================== 头部优化：防御性设计 ====================
-        # 在头部入口处增加一个LayerNorm，以防止输入饱和。
-        modules = [
-            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
-            nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            # ==================== 核心修复点 ====================
-            # 在激活函数GELU之前，对第一个线性层的输出进行归一化
-            # 这可以防止激活值爆炸或饱和
-            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
-        # ======================================================
-        ]
-        # =============================================================
-
-
-        # ==================== PROPOSED FIX ====================
-        # Add a LayerNorm after the first linear layer and before the activation.
-        # This stabilizes the activations within the head, preventing drift.
-        # if use_norm_in_head: # TODO
-        #     modules.append(nn.LayerNorm(self.config.embed_dim))
-        # ======================================================
-
-        modules.extend([
-            nn.GELU(approximate='tanh'),
-            # nn.ReLU(inplace=True),
-            nn.Linear(self.config.embed_dim, output_dim),
-            # 最后的LayerNorm可以保留，也可以视情况移除，因为它主要影响输出的尺度
-            # nn.LayerNorm(output_dim) 
-        ])
-
-        if norm_layer:
-            modules.append(norm_layer)
+        modules = MLP_V2(
+            in_channels=self.config.embed_dim,
+            hidden_channels=[32],
+            out_channels=output_dim,
+            # activation=nn.GELU(approximate='tanh'),
+            activation=nn.ReLU(inplace=True),
+            # norm_type='BN',
+            norm_type='LN', 
+            output_activation=False,
+            output_norm=False,
+            last_linear_layer_init_zero=True
+        )
             
         return Head(
             max_blocks=self.config.max_blocks,
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
+    
+    # def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
+    #     """Create head modules for the transformer."""
+    #     # modules = [
+    #     #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
+    #     # ]
+        
+    #     # ==================== 头部优化：防御性设计 ====================
+    #     # 在头部入口处增加一个LayerNorm，以防止输入饱和。
+    #     modules = [
+    #         nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
+    #         nn.Linear(self.config.embed_dim, self.config.embed_dim),
+    #         # ==================== 核心修复点 ====================
+    #         # 在激活函数GELU之前，对第一个线性层的输出进行归一化
+    #         # 这可以防止激活值爆炸或饱和
+    #         nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
+    #     # ======================================================
+    #     ]
+    #     # =============================================================
+
+
+    #     # ==================== PROPOSED FIX ====================
+    #     # Add a LayerNorm after the first linear layer and before the activation.
+    #     # This stabilizes the activations within the head, preventing drift.
+    #     # if use_norm_in_head: # TODO
+    #     #     modules.append(nn.LayerNorm(self.config.embed_dim))
+    #     # ======================================================
+
+    #     modules.extend([
+    #         nn.GELU(approximate='tanh'),
+    #         # nn.ReLU(inplace=True),
+    #         nn.Linear(self.config.embed_dim, output_dim),
+    #         # 最后的LayerNorm可以保留，也可以视情况移除，因为它主要影响输出的尺度
+    #         # nn.LayerNorm(output_dim) 
+    #     ])
+
+    #     if norm_layer:
+    #         modules.append(norm_layer)
+            
+    #     return Head(
+    #         max_blocks=self.config.max_blocks,
+    #         block_mask=block_mask,
+    #         head_module=nn.Sequential(*modules)
+    #     )
 
     def _create_head_cont(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""

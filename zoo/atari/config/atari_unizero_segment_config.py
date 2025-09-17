@@ -196,8 +196,8 @@ def main(env_id, seed):
 
             logit_clip_threshold=10, # value reward
 
-            # policy_logit_clip_threshold=5, # policy
-            policy_logit_clip_threshold=1, # policy
+            policy_logit_clip_threshold=5, # policy
+            # policy_logit_clip_threshold=1, # policy
 
             # piecewise_decay_lr_scheduler=False,
             # optim_type='AdamW_mix_lr',
@@ -272,7 +272,7 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_head-clip10-policy1_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_head-clip10-policy5_muzerohead_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_head-clip10-policy05_entry-norm_clipgrad-backbone5-head5_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -331,9 +331,11 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=6
+    export CUDA_VISIBLE_DEVICES=3
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
-    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_head-clip10-pol1_reinit-value-reward-policy-50k_pong.log 2>&1
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_head-clip10-pol5_fix-clip_reinit-value-reward-policy-50k.log 2>&1
+
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_head-clip10-pol5_fix-clip_mz-head_reinit-value-reward-policy-50k_msp.log 2>&1
 
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_entry-norm_clipgrad-backbone5-head5_reinit-value-reward-policy-50k_head-clip10-pol05_msp.log 2>&1
 
