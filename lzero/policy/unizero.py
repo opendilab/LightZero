@@ -481,6 +481,12 @@ class UniZeroPolicy(MuZeroPolicy):
         #    - c. 获取主干网络的参数（所有不在 head_param_ids 中的参数）
         self.backbone_params = [p for p in world_model.parameters() if id(p) not in self.head_param_ids]
 
+        # --- NEW: Policy Label Smoothing Parameters ---
+        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps
+        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
+        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
+
+
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -501,6 +507,14 @@ class UniZeroPolicy(MuZeroPolicy):
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
+
+        
+        # --- NEW: Calculate current epsilon for policy ---
+        if self.policy_ls_eps_start > 0:
+            progress = min(1.0, train_iter / self.policy_ls_eps_decay_steps)
+            current_policy_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
+        else:
+            current_policy_eps = 0.0
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
@@ -530,8 +544,11 @@ class UniZeroPolicy(MuZeroPolicy):
         transformed_target_value = scalar_transform(target_value)
 
         # Convert to categorical distributions
-        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+        # target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+        # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+
+        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
 
         # TODO
         # ==================== 核心修复：标签平滑 ====================
@@ -576,7 +593,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_eps=current_policy_eps,
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
 
         # ==================== START MODIFICATION 2 ====================

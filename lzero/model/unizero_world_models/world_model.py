@@ -34,6 +34,26 @@ import torch
 import torch.nn as nn
 from lzero.model.common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook, MLP_V2
 
+def inspect_model_parameters(model: nn.Module):
+    """
+    遍历模型的所有参数并打印其统计信息（均值、标准差、最大值、最小值）。
+    """
+    print("--- Inspecting Initial Model Parameters ---")
+    total_params = 0
+    with torch.no_grad():
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                total_params += param.numel()
+                mean = param.mean().item()
+                std = param.std().item()
+                abs_max = param.abs().max().item()
+                
+                # 打印关键统计数据，帮助判断初始化是否合理
+                print(f"{name:<50} | Shape: {str(param.shape):<25} | Mean: {mean:+.4f} | Std: {std:.4f} | MaxAbs: {abs_max:.4f}")
+
+    print(f"--- Total Trainable Parameters: {total_params/1e6:.2f}M ---")
+
+
 # --- HOOK FUNCTION FOR DEBUGGING ---
 def print_intermediate_activation_hook(module, input, output):
     """
@@ -1981,6 +2001,7 @@ class WorldModel(nn.Module):
         # # ======================= 在这里插入分析代码 =======================
         # # 从kwargs获取全局step，假设您在训练循环中传入了它
         global_step = kwargs.get('global_step', 0)
+        current_policy_eps = kwargs.get('current_policy_eps', 0)
 
         # # 为了避免影响训练，可以控制调用频率
         # if global_step % 10 == 0: # 每100个training step分析一次
@@ -2264,6 +2285,11 @@ class WorldModel(nn.Module):
         labels_value, labels_policy = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
+
+        # --- NEW: Apply label smoothing to policy target ---
+        if current_policy_eps > 0:
+            # Assumes target_policy is a probability distribution (sums to 1)
+            labels_policy = (1.0 - current_policy_eps) * labels_policy + current_policy_eps / self.action_space_size
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
@@ -2633,6 +2659,16 @@ class WorldModel(nn.Module):
 
         # Compute cross-entropy loss
         loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
+
+        # TODO=====
+        # # --- Calculate policy loss using the smoothed target ---
+        # # Use KL-Divergence for probability targets, which is equivalent to CrossEntropy for one-hot
+        # # Log-softmax on logits and KLDiv is more numerically stable than Softmax + CrossEntropy
+        # log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+        # # The target for KLDiv should be probabilities, not log-probabilities
+        # loss = torch.nn.functional.kl_div(log_probs labels, reduction='batchmean')
+        
+
         loss = (loss * mask_padding)
 
         if torch.isnan(loss).any():

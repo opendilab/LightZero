@@ -209,14 +209,28 @@ def init_weights(module, norm_type='BN',liner_weight_zero=False):
         module (nn.Module): The module to initialize.
         norm_type (str): The type of normalization to use ('BN' for BatchNorm, 'LN' for LayerNorm).
     """
-    if isinstance(module, (nn.Linear, nn.Embedding)):
+    if isinstance(module, nn.Embedding):
         module.weight.data.normal_(mean=0.0, std=0.02)
-
-        # if liner_weight_zero and isinstance(module, nn.Linear): # TODO========
-        #     nn.init.zeros_(module.weight)
-    
-        if isinstance(module, nn.Linear) and module.bias is not None:
+    elif isinstance(module, nn.Linear):
+        # 现在这个分支可以被正确执行了
+        if norm_type == 'BN':
+            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            print("Init Linear using kaiming normal for BN")
+        elif norm_type == 'LN':
+            # 对于Transformer结构，Xavier/Glorot更常见
+            nn.init.xavier_uniform_(module.weight)
+            print("Init Linear using xavier uniform for LN")
+        
+        if module.bias is not None:
             module.bias.data.zero_()
+    # if isinstance(module, (nn.Linear, nn.Embedding)):
+    #     module.weight.data.normal_(mean=0.0, std=0.02)
+
+    #     # if liner_weight_zero and isinstance(module, nn.Linear): # TODO========
+    #     #     nn.init.zeros_(module.weight)
+    
+    #     if isinstance(module, nn.Linear) and module.bias is not None:
+    #         module.bias.data.zero_()
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
         print(f"Init {module} using zero bias, 1 weight")
         try:
@@ -236,13 +250,13 @@ def init_weights(module, norm_type='BN',liner_weight_zero=False):
         elif norm_type == 'LN':
             nn.init.xavier_uniform_(module.weight)
             print(f"Init nn.Conv2d using xavier uniform for LN")
-    elif isinstance(module, nn.Linear):
-        if norm_type == 'BN':
-            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-            print("Init Linear using kaiming normal for BN")
-        elif norm_type == 'LN':
-            nn.init.xavier_uniform_(module.weight)
-            print("Init Linear using xavier uniform for LN")
+    # elif isinstance(module, nn.Linear):
+    #     if norm_type == 'BN':
+    #         nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+    #         print("Init Linear using kaiming normal for BN")
+    #     elif norm_type == 'LN':
+    #         nn.init.xavier_uniform_(module.weight)
+    #         print("Init Linear using xavier uniform for LN")
 
 
 class LossWithIntermediateLosses:
