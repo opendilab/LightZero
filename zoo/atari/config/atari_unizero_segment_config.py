@@ -106,8 +106,8 @@ def main(env_id, seed):
                 world_model_cfg=dict(
                     game_segment_length=game_segment_length,
                     
-                    encoder_type="resnet", #TODO========
-                    # encoder_type="dinov2", #TODO========
+                    # encoder_type="resnet", #TODO========
+                    encoder_type="dinov2", #TODO========
 
                     norm_type=norm_type,
                     num_res_blocks=2,
@@ -195,9 +195,11 @@ def main(env_id, seed):
                 decay=int(2e4), # 20k=2e4
             ),
 
-            policy_ls_eps_start=0.5, #TODO=============
+            # policy_ls_eps_start=0.5, #TODO=============
             # policy_ls_eps_start=0.1, #TODO=============
             # policy_ls_eps_start=0.0, #TODO=============
+            policy_ls_eps_start=0.05, #TODO=============
+
             policy_ls_eps_end=0.01,
             policy_ls_eps_decay_steps=50000, # 50k
 
@@ -321,7 +323,9 @@ def main(env_id, seed):
 
     # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
-    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-05_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_label-smooth-valuereward01-policy-005_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-05_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -355,9 +359,9 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    # args.env = 'PongNoFrameskip-v4'
+    args.env = 'PongNoFrameskip-v4'
 
-    args.env = 'MsPacmanNoFrameskip-v4'
+    # args.env = 'MsPacmanNoFrameskip-v4'
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'SeaquestNoFrameskip-v4' 

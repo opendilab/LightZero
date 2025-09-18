@@ -2664,6 +2664,7 @@ class WorldModel(nn.Module):
 
         # Compute cross-entropy loss
         loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
+        loss = (loss * mask_padding)
 
         # TODO=====
         # # --- Calculate policy loss using the smoothed target ---
@@ -2674,7 +2675,6 @@ class WorldModel(nn.Module):
         # loss = torch.nn.functional.kl_div(log_probs labels, reduction='batchmean')
         
 
-        loss = (loss * mask_padding)
 
         if torch.isnan(loss).any():
             raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")
