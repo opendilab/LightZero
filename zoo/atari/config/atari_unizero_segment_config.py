@@ -106,8 +106,8 @@ def main(env_id, seed):
                 world_model_cfg=dict(
                     game_segment_length=game_segment_length,
                     
-                    # encoder_type="resnet", #TODO========
-                    encoder_type="dinov2", #TODO========
+                    encoder_type="resnet", #TODO========
+                    # encoder_type="dinov2", #TODO========
 
                     norm_type=norm_type,
                     num_res_blocks=2,
@@ -115,8 +115,8 @@ def main(env_id, seed):
                     # num_res_blocks=1, # TODO
                     # num_channels=64,
                     support_size=601,
-                    policy_entropy_weight=5e-3,
-                    # policy_entropy_weight=5e-2, # TODO(pu)
+                    # policy_entropy_weight=5e-3,
+                    policy_entropy_weight=5e-2, # TODO(pu)
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -151,14 +151,18 @@ def main(env_id, seed):
 
                     # latent_norm_loss=True,
                     latent_norm_loss=False,
-                    weight_decay=1e-4, # TODO
+
+                    # optim_type='AdamW_mix_lr_wdecay',
+                    # # optim_type='AdamW',
+                    # # weight_decay=1e-4, # TODO orig
+                    # weight_decay=1e-3, # TODO: encoder 5*wd
+
 
                     use_priority=True, # TODO(pu): test
 
                     # optim_type='SGD',
                     # learning_rate=0.01,
 
-                    optim_type='AdamW',
                     # learning_rate=0.001,
                     learning_rate=0.0001,
 
@@ -197,14 +201,16 @@ def main(env_id, seed):
 
             # policy_ls_eps_start=0.5, #TODO=============
             # policy_ls_eps_start=0.1, #TODO=============
-            # policy_ls_eps_start=0.0, #TODO=============
-            policy_ls_eps_start=0.05, #TODO=============
-
+            policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
+            # policy_ls_eps_start=1, #TODO===========
             policy_ls_eps_end=0.01,
             policy_ls_eps_decay_steps=50000, # 50k
 
             label_smoothing_eps=0.1,  #TODO=============
+
             # label_smoothing_eps=0.,
+            # policy_ls_eps_start=0.0, #TODO=============
+
 
             # gradient_scale=True, #TODO
             gradient_scale=False, #TODO
@@ -216,11 +222,11 @@ def main(env_id, seed):
             priority_prob_alpha=1,
             priority_prob_beta=1,
 
-            # manual_temperature_decay=True,
-            # threshold_training_steps_for_final_temperature=int(5e4),
+            manual_temperature_decay=True,
+            threshold_training_steps_for_final_temperature=int(5e4), # 50k iter 对应 500k envsteps
 
-            manual_temperature_decay=False,
-            threshold_training_steps_for_final_temperature=int(2.5e4),
+            # manual_temperature_decay=False,
+            # threshold_training_steps_for_final_temperature=int(2.5e4),
             
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
@@ -228,14 +234,30 @@ def main(env_id, seed):
             batch_size=batch_size,
 
             piecewise_decay_lr_scheduler=False,
-            optim_type='AdamW',
-            # learning_rate=0.001,
-            learning_rate=0.0001,
+
+            optim_type='AdamW_mix_lr_wdecay',
+            # optim_type='AdamW',
+            # weight_decay=1e-4, # TODO orig
+            weight_decay=1e-3, # TODO: encoder 5*wd
+
+            # optim_type='AdamW',
+            # # learning_rate=0.001,
+            # learning_rate=0.0001,
 
 
+            # ==================== [新增] 范数监控频率 ====================
+            # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+            monitor_norm_freq=5000,
+            # monitor_norm_freq=2,
+
+            # ============================================================
+            
             # latent_norm_clip_threshold=3, # 768dim
             # latent_norm_clip_threshold=5, # 768dim latent encoder
-            latent_norm_clip_threshold=30, # 768dim latent encoder
+            # latent_norm_clip_threshold=30, # 768dim latent encoder
+
+            latent_norm_clip_threshold=10, # 768dim latent encoder
+
             # latent_norm_clip_threshold=25, # 768dim latent encoder
 
             # latent_norm_clip_threshold=20, # 768dim
@@ -320,10 +342,14 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
+    # main_config.exp_name = f'data_unizero_longrun_20250918_debug/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_nolabelsmooth_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-1_pytloss_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
-    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_label-smooth-valuereward01-policy-005_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_temp1-025-50k_adamw1e-4_wd1e-3-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_label-smooth-valuereward01-policy-005_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-05_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -359,9 +385,9 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    args.env = 'PongNoFrameskip-v4'
+    # args.env = 'PongNoFrameskip-v4'
 
-    # args.env = 'MsPacmanNoFrameskip-v4'
+    args.env = 'MsPacmanNoFrameskip-v4'
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'SeaquestNoFrameskip-v4' 
@@ -379,7 +405,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=0
+    export CUDA_VISIBLE_DEVICES=3
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
 

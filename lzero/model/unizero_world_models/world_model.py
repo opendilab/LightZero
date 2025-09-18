@@ -316,6 +316,10 @@ class WorldModel(nn.Module):
             logging.info("Learnable temperature scaling for prediction heads is ENABLED.")
         # ===================== END: LEARNABLE TEMPERATURE SCALING =====================
 
+        # 2. 初始化损失函数 (通常在模型 __init__ 中完成)
+        # 使用 reduction='none' 来获取每个token的损失，以便后续应用掩码
+        self.ce_loss_fn_pt = torch.nn.CrossEntropyLoss(reduction='none')
+
 
     def register_gradient_hooks(self, model_to_hook: nn.Module):
         """
@@ -2085,6 +2089,10 @@ class WorldModel(nn.Module):
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
+
+        # [新增] 从模型输出中获取中间张量 x，并分离计算图
+        intermediate_tensor_x = outputs.output_sequence.detach()
+
         # TODO============
         # ======================= 在这里插入分析代码 =======================
         # if global_step > 0 and global_step % 1000 == 0:
@@ -2419,6 +2427,9 @@ class WorldModel(nn.Module):
                 temperature_policy=temp_policy,
                 # ===================================================
 
+                # ==================== [修改] 新增监控张量 ====================
+                intermediate_tensor_x=intermediate_tensor_x,
+                # ==========================================================
 
             )
         else:
@@ -2461,6 +2472,10 @@ class WorldModel(nn.Module):
                 temperature_reward=temp_reward,
                 temperature_policy=temp_policy,
                 # ===================================================
+
+                # ==================== [修改] 新增监控张量 ====================
+                intermediate_tensor_x=intermediate_tensor_x,
+                # ==========================================================
             )
 
     
@@ -2665,6 +2680,15 @@ class WorldModel(nn.Module):
         # Compute cross-entropy loss
         loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
         loss = (loss * mask_padding)
+        
+        # TODO: check
+        # 3. 计算每个token的损失
+        # 当 labels 是浮点数（概率）时，CrossEntropyLoss 会自动计算交叉熵
+        # loss_per_token = self.ce_loss_fn_pt(logits, labels)
+        # # 4. 应用掩码并计算最终的平均损失
+        # # loss.sum() / mask_padding.sum() 是计算有效token的平均损失，这是最标准的做法
+        # loss = (loss_per_token * mask_padding)
+
 
         # TODO=====
         # # --- Calculate policy loss using the smoothed target ---

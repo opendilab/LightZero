@@ -57,17 +57,20 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
     optim_groups = [
         {
             'params': list(transformer_params.values()),
-            'lr': learning_rate * 0.1,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
+            'lr': learning_rate,  # 1e-4
+            # 'lr': learning_rate * 0.1,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
             'weight_decay': weight_decay
         },
         {
             'params': list(tokenizer_params.values()),
             'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
-            'weight_decay': weight_decay
+            # 'weight_decay': weight_decay
+            'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+            
         },
         {
             'params': list(head_params.values()),
-            'lr': learning_rate,  # Heads也使用基础学习率
+            'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
             'weight_decay': 0.0  # 通常Heads的权重不做衰减
         }
     ]
@@ -262,6 +265,11 @@ class UniZeroPolicy(MuZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
+        # ==================== [新增] 范数监控频率 ====================
+        # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+        monitor_norm_freq=5000,
+        # ============================================================
+        
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -368,6 +376,46 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return 'UniZeroModel', ['lzero.model.unizero_model']
 
+ # ==================== [新增] 模型范数监控函数 ====================
+    def _monitor_model_norms(self) -> Dict[str, float]:
+        """
+        Overview:
+            计算并返回模型关键组件（Encoder, Transformer, Heads）的参数矩阵范数。
+            此函数应在 torch.no_grad() 环境下调用，以提高效率。
+        Returns:
+            - norm_metrics (:obj:`Dict[str, float]`): 包含所有范数指标的字典，用于日志记录。
+        """
+        world_model = self._learn_model.world_model
+        norm_metrics = {}
+
+        # 定义要监控的模块组
+        module_groups = {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'head_value': world_model.head_value,
+            'head_reward': world_model.head_rewards,
+            'head_policy': world_model.head_policy,
+        }
+
+        for group_name, group_module in module_groups.items():
+            total_norm_sq = 0.0
+            for param_name, param in group_module.named_parameters():
+                if param.requires_grad:
+                    # 计算单层参数的L2范数
+                    param_norm = param.data.norm(2).item()
+                    # 替换点号，使其在TensorBoard中正确显示为层级
+                    log_name = f'norm/{group_name}/{param_name.replace(".", "/")}'
+                    norm_metrics[log_name] = param_norm
+                    total_norm_sq += param_norm ** 2
+            
+            # 计算整个模块的总范数
+            total_group_norm = np.sqrt(total_norm_sq)
+            norm_metrics[f'norm/{group_name}/_total_norm'] = total_group_norm
+
+        return norm_metrics
+    # =================================================================
+
+
     def _init_learn(self) -> None:
         """
         Overview:
@@ -390,7 +438,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 device_type=self._cfg.device,
                 betas=(0.9, 0.95),
             )
-        elif self._cfg.optim_type == 'AdamW_mix_lr':
+        elif self._cfg.optim_type == 'AdamW_mix_lr_wdecay':
             self._optimizer_world_model = configure_optimizer_unizero(
                 model=self._model.world_model,
                 learning_rate=self._cfg.learning_rate,  # 使用一个合理的AdamW基础学习率
@@ -597,6 +645,30 @@ class UniZeroPolicy(MuZeroPolicy):
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
+
+        # ==================== [修改] 集成范数监控逻辑 ====================
+        norm_log_dict = {}
+        # 检查是否达到监控频率
+        if self._cfg.monitor_norm_freq > 0 and train_iter > 0 and (train_iter % self._cfg.monitor_norm_freq == 0):
+            with torch.no_grad():
+                # 1. 监控模型参数范数
+                param_norm_metrics = self._monitor_model_norms()
+                norm_log_dict.update(param_norm_metrics)
+
+                # 2. 监控中间张量 x (Transformer的输出)
+                intermediate_x = losses.intermediate_losses.get('intermediate_tensor_x')
+                if intermediate_x is not None:
+                    # x 的形状为 (B, T, E)
+                    # 计算每个 token 的 L2 范数
+                    token_norms = intermediate_x.norm(p=2, dim=-1)
+                    
+                    # 记录这些范数的统计数据
+                    norm_log_dict['norm/x_token/mean'] = token_norms.mean().item()
+                    norm_log_dict['norm/x_token/std'] = token_norms.std().item()
+                    norm_log_dict['norm/x_token/max'] = token_norms.max().item()
+                    norm_log_dict['norm/x_token/min'] = token_norms.min().item()
+        # =================================================================
+
 
         # ==================== START MODIFICATION 2 ====================
         # Extract the calculated value_priority from the returned losses.
@@ -875,6 +947,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
         "current_policy_label_eps":current_policy_label_eps,
         }
+        
+                # ==================== [修改] 将范数监控结果合并到日志中 ====================
+        if norm_log_dict:
+            return_log_dict.update(norm_log_dict)
+        # =======================================================================
         
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
@@ -1368,7 +1445,7 @@ class UniZeroPolicy(MuZeroPolicy):
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        return [
+        base_vars = [
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_world_model',
             'analysis/latent_state_l2_norms',
@@ -1437,6 +1514,28 @@ class UniZeroPolicy(MuZeroPolicy):
         "temperature_policy",
                 "current_policy_label_eps",
         ]
+
+                # ==================== [新增] 添加范数和中间张量监控变量 ====================
+        norm_vars = [
+            # 模块总范数
+            'norm/encoder/_total_norm',
+            'norm/transformer/_total_norm',
+            'norm/head_value/_total_norm',
+            'norm/head_reward/_total_norm',
+            'norm/head_policy/_total_norm',
+            # 中间张量 x 的统计信息
+            'norm/x_token/mean',
+            'norm/x_token/std',
+            'norm/x_token/max',
+            'norm/x_token/min',
+        ]
+        # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
+        # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
+        # 或者在本地打印 `norm_log_dict` 来进行详细分析。
+        # wandb等工具可以更好地处理大量的动态指标。
+        # ========================================================================
+
+        return base_vars + norm_vars
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
