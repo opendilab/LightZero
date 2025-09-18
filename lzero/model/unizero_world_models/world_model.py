@@ -2001,7 +2001,9 @@ class WorldModel(nn.Module):
         # # ======================= 在这里插入分析代码 =======================
         # # 从kwargs获取全局step，假设您在训练循环中传入了它
         global_step = kwargs.get('global_step', 0)
-        current_policy_eps = kwargs.get('current_policy_eps', 0)
+        # current_policy_label_eps = kwargs.get('current_policy_label_eps', 0)
+        current_policy_label_eps = kwargs["current_policy_label_eps"]
+
 
         # # 为了避免影响训练，可以控制调用频率
         # if global_step % 10 == 0: # 每100个training step分析一次
@@ -2287,9 +2289,9 @@ class WorldModel(nn.Module):
                                                                                    batch['mask_padding'])
 
         # --- NEW: Apply label smoothing to policy target ---
-        if current_policy_eps > 0:
+        if current_policy_label_eps > 0:
             # Assumes target_policy is a probability distribution (sums to 1)
-            labels_policy = (1.0 - current_policy_eps) * labels_policy + current_policy_eps / self.action_space_size
+            labels_policy = (1.0 - current_policy_label_eps) * labels_policy + current_policy_label_eps / self.action_space_size
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
@@ -2602,6 +2604,9 @@ class WorldModel(nn.Module):
         # labels is a target tensor for comparison. batch is a dictionary with a mask indicating valid timesteps.
 
         logits = getattr(outputs, f'logits_{element}')
+
+        # 10.0 是一个经验值，可以调整。它足以产生非常尖锐的分布，但不会到-18那么夸张。
+        # logits = torch.clamp(logits, min=-10.0, max=10.0) # TODO
 
         if torch.isnan(logits).any():
             raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")

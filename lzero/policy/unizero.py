@@ -486,6 +486,8 @@ class UniZeroPolicy(MuZeroPolicy):
         self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
         self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
 
+        print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
+
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -512,9 +514,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # --- NEW: Calculate current epsilon for policy ---
         if self.policy_ls_eps_start > 0:
             progress = min(1.0, train_iter / self.policy_ls_eps_decay_steps)
-            current_policy_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
+            current_policy_label_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
         else:
-            current_policy_eps = 0.0
+            current_policy_label_eps = 0.0
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
@@ -593,7 +595,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_eps=current_policy_eps,
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
 
         # ==================== START MODIFICATION 2 ====================
@@ -870,6 +872,8 @@ class UniZeroPolicy(MuZeroPolicy):
              "temperature_value":temperature_value,
         "temperature_reward":temperature_reward,
         "temperature_policy":temperature_policy,
+
+        "current_policy_label_eps":current_policy_label_eps,
         }
         
         if self._cfg.use_wandb:
@@ -1431,6 +1435,7 @@ class UniZeroPolicy(MuZeroPolicy):
                      "temperature_value",
         "temperature_reward",
         "temperature_policy",
+                "current_policy_label_eps",
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
