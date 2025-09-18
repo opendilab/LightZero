@@ -74,6 +74,7 @@ def main(env_id, seed):
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 model_type='mlp',
+                norm_type=norm_type,
                 world_model_cfg=dict(
                     policy_loss_type='kl',
                     obs_type='vector',

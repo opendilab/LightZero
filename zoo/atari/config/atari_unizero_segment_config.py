@@ -23,7 +23,10 @@ def main(env_id, seed):
     eval_num_simulations = 50
     max_env_step = int(5e6)
     # max_env_step = int(50e6)
-    batch_size = 256
+    # batch_size = 256
+
+    batch_size = 64 # encoder_type="dinov2", #TODO========
+
     # batch_size = 16 # debug
     # batch_size = 4 # debug
 
@@ -97,8 +100,14 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
+
+                norm_type=norm_type,
+
                 world_model_cfg=dict(
                     game_segment_length=game_segment_length,
+                    
+                    # encoder_type="resnet", #TODO========
+                    encoder_type="dinov2", #TODO========
 
                     norm_type=norm_type,
                     num_res_blocks=2,
@@ -156,7 +165,13 @@ def main(env_id, seed):
                     # entry_norm=True, # TODO========
                     entry_norm=False, # TODO========
 
-                    use_temperature_scaling=True,
+                    # use_temperature_scaling=True,
+
+                    use_temperature_scaling=False, # TODO========
+
+                    # res_alha=True,
+                    res_alha=False, # TODO========
+
 
                     # optim_type='AdamW_mix_lr',
                     # learning_rate=0.001,
@@ -191,13 +206,15 @@ def main(env_id, seed):
 
 
             # latent_norm_clip_threshold=3, # 768dim
-            latent_norm_clip_threshold=5, # 768dim latent encoder
+            # latent_norm_clip_threshold=5, # 768dim latent encoder
+            latent_norm_clip_threshold=30, # 768dim latent encoder
+            # latent_norm_clip_threshold=25, # 768dim latent encoder
 
             # latent_norm_clip_threshold=20, # 768dim
             # latent_norm_clip_threshold=30, # 768dim
 
-            # logit_clip_threshold=10, # value reward
-            # policy_logit_clip_threshold=5, # policy
+            # logit_clip_threshold=5, # value reward
+            # policy_logit_clip_threshold=1, # policy
 
             logit_clip_threshold=9999, # value reward
             policy_logit_clip_threshold=99999, # policy
@@ -275,7 +292,19 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_temp-scale-softplus-fixcollecteval_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_headclip-value5-policy1_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_temp-scale-softplus-fixcollecteval_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-50_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-50_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
 
     # main_config.exp_name = f'data_unizero_longrun_20250918_debug/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -285,29 +314,6 @@ def main(env_id, seed):
     # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_head-clip10-policy05_entry-norm_clipgrad-backbone5-head5_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_entry-norm_clipgrad-backbone5-head05_grad-scale_reinit-value-reward-policy-50k_head-clip10-policy05_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_entry-norm_clipgrad-backbone5-head05_grad-scale_reinit-value-reward-policy-50k_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_entry-norm_clipgrad-backbone5-head05_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamwlr1e-4_96_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adammixlr1e-3_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_sgd001_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-3_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    
-    # main_config.exp_name = f'data_unizero_longrun_20250901_debug/{env_id[:-14]}/{env_id[:-14]}_uz_per_lnlw1e-4_enc-BN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250901/{env_id[:-14]}/{env_id[:-14]}_uz_per_grad-scale_pew005_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250827/{env_id[:-14]}/{env_id[:-14]}_uz_per_lnlw0001_pew005_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250827/{env_id[:-14]}/{env_id[:-14]}_uz_current-next-latent_fix-init-recur_encoder-head-simnorm_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250827/{env_id[:-14]}/{env_id[:-14]}_uz_current-next-latent_latent-norm-weight001_fix-init-recur_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_encoder-head-ln_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c50_seed{seed}'
 
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
@@ -319,9 +325,9 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    args.env = 'PongNoFrameskip-v4'
+    # args.env = 'PongNoFrameskip-v4'
 
-    # args.env = 'MsPacmanNoFrameskip-v4'
+    args.env = 'MsPacmanNoFrameskip-v4'
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'SeaquestNoFrameskip-v4' 
@@ -339,9 +345,21 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=3
+    export CUDA_VISIBLE_DEVICES=1
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
 
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoderdinov2_mspac.log 2>&1
+    
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_pong.log 2>&1
+
+
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_clip-encoder5-value5-policy1_fix-clip_msp.log 2>&1
+    
+
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-30_fix-clip_resalpha_pong.log 2>&1
+    
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-30_fix-clip_reinit-value-reward-policy-50k_pong.log 2>&1
+    
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_fix-clip_temp-scale-softplus-fixcollecteval_reinit-value-reward-policy-50k_pong.log 2>&1
     
 

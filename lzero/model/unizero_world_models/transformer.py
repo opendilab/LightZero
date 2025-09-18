@@ -247,6 +247,12 @@ class Block(nn.Module):
             nn.Linear(4 * config.embed_dim, config.embed_dim),
             nn.Dropout(config.resid_pdrop),
         )
+        
+        self.config = config
+        if self.config.res_alha:
+            # 为每个残差连接路径引入一个可学习的缩放因子，初始化为0
+            self.alpha_attn = nn.Parameter(torch.zeros(1))
+            self.alpha_mlp = nn.Parameter(torch.zeros(1))
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None, freqs_cis: torch.Tensor = None) -> torch.Tensor:
@@ -267,8 +273,12 @@ class Block(nn.Module):
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.mlp(self.ln2(x)))
         else:
-            x = x + x_attn
-            x = x + self.mlp(self.ln2(x))
+            if not self.config.res_alha:
+                x = x + x_attn
+                x = x + self.mlp(self.ln2(x))
+            else:
+                x = x + self.alpha_attn * x_attn
+                x = x + self.alpha_mlp * self.mlp(self.ln2(x))
 
         return x
 

@@ -8,7 +8,7 @@ from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
-    HFLanguageRepresentationNetwork
+    HFLanguageRepresentationNetwork, DinoV2RepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
@@ -73,7 +73,7 @@ class UniZeroModel(nn.Module):
         self.action_space_size = action_space_size
         self.activation = activation
         self.downsample = downsample
-        world_model_cfg.norm_type = norm_type
+        world_model_cfg.norm_type = norm_type # NOTE=====
         assert world_model_cfg.max_tokens == 2 * world_model_cfg.max_blocks, 'max_tokens should be 2 * max_blocks, because each timestep has 2 tokens: obs and action'
 
         if world_model_cfg.obs_type == 'vector':
@@ -118,17 +118,39 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
-            self.representation_network = RepresentationNetworkUniZero(
-                observation_shape,
-                num_res_blocks,
-                num_channels,
-                self.downsample,
-                activation=self.activation,
-                norm_type=norm_type,
-                embedding_dim=world_model_cfg.embed_dim,
-                group_size=world_model_cfg.group_size,
-                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
-            )
+            if world_model_cfg.encoder_type=="resnet":
+                # =======================
+                #  修改前的代码
+                # =======================
+                self.representation_network = RepresentationNetworkUniZero(
+                    observation_shape,
+                    num_res_blocks,
+                    num_channels,
+                    self.downsample,
+                    activation=self.activation,
+                    norm_type=norm_type,
+                    embedding_dim=world_model_cfg.embed_dim,
+                    group_size=world_model_cfg.group_size,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
+                )
+            elif world_model_cfg.encoder_type=="dinov2":
+
+                # =======================
+                #  修改后的代码
+                # =======================
+                print("Using DinoV2RepresentationNetwork as the encoder.")
+                self.representation_network = DinoV2RepresentationNetwork(
+                    observation_shape=observation_shape,
+                    embedding_dim=world_model_cfg.embed_dim,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                    group_size=world_model_cfg.group_size,
+                    # 传递其他兼容性参数
+                    num_res_blocks=num_res_blocks,
+                    num_channels=num_channels,
+                    downsample=self.downsample,
+                    activation=self.activation,
+                    norm_type=norm_type,
+                )
 
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:

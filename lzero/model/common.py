@@ -22,6 +22,12 @@ from ditk import logging
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 import torch
 
+import torch
+import torch.nn as nn
+
+torch.hub._validate_not_a_forked_repo=lambda a,b,c: True
+
+    
 # 1. 将 L2-Norm 封装成一个 nn.Module 类
 class L2Norm(nn.Module):
     """
@@ -480,6 +486,113 @@ class HFLanguageRepresentationNetwork(nn.Module):
         return cls_embedding
 
 
+# =============================================================================
+# 新的、可无缝替换的 DINOv2 表征网络
+# =============================================================================
+class DinoV2RepresentationNetwork(nn.Module):
+    
+    def __init__(
+        self,
+        observation_shape: SequenceType = (3, 64, 64),
+        embedding_dim: int = 256,
+        final_norm_option_in_encoder: str = 'LayerNorm',
+        group_size: int = 8,
+        # 下面的参数是为了接口兼容性，DINOv2 模型本身不会使用它们
+        num_res_blocks: int = 1,
+        num_channels: int = 64,
+        downsample: bool = True,
+        activation: nn.Module = nn.GELU(approximate='tanh'),
+        norm_type: str = 'BN',
+        dinov2_model_name: str = "dinov2_vits14",
+        dinov2_feature_key: str = "x_norm_clstoken",
+    ) -> None:
+        """
+        Overview:
+            一个使用 DINOv2 作为骨干的表征网络，旨在无缝替换 RepresentationNetworkUniZero。
+        
+        Arguments:
+            - observation_shape: 输入观测的形状。
+            - embedding_dim: 最终输出的潜在状态维度。
+            - final_norm_option_in_encoder: 编码器最后一层的归一化选项。
+            - group_size: SimNorm 使用的组大小。
+            - dinov2_model_name: 要加载的 DINOv2 模型名称。
+            - dinov2_feature_key: 从 DINOv2 中提取哪种特征。
+            - 其他参数: 为了与 UniZeroModel 的调用签名保持一致。
+        """
+        super().__init__()
+        self.observation_shape = observation_shape
+        self.embedding_dim = embedding_dim
+        
+        # 1. 加载 DINOv2 基础模型
+        print(f"Loading DINOv2 model: {dinov2_model_name}")
+        self.pretrained_model = torch.hub.load("facebookresearch/dinov2", dinov2_model_name)
+        self.feature_key = dinov2_feature_key
+        dinov2_output_dim = self.pretrained_model.num_features
+        
+        # DINOv2 模型期望的输入尺寸 (patch_size=14, 官方推荐 518x518)
+        # self.dinov2_input_size = (518, 518)
+        # self.dinov2_input_size = (224, 224)
+        # self.dinov2_input_size = (64, 64)
+        self.dinov2_input_size = (70, 70)
+        
+        # 2. 添加线性投影层以匹配所需的 embedding_dim
+        # 如果 DINOv2 输出维度和期望的 embedding_dim 不一致，则需要投影
+        if dinov2_output_dim != self.embedding_dim:
+            self.projection = nn.Linear(dinov2_output_dim, self.embedding_dim, bias=False)
+            print(f"Added projection layer: {dinov2_output_dim} -> {self.embedding_dim}")
+        else:
+            self.projection = nn.Identity()
+
+        # 3. 复制 RepresentationNetworkUniZero 中的 final_norm 逻辑
+        self.final_norm_option_in_encoder = final_norm_option_in_encoder
+        if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5, elementwise_affine=False)
+        elif self.final_norm_option_in_encoder == 'SimNorm':
+            self.final_norm = SimNorm(simnorm_dim=group_size)
+        elif self.final_norm_option_in_encoder == 'L2Norm':
+            self.final_norm = L2Norm(eps=1e-6)
+        elif self.final_norm_option_in_encoder is None:
+            self.final_norm = nn.Identity()
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+        
+        print(f"Using final normalization: {self.final_norm_option_in_encoder}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Shapes:
+            - x: (B, C_in, H, W)
+            - output: (B, embedding_dim)
+        """
+        # 4. 在 forward 中动态调整输入尺寸
+        # 如果输入尺寸与 DINOv2 期望的不符，进行 resize
+        if x.shape[-2:] != self.dinov2_input_size:
+            x = F.interpolate(x, size=self.dinov2_input_size, mode='bicubic', align_corners=False)
+        
+        # 提取 DINOv2 特征
+        # 使用 no_grad 可以冻结 DINOv2 的权重，只训练后续的层
+        # 如果你想微调 DINOv2，请移除 with torch.no_grad()
+        with torch.no_grad():
+            emb = self.pretrained_model.forward_features(x)[self.feature_key]
+        
+        # 应用投影层
+        x = self.projection(emb)
+        
+        # 确保输出形状为 (B, embedding_dim)
+        if x.dim() != 2:
+             x = x.view(-1, self.embedding_dim)
+
+        # 5. 应用最终的归一化和激活函数，与原网络保持一致
+        if self.final_norm is not None:
+            x = self.final_norm(x)
+
+        if self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
+            x = torch.tanh(x)
+            
+        return x
+    
 class RepresentationNetworkUniZero(nn.Module):
     
     def __init__(

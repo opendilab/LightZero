@@ -92,7 +92,10 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
+                norm_type=norm_type,
+
                 world_model_cfg=dict(
+                    encoder_type="resnet", #TODO========
                     game_segment_length=game_segment_length,
 
                     norm_type=norm_type,
@@ -144,7 +147,8 @@ def main(env_id, seed):
                     use_priority=True, # TODO(pu): test
                     # entry_norm=True, # TODO========
                     entry_norm=False, # TODO========
-
+                    use_temperature_scaling=False, # TODO========
+                    res_alha=False, # TODO========
 
                 ),
             ),
@@ -243,7 +247,9 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment_from_buffer
-    main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_muzerohead_noclip_clear{game_segment_length}_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_orighead_noclip_clear{game_segment_length}_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_muzerohead_noclip_clear{game_segment_length}_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_from_buffer_20250917/{env_id[:-14]}/{env_id[:-14]}_uz_in-value-reward-head-ln2_per_lnlw1e-4_enc-LN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250901_debug/{env_id[:-14]}/{env_id[:-14]}_uz_per_lnlw1e-4_enc-BN_fix-init-recur_encoder-head-ln_clear{game_segment_length}_originlossweight_spsi{game_segment_length}_envnum{collector_env_num}_soft-target-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
@@ -291,7 +297,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=3
+    export CUDA_VISIBLE_DEVICES=2
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_from_buffer_config.py
     """
