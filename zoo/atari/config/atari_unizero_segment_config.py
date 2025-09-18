@@ -228,8 +228,8 @@ def main(env_id, seed):
             eval_num_simulations=eval_num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            # train_start_after_envsteps=0,
-            train_start_after_envsteps=2000, # TODO
+            train_start_after_envsteps=0,
+            # train_start_after_envsteps=2000, # TODO
             game_segment_length=game_segment_length,
             grad_clip_value=5,
 
@@ -275,7 +275,7 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_temp-scale_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_temp-scale-softplus-fixcollecteval_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250918_debug/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -339,10 +339,10 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=1
+    export CUDA_VISIBLE_DEVICES=3
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
 
-    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_fix-clip_temp-scale_reinit-value-reward-policy-50k_pong.log 2>&1
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5_fix-clip_temp-scale-softplus-fixcollecteval_reinit-value-reward-policy-50k_pong.log 2>&1
     
 
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-clip-5-true_head-clip10-pol5_fix-clip_mz-head_reinit-value-reward-policy-50k_msp.log 2>&1

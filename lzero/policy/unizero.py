@@ -17,6 +17,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
+import torch.nn.functional as F
 
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
@@ -893,6 +894,21 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
+    # def _apply_temperature_scaling_for_inference(self, policy_logits, value_logits, reward_logits):
+    #     """ 辅助函数，在推理时应用可学习的温度 """
+    #     if self._cfg.model.world_model_cfg.use_temperature_scaling:
+    #         with torch.no_grad():
+    #             T_policy = 1.0 + F.softplus(self._model.world_model.log_temp_policy)
+    #             T_value = 1.0 + F.softplus(self._model.world_model.log_temp_value)
+    #             T_reward = 1.0 + F.softplus(self._model.world_model.log_temp_reward)
+
+    #             policy_logits /= (T_policy + 1e-8)
+    #             value_logits /= (T_value + 1e-8)
+    #             if not isinstance(reward_logits, list):
+    #                 reward_logits /= (T_reward + 1e-8)
+        
+    #     return policy_logits, value_logits, reward_logits
+    
     # @profile
     def _forward_collect(
             self,
@@ -941,6 +957,15 @@ class UniZeroPolicy(MuZeroPolicy):
         with torch.no_grad():
             network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+
+            # if self._cfg.model.world_model_cfg.use_temperature_scaling:
+            #     # ==================== 关键修改点 ====================
+            #     # 在将 logits 送入 MCTS 之前，应用可学习的温度
+            #     policy_logits, pred_values, reward_roots = self._apply_temperature_scaling_for_inference(
+            #         policy_logits, pred_values, reward_roots
+            #     )
+            #     # ====================================================
+
 
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
@@ -1088,6 +1113,14 @@ class UniZeroPolicy(MuZeroPolicy):
         with torch.no_grad():
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+
+            # if self._cfg.model.world_model_cfg.use_temperature_scaling:
+            #     # ==================== 关键修改点 ====================
+            #     # 在将 logits 送入 MCTS 之前，应用可学习的温度
+            #     policy_logits, pred_values, reward_roots = self._apply_temperature_scaling_for_inference(
+            #         policy_logits, pred_values, reward_roots
+            #     )
+            #     # ====================================================
 
             # if not in training, obtain the scalars of the value/reward
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）

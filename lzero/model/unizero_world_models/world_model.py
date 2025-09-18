@@ -1178,6 +1178,19 @@ class WorldModel(nn.Module):
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
+        if self.use_temperature_scaling and not self.training:
+            # ==================== 关键修改点 ====================
+            # collect/eval/计算atrget时，应用可学习的温度. 在训练时是在compute loss中执行temperature_scaling
+            with torch.no_grad():
+                T_policy = 1.0 + F.softplus(self.log_temp_policy)
+                T_value = 1.0 + F.softplus(self.log_temp_value)
+                T_reward = 1.0 + F.softplus(self.log_temp_reward)
+
+                logits_policy /= (T_policy + 1e-8)
+                logits_value /= (T_value + 1e-8)
+                logits_rewards /= (T_reward + 1e-8)
+            # ====================================================
+
         # print(f"logits_observations.mean(): {logits_observations.mean().item():.6f}")
         # print(f"logits_rewards.mean(): {logits_rewards.mean().item():.6f}")
         # print(f"logits_policy.mean(): {logits_policy.mean().item():.6f}")
@@ -2337,10 +2350,13 @@ class WorldModel(nn.Module):
         # 在 return 语句之前，获取当前的温度值
         temp_value, temp_reward, temp_policy = 1.0, 1.0, 1.0
         if self.use_temperature_scaling:
-            temp_value = torch.clamp(self.log_temp_value.exp(), min=0.1).item()
-            temp_reward = torch.clamp(self.log_temp_reward.exp(), min=0.1).item()
-            temp_policy = torch.clamp(self.log_temp_policy.exp(), min=0.1).item()
-
+            # temp_value = torch.clamp(self.log_temp_value.exp(), min=0.1).item()
+            # temp_reward = torch.clamp(self.log_temp_reward.exp(), min=0.1).item()
+            # temp_policy = torch.clamp(self.log_temp_policy.exp(), min=0.1).item()
+            
+            temp_value  = 1.0 + F.softplus(self.log_temp_value).item()
+            temp_reward = 1.0 + F.softplus(self.log_temp_reward).item()
+            temp_policy = 1.0 + F.softplus(self.log_temp_policy).item()
 
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
@@ -2576,23 +2592,34 @@ class WorldModel(nn.Module):
         # # =============================================================
 
         # ==================== START: APPLY LEARNABLE TEMPERATURE ====================
-        if self.use_temperature_scaling:
-            # 根据 element 类型，选择对应的温度参数
-            if element == 'value':
-                # T = self.log_temp_value.exp()
-                # 为了防止T过小导致数值不稳定，可以加一个clamp
-                T = torch.clamp(self.log_temp_value.exp(), min=0.1)
-            elif element == 'reward':
-                # T = self.log_temp_reward.exp()
-                T = torch.clamp(self.log_temp_reward.exp(), min=0.1)
-            elif element == 'policy':
-                # T = self.log_temp_policy.exp()
-                T = torch.clamp(self.log_temp_policy.exp(), min=0.1)
-            else:
-                T = 1.0  # 对于其他未知类型，不使用温度
+        # if self.use_temperature_scaling:
+        #     # 根据 element 类型，选择对应的温度参数
+        #     if element == 'value':
+        #         # T = self.log_temp_value.exp()
+        #         # 为了防止T过小导致数值不稳定，可以加一个clamp
+        #         T = torch.clamp(self.log_temp_value.exp(), min=0.1)
+        #     elif element == 'rewards':
+        #         # T = self.log_temp_reward.exp()
+        #         T = torch.clamp(self.log_temp_reward.exp(), min=0.1)
+        #     elif element == 'policy':
+        #         # T = self.log_temp_policy.exp()
+        #         T = torch.clamp(self.log_temp_policy.exp(), min=0.1)
+        #     else:
+        #         T = 1.0  # 对于其他未知类型，不使用温度
 
-            # 应用温度缩放：用温度 T 来除以 logits
-            # 增加一个极小值防止除以零（尽管exp()保证了T>0）
+        #     # 应用温度缩放：用温度 T 来除以 logits
+        #     # 增加一个极小值防止除以零（尽管exp()保证了T>0）
+        #     logits = logits / (T + 1e-8)
+        if self.use_temperature_scaling:
+            if element == 'value':
+                T = 1.0 + F.softplus(self.log_temp_value)
+            elif element == 'rewards':
+                T = 1.0 + F.softplus(self.log_temp_reward)
+            elif element == 'policy':
+                T = 1.0 + F.softplus(self.log_temp_policy)
+            else:
+                T = 1.0
+
             logits = logits / (T + 1e-8)
         # ===================== END: APPLY LEARNABLE TEMPERATURE =====================
 
