@@ -617,6 +617,11 @@ class UniZeroPolicy(MuZeroPolicy):
         logits_policy_max=self.intermediate_losses['logits_policy_max']
         logits_policy_min=self.intermediate_losses['logits_policy_min']
 
+
+        temperature_value=self.intermediate_losses['temperature_value']
+        temperature_reward=self.intermediate_losses['temperature_reward']
+        temperature_policy=self.intermediate_losses['temperature_policy']
+
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
@@ -843,6 +848,10 @@ class UniZeroPolicy(MuZeroPolicy):
         "logits_policy_mean":logits_policy_mean,
         "logits_policy_max":logits_policy_max,
         "logits_policy_min":logits_policy_min,
+
+             "temperature_value":temperature_value,
+        "temperature_reward":temperature_reward,
+        "temperature_policy":temperature_policy,
         }
         
         if self._cfg.use_wandb:
@@ -1368,6 +1377,10 @@ class UniZeroPolicy(MuZeroPolicy):
         "logits_policy_mean",
         "logits_policy_max",
         "logits_policy_min",
+
+                     "temperature_value",
+        "temperature_reward",
+        "temperature_policy",
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:

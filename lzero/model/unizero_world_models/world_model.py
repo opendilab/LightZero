@@ -283,6 +283,19 @@ class WorldModel(nn.Module):
         # self.register_gradient_hooks(self.tokenizer.representation_network)
         # =============================================================
 
+        # ==================== START: LEARNABLE TEMPERATURE SCALING ====================
+        # 添加一个选项来启用或禁用温度缩放
+        self.use_temperature_scaling = getattr(self.config, 'use_temperature_scaling', True) # 默认开启
+
+        if self.use_temperature_scaling:
+            # 为 value, reward, policy 分别初始化一个可学习的对数温度参数
+            # 初始化为0，意味着初始温度 T = exp(0) = 1，不影响训练开始
+            self.log_temp_value = nn.Parameter(torch.zeros([]))
+            self.log_temp_reward = nn.Parameter(torch.zeros([]))
+            self.log_temp_policy = nn.Parameter(torch.zeros([]))
+            logging.info("Learnable temperature scaling for prediction heads is ENABLED.")
+        # ===================== END: LEARNABLE TEMPERATURE SCALING =====================
+
 
     def register_gradient_hooks(self, model_to_hook: nn.Module):
         """
@@ -715,72 +728,72 @@ class WorldModel(nn.Module):
     #     )
     
     #_create_head_muzero
-    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
-        """Create head modules for the transformer."""
-
-        
-        modules = MLP_V2(
-            in_channels=self.config.embed_dim,
-            hidden_channels=[32],
-            out_channels=output_dim,
-            # activation=nn.GELU(approximate='tanh'),
-            activation=nn.ReLU(inplace=True),
-            # norm_type='BN',
-            norm_type='LN', 
-            output_activation=False,
-            output_norm=False,
-            last_linear_layer_init_zero=True
-        )
-            
-        return Head(
-            max_blocks=self.config.max_blocks,
-            block_mask=block_mask,
-            head_module=nn.Sequential(*modules)
-        )
-    
     # def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
     #     """Create head modules for the transformer."""
-    #     # modules = [
-    #     #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
-    #     # ]
+
         
-    #     # ==================== 头部优化：防御性设计 ====================
-    #     # 在头部入口处增加一个LayerNorm，以防止输入饱和。
-    #     modules = [
-    #         nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
-    #         nn.Linear(self.config.embed_dim, self.config.embed_dim),
-    #         # ==================== 核心修复点 ====================
-    #         # 在激活函数GELU之前，对第一个线性层的输出进行归一化
-    #         # 这可以防止激活值爆炸或饱和
-    #         nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
-    #     # ======================================================
-    #     ]
-    #     # =============================================================
-
-
-    #     # ==================== PROPOSED FIX ====================
-    #     # Add a LayerNorm after the first linear layer and before the activation.
-    #     # This stabilizes the activations within the head, preventing drift.
-    #     # if use_norm_in_head: # TODO
-    #     #     modules.append(nn.LayerNorm(self.config.embed_dim))
-    #     # ======================================================
-
-    #     modules.extend([
-    #         nn.GELU(approximate='tanh'),
-    #         # nn.ReLU(inplace=True),
-    #         nn.Linear(self.config.embed_dim, output_dim),
-    #         # 最后的LayerNorm可以保留，也可以视情况移除，因为它主要影响输出的尺度
-    #         # nn.LayerNorm(output_dim) 
-    #     ])
-
-    #     if norm_layer:
-    #         modules.append(norm_layer)
+    #     modules = MLP_V2(
+    #         in_channels=self.config.embed_dim,
+    #         hidden_channels=[32],
+    #         out_channels=output_dim,
+    #         # activation=nn.GELU(approximate='tanh'),
+    #         activation=nn.ReLU(inplace=True),
+    #         # norm_type='BN',
+    #         norm_type='LN', 
+    #         output_activation=False,
+    #         output_norm=False,
+    #         last_linear_layer_init_zero=True
+    #     )
             
     #     return Head(
     #         max_blocks=self.config.max_blocks,
     #         block_mask=block_mask,
     #         head_module=nn.Sequential(*modules)
     #     )
+    
+    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, use_norm_in_head: bool = False) -> Head:
+        """Create head modules for the transformer."""
+        # modules = [
+        #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
+        # ]
+        
+        # ==================== 头部优化：防御性设计 ====================
+        # 在头部入口处增加一个LayerNorm，以防止输入饱和。
+        modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
+            nn.Linear(self.config.embed_dim, self.config.embed_dim),
+            # ==================== 核心修复点 ====================
+            # 在激活函数GELU之前，对第一个线性层的输出进行归一化
+            # 这可以防止激活值爆炸或饱和
+            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
+        # ======================================================
+        ]
+        # =============================================================
+
+
+        # ==================== PROPOSED FIX ====================
+        # Add a LayerNorm after the first linear layer and before the activation.
+        # This stabilizes the activations within the head, preventing drift.
+        # if use_norm_in_head: # TODO
+        #     modules.append(nn.LayerNorm(self.config.embed_dim))
+        # ======================================================
+
+        modules.extend([
+            nn.GELU(approximate='tanh'),
+            # nn.ReLU(inplace=True),
+            nn.Linear(self.config.embed_dim, output_dim),
+            # 最后的LayerNorm可以保留，也可以视情况移除，因为它主要影响输出的尺度
+            # nn.LayerNorm(output_dim) 
+        ])
+
+        if norm_layer:
+            modules.append(norm_layer)
+            
+        return Head(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=nn.Sequential(*modules)
+        )
 
     def _create_head_cont(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
@@ -803,8 +816,8 @@ class WorldModel(nn.Module):
 
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
-        # last_linear_layer_init_zero = True  # TODO
-        last_linear_layer_init_zero = False  # TODO=====
+        last_linear_layer_init_zero = True  # TODO
+        # last_linear_layer_init_zero = False  # TODO=====
 
         if last_linear_layer_init_zero:
             if self.continuous_action_space:
@@ -2321,6 +2334,14 @@ class WorldModel(nn.Module):
         # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
         detached_obs_embeddings = obs_embeddings.detach()
 
+        # 在 return 语句之前，获取当前的温度值
+        temp_value, temp_reward, temp_policy = 1.0, 1.0, 1.0
+        if self.use_temperature_scaling:
+            temp_value = torch.clamp(self.log_temp_value.exp(), min=0.1).item()
+            temp_reward = torch.clamp(self.log_temp_reward.exp(), min=0.1).item()
+            temp_policy = torch.clamp(self.log_temp_policy.exp(), min=0.1).item()
+
+
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
                 latent_recon_loss_weight=self.latent_recon_loss_weight,
@@ -2348,7 +2369,11 @@ class WorldModel(nn.Module):
                 value_priority=value_priority,
                 obs_embeddings=detached_obs_embeddings,  # <-- 新增
 
-
+                # ==================== 新增日志项 ====================
+                temperature_value=temp_value,
+                temperature_reward=temp_reward,
+                temperature_policy=temp_policy,
+                # ===================================================
 
 
             )
@@ -2387,7 +2412,11 @@ class WorldModel(nn.Module):
     logits_reward=outputs.logits_rewards.detach(),
     logits_policy=outputs.logits_policy.detach(),
 
-
+                # ==================== 新增日志项 ====================
+                temperature_value=temp_value,
+                temperature_reward=temp_reward,
+                temperature_policy=temp_policy,
+                # ===================================================
             )
 
     
@@ -2545,6 +2574,27 @@ class WorldModel(nn.Module):
         #     temperature = 2.0  # 这是一个可以调整的超参数，可以从1.5或2.0开始
         #     logits = logits / temperature
         # # =============================================================
+
+        # ==================== START: APPLY LEARNABLE TEMPERATURE ====================
+        if self.use_temperature_scaling:
+            # 根据 element 类型，选择对应的温度参数
+            if element == 'value':
+                # T = self.log_temp_value.exp()
+                # 为了防止T过小导致数值不稳定，可以加一个clamp
+                T = torch.clamp(self.log_temp_value.exp(), min=0.1)
+            elif element == 'reward':
+                # T = self.log_temp_reward.exp()
+                T = torch.clamp(self.log_temp_reward.exp(), min=0.1)
+            elif element == 'policy':
+                # T = self.log_temp_policy.exp()
+                T = torch.clamp(self.log_temp_policy.exp(), min=0.1)
+            else:
+                T = 1.0  # 对于其他未知类型，不使用温度
+
+            # 应用温度缩放：用温度 T 来除以 logits
+            # 增加一个极小值防止除以零（尽管exp()保证了T>0）
+            logits = logits / (T + 1e-8)
+        # ===================== END: APPLY LEARNABLE TEMPERATURE =====================
 
 
         # Reshape your tensors
