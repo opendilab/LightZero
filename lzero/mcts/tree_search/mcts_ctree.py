@@ -46,7 +46,7 @@ class UniZeroMCTSCtree(object):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg: EasyDict = None) -> None:
+    def __init__(self, cfg: EasyDict = None,eval=False) -> None:
         """
         Overview:
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
@@ -56,9 +56,13 @@ class UniZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
+        if eval:
+            self._cfg.num_simulations=self._cfg.eval_num_simulations
+        
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
+        
 
     @classmethod
     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "mz_ctree":
