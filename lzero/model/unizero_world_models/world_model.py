@@ -517,9 +517,13 @@ class WorldModel(nn.Module):
 
             # --- 修改部分：检查文件是否存在，如果存在则添加时间戳 ---
             # 1. 构建基础路径
+            # base_save_path = (
+            #     f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
+            #     f'tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+            # )
             base_save_path = (
                 f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
-                f'tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+                f'tsne_with_vr_{self.config.optim_type}_step_{step_counter}.png'
             )
 
             # 2. 检查文件是否存在，并确定最终保存路径
@@ -2099,27 +2103,27 @@ class WorldModel(nn.Module):
         # if global_step > 0 and global_step % 5000 == 0:
         # if global_step >= 0 and global_step % 5000 == 0: # 5k
 
-        # if global_step >= 0 and global_step % 10000 == 0: # 10k
+        if global_step >= 0 and global_step % 10000 == 0: # 20k
         
-        #     with torch.no_grad():
-        #         # 将logits转换为标量值
-        #         # 注意：outputs的形状是(B, L, E)，我们需要reshape
-        #         batch_size, seq_len = batch['actions'].shape[0], batch['actions'].shape[1]
+            with torch.no_grad():
+                # 将logits转换为标量值
+                # 注意：outputs的形状是(B, L, E)，我们需要reshape
+                batch_size, seq_len = batch['actions'].shape[0], batch['actions'].shape[1]
                 
-        #         pred_val_logits = outputs.logits_value.view(batch_size * seq_len, -1)
-        #         pred_rew_logits = outputs.logits_rewards.view(batch_size * seq_len, -1)
+                pred_val_logits = outputs.logits_value.view(batch_size * seq_len, -1)
+                pred_rew_logits = outputs.logits_rewards.view(batch_size * seq_len, -1)
                 
-        #         scalar_values = inverse_scalar_transform_handle(pred_val_logits).squeeze(-1)
-        #         scalar_rewards = inverse_scalar_transform_handle(pred_rew_logits).squeeze(-1)
+                scalar_values = inverse_scalar_transform_handle(pred_val_logits).squeeze(-1)
+                scalar_rewards = inverse_scalar_transform_handle(pred_rew_logits).squeeze(-1)
 
-        #         self._analyze_latent_representation(
-        #             latent_states=obs_embeddings,
-        #             timesteps=batch['timestep'],
-        #             game_states=batch['observations'],
-        #             predicted_values=scalar_values, # 传入预测的Value
-        #             predicted_rewards=scalar_rewards, # 传入预测的Reward
-        #             step_counter=global_step
-        #         )
+                self._analyze_latent_representation(
+                    latent_states=obs_embeddings,
+                    timesteps=batch['timestep'],
+                    game_states=batch['observations'],
+                    predicted_values=scalar_values, # 传入预测的Value
+                    predicted_rewards=scalar_rewards, # 传入预测的Reward
+                    step_counter=global_step
+                )
 
         # =================================================================
 

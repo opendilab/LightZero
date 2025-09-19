@@ -21,7 +21,8 @@ def main(env_id, seed):
     collect_num_simulations = 25
     # collect_num_simulations = 50
     eval_num_simulations = 50
-    max_env_step = int(5e6)
+    # max_env_step = int(5e6)
+    max_env_step = int(2e6)
     # max_env_step = int(50e6)
     # batch_size = 256
 
@@ -177,6 +178,8 @@ def main(env_id, seed):
                     res_alha=False, # TODO========
 
 
+                    optim_type='AdamW_mix_lr_wdecay', # only for tsne plot
+
                     # optim_type='AdamW_mix_lr',
                     # learning_rate=0.001,
 
@@ -185,8 +188,8 @@ def main(env_id, seed):
 
             eps=dict(
                 # (bool) Whether to use eps greedy exploration in collecting data.
-                # eps_greedy_exploration_in_collect=True,
-                eps_greedy_exploration_in_collect=False,
+                eps_greedy_exploration_in_collect=True,
+                # eps_greedy_exploration_in_collect=False,
 
                 # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
                 type='linear',
@@ -222,11 +225,11 @@ def main(env_id, seed):
             priority_prob_alpha=1,
             priority_prob_beta=1,
 
-            manual_temperature_decay=True,
-            threshold_training_steps_for_final_temperature=int(5e4), # 50k iter 对应 500k envsteps
+            # manual_temperature_decay=True,
+            # threshold_training_steps_for_final_temperature=int(5e4), # 50k iter 对应 500k envsteps
 
-            # manual_temperature_decay=False,
-            # threshold_training_steps_for_final_temperature=int(2.5e4),
+            manual_temperature_decay=False,
+            threshold_training_steps_for_final_temperature=int(2.5e4),
             
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
@@ -238,7 +241,9 @@ def main(env_id, seed):
             optim_type='AdamW_mix_lr_wdecay',
             # optim_type='AdamW',
             # weight_decay=1e-4, # TODO orig
-            weight_decay=1e-3, # TODO: encoder 5*wd
+            # weight_decay=1e-3, # TODO: encoder 5*wd
+            weight_decay=1e-2, # TODO: encoder 5*wd
+
 
             # optim_type='AdamW',
             # # learning_rate=0.001,
@@ -345,9 +350,12 @@ def main(env_id, seed):
     # main_config.exp_name = f'data_unizero_longrun_20250918_debug/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_nolabelsmooth_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-1_pytloss_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_eps20k_pew001_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
 
-    main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_temp1-025-50k_adamw1e-4_wd1e-3-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_temp1-025-50k_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_label-smooth-valuereward01-policy-005_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -387,7 +395,7 @@ if __name__ == "__main__":
 
     # args.env = 'PongNoFrameskip-v4'
 
-    args.env = 'MsPacmanNoFrameskip-v4'
+    # args.env = 'MsPacmanNoFrameskip-v4'
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'SeaquestNoFrameskip-v4' 
@@ -405,7 +413,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=3
+    export CUDA_VISIBLE_DEVICES=1
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
 

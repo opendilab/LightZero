@@ -649,7 +649,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # ==================== [修改] 集成范数监控逻辑 ====================
         norm_log_dict = {}
         # 检查是否达到监控频率
-        if self._cfg.monitor_norm_freq > 0 and train_iter > 0 and (train_iter % self._cfg.monitor_norm_freq == 0):
+        if self._cfg.monitor_norm_freq > 0 and train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0):
             with torch.no_grad():
                 # 1. 监控模型参数范数
                 param_norm_metrics = self._monitor_model_norms()
