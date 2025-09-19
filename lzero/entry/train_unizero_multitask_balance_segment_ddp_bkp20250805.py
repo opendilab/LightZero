@@ -116,15 +116,6 @@ class CurriculumController:
         self.max_stage_iters  = mc.max_stage_iters
         self.policy           = policy
 
-        # ==================== 新增代码 开始 ====================
-        # 从配置中读取标志，决定是否对Encoder应用课程学习。
-        # getattr(mc, 'apply_curriculum_to_encoder', True) 表示：
-        # 尝试从 mc (world_model_cfg) 中获取 'apply_curriculum_to_encoder' 属性。
-        # 如果找不到，则默认值为 True，以保持向后兼容性。
-        self.apply_curriculum_to_encoder = getattr(mc, 'apply_curriculum_to_encoder', False)
-        logging.info(f"[课程学习控制器] 初始化。课程学习将应用于Encoder: {self.apply_curriculum_to_encoder}")
-        # ==================== 新增代码 结束 ====================
-
         self.stage            = 0
         self.last_switch_iter = 0
         self.last_solved      = 0      # 已解决任务数上次快照
@@ -179,42 +170,43 @@ class CurriculumController:
             # 而 tokenizer.encoder 引用了它。
             vit_encoder = world_model.tokenizer.encoder
             transformer_backbone = world_model.transformer
-
-            # ==================== 修改部分 开始 ====================
-
-            # 1. 根据配置，条件性地为 ViT Encoder 设置新阶段和冻结
-            if self.apply_curriculum_to_encoder:
-                logging.info(f"[课程学习] 将对 ViT Encoder 应用课程阶段 {self.stage}。")
-                set_curriculum_stage(vit_encoder, self.stage)
-                if is_entering_stage1:
-                    logging.info("[课程学习] 进入阶段 1，正在冻结 ViT Encoder 的非 LoRA 参数。")
-                    freeze_non_lora_parameters(
-                        vit_encoder,
-                        freeze=True,
-                        verbose=True
-                    )
-                # 打印 ViT Encoder 的状态
-                log_module_trainable_status(vit_encoder, "ViT Encoder")
-            else:
-                logging.info("[课程学习] 根据配置，跳过对 ViT Encoder 的课程学习阶段设置和冻结。")
-                # 即使不应用课程学习，也可以打印一下它的状态以供调试
-                log_module_trainable_status(vit_encoder, "ViT Encoder (未应用课程学习)")
-
-            # 2. 总是为 Transformer Decoder 设置新阶段和冻结
-            logging.info(f"[课程学习] 将对 Transformer Backbone 应用课程阶段 {self.stage}。")
+            
+            set_curriculum_stage(vit_encoder, self.stage)
             set_curriculum_stage(transformer_backbone, self.stage)
+
+            # 如果是从阶段 0 进入阶段 1，则冻结整个骨干网络（包括Encoder和Decoder）
             if is_entering_stage1:
-                logging.info("[课程学习] 进入阶段 1，正在冻结 Transformer Backbone 的非 LoRA 参数。")
+                logging.info("[课程学习] 进入阶段 1。正在冻结所有非 LoRA 的骨干网络参数。")
+                # <--- 修改：对整个 world_model 进行冻结
                 freeze_non_lora_parameters(
                     transformer_backbone,
                     freeze=True,
                     verbose=True
                 )
+                freeze_non_lora_parameters(
+                    vit_encoder,
+                    freeze=True,
+                    verbose=True
+                )
+                # freeze_non_lora_parameters(
+                #     world_model,
+                #     freeze=True,
+                #     verbose=True
+                # )
             
-            # 打印 Transformer Backbone 的状态
+            # 3. 调用新的日志函数，详细打印每个组件的状态
+            #    这会提供一个最终的、权威的参数状态快照。
+            log_module_trainable_status(vit_encoder, "ViT Encoder")
             log_module_trainable_status(transformer_backbone, "Transformer Backbone")
+            
+            # ==================== 新增/修改部分 结束 ====================
 
-            # ==================== 修改部分 结束 ====================
+            # NEW : freeze all non-LoRA weights from stage-1 onwards
+            # freeze_non_lora(
+            #     self.policy._learn_model.world_model.transformer,
+            #     freeze=(self.stage >= 1),
+            #     verbose=True,
+            # )
 
             logging.info(f'[Curriculum] switch to stage {self.stage} '
                          f'(solved={solved_cnt}, unsolved={unsolved_cnt}, '
@@ -927,27 +919,10 @@ def train_unizero_multitask_balance_segment_ddp(
 
 
         # ddp 同步全局已解决任务数量，更新 curriculum_stage
-        # local_solved_count = len([task for task in solved_task_pool])
-        # solved_counts_all = [None for _ in range(world_size)]
-        # dist.all_gather_object(solved_counts_all, local_solved_count)
-        # global_solved = sum(solved_counts_all)
-
-        # ==================== 修改部分 开始 ====================
-        # 正确的DDP同步方式：同步完整的任务ID集合，而不仅仅是数量
-        # 1. 准备一个列表，用于接收来自所有进程的 `solved_task_pool` 集合
-        all_solved_pools = [None for _ in range(world_size)]
-        # 2. 使用 all_gather_object 收集所有进程的局部 `solved_task_pool`
-        dist.all_gather_object(all_solved_pools, solved_task_pool)
-        # 3. 在每个进程上，通过取并集来创建一个全局统一的 `solved_task_pool`
-        global_solved_task_pool = set()
-        for pool in all_solved_pools:
-            if pool:  # 确保pool不是None
-                global_solved_task_pool.update(pool)
-        # 4. 将当前进程的局部 set 更新为全局 set，确保后续逻辑的正确性
-        solved_task_pool = global_solved_task_pool
-        # 5. 从这个全局统一的集合中计算出真正正确的已解决任务总数
-        global_solved = len(solved_task_pool)
-        # ==================== 修改部分 结束 ====================
+        local_solved_count = len([task for task in solved_task_pool])
+        solved_counts_all = [None for _ in range(world_size)]
+        dist.all_gather_object(solved_counts_all, local_solved_count)
+        global_solved = sum(solved_counts_all)
 
         # 预设阶段数 N=3，每达到 M/N 个任务，即更新阶段（注意：total_tasks 为 M）
         # cur_curriculum_stage = int(global_solved // (total_tasks / cfg.policy.model.world_model_cfg.curriculum_stage_num))
@@ -967,7 +942,6 @@ def train_unizero_multitask_balance_segment_ddp(
         if rank == 0:         # 只在 rank0 写 TensorBoard，避免重复
             tb_logger.add_scalar('UniZero-MT/stage',   curr_ctrl.stage,   global_step=learner.train_iter)
             tb_logger.add_scalar('UniZero-MT/last_solved', curr_ctrl.last_solved, global_step=learner.train_iter)
-            tb_logger.add_scalar('UniZero-MT/global_solved', global_solved, global_step=learner.train_iter)
 
             # 遍历 transformer 中所有子模块，根据其名称查找 CurriculumLoRALinear 模块
             transformer = policy._learn_model.world_model.transformer

@@ -24,22 +24,48 @@ from lzero.model.common import SimNorm
 import logging
 from typing import Dict, List, Any
 
+# class LearnableScale(nn.Module):
+#     """
+#     可学习且有界的标量参数:
+#       s = s_max * sigmoid(ŝ)         (0, s_max)
+#     """
+#     def __init__(self, init=1.0, s_max=1.2):
+#         super().__init__()
+#         # 反推初始值
+#         inv_sig = math.log(init / (s_max - init + 1e-9))
+#         self.logit = nn.Parameter(torch.tensor(inv_sig))
+#         self.logit.requires_grad = True # TODO
+#         self.s_max = s_max
+
+#     def forward(self):
+#         return self.s_max * torch.sigmoid(self.logit)
+
 class LearnableScale(nn.Module):
     """
-    可学习且有界的标量参数:
-      s = s_max * sigmoid(ŝ)         (0, s_max)
+    一个被约束在特定范围内的可学习标量参数。
+    
+    s = offset + scale * tanh(ŝ)
+    
+    这将无界的 logit ŝ 映射到 (offset - scale, offset + scale) 范围内。
+    使用 tanh 有时比 sigmoid 能提供更稳定的梯度。
+    
+    例如: 要获得 (0.8, 1.2) 的范围，使用 init=1.0, s_range=0.2。
     """
-    def __init__(self, init=1.0, s_max=1.5):
+    def __init__(self, init: float = 1.0, s_range: float = 0.2):
         super().__init__()
-        # 反推初始值
-        inv_sig = math.log(init / (s_max - init + 1e-9))
-        self.logit = nn.Parameter(torch.tensor(inv_sig))
-        self.logit.requires_grad = True # TODO
-        self.s_max = s_max
+        assert s_range > 0, "缩放范围必须为正。"
+        self.offset = init
+        self.scale = s_range
 
-    def forward(self):
-        return self.s_max * torch.sigmoid(self.logit)
-        
+        # 将 logit 初始化为 0，使初始输出恰好为 `init`。
+        self.logit = nn.Parameter(torch.tensor(0.0))
+        self.logit.requires_grad = False  # TODO 初始时冻结，由 CurriculumController 激活
+        # self.logit.requires_grad = True # TODO
+
+
+    def forward(self) -> torch.Tensor:
+        return self.offset + self.scale * torch.tanh(self.logit)
+    
 ##############################################
 # CurriculumLoRALinear 实现
 ##############################################
@@ -102,8 +128,9 @@ class CurriculumLoRALinear(nn.Module):
                 })
                 self.adapters.append(adapter)
 
-                self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.5))
-                
+                # self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.2))
+                self.adapter_scales.append(LearnableScale(lora_scale_init, s_range=0.2))
+
                 # self.adapter_scales.append(  #  ← 新增
                 #     nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
                 # )
@@ -122,6 +149,7 @@ class CurriculumLoRALinear(nn.Module):
             for adapter in self.adapters:
                 adapter['lora_A'].requires_grad = False
                 adapter['lora_B'].requires_grad = False
+
 
     def set_curriculum_stage(self, stage: int):
         """
@@ -157,7 +185,6 @@ class CurriculumLoRALinear(nn.Module):
             if self.bias is not None:
                 self.bias.requires_grad = False
             for idx, adapter in enumerate(self.adapters):
-                # self.adapter_scales[idx].requires_grad = True   #  ← 新增
                 logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
                 logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0]().item()}")
 
@@ -239,20 +266,35 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
 # 辅助函数：在 transformer 内部遍历所有 CurriculumLoRALinear 模块，并设置阶段
 ##############################################
 
-def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
+# def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
+#     """
+#     遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
+#     并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
+#     """
+#     count = 0
+#     for module in transformer.modules():
+#         # logging.info(f"[Transformer] module {module}.")
+
+#         if isinstance(module, CurriculumLoRALinear):
+#             module.set_curriculum_stage(stage)
+#             count += 1
+#     logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
+
+def set_curriculum_stage(model: nn.Module, stage: int):
     """
-    遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
-    并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
+    遍历给定模型 (model) 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
+    并调用其 set_curriculum_stage(stage) 方法。
+    这个函数是通用的，可以作用于 ViT Encoder 或 Transformer Decoder。
     """
     count = 0
-    for module in transformer.modules():
-        # logging.info(f"[Transformer] module {module}.")
-
+    for module in model.modules():
         if isinstance(module, CurriculumLoRALinear):
             module.set_curriculum_stage(stage)
             count += 1
-    logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
+    logging.info(f"[Curriculum] 在 {type(model).__name__} 中共更新 {count} 个 CurriculumLoRALinear 模块为 stage {stage}.")
 
+# 保留旧函数名并指向新函数，以实现向后兼容
+set_curriculum_stage_for_transformer = set_curriculum_stage
 
 ##############################################
 # TransformerConfig 示例（增加 curriculum_stage_num）

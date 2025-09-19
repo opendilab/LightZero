@@ -333,9 +333,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # (int) the number of simulations in MCTS for collect.
+        # # (int) the number of simulations in MCTS for renalyze.
         num_simulations=50,
-        # (int) the number of simulations in MCTS for eval. If not set, use num_simulations.
+        # (int) The number of simulations in MCTS for the collect phase.
+        collect_num_simulations=25,
+        # (int) The number of simulations in MCTS for the eval phase.
         eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
@@ -1108,10 +1110,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         self._collect_model = self._model
 
+        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_collect_cfg = copy.deepcopy(self._cfg)
+        mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
@@ -1373,7 +1380,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
-        
         # 创建eval专用的配置对象，使用eval_num_simulations
         # eval_cfg = copy.deepcopy(self._cfg)
         # eval_num_simulations = getattr(self._cfg, 'eval_num_simulations', self._cfg.num_simulations)
@@ -1390,6 +1396,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)   # 使用eval专用配置
         
+
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
