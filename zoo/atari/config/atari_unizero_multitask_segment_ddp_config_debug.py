@@ -64,8 +64,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         policy=dict(
             multi_gpu=True,  # Very important for ddp
             only_use_moco_stats=False,
-            # use_moco=False,  # ==============TODO==============
-            use_moco=True,  # ==============TODO: moco==============
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO: moco==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
@@ -129,7 +129,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=12, # todo
                     num_heads=24,
 
-                    embed_dim=768,
+                    embed_dim=768,#768
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
@@ -142,8 +142,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_in_moe_head=4,
 
                     moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False, # ==============TODO:orig==============
-                    # multiplication_moe_in_transformer=True, # =======TODO: moe8=======
+                    # multiplication_moe_in_transformer=False, # ==============TODO:orig==============
+                    multiplication_moe_in_transformer=True, # =======TODO: moe8=======
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
@@ -337,7 +337,7 @@ if __name__ == "__main__":
 
     batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size)
     total_batch_size =  effective_batch_size # 当前无效
-
+    
     num_unroll_steps = 10
     # infer_context_length = 4
     infer_context_length = 5 # ==============TODO==============
@@ -350,7 +350,9 @@ if __name__ == "__main__":
 
     # ======== TODO: only for debug ========
     env_id_list = [
-            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4'
+            'PongNoFrameskip-v4', 
+            'MsPacmanNoFrameskip-v4',
+            #   'SeaquestNoFrameskip-v4'
         ]
     num_layers = 1 # ==============TODO==============
     collector_env_num = 2
@@ -363,11 +365,14 @@ if __name__ == "__main__":
     infer_context_length = 2
     batch_sizes = [2 for _ in range(len(env_id_list))]
     total_batch_size =  2*len(env_id_list)
+    
+    # ===========button from tangjia===========
+    
 
 
     import torch.distributed as dist
 
-    for seed in [0,1]:
+    for seed in [100]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
