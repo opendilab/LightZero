@@ -58,13 +58,14 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         {
             'params': list(transformer_params.values()),
             'lr': learning_rate,  # 1e-4
-            # 'lr': learning_rate * 0.1,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
+            # 'lr': learning_rate * 0.2,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
             'weight_decay': weight_decay
+            # 'weight_decay': weight_decay * 5.0 
         },
         {
             'params': list(tokenizer_params.values()),
             'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
-            # 'weight_decay': weight_decay
+            # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
             'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
             
         },
@@ -72,11 +73,13 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
             'params': list(head_params.values()),
             'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
             'weight_decay': 0.0  # 通常Heads的权重不做衰减
+            # 'weight_decay': weight_decay
+
         }
     ]
 
     print("--- Optimizer Groups ---")
-    print(f"Transformer LR: {learning_rate * 0.1}")
+    print(f"Transformer LR: {learning_rate}")
     print(f"Tokenizer/Heads LR: {learning_rate}")
     
     optimizer = torch.optim.AdamW(optim_groups, betas=betas)
@@ -452,7 +455,18 @@ class UniZeroPolicy(MuZeroPolicy):
         if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
             # TODO: check the total training steps
-            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+            # self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+            total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
+            # final_lr = self._cfg.get('final_learning_rate', 0.0)
+            final_lr = self._cfg.get('final_learning_rate', 1e-6)
+            
+            self.lr_scheduler = CosineAnnealingLR(
+                self._optimizer_world_model, 
+                T_max=total_iters, 
+                eta_min=final_lr
+            )
+            print(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
+
 
         if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
@@ -1113,7 +1127,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                next_latent_state = next_latent_state_with_env[i][action]
+                # next_latent_state = next_latent_state_with_env[i][action] # eps_collect have ker bug
+                # next_latent_state = None
                 
                 if self._cfg.model.world_model_cfg.obs_type == 'text':
                     # Output the plain text content decoded by the decoder from the next latent state
@@ -1257,7 +1272,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 # Predict the next latent state based on the selected action and policy
-                next_latent_state = next_latent_state_with_env[i][action]
+                # next_latent_state = next_latent_state_with_env[i][action] # eps_collect have ker bug
+                # next_latent_state = None
 
                 if self._cfg.model.world_model_cfg.obs_type == 'text':
                     # Output the plain text content decoded by the decoder from the next latent state
