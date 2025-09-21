@@ -177,13 +177,13 @@ def train_unizero_with_reward_model(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        #     logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
-        #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-        #     logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
-        #     if stop:
-        #         logging.info("Stopping condition met, training ends!")
-        #         break
+        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
+            if stop:
+                logging.info("Stopping condition met, training ends!")
+                break
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
