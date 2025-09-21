@@ -23,13 +23,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     
     encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
     if encoder_option == 'qwen':
-        # model_name: str = 'Qwen/Qwen3-0.6B'
-        model_name: str = '/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen3-0.6B'
+        model_name: str = 'Qwen/Qwen3-0.6B'
         batch_size = 4
         accumulation_steps=16
     elif encoder_option == 'legacy':
-        # model_name: str = 'BAAI/bge-base-en-v1.5'
-        model_name: str = '/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/bge-base-en-v1.5'
+        model_name: str = 'BAAI/bge-base-en-v1.5'
         batch_size = 64
         accumulation_steps=1
     else:
