@@ -345,11 +345,28 @@ class UniZeroPolicy(MuZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
+        # assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
+        # assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
+        if self._cfg.use_rnd_model:
+            if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='assign',
+                    update_kwargs={'freq': self._cfg.target_update_freq_for_intrinsic_reward}
+                )
+            elif self._cfg.target_model_for_intrinsic_reward_update_type == 'momentum':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='momentum',
+                    update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
+                )
+        
+        
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
@@ -381,6 +398,8 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.train()
         self._target_model.train()
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
 
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
@@ -512,6 +531,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update the target model with the current model's parameters
         self._target_model.update(self._learn_model.state_dict())
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()

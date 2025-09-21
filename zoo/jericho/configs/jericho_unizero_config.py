@@ -16,11 +16,22 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
-    env_id = 'detective.z5'
+    env_id = 'zork1.z5'
 
-    collector_env_num: int = 4       # Number of collector environments
+    collector_env_num: int = 4      # Number of collector environments
     n_episode = int(collector_env_num)
-    batch_size=64
+    
+    encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
+    if encoder_option == 'qwen':
+        model_name: str = 'Qwen/Qwen3-0.6B'
+        batch_size = 4
+        accumulation_steps=16
+    elif encoder_option == 'legacy':
+        model_name: str = 'BAAI/bge-base-en-v1.5'
+        batch_size = 64
+        accumulation_steps=1
+    else:
+        raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
@@ -57,16 +68,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     reanalyze_batch_size: int = 160
     # reanalyze_partition: Partition ratio from the replay buffer to use during reanalysis
     reanalyze_partition: float = 0.75
-
-    # Model name or path - configurable according to the predefined model paths or names
-    encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
-
-    if encoder_option == 'qwen':
-        model_name: str = 'Qwen/Qwen3-0.6B'
-    elif encoder_option == 'legacy':
-        model_name: str = 'BAAI/bge-base-en-v1.5'
-    else:
-        raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
@@ -107,7 +108,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     ),
                 ),
             ),
-            accumulation_steps=1,  # TODO: Accumulated gradient steps (currently default)
+            accumulation_steps=accumulation_steps,  # TODO: Accumulated gradient steps (currently default)
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
@@ -136,7 +137,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     latent_recon_loss_weight=0.1
                 ),
             ),
-            update_per_collect=int(collector_env_num*max_steps*replay_ratio ),  # Important for DDP
+            update_per_collect=int(collector_env_num*max_steps*replay_ratio*accumulation_steps ),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
             num_unroll_steps=num_unroll_steps,
@@ -186,7 +187,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"data_lz/data_unizero_jericho/{encoder_option}/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )

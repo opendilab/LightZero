@@ -497,4 +497,4 @@ if __name__ == '__main__':
     env = JerichoEnv(env_cfg)
     # Collect data for an episode according to collect_policy_mode
     env.collect_episode_data()  
-    del env  
+    del env 

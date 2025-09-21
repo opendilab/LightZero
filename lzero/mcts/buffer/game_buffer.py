@@ -159,14 +159,14 @@ class GameBuffer(ABC, object):
                 if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
                 if pos_in_game_segment >= len(game_segment.action_segment) - 1:
-                    pos_in_game_segment = np.random.choice(len(game_segment.action_segment) - 1, 1).item()
+                    pos_in_game_segment = np.random.choice(max(len(game_segment.action_segment) - 1, 1), 1).item()
             else:
                 # For environments with a fixed action space (e.g., Atari),
                 # we can safely sample from the entire game segment range.
                 if pos_in_game_segment >= self._cfg.game_segment_length:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
                 if pos_in_game_segment >= len(game_segment.action_segment) - 1:
-                    pos_in_game_segment = np.random.choice(len(game_segment.action_segment) - 1, 1).item()
+                    pos_in_game_segment = np.random.choice(max(len(game_segment.action_segment) - 1, 1), 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             

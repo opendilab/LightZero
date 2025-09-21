@@ -447,8 +447,9 @@ class QwenNetwork(nn.Module):
         batch_idx = torch.arange(B, device=last_hidden.device)
 
         selected = last_hidden[batch_idx, positions]  # [B, H]
-
-        latent = self.embedding_head(selected.to(self.embedding_head[0].weight.dtype))
+        weight = self.embedding_head[0].weight
+        selected = selected.to(dtype=weight.dtype, device=weight.device)
+        latent = self.embedding_head(selected)
         return latent
 
     def decode(self, embeddings: torch.Tensor, max_length: int = 512) -> str:

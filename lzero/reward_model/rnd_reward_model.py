@@ -234,10 +234,10 @@ class RNDRewardModel(BaseRewardModel):
         obs_batch_orig = data[0][0]
         target_reward = data[1][0]
         batch_size = obs_batch_orig.shape[0]
-        # reshape to (4, 2835, 6)
-        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size, self.cfg.obs_shape, 6))
-        # reshape to (24, 2835)
-        obs_batch_tmp = np.reshape(obs_batch_tmp, (batch_size * 6, self.cfg.obs_shape))
+        T = target_reward.shape[1]  
+
+        # obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size, self.cfg.obs_shape, T))
+        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size * T, self.cfg.obs_shape))
 
         if self.input_type == 'latent_state':
             with torch.no_grad():
@@ -249,7 +249,7 @@ class RNDRewardModel(BaseRewardModel):
         # NOTE: deepcopy reward part of data is very important,
         # otherwise the reward of data in the replay buffer will be incorrectly modified.
         target_reward_augmented = copy.deepcopy(target_reward)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * 6, 1))
+        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * T, 1))
 
         if self.cfg.input_norm:
             # add this line to avoid inplace operation on the original tensor.
@@ -294,16 +294,17 @@ class RNDRewardModel(BaseRewardModel):
         self.tb_logger.add_scalar('augmented_reward/reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
         self.tb_logger.add_scalar('augmented_reward/reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
 
-        # reshape to (target_reward_augmented.shape[0], 6, 1)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, 6, 1))
+        # reshape to (target_reward_augmented.shape[0], T, 1)
+        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, T, 1))
+        # TODO why? batchsizw * T -> batchsize * T * 1
         data[1][0] = target_reward_augmented
         train_data_augmented = data
 
         return train_data_augmented
 
     def collect_data(self, data: list) -> None:
-        # TODO(pu): now we only collect the first 300 steps of each game segment.
-        collected_transitions = np.concatenate([game_segment.obs_segment[:300] for game_segment in data[0]], axis=0)
+
+        collected_transitions = np.concatenate([game_segment.obs_segment for game_segment in data[0]], axis=0)
         if self.input_type == 'latent_state':
             with torch.no_grad():
                 self.train_latent_state.extend(
