@@ -23,7 +23,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     
     # Model name or path - configurable according to the predefined model paths or names
     encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
-    if encoder_option == 'legacy':
+    if encoder_option == 'qwen':
         model_name: str = 'Qwen/Qwen3-0.6B'
         batch_size = int(32*gpu_num)
         accumulation_steps=2
