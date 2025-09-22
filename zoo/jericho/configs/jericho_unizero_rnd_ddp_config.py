@@ -103,7 +103,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
-            walkthrough_episodes=0,  # Number of expert walkthrough episodes to use for data collection
             manager=dict(shared_memory=False),
         ),
         reward_model=dict(
