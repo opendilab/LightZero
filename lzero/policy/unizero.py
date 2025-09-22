@@ -725,7 +725,10 @@ class UniZeroPolicy(MuZeroPolicy):
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                next_latent_state = next_latent_state_with_env[i][action]
+                if action in next_latent_state_with_env[i]:
+                    next_latent_state = next_latent_state_with_env[i][action]
+                else:
+                    next_latent_state = np.zeros_like(latent_state_roots[i], dtype=np.float32)
                 
                 if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
@@ -858,7 +861,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 # Predict the next latent state based on the selected action and policy
-                next_latent_state = next_latent_state_with_env[i][action]
+                if action in next_latent_state_with_env[i]:
+                    next_latent_state = next_latent_state_with_env[i][action]
+                else:
+                    next_latent_state = np.zeros_like(latent_state_roots[i], dtype=np.float32)
 
                 if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
