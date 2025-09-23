@@ -460,23 +460,11 @@ class Block(nn.Module):
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=config.num_experts_per_tok,
             )
-            
+            # If a shared expert branch is configured, add its output
             print("="*20)
             print(f'use moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
         elif config.multiplication_moe_in_transformer:
-            # TODO: deepseek-v3
-            # from .moe import MoeConfig,MoELayer
-            # moe_cfg = MoeConfig(
-            #     embed_dim=config.embed_dim,
-            #     num_experts_total=config.num_experts_of_moe_in_transformer,
-            #     num_experts_per_tok=1,
-            # )
-            # self.feed_forward = MoELayer(moe_cfg)
-            # print("=" * 20)
-            # print(f"Use MoE feed_forward, num_experts={moe_cfg.num_experts_total}")
-            # print("=" * 20)
-
             from .moe import MoELayer, MultiplicationFeedForward
             # Create multiple FeedForward instances for multiplication-based MoE
             self.experts = nn.ModuleList([

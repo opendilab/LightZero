@@ -49,7 +49,7 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                 world_model_cfg=dict(
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    predict_latent_loss_type='mse',
                     share_head=False, # TODO
                     policy_entropy_weight=5e-2, 
                     continuous_action_space=False,
@@ -62,8 +62,8 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                     num_heads=24,
                     obs_type="text",  # TODO: Modify as needed.
                     env_num=max(collector_env_num, evaluator_env_num),              
-                    task_embed_option=None,   # ==============TODO: none ==============
-                    use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,  
+                    use_task_embed=False, 
                     embed_dim=768,
                     task_num=len(env_id_list),
                     use_normal_head=True,
@@ -80,8 +80,8 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
 
                 ),
             ),
-            use_task_exploitation_weight=False, # TODO
-            task_complexity_weight=False, # TODO
+            use_task_exploitation_weight=False, 
+            task_complexity_weight=False, 
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             use_priority=False,
@@ -100,7 +100,7 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
             manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
-            train_start_after_envsteps=int(0), # TODO: ===== only for debug =====
+            train_start_after_envsteps=int(0),
             replay_buffer_size=int(5e5),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
@@ -148,7 +148,6 @@ def create_env_manager():
             import_names=['zoo.jericho.envs.jericho_env'],
         ),
         env_manager=dict(type='base'),
-        # env_manager=dict(type='subprocess'), # subprocess在jericho环境下不支持
         policy=dict(
             type='unizero_multitask',
             import_names=['lzero.policy.unizero_multitask'],

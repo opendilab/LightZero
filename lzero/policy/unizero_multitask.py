@@ -1010,8 +1010,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # self.task_num_for_current_rank 作为当前rank的base_index
         num_tasks = self.task_num_for_current_rank
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
-        # TODO xiongjyu: 以下代码感觉有问题，如果num_tasks != 1（例如2）, 4个任务的self.task_id分别是0， 1， 2， 3；
-        # ！！！ 那么 self.task_id+task_idx 的结果将是（0， 1， 2， 3， 4， 5），结果很奇怪 ！！！
         if num_tasks is not None:
             for var in task_specific_vars:
                 for task_idx in range(num_tasks):

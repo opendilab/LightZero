@@ -261,3 +261,18 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
 
         # Reset the time records in the buffer.
         buffer.reset_runtime_metrics()
+        
+        
+def symlog(x: torch.Tensor) -> torch.Tensor:
+    """
+    Symlog normalization to reduce the scale differences of target values.
+    symlog(x) = sign(x) * log(|x| + 1)
+    """
+    return torch.sign(x) * torch.log(torch.abs(x) + 1)
+
+def inv_symlog(x: torch.Tensor) -> torch.Tensor:
+    """
+    Inverse operation of symlog, used to recover the original values.
+    inv_symlog(x) = sign(x) * (exp(|x|) - 1)
+    """
+    return torch.sign(x) * (torch.exp(torch.abs(x)) - 1)

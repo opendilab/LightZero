@@ -49,7 +49,7 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                 world_model_cfg=dict(
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    predict_latent_loss_type='mse', 
                     share_head=False, # TODO
                     policy_entropy_weight=5e-2, 
                     continuous_action_space=False,
@@ -60,10 +60,10 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=24,
-                    obs_type="text",  # TODO: Modify as needed.
+                    obs_type="text",  
                     env_num=max(collector_env_num, evaluator_env_num),              
-                    task_embed_option=None,   # ==============TODO: none ==============
-                    use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   
+                    use_task_embed=False,
                     embed_dim=768,
                     task_num=len(env_id_list),
                     use_normal_head=True,
@@ -77,7 +77,7 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
 
-                    moe_use_lora=False, # Does moe use lora?
+                    moe_use_lora=False, # Does moe use lora
                     lora_r= 0,
                     lora_alpha =1,
                     lora_dropout= 0.0,
@@ -106,7 +106,7 @@ def create_config(env_id, max_steps, max_action_num, action_space_size, collecto
             manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
-            train_start_after_envsteps=int(0), # TODO: ===== only for debug =====
+            train_start_after_envsteps=int(0),
             replay_buffer_size=int(5e5),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
@@ -130,7 +130,7 @@ def generate_configs(env_id_list, env_configurations, collector_env_num, n_episo
     max_steps_list = [v[1] for _, v in env_configurations.items()]   
 
     for task_id, env_id in enumerate(env_id_list):
-        max_action_num, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
+        max_action_num, max_steps = env_configurations.get(env_id, (10, 50))  
         update_per_collect = 40  # Ensure at least one update per collect
 
         config = create_config(
@@ -154,7 +154,6 @@ def create_env_manager():
             import_names=['zoo.jericho.envs.jericho_env'],
         ),
         env_manager=dict(type='base'),
-        # env_manager=dict(type='subprocess'), # subprocess在jericho环境下不支持
         policy=dict(
             type='unizero_multitask',
             import_names=['lzero.policy.unizero_multitask'],
