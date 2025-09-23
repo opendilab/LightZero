@@ -25,9 +25,9 @@ def main(env_id, seed):
     max_env_step = int(2e6)#TODO========
 
     # max_env_step = int(50e6)
-    # batch_size = 256
+    batch_size = 256
 
-    batch_size = 64 # encoder_type="dinov2", #TODO========
+    # batch_size = 64 # encoder_type="dinov2", #TODO========
 
     # batch_size = 16 # debug
     # batch_size = 4 # debug
@@ -206,6 +206,26 @@ def main(env_id, seed):
 
             ),
 
+            # (bool) 是否启用自适应策略熵权重 (alpha)
+            use_adaptive_entropy_weight=True,
+            # (float) 自适应alpha优化器的学习率
+            adaptive_entropy_alpha_lr=1e-4,
+            target_entropy_start_ratio =0.98,
+            target_entropy_end_ratio =0.7,
+            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+            
+            # ==================== START: Encoder-Clip Annealing Config ====================
+            # (bool) 是否启用 encoder-clip 值的退火。
+            use_encoder_clip_annealing=True,
+            # (str) 退火类型。可选 'linear' 或 'cosine'。
+            encoder_clip_anneal_type='cosine',
+            # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+            encoder_clip_start_value=30.0,
+            # (float) 退火的结束 clip 值 (训练后期，较严格)。
+            encoder_clip_end_value=10.0,
+            # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+
             # policy_ls_eps_start=0.5, #TODO=============
             # policy_ls_eps_start=0.1, #TODO=============
             policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
@@ -270,9 +290,9 @@ def main(env_id, seed):
             
             # latent_norm_clip_threshold=3, # 768dim
             # latent_norm_clip_threshold=5, # 768dim latent encoder
-            # latent_norm_clip_threshold=30, # 768dim latent encoder # for pong
+            latent_norm_clip_threshold=30, # 768dim latent encoder # for pong
 
-            latent_norm_clip_threshold=10, # 768dim latent encoder
+            # latent_norm_clip_threshold=10, # 768dim latent encoder
 
             # latent_norm_clip_threshold=25, # 768dim latent encoder
 
@@ -320,7 +340,6 @@ def main(env_id, seed):
             # head_grad_clip_value=0.5,
             head_grad_clip_value=5,  # TODO
 
-
             # replay_buffer_size=int(1e6),
             replay_buffer_size=int(5e5), # TODO
 
@@ -359,65 +378,20 @@ def main(env_id, seed):
     
     from lzero.entry import train_unizero_segment
 
-    main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-01lr-tran02lr_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-200k_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-200k-1-07_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-01lr-tran02lr_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_lw-v1_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_pew005_adamw1e-4_cosdecay500k-1e-6_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_eps20k_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
-    # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_env1_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew01_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-2-all_encoder-clip30_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-2-all_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_use-aug_pew001_adamw1e-4_wd1e-2-all_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-2-all_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-2-encoder-trans-5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_episodelife-false_pew001_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918_debug/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_nolabelsmooth_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-1_pytloss_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_eps20k_pew001_adamw1e-4_wd1e-2-encoder5times_encoder-clip30_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-3-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_eps20k_pew001_adamw1e-4_wd1e-3-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew0001_adamw1e-4_wd1e-4-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_eps200k_pew001_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
 
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_pew001_temp1-025-50k_adamw1e-4_wd1e-2-encoder5times_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_label-smooth-valuereward01-policy-005_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_label-smooth-valuereward01-policy-05_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-dinov2-res70_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-LN_eps20k_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_headclip-value5-policy1_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_temp-scale-softplus-fixcollecteval_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-50_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-50_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-
-    # main_config.exp_name = f'data_unizero_longrun_20250918_debug/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5-true_head-clip10-policy5_muzerohead_fix-clip_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_head-clip10-policy05_entry-norm_clipgrad-backbone5-head5_reinit-value-reward-policy-50k_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
-
-    # main_config.exp_name = f'data_unizero_longrun_20250910/{env_id[:-14]}/{env_id[:-14]}_uz_adamw1e-4_encoder-clip-5_entry-norm_clipgrad-backbone5-head05_grad-scale_reinit-value-reward-policy-50k_head-clip10-policy05_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
@@ -432,15 +406,15 @@ if __name__ == "__main__":
     # args.env = 'PongNoFrameskip-v4'
     args.env = 'MsPacmanNoFrameskip-v4'
 
-    # args.env = 'QbertNoFrameskip-v4'
 
-    # args.env = 'SeaquestNoFrameskip-v4' 
     # args.env = 'BoxingNoFrameskip-v4'
+    # args.env = 'SeaquestNoFrameskip-v4' 
+
+    # args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'SpaceInvadersNoFrameskip-v4'
 
     # args.env = 'HeroNoFrameskip-v4'
     # args.env = 'ChopperCommandNoFrameskip-v4'
-
-    # args.env = 'SpaceInvadersNoFrameskip-v4'
 
     # args.env = 'AlienNoFrameskip-v4'
     # args.env = 'RoadRunnerNoFrameskip-v4'
@@ -456,7 +430,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=7
+    export CUDA_VISIBLE_DEVICES=4
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
 

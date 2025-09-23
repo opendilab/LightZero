@@ -202,6 +202,23 @@ class UniZeroPolicy(MuZeroPolicy):
                 max_seq_len=8192,
             ),
         ),
+        # (bool) 是否启用自适应策略熵权重 (alpha)
+        use_adaptive_entropy_weight=True,
+        # (float) 自适应alpha优化器的学习率
+        adaptive_entropy_alpha_lr=1e-4,
+        # ==================== START: Encoder-Clip Annealing Config ====================
+        # (bool) 是否启用 encoder-clip 值的退火。
+        use_encoder_clip_annealing=True,
+        # (str) 退火类型。可选 'linear' 或 'cosine'。
+        encoder_clip_anneal_type='cosine',
+        # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+        encoder_clip_start_value=30.0,
+        # (float) 退火的结束 clip 值 (训练后期，较严格)。
+        encoder_clip_end_value=10.0,
+        # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+        encoder_clip_anneal_steps=200000,  # 例如，在200k次迭代后达到最终值
+        # ===================== END: Encoder-Clip Annealing Config =====================
+        
         # ****** common ******
         # (bool) whether to use rnd model.
         use_rnd_model=False,
@@ -551,6 +568,57 @@ class UniZeroPolicy(MuZeroPolicy):
         print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
 
 
+        # ==================== START: 目标熵正则化初始化 ====================
+        # 从配置中读取是否启用自适应alpha，并提供一个默认值
+        self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
+
+        # 在 _init_learn 中增加配置
+        self.target_entropy_start_ratio = self._cfg.get('target_entropy_start_ratio', 0.98)
+        self.target_entropy_end_ratio = self._cfg.get('target_entropy_end_ratio', 0.7)
+        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000) # 例如，在200k步内完成退火 2M envsteps
+
+        if self.use_adaptive_entropy_weight:
+            # 1. 设置目标熵。对于离散动作空间，一个常见的启发式设置是动作空间维度的负对数乘以一个系数。
+            #    这个系数（例如0.98）可以作为一个超参数。
+            action_space_size = self._cfg.model.action_space_size
+            self.target_entropy = -np.log(1.0 / action_space_size) * 0.98
+            
+            # 2. 初始化一个可学习的 log_alpha 参数。
+            #    初始化为0，意味着初始的 alpha = exp(0) = 1.0。
+            self.log_alpha = torch.nn.Parameter(torch.zeros(1, device=self._cfg.device), requires_grad=True)
+            
+            # 3. 为 log_alpha 创建一个专属的优化器。
+            #    使用与主优化器不同的、较小的学习率（例如1e-4）通常更稳定。
+            alpha_lr = self._cfg.get('adaptive_entropy_alpha_lr', 1e-4)
+            self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
+            
+            print("="*20)
+            print(">>> 目标熵正则化 (自适应Alpha) 已启用 <<<")
+            print(f"    目标熵 (Target Entropy): {self.target_entropy:.4f}")
+            print(f"    Alpha 优化器学习率: {alpha_lr:.2e}")
+            print("="*20)
+        # ===================== END: 目标熵正则化初始化 =====================
+
+        # ==================== START: 初始化 Encoder-Clip Annealing 参数 ====================
+        self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
+        if self.use_encoder_clip_annealing:
+            self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
+            self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
+            self.encoder_clip_end = self._cfg.get('encoder_clip_end_value', 10.0)
+            self.encoder_clip_anneal_steps = self._cfg.get('encoder_clip_anneal_steps', 200000)
+            
+            print("="*20)
+            print(">>> Encoder-Clip 退火已启用 <<<")
+            print(f"    类型: {self.encoder_clip_anneal_type}")
+            print(f"    范围: {self.encoder_clip_start} -> {self.encoder_clip_end}")
+            print(f"    步数: {self.encoder_clip_anneal_steps}")
+            print("="*20)
+        else:
+            # 如果不启用退火，则使用固定的 clip 阈值
+            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
+        # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
+
+
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -698,6 +766,13 @@ class UniZeroPolicy(MuZeroPolicy):
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
+        # 从 losses 对象中提取策略熵
+        policy_entropy = self.intermediate_losses['policy_entropy']
+        
+
+
+
+
         obs_loss = self.intermediate_losses['loss_obs']
         reward_loss = self.intermediate_losses['loss_rewards']
         policy_loss = self.intermediate_losses['loss_policy']
@@ -706,6 +781,54 @@ class UniZeroPolicy(MuZeroPolicy):
         perceptual_loss = self.intermediate_losses['perceptual_loss']
         orig_policy_loss = self.intermediate_losses['orig_policy_loss']
         policy_entropy = self.intermediate_losses['policy_entropy']
+
+        # ==================== START: 目标熵正则化更新逻辑 ====================
+        alpha_loss = None
+        current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight # 默认使用固定值
+        if self.use_adaptive_entropy_weight:
+            # 计算 alpha 的损失。我们希望 policy_entropy 接近 target_entropy。
+            # .detach() 是关键，因为我们不希望 alpha_loss 的梯度流向策略网络。
+            # alpha_loss = -(self.log_alpha * (policy_entropy.detach() + self.target_entropy)).mean()
+
+            # --- START: 动态计算目标熵 ---
+            progress = min(1.0, train_iter / self.target_entropy_decay_steps)
+            current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
+            action_space_size = self._cfg.model.action_space_size
+            current_target_entropy = -np.log(1.0 / action_space_size) * current_ratio
+            # --- END: 动态计算目标熵 ---
+
+            # 使用 current_target_entropy 来计算 alpha_loss
+            alpha_loss = -(self.log_alpha * (policy_entropy.detach() + current_target_entropy)).mean()
+
+
+            # 更新 log_alpha
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            
+            # 使用当前更新后的 alpha (截断梯度流)
+            current_alpha = self.log_alpha.exp().detach()
+        
+            # 重新计算加权的策略损失和总损失
+            # 注意：这里的 policy_entropy 已经是一个batch的平均值
+            weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
+            # 重新构建总损失 (不使用 losses.loss_total)
+            # 确保这里的权重与 LossWithIntermediateLosses 类中的计算方式一致
+            self.obs_loss_weight = 10
+            self.value_loss_weight = 0.5
+            self.reward_loss_weight = 1.
+            self.policy_loss_weight = 1.
+            self.ends_loss_weight = 0.
+            total_loss = (
+                self.reward_loss_weight * reward_loss +
+                self.value_loss_weight * value_loss +
+                self.policy_loss_weight * weighted_policy_loss +
+                self.obs_loss_weight  * obs_loss # 假设 ssl_loss_weight 是 obs_loss 的权重
+                # ... 如果还有其他损失项，也加进来 ...
+            )
+            weighted_total_loss = (weights * total_loss).mean()
+        # ===================== END: 目标熵正则化更新逻辑 =====================
+
         first_step_losses = self.intermediate_losses['first_step_losses']
         middle_step_losses = self.intermediate_losses['middle_step_losses']
         last_step_losses = self.intermediate_losses['last_step_losses']
@@ -762,15 +885,42 @@ class UniZeroPolicy(MuZeroPolicy):
         # =================================================================
         with torch.no_grad():
             # 1. Encoder-Clip
-            if self.latent_norm_clip_threshold > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            # ==================== START: 动态计算当前 Clip 阈值 ====================
+            current_clip_value = self.latent_norm_clip_threshold  # 默认使用固定值
+            if self.use_encoder_clip_annealing:
+                progress = min(1.0, train_iter / self.encoder_clip_anneal_steps)
+                
+                if self.encoder_clip_anneal_type == 'cosine':
+                    # 余弦调度: 从1平滑过渡到0
+                    cosine_progress = 0.5 * (1.0 + np.cos(np.pi * progress))
+                    current_clip_value = self.encoder_clip_end + \
+                                         (self.encoder_clip_start - self.encoder_clip_end) * cosine_progress
+                else:  # 默认为线性调度
+                    current_clip_value = self.encoder_clip_start * (1 - progress) + \
+                                         self.encoder_clip_end * progress
+            # ===================== END: 动态计算当前 Clip 阈值 =====================
+
+            # 1. Encoder-Clip (使用动态计算出的 current_clip_value)
+            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
                 obs_embeddings = losses.intermediate_losses['obs_embeddings']
                 if obs_embeddings is not None:
                     max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
-                    if max_latent_norm > self.latent_norm_clip_threshold:
-                        scale_factor = self.latent_norm_clip_threshold / max_latent_norm.item()
-                        print(f"[Encoder-Clip] Max latent norm {max_latent_norm.item():.2f} > {self.latent_norm_clip_threshold}. Scaling encoder weights by {scale_factor:.4f}.")
-                        # 调用高效的向量化函数
+                    if max_latent_norm > current_clip_value:
+                        scale_factor = current_clip_value / max_latent_norm.item()
+                        # 不再频繁打印，或者可以改为每隔N步打印一次
+                        if train_iter % 1000 == 0:
+                            print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
                         scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
+
+            # if self.latent_norm_clip_threshold > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            #     obs_embeddings = losses.intermediate_losses['obs_embeddings']
+            #     if obs_embeddings is not None:
+            #         max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
+            #         if max_latent_norm > self.latent_norm_clip_threshold:
+            #             scale_factor = self.latent_norm_clip_threshold / max_latent_norm.item()
+            #             print(f"[Encoder-Clip] Max latent norm {max_latent_norm.item():.2f} > {self.latent_norm_clip_threshold}. Scaling encoder weights by {scale_factor:.4f}.")
+            #             # 调用高效的向量化函数
+            #             scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
             # 2. Value/Reward-Head-Clip
             if self.logit_clip_threshold > 0:
@@ -966,7 +1116,17 @@ class UniZeroPolicy(MuZeroPolicy):
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
         # =======================================================================
+        if self.use_adaptive_entropy_weight:
+            return_log_dict['adaptive_alpha'] = current_alpha.item()
+            return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
+
+            return_log_dict['alpha_loss'] = alpha_loss.item()
         
+        # ==================== START: 添加新日志项 ====================
+        if self.use_encoder_clip_annealing:
+            return_log_dict['current_encoder_clip_value'] = current_clip_value
+        # ===================== END: 添加新日志项 =====================
+
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
             wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
@@ -1529,6 +1689,10 @@ class UniZeroPolicy(MuZeroPolicy):
         "temperature_reward",
         "temperature_policy",
                 "current_policy_label_eps",
+                         'adaptive_alpha',
+                         "adaptive_target_entropy_ratio",
+            'alpha_loss',
+            "current_encoder_clip_value",
         ]
 
                 # ==================== [新增] 添加范数和中间张量监控变量 ====================
@@ -1560,11 +1724,16 @@ class UniZeroPolicy(MuZeroPolicy):
         Returns:
             - state_dict (:obj:`Dict[str, Any]`): The dict of current policy learn state, for saving and restoring.
         """
-        return {
+        state_dict = {
             'model': self._learn_model.state_dict(),
             'target_model': self._target_model.state_dict(),
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
+        # ==================== START: 保存Alpha优化器状态 ====================
+        if self.use_adaptive_entropy_weight:
+            state_dict['alpha_optimizer'] = self.alpha_optimizer.state_dict()
+        # ===================== END: 保存Alpha优化器状态 =====================
+        return state_dict
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
@@ -1576,6 +1745,11 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         # self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+
+        # ==================== START: 加载Alpha优化器状态 ====================
+        if self.use_adaptive_entropy_weight and 'alpha_optimizer' in state_dict:
+            self.alpha_optimizer.load_state_dict(state_dict['alpha_optimizer'])
+        # ===================== END: 加载Alpha优化器状态 =====================
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """
