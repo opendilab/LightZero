@@ -199,7 +199,10 @@ def cal_dormant_ratio(
 
     if not hasattr(model, "encoder") and not hasattr(model, "transformer") and not hasattr(model, "head"):
         # 如果传入的是self.tokenizer.encoder
-        parts["model"] = model
+        if hasattr(model, "pretrained_model"):
+            parts["pretrained_model"] = model.pretrained_model
+        else:
+            parts["model"] = model
 
     # 定义要捕获的目标模块类型 TODO: 增加更多模块
     target_modules = (nn.Conv2d, nn.Linear)

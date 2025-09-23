@@ -3,11 +3,11 @@ import logging
 from typing import Any, Tuple
 from typing import Optional
 from typing import Union, Dict
-
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
+from .kv_caching import KeysValues
 from lzero.model.common import SimNorm
 from lzero.model.unizero_world_models.world_model import WorldModel
 from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
@@ -19,7 +19,7 @@ from .utils import WorldModelOutput, hash_state
 
 logging.getLogger().setLevel(logging.DEBUG)
 from ding.utils import get_rank
-import torch.distributed as dist
+import torch.distributed as dist 
 from sklearn.manifold import TSNE
 import os
 import numpy as np
@@ -29,8 +29,10 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import torch 
 import math
 
+# TODO xjy： 继承容易出问题
+# class WorldModelMT(WorldModel):
 
-class WorldModelMT(WorldModel):
+class WorldModelMT(nn.Module):
     """
     Overview:
         The WorldModel class is responsible for the scalable latent world model of UniZero (https://arxiv.org/abs/2406.10667),
@@ -55,7 +57,7 @@ class WorldModelMT(WorldModel):
                 - "concat_task_embed": Concatenates task embeddings with observation embeddings.
                 - "register_task_embed": Uses task embeddings as additional input tokens.
         """
-        super().__init__(config, tokenizer)
+        super().__init__()
         self.tokenizer = tokenizer
         self.config = config
 
@@ -74,6 +76,12 @@ class WorldModelMT(WorldModel):
 
 
         self.share_head = config.share_head  # 新增参数
+        # Task embedding setup
+        self.use_task_embed = config.use_task_embed
+        self.task_embed_option = self.config.task_embed_option 
+        self.task_num = config.task_num
+        self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
+        self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
 
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
@@ -81,10 +89,14 @@ class WorldModelMT(WorldModel):
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Move all modules to the specified device
         print(f"self.device: {self.device}")
-        # Position embedding
-        self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
-        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
+        self._initialize_config_parameters()
+        self._initialize_patterns()
+
+        self.sim_norm = SimNorm(simnorm_dim=self.group_size)
+        self.hidden_size = config.embed_dim // config.num_heads
+
+        # Position embedding
         if self.task_embed_option == "register_task_embed":
             # 由于 "register_task_embed"设定下的位置编码没有矫正
             # 使用 nn.Embedding，但初始化为全零并禁止学习
@@ -92,15 +104,6 @@ class WorldModelMT(WorldModel):
             nn.init.constant_(self.pos_emb.weight, 0.0)  # 初始化全零
             self.pos_emb.weight.requires_grad = False  # 禁止更新
 
-        # Task embedding setup
-        self.use_task_embed = config.use_task_embed
-        self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
-        self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
-        self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
-        
-        self.precompute_pos_emb_diff_kv()
-
-        self.sim_norm = SimNorm(simnorm_dim=self.group_size)
         if self.task_embed_option == "concat_task_embed":
             # TODO：目前在 "concat_task_embed"下面，self.pos_emb需要设置为固定的0
             self.task_emb = nn.Embedding(self.task_num, self.task_embed_dim, max_norm=1)  # TODO: TDMPC2：max_norm=1性能更好
@@ -118,8 +121,12 @@ class WorldModelMT(WorldModel):
             self.obs_act_embed_dim = config.embed_dim
             self.register_token_num = 0
 
-
         self.transformer = Transformer(self.config, self.task_emb)
+        self.to(self.device)
+        
+        self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
+        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+        self.precompute_pos_emb_diff_kv()
 
         self.analysis_dormant_ratio_interval = self.config.get('analysis_dormant_ratio_interval', 100)  # 每 100 次调用做一次分析
         self._analysis_step_counter = 0
@@ -136,26 +143,53 @@ class WorldModelMT(WorldModel):
             # 遍历 env_id_list，提取短名称
             for env_id in self.config.env_id_list:
                 # 提取 'NoFrameskip-v4' 之前的部分作为短名称
-                short_name = env_id.replace('NoFrameskip-v4', '')
+                short_name = env_id.replace('.z5', '')
                 self.env_short_names[env_id] = short_name
-            # 映射环境 ID 到简写名称
-            # self.env_short_names = {
-            #     'PongNoFrameskip-v4': 'Pong',
-            #     'MsPacmanNoFrameskip-v4': 'MsPacman',
-            #     'SeaquestNoFrameskip-v4': 'Seaquest',
-            #     'BoxingNoFrameskip-v4': 'Boxing',
-            #     'AlienNoFrameskip-v4': 'Alien',
-            #     'ChopperCommandNoFrameskip-v4': 'Chopper',
-            #     'HeroNoFrameskip-v4': 'Hero',
-            #     'RoadRunnerNoFrameskip-v4': 'RoadRunner'
-            # }
-            # 颜色映射，确保每个任务有固定的颜色
             self.num_tasks = len(self.env_id_list)
             
             # 生成足够多的颜色
             self.colors = self._generate_colors(len(self.env_id_list))
 
-            
+        self.continuous_action_space = self.config.continuous_action_space
+        
+        # Initialize action embedding table
+        if self.continuous_action_space:
+            # TODO: check the effect of SimNorm
+            if isinstance(config.action_space_size, list):
+                assert self.task_num == len(config.action_space_size)
+                self.act_embedding_table = nn.ModuleList(
+                    nn.Sequential(
+                        nn.Linear(action_size, config.embed_dim, device=self.device, bias=False),
+                        SimNorm(simnorm_dim=self.group_size)
+                    )   for action_size in config.action_space_size
+                )
+            elif isinstance(config.action_space_size, int):
+                self.act_embedding_table = nn.Sequential(
+                    nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+                    SimNorm(simnorm_dim=self.group_size))
+            else:
+                raise ValueError(f"Unsupported action space size type: {type(config.action_space_size)}")
+
+        else:
+            # for discrete action space
+            if isinstance(config.action_space_size, list):
+                assert self.task_num == len(config.action_space_size)
+                self.act_embedding_table = nn.ModuleList(
+                    nn.Embedding(action_size, config.embed_dim, device=self.device)
+                    for action_size in config.action_space_size
+                )
+                print(f"self.act_embedding_table: {self.act_embedding_table}")
+
+            elif isinstance(config.action_space_size, int):
+                self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+            else:
+                raise ValueError(f"Unsupported action space size type: {type(config.action_space_size)}")
+                
+
+        print(f'='*20)
+        print(f"self.obs_act_embed_dim:{self.obs_act_embed_dim}")
+        print(f'='*20)
+
         self.head_policy_multi_task = nn.ModuleList()
         self.head_value_multi_task = nn.ModuleList()
         self.head_rewards_multi_task = nn.ModuleList()
@@ -166,42 +200,6 @@ class WorldModelMT(WorldModel):
         self.use_moe_head = config.use_moe_head
         self.use_softmoe_head = config.use_softmoe_head
 
-
-        self.to(self.device)
-
-        # Initialize configuration parameters
-        self._initialize_config_parameters()
-
-        # Initialize patterns for block masks
-        self._initialize_patterns()
-
-        self.hidden_size = config.embed_dim // config.num_heads
-
-
-        # Initialize action embedding table
-        if self.continuous_action_space:
-            # TODO: check the effect of SimNorm
-            # self.act_embedding_table = nn.Sequential(
-            #     nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-            #     SimNorm(simnorm_dim=self.group_size))
-            # print(f'config.action_space_size_list:{config.action_space_size_list}')
-            self.act_embedding_table = nn.ModuleList([
-                nn.Sequential(
-                    nn.Linear(config.action_space_size_list[task_id], self.obs_act_embed_dim, device=self.device, bias=False),
-                    SimNorm(simnorm_dim=self.group_size)
-                )
-                for task_id in range(self.task_num)
-            ])
-        else:
-            # for discrete action space
-            self.act_embedding_table = nn.Embedding(config.action_space_size, self.obs_act_embed_dim, device=self.device)
-            print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
-
-            print(f'='*20)
-            print(f"self.obs_act_embed_dim:{self.obs_act_embed_dim}")
-            print(f'='*20)
-
-
         # if self.num_experts_in_moe_head == -1:
         assert self.num_experts_in_moe_head > 0
         if self.use_normal_head:
@@ -211,13 +209,20 @@ class WorldModelMT(WorldModel):
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):
+                if isinstance(self.action_space_size, list):
+                    action_size = self.action_space_size[task_id]
+                elif isinstance(self.action_space_size, int):
+                    action_size = self.action_space_size
+                else:
+                    raise ValueError('Unsupported action space size type: {}'.format(type(self.action_space_size))) 
+
                 if self.continuous_action_space:
                     # TODO
                     self.sigma_type = self.config.sigma_type
                     self.bound_type = self.config.bound_type
-                    self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.config.action_space_size_list[task_id]) # TODO
+                    self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, action_size) # TODO
                 else:
-                    self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+                    self.head_policy = self._create_head(self.value_policy_tokens_pattern, action_size)
 
                 if not self.share_head or task_id == 0:
                     self.head_policy_multi_task.append(self.head_policy)
@@ -278,8 +283,22 @@ class WorldModelMT(WorldModel):
         print("="*20)
         print(f"self.head_dict:{self.head_dict}")
 
+
+        if isinstance(self.tokenizer.encoder, torch.nn.ModuleList):
+            skip_modules = set()
+            for m in self.tokenizer.encoder:
+                skip_modules.update(m.pretrained_model.modules())
+        else:
+            skip_modules = set(self.tokenizer.encoder.pretrained_model.modules())
+
+        def custom_init(module):
+            if module in skip_modules:
+                return
+            init_weights(module, norm_type=self.config.norm_type)
+
         # Apply weight initialization, the order is important
-        self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+        self.apply(custom_init)
+        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
         self._initialize_last_layer()
 
         # Cache structures
@@ -420,6 +439,7 @@ class WorldModelMT(WorldModel):
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
+    
     def get_moe(self, name):
         """Get or create a MoE instance"""
         from .moe import MoELayer, MultiplicationFeedForward
@@ -710,13 +730,6 @@ class WorldModelMT(WorldModel):
             if self.task_embed_option == "add_task_embed":
                 obs_embeddings = obs_embeddings + self.task_embeddings
             elif self.task_embed_option == "concat_task_embed":
-
-                # print(f'=='*20)
-                # print(f"is_init_infer:{is_init_infer}")
-                # print(f'obs_embeddings.shape:{obs_embeddings.shape}')
-                # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
-                # print(f'=='*20)
-
                 # if is_init_infer:
                 #     # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中已经在init_infer中增加了task embeddings的信息了
                 #     # Expand task embeddings to match the sequence shape
@@ -753,10 +766,15 @@ class WorldModelMT(WorldModel):
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
-            if self.task_num >= 1 and self.continuous_action_space:
-                act_embeddings = self.act_embedding_table[task_id](act_tokens)
+
+            if isinstance(self.act_embedding_table, nn.ModuleList):
+                if task_id >= len(self.act_embedding_table):
+                    act_embeddings = self.act_embedding_table[0](act_tokens)
+                else:
+                    act_embeddings = self.act_embedding_table[task_id](act_tokens)
             else:
                 act_embeddings = self.act_embedding_table(act_tokens)
+                
             
             if self.task_embed_option == "add_task_embed":
                 # TODO: 对于action_token不需要增加task_embeddings会造成歧义，反而干扰学习
@@ -782,7 +800,7 @@ class WorldModelMT(WorldModel):
             if self.continuous_action_space:
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps, task_id=task_id)
             else:
-                sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+                sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps, task_id=task_id)
         
 
         # Pass sequences through transformer
@@ -938,7 +956,15 @@ class WorldModelMT(WorldModel):
                                                  -1)
 
         num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
-        act_embeddings = self.act_embedding_table(act_tokens)
+
+        if isinstance(self.act_embedding_table, nn.ModuleList):
+            if task_id >= len(self.act_embedding_table):
+                act_embeddings = self.act_embedding_table[0](act_tokens)
+            else:
+                act_embeddings = self.act_embedding_table[task_id](act_tokens)
+        else:
+            act_embeddings = self.act_embedding_table(act_tokens)
+
 
         B, L, K, E = obs_embeddings.size()
         if self.task_embed_option == "concat_task_embed":
@@ -971,39 +997,6 @@ class WorldModelMT(WorldModel):
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
-
-
-    #@profile
-    # def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps, task_id=0):
-    #     """
-    #     Process combined observation embeddings and action tokens.
-
-    #     Arguments:
-    #         - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing combined observation embeddings and action tokens.
-    #         - prev_steps (:obj:`torch.Tensor`): Previous steps.
-    #     Returns:
-    #         - torch.Tensor: Combined observation and action embeddings with position information added.
-    #     """
-    #     obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
-    #     if len(obs_embeddings.shape) == 3:
-    #         obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens,
-    #                                              -1)
-
-    #     num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
-    #     # act_embeddings = self.act_embedding_table[task_id](act_tokens)
-    #     act_embeddings = self.act_embedding_table(act_tokens)
-
-    #     B, L, K, E = obs_embeddings.size()
-    #     obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
-
-    #     for i in range(L):
-    #         # obs = obs_embeddings[:, i, :, :]
-    #         obs = obs_embeddings[:, i, :, :] + self.task_embeddings  # Shape: (B, K, E) TODO: task_embeddings
-    #         act = act_embeddings[:, i, 0, :].unsqueeze(1)
-    #         obs_act = torch.cat([obs, act], dim=1)
-    #         obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
-
-    #     return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
     #@profile
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths, task_id=0):
@@ -1218,12 +1211,6 @@ class WorldModelMT(WorldModel):
 
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, task_id=task_id)
             
-            # if self.reanalyze_phase:
-            #     # TODO
-            #     outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, is_init_infer=False, task_id=task_id)
-            # else:
-            #     outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, is_init_infer=True, task_id=task_id)
-
             # select the last timestep for each sample
             last_steps_value = outputs_wm.logits_value[:, -1:, :]
             outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps_value), dim=1)
@@ -1284,23 +1271,7 @@ class WorldModelMT(WorldModel):
         if not self.continuous_action_space:
             token = action.reshape(-1, 1)
         else:
-            token = action.reshape(-1, self.config.action_space_size_list[task_id])
-
-        # ======= Print statistics for debugging =============
-        # min_size = min(self.keys_values_wm_size_list)
-        # if min_size >= self.config.max_tokens - 5:
-        #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
-        # if min_size >= self.config.max_tokens - 7:
-        #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
-        # if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
-        #     self.hit_freq = self.hit_count / self.total_query_count
-        #     print('total_query_count:', self.total_query_count)
-        #     length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
-        #     print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-        #     print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
-        #     length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
-        #     print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-        #     print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
+            token = action.reshape(-1, self.config.action_space_size[task_id])
 
         # Trim and pad kv_cache
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
@@ -1616,16 +1587,7 @@ class WorldModelMT(WorldModel):
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
                     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id
                     )
-                # if self.reanalyze_phase:
-                #     self.forward(
-                #     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
-                #     past_keys_values=self.keys_values_wm_single_env, is_init_infer=False, task_id=task_id
-                #     )
-                # else:
-                #     self.forward(
-                #     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
-                #     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id
-                #     )
+
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
 
@@ -1826,7 +1788,8 @@ class WorldModelMT(WorldModel):
         if self.do_analysis:
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
-            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
+            inputs = batch['observations'].contiguous().view(-1, shape[-1]) # (b, s, h) -> (b * s, h)
+            # inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             if self.continuous_action_space:
                 encoder_index = task_id
             else:
@@ -1852,10 +1815,12 @@ class WorldModelMT(WorldModel):
             # representation 层在 model.named_modules() 的名称为 "representation"
             # print(f"self.tokenizer.encoder:{self.tokenizer.encoder}")
 
-            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
+            # e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
+            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="embed_proj_head")
             # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
             try:
-                e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+                # e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+                e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="norm")
             except Exception as e:
                 e_rank_sim_norm = torch.tensor(0.)
 
@@ -1936,6 +1901,14 @@ class WorldModelMT(WorldModel):
                                              dtype=batch['observations'].dtype)
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
+        elif self.obs_type == 'text':
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device,
+                                           dtype=torch.float32)
+            # # Reconstruct observations from latent state representations
+            # reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings, batch['observations'])
+            # # Calculate reconstruction loss
+            # latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits, ignore_index=0)
+            latent_recon_loss = self.latent_recon_loss
 
         # Action tokens
         if self.continuous_action_space:
@@ -1970,19 +1943,6 @@ class WorldModelMT(WorldModel):
             # avg_weight_mag_head       = None
             # e_rank_last_linear        = None
             # e_rank_sim_norm           = None
-
-        #  ========== for visualization ==========
-        # Uncomment the lines below for visualization
-        # predict_policy = outputs.logits_policy
-        # predict_policy = F.softmax(outputs.logits_policy, dim=-1)
-        # predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # import pdb; pdb.set_trace()
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0613')
-        
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode')
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
-        #  ========== for visualization ==========
 
         # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
@@ -2031,15 +1991,6 @@ class WorldModelMT(WorldModel):
 
             loss_obs = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(dim=-1)
 
-            #  ========== for debugging ==========
-            # assert not torch.isnan(logits_reshaped).any(), "logits_reshaped contains NaN values"
-            # assert not torch.isnan(labels_reshaped).any(), "labels_reshaped contains NaN values"
-            # print('loss_obs:', loss_obs.mean())
-            # for name, param in self.tokenizer.encoder.named_parameters():
-            #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
-            # logits_grad = torch.autograd.grad(loss_obs.mean(), logits_observations, retain_graph=True)[0]
-            # print(f"logits_grad (min, max, mean): {logits_grad.min()}, {logits_grad.max()}, {logits_grad.mean()}")
-
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
         loss_obs = (loss_obs * mask_padding_expanded)
@@ -2047,7 +1998,8 @@ class WorldModelMT(WorldModel):
         # Compute labels for policy and value
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
-                                                                                   batch['mask_padding'])
+                                                                                   batch['mask_padding'],
+                                                                                   task_id=task_id)
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
@@ -2242,7 +2194,7 @@ class WorldModelMT(WorldModel):
 
     #@profile
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
-                                                mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                                                mask_padding: torch.BoolTensor, task_id: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Compute labels for value and policy predictions. """
         mask_fill = torch.logical_not(mask_padding)
 
@@ -2253,11 +2205,18 @@ class WorldModelMT(WorldModel):
         # Fill the masked areas of value
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
+        
+        if isinstance(self.action_space_size, list):
+            action_size = self.action_space_size[task_id]
+        elif isinstance(self.action_space_size, int):
+            action_size = self.action_space_size
+        else:
+            raise ValueError('Unsupported action space size type: {}'.format(type(self.action_space_size))) 
 
         if self.continuous_action_space:
             return None, labels_value.reshape(-1, self.support_size)
         else:
-            return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
+            return labels_policy.reshape(-1, action_size), labels_value.reshape(-1, self.support_size)
 
     #@profile
     def clear_caches(self):
@@ -2273,3 +2232,113 @@ class WorldModelMT(WorldModel):
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"
+    
+    def custom_copy_kv_cache_to_shared_init_envs(self, src_kv: KeysValues, env_id) -> int:
+        """
+        Overview:
+            Efficiently copies the contents of a KeysValues object to the shared pool for a specific environment in the init_infer stage.
+        Arguments:
+            - src_kv (:obj:`KeysValues`): The source KeysValues object from which data is copied.
+            - env_id (:obj:`int`): The identifier of the environment for which the cache is being copied.
+        Returns:
+            - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
+        """
+        src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+        
+        if self.shared_pool_init_infer[env_id][self.shared_pool_index_init_envs[env_id]] is None:
+            self.shared_pool_init_infer[env_id][self.shared_pool_index_init_envs[env_id]] = KeysValues(
+                src_kv_shape[0],  # Number of elements (n)
+                src_kv_shape[1],  # Number of attention heads (num_heads)
+                src_kv_shape[2],  # Maximum number of tokens (max_tokens)
+                src_kv_shape[3] * src_kv_shape[1],  # Embedding dimension (embed_dim)
+                len(src_kv),  # Number of layers (num_layers)
+                src_kv._keys_values[0]._k_cache._cache.device,  # Device where the cache is stored
+            )
+        
+        dst_kv = self.shared_pool_init_infer[env_id][self.shared_pool_index_init_envs[env_id]]
+        
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            # Copy the key and value caches using torch.copy_() for efficient data transfer
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+        
+        index = self.shared_pool_index_init_envs[env_id]
+        self.shared_pool_index_init_envs[env_id] = (self.shared_pool_index_init_envs[env_id] + 1) % self.shared_pool_size_init
+        
+        return index
+
+    def custom_copy_kv_cache_to_shared_wm(self, src_kv: KeysValues) -> int:
+        """
+        Overview:
+            Efficiently copies the contents of a KeysValues object to the shared pool for world model usage.
+        Arguments:
+            - src_kv (:obj:`KeysValues`): The source KeysValues object from which data is copied.
+        Returns:
+            - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
+        """
+        src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+        
+        if self.shared_pool_wm[self.shared_pool_index_wm] is None:
+            # import ipdb; ipdb.set_trace()
+            self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
+                src_kv_shape[0],  # Number of elements (n)
+                src_kv_shape[1],  # Number of attention heads (num_heads)
+                src_kv_shape[2],  # Maximum number of tokens (max_tokens)
+                src_kv_shape[3] * src_kv_shape[1],  # Embedding dimension (embed_dim)
+                len(src_kv),  # Number of layers (num_layers)
+                src_kv._keys_values[0]._k_cache._cache.device,  # Device where the cache is stored
+            )
+        
+        dst_kv = self.shared_pool_wm[self.shared_pool_index_wm]
+        
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            # Copy the key and value caches using torch.copy_() for efficient data transfer
+            # try:
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            # except Exception as e:
+            #     import ipdb; ipdb.set_trace()
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+        
+        self.shared_pool_index_wm = (self.shared_pool_index_wm + 1) % self.shared_pool_size_wm
+        
+        return dst_kv
+
+    def custom_copy_kv_cache_to_shared_recur(self, src_kv: KeysValues) -> int:
+        """
+        Overview:
+            Efficiently copies the contents of a KeysValues object to the shared pool for recurrent inference.
+        Arguments:
+            - src_kv (:obj:`KeysValues`): The source KeysValues object from which data is copied.
+        Returns:
+            - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
+        """
+        src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+        
+        if self.shared_pool_recur_infer[self.shared_pool_index] is None:
+            self.shared_pool_recur_infer[self.shared_pool_index] = KeysValues(
+                src_kv_shape[0],  # Number of elements (n)
+                src_kv_shape[1],  # Number of attention heads (num_heads)
+                src_kv_shape[2],  # Maximum number of tokens (max_tokens)
+                src_kv_shape[3] * src_kv_shape[1],  # Embedding dimension (embed_dim)
+                len(src_kv),  # Number of layers (num_layers)
+                src_kv._keys_values[0]._k_cache._cache.device,  # Device where the cache is stored
+            )
+        
+        dst_kv = self.shared_pool_recur_infer[self.shared_pool_index]
+        
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            # Copy the key and value caches using torch.copy_() for efficient data transfer
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+        
+        index = self.shared_pool_index
+        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
+        
+        return index
+

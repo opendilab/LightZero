@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 import torch.nn as nn
@@ -6,7 +6,8 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
+    HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
@@ -18,12 +19,11 @@ from .vit import ViT
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroMTModel')
 class UniZeroMTModel(nn.Module):
-
     #@profile
     def __init__(
             self,
             observation_shape: SequenceType = (4, 64, 64),
-            action_space_size: int = 6,
+            action_space_size: Union[int, list] = 0,
             num_res_blocks: int = 1,
             num_channels: int = 64,
             activation: nn.Module = nn.GELU(approximate='tanh'),
@@ -45,7 +45,7 @@ class UniZeroMTModel(nn.Module):
                 - and heads, which generate the logits for observations, rewards, policy, and value.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[3, 64, 64] for Atari.
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - action_space_size: (:obj:`[int, list]`): Action space size. For discrete or fixed action spaces, this is usually an integer. For multi-task environments where the action spaces are different, this is a list.
             - num_res_blocks (:obj:`int`): The number of res blocks in UniZero model.
             - num_channels (:obj:`int`): The channels of hidden states in representation network.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
@@ -75,7 +75,6 @@ class UniZeroMTModel(nn.Module):
         self.action_space_size = action_space_size
 
         # for multi-task
-        self.action_space_size = 18
         self.task_num = task_num
 
         self.activation = activation
@@ -238,6 +237,24 @@ class UniZeroMTModel(nn.Module):
             print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            print('==' * 20)
+        elif world_model_cfg.obs_type == 'text':
+            self.representation_network = nn.ModuleList()
+            for task_id in range(1):  # TODO: one share encoder
+                self.representation_network.append(
+                    HFLanguageRepresentationNetwork(
+                        model_path=kwargs['encoder_url'], 
+                        embedding_size=world_model_cfg.embed_dim,
+                        final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
+                    )
+                )
+
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
+            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print('==' * 20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
 
     #@profile

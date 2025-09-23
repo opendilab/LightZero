@@ -69,7 +69,10 @@ class GameSegment:
                     # image obs input, e.g. atari environments
                     self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape_list[task_id][-2], config.model.observation_shape_list[task_id][-1])
             else:
-                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
+                if isinstance(config.model.observation_shape, int) or len(config.model.observation_shape) == 1:
+                    self.zero_obs_shape = config.model.observation_shape
+                else:   
+                    self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
 
         self.obs_segment = []
         self.action_segment = []

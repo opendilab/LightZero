@@ -17,9 +17,7 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 import sys
 
-sys.path.append('/cpfs04/user/puyuan/code/LibMTL')
-# sys.path.append('/fs-computility/niuyazhe/puyuan/code/LibMTL')
-
+# TODO need to install the LibMTL package from the following link: https://github.com/puyuan1996/LibMTL
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
 # from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
@@ -66,7 +64,6 @@ def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
         except Exception as e:
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
-
 
 
 class WrappedModel:
@@ -428,7 +425,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             if self._cfg.cos_lr_scheduler:
                 self.lr_scheduler = CosineAnnealingLR(
-                    self._optimizer_world_model, T_max=int(2e5), eta_min=0, last_epoch=-1
+                    self._optimizer_world_model, T_max=int(1e5), eta_min=0, last_epoch=-1
                 ) # TODO
             elif self._cfg.piecewise_decay_lr_scheduler:
                 # Example step scheduler, adjust milestones and gamma as needed
@@ -645,7 +642,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # Convert to categorical distributions
             target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
             target_value_categorical = phi_transform(self.value_support, transformed_target_value)
-
+  
             # Prepare batch for a transformer-based world model
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
@@ -771,7 +768,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             avg_weight_mag_head_multi_task.append(avg_weight_mag_head)
             e_rank_last_linear_multi_task.append(e_rank_last_linear)
             e_rank_sim_norm_multi_task.append(e_rank_sim_norm)
-
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
@@ -1081,7 +1077,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         if num_tasks is not None:
             for var in task_specific_vars:
                 for task_idx in range(num_tasks):
-                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
+                    print(f"learner policy Rank, self.task_id: {self.task_id+task_idx}")
                     monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
         else:
             # If num_tasks is not provided, we assume there's only one task and keep the original variable names

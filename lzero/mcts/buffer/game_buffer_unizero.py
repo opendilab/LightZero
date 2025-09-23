@@ -52,10 +52,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         if hasattr(self._cfg, 'task_id'):
             self.task_id = self._cfg.task_id
             print(f"Task ID is set to {self.task_id}.")
-            try:
-                self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
-            except Exception as e:
+
+            if isinstance(self._cfg.model.action_space_size, list):
+                self.action_space_size = self._cfg.model.action_space_size[self.task_id]
+            elif isinstance(self._cfg.model.action_space_size, int):
                 self.action_space_size = self._cfg.model.action_space_size
+            else:
+                raise ValueError(" action_space_size should be int or list")
         else:
             self.task_id = None
             print("No task_id found in configuration. Task ID is set to None.")
@@ -90,6 +93,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         )
 
         # target policy
+
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1]) # current_batch[1] is batch_action
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self.action_space_size
@@ -135,14 +139,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         obs_list, action_list, mask_list = [], [], []
         timestep_list = []
         bootstrap_action_list = []
-
-        # prepare the inputs of a batch
+        
         for i in range(batch_size):
             game = game_segment_list[i]
             pos_in_game_segment = pos_in_game_segment_list[i]
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
+
             timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
@@ -158,9 +162,17 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
+            # prepare the inputs of a batch
+            if isinstance(game.action_space_size, list):
+                action_size = game.action_space_size[self.task_id]
+            elif isinstance(game.action_space_size, int):
+                action_size = game.action_space_size
+            else:
+                raise ValueError(" action_space_size should be int or list")
+
             # pad random action
             actions_tmp += [
-                np.random.randint(0, game.action_space_size)
+                np.random.randint(0, action_size)
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
             # TODO: check the effect
@@ -185,7 +197,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                                                                   self._cfg.num_unroll_steps+self._cfg.td_steps].tolist()
             # pad random action
             bootstrap_action_tmp += [
-                np.random.randint(0, game.action_space_size)
+                np.random.randint(0, action_size)
                 for _ in range(self._cfg.num_unroll_steps - len(bootstrap_action_tmp))
             ]
             bootstrap_action_list.append(bootstrap_action_tmp)

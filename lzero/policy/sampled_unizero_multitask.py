@@ -32,7 +32,7 @@ import torch.distributed as dist
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 import sys
-sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
+
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 

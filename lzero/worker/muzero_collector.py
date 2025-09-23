@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import deque, namedtuple
 from typing import Optional, Any, List
@@ -58,6 +59,7 @@ class MuZeroCollector(ISerialCollector):
             - task_id (:obj:`int`): Unique identifier for the task. If None, that means we are in the single task mode.
         """
         self.task_id = task_id
+
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -65,6 +67,9 @@ class MuZeroCollector(ISerialCollector):
         self._end_flag = False
 
         self._rank = get_rank()
+
+        print(f'rank {self._rank}, self.task_id: {self.task_id}')
+
         self._world_size = get_world_size()
         if self._rank == 0:
             if tb_logger is not None:
@@ -82,7 +87,9 @@ class MuZeroCollector(ISerialCollector):
             self._logger, _ = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
-            self._tb_logger = None
+            # =========== TODO: for unizero_multitask ddp_v2 ========
+            self._tb_logger = tb_logger
+
 
         self.policy_config = policy_config
         self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
@@ -122,7 +129,7 @@ class MuZeroCollector(ISerialCollector):
             self._logger.debug(
                 'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
             )
-        self._policy.reset()
+        self._policy.reset(task_id=self.task_id)
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -256,13 +263,10 @@ class MuZeroCollector(ISerialCollector):
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
 
         # NOTE: for unizero
-        beg_index = 0
-        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
-        pad_action_lst = game_segments[i].action_segment[beg_index:end_index]
-
+        pad_action_lst = game_segments[i].action_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+        
         # NOTE: for unizero
-        pad_child_visits_lst = game_segments[i].child_visit_segment[
-                               :self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
 
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
@@ -310,7 +314,7 @@ class MuZeroCollector(ISerialCollector):
         # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
-        # reset last game_segments
+        # reset last game_segments and last game_priorities for the next collection
         last_game_segments[i] = None
         last_game_priorities[i] = None
 
@@ -378,7 +382,8 @@ class MuZeroCollector(ISerialCollector):
             GameSegment(
                 self._env.action_space,
                 game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
+                config=self.policy_config,
+                task_id=self.task_id
             ) for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
@@ -388,6 +393,7 @@ class MuZeroCollector(ISerialCollector):
                 [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
                 maxlen=self.policy_config.model.frame_stack_num
             )
+
             game_segments[env_id].reset(observation_window_stack[env_id])
 
         dones = np.array([False for _ in range(env_nums)])
@@ -448,14 +454,13 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # Key policy forward step
                 # ==============================================================
-                # print(f'ready_env_id:{ready_env_id}')
-                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
                 if self.task_id is None:
                     # single task setting
-                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
                 else:
-                    # multi-task setting
-                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep, task_id=self.task_id)
+                    # multi task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
@@ -580,9 +585,9 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero', 'unizero_multitask', 'sampled_unizero_multitask']:
-                        # TODO: only for UniZero now
-                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)  # NOTE: reset_init_data=False
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
+                        # ============ only for UniZero now ============
+                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
                     total_transitions += 1
 
@@ -623,7 +628,8 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
+                            config=self.policy_config,
+                            task_id=self.task_id
                         )
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -704,7 +710,8 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
+                            config=self.policy_config,
+                            task_id=self.task_id
                         )
                         observation_window_stack[env_id] = deque(
                             [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
@@ -727,7 +734,8 @@ class MuZeroCollector(ISerialCollector):
                     visit_entropies_lst[env_id] = 0
 
                     # Env reset is done by env_manager automatically
-                    self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
+                    # NOTE: ============ reset the policy for the env_id. Default reset_init_data=True. ================
+                    self._policy.reset([env_id], task_id=self.task_id)
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
@@ -744,16 +752,12 @@ class MuZeroCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
-
-        # reduce data when enables DDP
-        if self._world_size > 1:
-            # Before allreduce
-            self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
-            collected_step = allreduce_data(collected_step, 'sum')
-            collected_episode = allreduce_data(collected_episode, 'sum')
-            collected_duration = allreduce_data(collected_duration, 'sum')
-            # After allreduce
-            self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+        # TODO: for multitask new ddp pipeline
+        # 再多任务情况下，只有多个进程处理同一个任务的时候才需要allreduce， 单进程处理1～多任务的时候不需要allreduce
+        # if self._world_size > 1:
+        #     collected_step = allreduce_data(collected_step, 'sum')
+        #     collected_episode = allreduce_data(collected_episode, 'sum')
+        #     collected_duration = allreduce_data(collected_duration, 'sum')
 
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
@@ -770,8 +774,9 @@ class MuZeroCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
-        if self._rank != 0:
-            return
+        # TODO: for multitask new ddp pipeline，since each process has different tasks to handle, each process needs to output logs
+        # if self._rank != 0:
+        #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)
@@ -804,6 +809,7 @@ class MuZeroCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
+            print(f'collector output_log: rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
                 if k in ['each_reward']:
