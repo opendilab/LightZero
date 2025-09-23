@@ -10,7 +10,7 @@ from ding.model import FCEncoder, ConvEncoder
 from ding.reward_model.base_reward_model import BaseRewardModel
 from ding.torch_utils.data_helper import to_tensor
 from ding.utils import RunningMeanStd
-from ding.utils import SequenceType, REWARD_MODEL_REGISTRY
+from ding.utils import SequenceType, REWARD_MODEL_REGISTRY, allreduce, synchronize
 from easydict import EasyDict
 
 
@@ -64,7 +64,9 @@ class RNDNetworkRepr(nn.Module):
             param.requires_grad = False
 
     def forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        predict_feature = self.predictor(self.representation_network(obs))
+        with torch.no_grad():
+            z = self.representation_network(obs)
+        predict_feature = self.predictor(z)
         with torch.no_grad():
             target_feature = self.target(obs)
 
@@ -142,13 +144,15 @@ class RNDRewardModel(BaseRewardModel):
 
     def __init__(self, config: EasyDict, device: str = 'cpu', tb_logger: 'SummaryWriter' = None,
                  representation_network: nn.Module = None, target_representation_network: nn.Module = None,
-                 use_momentum_representation_network: bool = True) -> None:  # noqa
+                 use_momentum_representation_network: bool = True, bp_update_sync: bool = True, multi_gpu: bool = False) -> None:  # noqa
         super(RNDRewardModel, self).__init__()
         self.cfg = config
         self.representation_network = representation_network
         self.target_representation_network = target_representation_network
         self.use_momentum_representation_network = use_momentum_representation_network
         self.input_type = self.cfg.input_type
+        self._bp_update_sync = bp_update_sync
+        self.multi_gpu = multi_gpu
         assert self.input_type in ['obs', 'latent_state', 'obs_latent_state'], self.input_type
         self.device = device
         assert self.device == "cpu" or self.device.startswith("cuda")
@@ -186,7 +190,31 @@ class RNDRewardModel(BaseRewardModel):
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
         self.estimate_cnt_rnd = 0
         self.train_cnt_rnd = 0
+        
+    def sync_gradients(self, model: torch.nn.Module) -> None:
+        """
+        Overview:
+            Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.
+        Arguments:
+            - model (:obj:`torch.nn.Module`): The model to synchronize gradients.
 
+        .. note::
+            This method is only used in multi-gpu training, and it should be called after ``backward`` method and \
+            before ``step`` method. The user can also use ``bp_update_sync`` config to control whether to synchronize \
+            gradients allreduce and optimizer updates.
+        """
+
+        if self._bp_update_sync:
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    if param.grad is not None:
+                        allreduce(param.grad.data)
+                    else:
+                        zero_grad = torch.zeros_like(param.data)
+                        allreduce(zero_grad)
+        else:
+            synchronize()
+            
     def _train_with_data_one_step(self) -> None:
         if self.input_type in ['obs', 'obs_latent_state']:
             train_data = random.sample(self.train_obs, self.cfg.batch_size)
@@ -211,6 +239,9 @@ class RNDRewardModel(BaseRewardModel):
         self.tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
         self._optimizer_rnd.zero_grad()
         loss.backward()
+        
+        if self.multi_gpu:
+            self.sync_gradients(self.reward_model.predictor)
         self._optimizer_rnd.step()
 
     def train_with_data(self) -> None:

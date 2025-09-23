@@ -128,7 +128,9 @@ def train_unizero_with_reward_model(
         tb_logger,
         policy._learn_model.representation_network,
         policy._target_model_for_intrinsic_reward.representation_network,
-        cfg.policy.use_momentum_representation_network
+        cfg.policy.use_momentum_representation_network,
+        bp_update_sync=cfg.policy.bp_update_sync,
+        multi_gpu=cfg.policy.multi_gpu,
     )
 
     # Execute the learner's before_run hook
@@ -192,6 +194,15 @@ def train_unizero_with_reward_model(
         # ****** reward_model related code ******
         # collect data for reward_model training
         reward_model.collect_data(new_data)
+
+        if world_size > 1:
+            # Synchronize all ranks before training
+            try:
+                dist.barrier()
+            except Exception as e:
+                logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
+                break
+            
         # update reward_model
         if reward_model.cfg.input_type == 'latent_state':
             # train reward_model with latent_state
@@ -243,8 +254,6 @@ def train_unizero_with_reward_model(
 
                 # update train_data reward using the augmented reward
                 train_data_augmented = reward_model.estimate(train_data)
-
-                
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
                 
