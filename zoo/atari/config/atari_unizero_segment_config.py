@@ -21,8 +21,8 @@ def main(env_id, seed):
     collect_num_simulations = 25
     # collect_num_simulations = 50
     eval_num_simulations = 50
-    # max_env_step = int(5e6)  #TODO mspacman========
-    max_env_step = int(2e6)#TODO========
+    max_env_step = int(10e6)  #TODO mspacman========
+    # max_env_step = int(2e6)#TODO========
 
     # max_env_step = int(50e6)
     batch_size = 256
@@ -86,6 +86,8 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
+            collect_max_episode_steps=int(10000),
+            eval_max_episode_steps=int(10000),
             # TODO: only for debug
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
@@ -211,7 +213,10 @@ def main(env_id, seed):
             # (float) 自适应alpha优化器的学习率
             adaptive_entropy_alpha_lr=1e-4,
             target_entropy_start_ratio =0.98,
+            # target_entropy_end_ratio =0.9,
             target_entropy_end_ratio =0.7,
+            # target_entropy_end_ratio =0.5, # TODO=====
+
             target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
             
             # ==================== START: Encoder-Clip Annealing Config ====================
@@ -242,7 +247,9 @@ def main(env_id, seed):
             # gradient_scale=True, #TODO
             gradient_scale=False, #TODO
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
-            model_path=None,
+            model_path=None, # TODO=======
+            # model_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_unizero_longrun_20250923/Qbert/Qbert_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum8_brf1e-12-rbs160-rp0.75_nlayer2_numsegments-8_gsl20_rr0.1_Htrain10-Hinfer4_bs256_c25_seed0/ckpt/ckpt_best.pth.tar",
+            # model_path="/mnt/nfs/zhangjinouwen/puyuan/LightZero/data_unizero_longrun_20250923/Seaquest/Seaquest_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum8_brf1e-12-rbs160-rp0.75_nlayer2_numsegments-8_gsl20_rr0.1_Htrain10-Hinfer4_bs256_c25_seed0/ckpt/ckpt_best.pth.tar",
             use_augmentation=False, # TODO
             # use_augmentation=True, # TODO=======
 
@@ -377,8 +384,14 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
-
     main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_2mckpt_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-09-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    
     # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-200k-1-07_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
@@ -403,16 +416,19 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    # args.env = 'PongNoFrameskip-v4'
-    # args.env = 'MsPacmanNoFrameskip-v4'
+    # 测试的atari8中的4个base环境
+    # args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
+    # args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
-    # args.env = 'BoxingNoFrameskip-v4'
-    args.env = 'SeaquestNoFrameskip-v4' 
+    args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
+    # args.env = 'HeroNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
-    # args.env = 'QbertNoFrameskip-v4'
-    # args.env = 'SpaceInvadersNoFrameskip-v4'
+    # 下面是atari8以外的2个代表环境
+    # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
-    # args.env = 'HeroNoFrameskip-v4'
+    # 下面是已经表现不错的
+    # args.env = 'BoxingNoFrameskip-v4' # 反应型环境 密集奖励
     # args.env = 'ChopperCommandNoFrameskip-v4'
 
     # args.env = 'AlienNoFrameskip-v4'
@@ -429,7 +445,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=6
+    export CUDA_VISIBLE_DEVICES=0
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
 
