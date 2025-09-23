@@ -202,8 +202,11 @@ class LayerNorm(nn.Module):
 def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type):
     # start with all of the candidate parameters
     param_dict = {pn: p for pn, p in model.named_parameters()}
+
+    # 非常重要 对于balance pipeline ===========
     # filter out those that do not require grad
-    param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+    # param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+
     # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
     # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
     decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]

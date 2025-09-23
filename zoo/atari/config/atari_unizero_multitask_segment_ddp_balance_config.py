@@ -121,7 +121,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     num_layers=4,  # TODO=======
                     # num_layers=8,
-
                     num_heads=24,
 
                     # ===== only for debug =====
@@ -148,24 +147,32 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
 
-                    # LoRA 参数：
-                    # moe_use_lora=True, # TDO
-                    moe_use_lora=False, # TODO
+                   # LoRA 参数：
+                    # moe_use_lora=False, # TODO
+                    moe_use_lora=True, # TODO
+
                     curriculum_stage_num=curriculum_stage_num,
                     lora_target_modules=["attn", "feed_forward"],
-                    # lora_r= 8,
-                    lora_r=64,
-                    lora_alpha=1,
-                    lora_dropout=0.0,
+                    lora_r=64, # TODO
+                    lora_alpha=32,
+                    lora_dropout=0.1,
+                    lora_scale_init=1,
+
+                    min_stage0_iters=50000, # 50k
+                    max_stage_iters=20000, # 20k
+
+                    # ==================== 新增的控制参数 ====================
+                    # 设置为 False，则课程学习和LoRA冻结将只应用于Transformer Backbone
+                    # 设置为 True 或不设置此项，则同时应用于ViT Encoder和Transformer Backbone
+                    apply_curriculum_to_encoder=False, 
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
-
             target_return =target_return_dict[env_id],
             balance_pipeline=True,
             # task_complexity_weight=False, # TODO
-            task_complexity_weight=True, # TODO
+            task_complexity_weight=True, # TODO: 这个选项打开时统计所有环境的norm mean
 
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
@@ -185,7 +192,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # cos_lr_scheduler=True,
             cos_lr_scheduler=False,
             num_segments=num_segments,
+            # (int) the number of simulations in MCTS for renalyze.
             num_simulations=num_simulations,
+            # (int) The number of simulations in MCTS for the collect phase.
+            collect_num_simulations=num_simulations,
+            # (int) The number of simulations in MCTS for the eval phase.
+            eval_num_simulations=50,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
@@ -208,7 +220,10 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # ===== only for debug =====
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_encoder-backbone-attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_backbone-attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -239,6 +254,12 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/202507/uz_mt_nlayer4_atari8_balance-totalstage5_encoder-backbone.log
+
+        cd /cpfs04/user/puyuan/code/LightZero/
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250522_cpfs/uz_mt_nlayer4_atari8_vit-small_moe8-lora_balance-totalstage5_stage-50k-20k_s0.log
+
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_nlayer4_atari26_vit-ln_moe8_balance-totalstage9.log
 
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_balance_atari26_vit-ln_moe8_totalstage5.log
@@ -318,14 +339,20 @@ if __name__ == "__main__":
         # target score
         target_scores = {
             # 8games
-            'PongNoFrameskip-v4': 14.6, # 0
-            'MsPacmanNoFrameskip-v4': 1500.6, # 1
-            'SeaquestNoFrameskip-v4': 1000.7, # 2
-            'BoxingNoFrameskip-v4': 12.1, # 3
-            'AlienNoFrameskip-v4': 1000.7, # 4
-            'ChopperCommandNoFrameskip-v4': 3000.8, # 5
-            'HeroNoFrameskip-v4': 3082.4, # 6
-            'RoadRunnerNoFrameskip-v4': 7845.0, # 7
+            # 'PongNoFrameskip-v4': 14.6, # 0 expert
+            'PongNoFrameskip-v4': 20, # 0 expert
+            # 'MsPacmanNoFrameskip-v4': 1500.6, # 1 
+            'MsPacmanNoFrameskip-v4': 6951.6, # 1
+            # 'SeaquestNoFrameskip-v4': 1000.7, # 2
+            'SeaquestNoFrameskip-v4': 42054.7, # 2 expert
+            'BoxingNoFrameskip-v4': 12.1, # 3 expert
+            # 'AlienNoFrameskip-v4': 1000.7, # 4
+            'AlienNoFrameskip-v4': 7127.7, # 4 expert
+            # 'ChopperCommandNoFrameskip-v4': 3000.8, # 5
+            # 'HeroNoFrameskip-v4': 3082.4, # 6
+            'ChopperCommandNoFrameskip-v4': 7387.8, # 5 expert
+            'HeroNoFrameskip-v4': 30826.4, # 6 expert
+            'RoadRunnerNoFrameskip-v4': 7845.0, # 7 expert
             # 后续 Atari 26games 的额外项
             'AmidarNoFrameskip-v4': 100.5, # 8
             'AssaultNoFrameskip-v4': 742.0, # 9
@@ -360,52 +387,33 @@ if __name__ == "__main__":
     # 示例：以 ratio=1 使用
     target_return_dict = get_atari_target_return_dict(ratio=1)
     # target_return_dict = get_atari_target_return_dict(ratio=0.5)
-
+    num_games = 8 # 26 # 8
 
     # 分别定义 Atari 游戏列表（8games 和 26games）
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-    ]
-
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-        'AmidarNoFrameskip-v4',
-        'AssaultNoFrameskip-v4',
-        'AsterixNoFrameskip-v4',
-        'BankHeistNoFrameskip-v4',
-        'BattleZoneNoFrameskip-v4',
-        'CrazyClimberNoFrameskip-v4',
-        'DemonAttackNoFrameskip-v4',
-        'FreewayNoFrameskip-v4',
-        'FrostbiteNoFrameskip-v4',
-        'GopherNoFrameskip-v4',
-        'JamesbondNoFrameskip-v4',
-        'KangarooNoFrameskip-v4',
-        'KrullNoFrameskip-v4',
-        'KungFuMasterNoFrameskip-v4',
-        'PrivateEyeNoFrameskip-v4',
-        'UpNDownNoFrameskip-v4',
-        'QbertNoFrameskip-v4',
-        'BreakoutNoFrameskip-v4',
-    ]
+    if num_games==3:
+            env_id_list = [
+            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4'
+        ]
+    elif num_games==8:
+        env_id_list = [
+            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+            'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+        ]
+    elif num_games==26:
+        # List of Atari games used for multi-task learning
+        env_id_list = [
+            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+            'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+            'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
+            'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
+            'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
+            'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
+            'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+        ]
 
     global curriculum_stage_num
     # TODO ==============
-    curriculum_stage_num=3
+    # curriculum_stage_num=3
     curriculum_stage_num=5
     # curriculum_stage_num=9
 
@@ -435,8 +443,8 @@ if __name__ == "__main__":
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    # buffer_reanalyze_freq = 1 / 50
-    buffer_reanalyze_freq = 1 / 1000000
+    buffer_reanalyze_freq = 1 / 50
+    # buffer_reanalyze_freq = 1 / 1000000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 

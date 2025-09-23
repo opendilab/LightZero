@@ -105,9 +105,9 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     context_length=2 * infer_context_length,
                     device='cuda',
                     # ======== TODO: only for debug ========
-                    # num_layers=1, # TODO: debug config
+                    num_layers=1, # TODO: debug config
 
-                    num_layers=4, # ==============TODO==============
+                    # num_layers=4, # ==============TODO==============
                     # num_layers=8,
 
                     num_heads=24,
@@ -128,8 +128,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_of_moe_in_transformer=8,
                     
                     # LoRA 参数：
-                    # moe_use_lora=False, # TODO
-                    moe_use_lora=True, # TODO
+                    moe_use_lora=False, # TODO
 
                     # curriculum_stage_num=3,
                     curriculum_stage_num=curriculum_stage_num,
@@ -141,13 +140,12 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     lora_dropout=0.0,
                     lora_scale_init=1,
 
-                    # min_stage0_iters=15000, # 400k envsteps 40k iter
-                    min_stage0_iters=10000, # 400k envsteps 40k iter
-                    max_stage_iters=5000,
+                    # min_stage0_iters=10000,
+                    # max_stage_iters=5000,
 
                     # ======== TODO: only for debug ========
-                    # min_stage0_iters=2,
-                    # max_stage_iters=5,
+                    min_stage0_iters=2,
+                    max_stage_iters=5,
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
@@ -216,7 +214,7 @@ def generate_configs(env_id_list: List[str],
     configs = []
     # ========= TODO: global BENCHMARK_NAME =========
 
-    exp_name_prefix = f'data_suz_dmc_mt_balance_20250625/dmc_{len(env_id_list)}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}_stage0-10k-5k_fix-lora-update-stablescale_moe8-uselora_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_dmc_mt_balance_20250612_debug/dmc_{len(env_id_list)}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}_stage0-10k-5k_fix-lora-update_moe8_nlayer4_not-share-head_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -275,7 +273,7 @@ if __name__ == "__main__":
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /fs-computility/niuyazhe/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee /fs-computility/niuyazhe/puyuan/code/LightZero/log/20250509/uz_mt_dmc18_ln_balance_moe8_stage5_stage0-10k-5k_nlayer8.log
 
         cd /cpfs04/user/puyuan/code/LightZero/
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250625/uz_mt_dmc18_ln_balance_moe8-uselora_stage5_stage0-5k-10k_nlayer4_fix-lora-update-stablescale_seed0.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /cpfs04/user/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee /cpfs04/user/puyuan/code/LightZero/log/20250522_cpfs/uz_mt_dmc18_ln_balance_moe8_stage5_stage0-5k-10k_nlayer4_fix-lora-update_seed1.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -387,16 +385,16 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 1
-    # total_batch_size = 8
-    # batch_size = [3 for _ in range(len(env_id_list))]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 1
+    total_batch_size = 8
+    batch_size = [3 for _ in range(len(env_id_list))]
     # =======================================
 
-    seed = 0  # You can iterate over multiple seeds if needed
+    seed = 1  # You can iterate over multiple seeds if needed
 
     configs = generate_configs(
         env_id_list=env_id_list,
@@ -419,8 +417,8 @@ if __name__ == "__main__":
 
     import torch.distributed as dist
     with DDPContext():
-        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
+        # train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
         # 如果只想训练部分任务，可以修改 configs，例如:
         # ======== TODO: only for debug ========
-        # train_unizero_multitask_balance_segment_ddp(configs[:1], seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
+        train_unizero_multitask_balance_segment_ddp(configs[:1], seed=seed, max_env_step=max_env_step, benchmark_name="dmc")
         dist.destroy_process_group()

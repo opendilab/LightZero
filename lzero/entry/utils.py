@@ -14,6 +14,107 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+# ============================================================
+#  freeze_non_lora.py
+# ------------------------------------------------------------
+#  A tiny utility that (un)freezes **all** parameters except
+#  those belonging to LoRA adapters / LearnableScale objects.
+#
+#  • Works with both CurriculumLoRALinear  &  ordinary LoRALinear
+#  • O(#parameters) – just one linear scan, no recursion
+#  • Can be called repeatedly; idempotent
+#  • Returns (n_frozen, n_trainable) for quick logging
+# ============================================================
+
+import re
+from typing import Iterable, Tuple
+
+import torch.nn as nn
+
+
+# -----------------------------------------------------------------
+# helper: detect LoRA / LearnableScale parameters by their names
+# -----------------------------------------------------------------
+#   CurriculumLoRALinear parameters have canonical names like
+#     "...adapters.3.lora_A"  (weight)
+#     "...adapters.3.lora_B"  (weight)
+#     "...adapter_scales.3.logit" (learnable scalar)
+#   Ordinary LoRALinear (if you ever use it) typically carries
+#     ".lora_A", ".lora_B" in their names as well.
+#
+#   So a simple regexp matching is sufficient and cheap.
+# -----------------------------------------------------------------
+_LORA_PAT = re.compile(r"\.(?:lora_[AB]|adapter_scales\.\d+\.logit)$")
+
+
+def _is_lora_param(name: str) -> bool:
+    return bool(_LORA_PAT.search(name))
+
+
+# -----------------------------------------------------------------
+# main API
+# -----------------------------------------------------------------
+def freeze_non_lora(
+    module: nn.Module,
+    freeze: bool = True,
+    *,
+    verbose: bool = False,
+) -> Tuple[int, int]:
+    """
+    Freeze (or un-freeze) every parameter **except** LoRA / LearnableScale.
+
+    Args:
+        module   : the transformer (or any nn.Module tree)
+        freeze   : True  -> set requires_grad=False for non-LoRA params
+                   False -> set requires_grad=True  for non-LoRA params
+        verbose  : print a short summary if True
+
+    Returns:
+        (n_frozen, n_trainable) – number of tensors in each group
+    """
+    n_frozen = 0
+    n_train  = 0
+
+    for name, param in module.named_parameters():
+        if _is_lora_param(name):           # LoRA / scale param – keep opposite state
+            param.requires_grad = True
+            n_train += 1
+        else:                              # everything else
+            param.requires_grad = (not freeze)
+            if param.requires_grad:
+                n_train += 1
+            else:
+                n_frozen += 1
+
+    if verbose:
+        total = n_frozen + n_train
+        print(
+            f"[freeze_non_lora] trainable={n_train}/{total} "
+            f"({n_train/total:.1%}), frozen={n_frozen}"
+        )
+    return n_frozen, n_train
+
+
+# -----------------------------------------------------------------
+# example usage inside CurriculumController.switch()
+# -----------------------------------------------------------------
+#
+#   ...
+#   if need_switch and self.stage < self.stage_num - 1:
+#       self.stage += 1
+#       set_curriculum_stage_for_transformer(
+#           self.policy._learn_model.world_model.transformer, self.stage
+#       )
+#
+#       # NEW : freeze all non-LoRA weights from stage-1 onwards
+#       freeze_non_lora(
+#           self.policy._learn_model.world_model.transformer,
+#           freeze=(self.stage >= 1),
+#           verbose=True,
+#       )
+#   ...
+
+
 class TemperatureScheduler:
     def __init__(self, initial_temp: float, final_temp: float, threshold_steps: int, mode: str = 'linear'):
         """

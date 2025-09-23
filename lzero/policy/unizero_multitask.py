@@ -19,6 +19,31 @@ import sys
 
 # TODO need to install the LibMTL package from the following link: https://github.com/puyuan1996/LibMTL
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# from LibMTL.weighting.moco_generic import GenericMoCo, MoCoCfg
+# from LibMTL.weighting.moco_fast import FastMoCo, MoCoCfg
+from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
+from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
+
+
+
+import torch.distributed as dist
+
+# ------------------------------------------------------------
+# 1. 额外增加 learner 专用 process-group
+#    (在 main / learner 初始化时调用一次)
+# ------------------------------------------------------------
+def build_learner_group(learner_ranks: list[int]) -> dist.ProcessGroup:
+    """
+    learner_ranks 里只放 **真正执行 backward** 的那些 rank
+      例：CUDA_VISIBLE_DEVICES=0,1  →  learner_ranks=[0,1]
+    返回一个新的 ProcessGroup，后续给 GenericMoCo 使用
+    """
+    world_pg = dist.group.WORLD
+    pg = dist.new_group(ranks=learner_ranks, backend='nccl')
+    if dist.get_rank() in learner_ranks:
+        torch.cuda.set_device(learner_ranks.index(dist.get_rank()))
+    return pg
+
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
@@ -204,7 +229,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
                 analysis_dormant_ratio_weight_rank=False,
                 # (float) The threshold for a dormant neuron.
-                dormant_threshold=0.025,
+                # dormant_threshold=0.025,
+                dormant_threshold=0.01,
+
             ),
         ),
         # ****** common ******
@@ -290,8 +317,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # (int) the number of simulations in MCTS.
+        # # (int) the number of simulations in MCTS for renalyze.
         num_simulations=50,
+        # (int) The number of simulations in MCTS for the collect phase.
+        collect_num_simulations=25,
+        # (int) The number of simulations in MCTS for the eval phase.
+        eval_num_simulations=50,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -465,10 +496,23 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 将 wrapped_model 作为 share_model 传递给 GradCorrect
             # ========= 初始化 MoCo CAGrad 参数 =========
             # self.grad_correct = GradCorrect(self.wrapped_model, self.task_num_for_current_rank, self._cfg.device)
-            self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
-
-            self.grad_correct.init_param()  
-            self.grad_correct.rep_grad = False
+            
+            if self._cfg.moco_version=="v0":
+                self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+                self.grad_correct.init_param()  
+                self.grad_correct.rep_grad = False
+            elif self._cfg.moco_version=="v1":
+                cfg_moco = MoCoCfg(
+                    beta0=0.9,  beta_sigma=0.95,
+                    gamma0=0.1, gamma_sigma=0.95,
+                    rho=0.01,   stat_interval=10000)
+                self.grad_correct = FastMoCo(
+                    shared_module=self.wrapped_model,
+                    world_task_num=self._cfg.total_task_num,   # 全局任务数
+                    device=self._cfg.device,
+                    multi_gpu=self._cfg.multi_gpu,
+                    cfg=cfg_moco,
+                )
 
         # 用于缓存上一帧的可塑性相关指标
         self._prev_plasticity_metrics = dict(
@@ -577,8 +621,17 @@ class UniZeroMTPolicy(UniZeroPolicy):
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                     self._cfg.device)
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            
+            # rank = get_rank()
+            # print(f'Rank {rank}: cfg.policy.task_id : {self._cfg.task_id}, self._cfg.batch_size {self._cfg.batch_size}')
+
+            cur_batch_size = target_reward.size(0)          # run-time batch
+
+            target_reward = target_reward.view(cur_batch_size, -1)
+            target_value = target_value.view(cur_batch_size, -1)
+
+            # target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            # target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
             # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
@@ -594,10 +647,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape)
+                    cur_batch_size, -1, self._cfg.model.observation_shape)
             elif len(self._cfg.model.observation_shape) == 3:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape)
+                    cur_batch_size, -1, *self._cfg.model.observation_shape)
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
@@ -723,7 +776,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
-            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            if self._cfg.moco_version=="v0":
+                lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            elif self._cfg.moco_version=="v1":
+                lambd, stats = self.grad_correct.backward(losses_list)
+        
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
@@ -772,6 +829,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             #     self.sync_gradients(self._learn_model)
             if not self._cfg.use_moco:
                 self.sync_gradients(self._learn_model)
+            
+            # print(f'Rank {dist.get_rank()} train task_id: {self._cfg.task_id} sync grad end...')
 
         # print("=== Step 前，参数梯度详细信息 ===")
         # for idx, param in enumerate(self.grad_correct.share_model.parameters()):
@@ -898,10 +957,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         self._collect_model = self._model
 
+        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_collect_cfg = copy.deepcopy(self._cfg)
+        mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_collect = MCTSCtree(self._cfg)
+            self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(self._cfg)
+            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
@@ -1153,10 +1217,16 @@ class UniZeroMTPolicy(UniZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+        
+        # 为 eval MCTS 创建一个配置副本，并设置特定的模拟次数
+        mcts_eval_cfg = copy.deepcopy(self._cfg)
+        mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
+
         if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
+            self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
-            self._mcts_eval = MCTSPtree(self._cfg)
+            self._mcts_eval = MCTSPtree(mcts_eval_cfg)
+
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':

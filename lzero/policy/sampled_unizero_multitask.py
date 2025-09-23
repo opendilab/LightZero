@@ -155,7 +155,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 predict_latent_loss_type='group_kl',
                 obs_type='image',
                 gamma=1,
-                dormant_threshold=0.025,
+                # dormant_threshold=0.025,
+                dormant_threshold=0.01,
                 policy_loss_type='kl',
             ),
         ),
@@ -395,8 +396,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             ]
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list, self._cfg.device)
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            # target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            # target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+
+            cur_batch_size = target_reward.size(0)          # run-time batch
+            target_reward = target_reward.view(cur_batch_size, -1)
+            target_value = target_value.view(cur_batch_size, -1)
 
             # Transform rewards and values to their scaled forms
             transformed_target_reward = scalar_transform(target_reward)
@@ -410,10 +415,10 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape_list[task_id], int) or len(self._cfg.model.observation_shape_list[task_id]) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape_list[task_id])
+                    cur_batch_size, -1, self._cfg.model.observation_shape_list[task_id])
             elif len(self._cfg.model.observation_shape_list[task_id]) == 3:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape_list[task_id])
+                    cur_batch_size, -1, *self._cfg.model.observation_shape_list[task_id])
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
             batch_for_gpt['child_sampled_actions'] = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)[:, :-1]

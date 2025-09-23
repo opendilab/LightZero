@@ -23,48 +23,6 @@ from line_profiler import line_profiler
 from lzero.model.common import SimNorm
 import logging
 
-# class LearnableScale(nn.Module):
-#     """
-#     可学习且有界的标量参数:
-#       s = s_max * sigmoid(ŝ)         (0, s_max)
-#     """
-#     def __init__(self, init=1.0, s_max=1.2):
-#         super().__init__()
-#         # 反推初始值
-#         inv_sig = math.log(init / (s_max - init + 1e-9))
-#         self.logit = nn.Parameter(torch.tensor(inv_sig))
-#         self.logit.requires_grad = True # TODO
-#         self.s_max = s_max
-
-#     def forward(self):
-#         return self.s_max * torch.sigmoid(self.logit)
-
-class LearnableScale(nn.Module):
-    """
-    一个被约束在特定范围内的可学习标量参数。
-    
-    s = offset + scale * tanh(ŝ)
-    
-    这将无界的 logit ŝ 映射到 (offset - scale, offset + scale) 范围内。
-    使用 tanh 有时比 sigmoid 能提供更稳定的梯度。
-    
-    例如: 要获得 (0.8, 1.2) 的范围，使用 init=1.0, s_range=0.2。
-    """
-    def __init__(self, init: float = 1.0, s_range: float = 0.2):
-        super().__init__()
-        assert s_range > 0, "缩放范围必须为正。"
-        self.offset = init
-        self.scale = s_range
-
-        # 将 logit 初始化为 0，使初始输出恰好为 `init`。
-        self.logit = nn.Parameter(torch.tensor(0.0))
-        self.logit.requires_grad = False  # TODO 初始时冻结，由 CurriculumController 激活
-        # self.logit.requires_grad = True # TODO
-
-
-    def forward(self) -> torch.Tensor:
-        return self.offset + self.scale * torch.tanh(self.logit)
-    
 ##############################################
 # CurriculumLoRALinear 实现
 ##############################################
@@ -116,9 +74,7 @@ class CurriculumLoRALinear(nn.Module):
 
         # 初始化 LoRA adapter，只有在 r > 0 且 curriculum_stage_num > 1 时才存在
         self.adapters = nn.ModuleList()
-        # self.adapter_scales = nn.ParameterList()
-        self.adapter_scales = nn.ModuleList()
-
+        self.adapter_scales = nn.ParameterList()
         if r > 0 and (curriculum_stage_num - 1) > 0:
             for i in range(curriculum_stage_num - 1):
                 adapter = nn.ParameterDict({
@@ -127,16 +83,12 @@ class CurriculumLoRALinear(nn.Module):
                 })
                 self.adapters.append(adapter)
 
-                # self.adapter_scales.append(LearnableScale(lora_scale_init, s_max=1.2))
-                self.adapter_scales.append(LearnableScale(lora_scale_init, s_range=0.2))
-
-                # self.adapter_scales.append(  #  ← 新增
-                #     nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
-                # )
-
+                self.adapter_scales.append(  #  ← 新增
+                    nn.Parameter(torch.tensor(lora_scale_init, dtype=torch.float32))
+                )
             # --- CurriculumLoRALinear.__init__() ------------
-            # for p in self.adapter_scales:
-            #     p.requires_grad = True   # 统一设 True，避免遗漏
+            for p in self.adapter_scales:
+                p.requires_grad = True   # 统一设 True，避免遗漏
         else:
             self.adapters = None
 
@@ -148,7 +100,6 @@ class CurriculumLoRALinear(nn.Module):
             for adapter in self.adapters:
                 adapter['lora_A'].requires_grad = False
                 adapter['lora_B'].requires_grad = False
-
 
     def set_curriculum_stage(self, stage: int):
         """
@@ -173,10 +124,10 @@ class CurriculumLoRALinear(nn.Module):
                 for idx, adapter in enumerate(self.adapters):
                     adapter['lora_A'].requires_grad = False
                     adapter['lora_B'].requires_grad = False
-                    # self.adapter_scales[idx].requires_grad = True   #  ← 新增
+                    self.adapter_scales[idx].requires_grad = True   #  ← 新增
             logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: 基础层可训练，所有 adapter 均冻结。")
             logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
-            logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0]().item()}")
+            logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0].item()}")
 
         else:
             # 阶段大于 0，冻结基础层
@@ -184,8 +135,9 @@ class CurriculumLoRALinear(nn.Module):
             if self.bias is not None:
                 self.bias.requires_grad = False
             for idx, adapter in enumerate(self.adapters):
+                self.adapter_scales[idx].requires_grad = True   #  ← 新增
                 logging.info(f"[self.adapter_scales:] {self.adapter_scales}")
-                logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0]().item()}")
+                logging.info(f"self.adapter_scales[0].item(): {self.adapter_scales[0].item()}")
 
                 if idx == stage - 1:
                     adapter['lora_A'].requires_grad = True
@@ -209,7 +161,7 @@ class CurriculumLoRALinear(nn.Module):
             adapter = self.adapters[idx]
             out = F.linear(self.lora_dropout(x), adapter['lora_A'])
             out = F.linear(out, adapter['lora_B'])
-            scale = self.adapter_scales[idx]() # TODO: 所有adapter  对应的scale都参与训练
+            scale = self.adapter_scales[idx] # TODO: 所有adapter  对应的scale都参与训练
             if idx == self.curriculum_stage - 1:
                 adapter_out = adapter_out + self.scaling * out * scale  # 仅当前 adapter 参与更新
             else:
@@ -219,6 +171,7 @@ class CurriculumLoRALinear(nn.Module):
 ##############################################
 # 修改 _maybe_wrap_linear 辅助函数
 ##############################################
+
 def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Module:
     """
     辅助函数：当满足以下条件时，将传入的 nn.Linear 层替换为
@@ -264,35 +217,20 @@ def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Modul
 # 辅助函数：在 transformer 内部遍历所有 CurriculumLoRALinear 模块，并设置阶段
 ##############################################
 
-# def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
-#     """
-#     遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
-#     并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
-#     """
-#     count = 0
-#     for module in transformer.modules():
-#         # logging.info(f"[Transformer] module {module}.")
-
-#         if isinstance(module, CurriculumLoRALinear):
-#             module.set_curriculum_stage(stage)
-#             count += 1
-#     logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
-
-def set_curriculum_stage(model: nn.Module, stage: int):
+def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
     """
-    遍历给定模型 (model) 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
-    并调用其 set_curriculum_stage(stage) 方法。
-    这个函数是通用的，可以作用于 ViT Encoder 或 Transformer Decoder。
+    遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
+    并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
     """
     count = 0
-    for module in model.modules():
+    for module in transformer.modules():
+        # logging.info(f"[Transformer] module {module}.")
+
         if isinstance(module, CurriculumLoRALinear):
             module.set_curriculum_stage(stage)
             count += 1
-    logging.info(f"[Curriculum] 在 {type(model).__name__} 中共更新 {count} 个 CurriculumLoRALinear 模块为 stage {stage}.")
+    logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
 
-# 保留旧函数名并指向新函数，以实现向后兼容
-set_curriculum_stage_for_transformer = set_curriculum_stage
 
 ##############################################
 # TransformerConfig 示例（增加 curriculum_stage_num）
@@ -544,11 +482,23 @@ class Block(nn.Module):
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=config.num_experts_per_tok,
             )
-            # If a shared expert branch is configured, add its output
+            
             print("="*20)
             print(f'use moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
         elif config.multiplication_moe_in_transformer:
+            # TODO: deepseek-v3
+            # from .moe import MoeConfig,MoELayer
+            # moe_cfg = MoeConfig(
+            #     embed_dim=config.embed_dim,
+            #     num_experts_total=config.num_experts_of_moe_in_transformer,
+            #     num_experts_per_tok=1,
+            # )
+            # self.feed_forward = MoELayer(moe_cfg)
+            # print("=" * 20)
+            # print(f"Use MoE feed_forward, num_experts={moe_cfg.num_experts_total}")
+            # print("=" * 20)
+
             from .moe import MoELayer, MultiplicationFeedForward
             # Create multiple FeedForward instances for multiplication-based MoE
             self.experts = nn.ModuleList([

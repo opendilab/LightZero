@@ -21,16 +21,212 @@ from ding.utils import EasyTimer
 import torch.nn.functional as F
 import torch.distributed as dist
 import concurrent.futures
-from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer
+# from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer,CurriculumLoRALinear
+from lzero.model.unizero_world_models.transformer import set_curriculum_stage, CurriculumLoRALinear
 
 # ===== 新增依赖 =====
 import numpy as np                    # 计算均值
 from collections import defaultdict   # 保存所有任务最近一次评估分数
-
+import math
+from .utils import freeze_non_lora
 
 # 保存最近一次评估回报：{task_id: eval_episode_return_mean}
 from collections import defaultdict
 GLOBAL_EVAL_RETURNS: dict[int, float] = defaultdict(lambda: None)
+
+def log_module_trainable_status(module: torch.nn.Module, module_name: str, logger=logging):
+    """
+    一个高效且可扩展的日志函数，用于详细打印一个模块内部参数的冻结/可训练状态。
+
+    Args:
+        module (torch.nn.Module): 需要检查的模块 (例如 ViT Encoder 或 Transformer)。
+        module_name (str): 在日志中显示的模块名称。
+        logger: 用于输出的日志记录器。
+    """
+    logger.info(f"--- '{module_name}' 模块参数状态详细日志 ---")
+    
+    total_params = 0
+    trainable_params = 0
+    
+    # 打印详细的参数状态
+    for name, param in module.named_parameters():
+        total_params += param.numel()
+        status = "Trainable" if param.requires_grad else "Frozen"
+        
+        # 为了日志整洁，我们可以重点关注 LoRA 相关参数和一些代表性参数
+        # 这里为了完整性，我们全部打印，但在实际使用中可以根据需要过滤
+        logger.info(f"  - {name:<60} | Shape: {str(param.shape):<25} | Status: {status}")
+        
+        if param.requires_grad:
+            trainable_params += param.numel()
+            
+    # 打印摘要信息
+    logger.info(f"--- '{module_name}' 摘要 ---")
+    logger.info(f"  - 总参数量: {total_params:,}")
+    logger.info(f"  - 可训练参数量: {trainable_params:,}")
+    if total_params > 0:
+        percentage = 100 * trainable_params / total_params
+        logger.info(f"  - 可训练比例: {percentage:.4f}%")
+    logger.info("-" * (len(module_name) + 30))
+
+def freeze_non_lora_parameters(model: torch.nn.Module, freeze: bool = True, verbose: bool = False):
+    """
+    冻结或解冻模型中所有不属于 LoRA 适配器的参数。
+    这对于在初始训练阶段后锁定骨干网络非常有用。
+    """
+    if verbose:
+        logging.info(f"为所有非 LoRA 参数设置 requires_grad={not freeze}。")
+        
+    for name, param in model.named_parameters():
+        # 我们通过名称中是否包含 'lora_' 或 'adapter_scales' 来识别 LoRA 参数
+        if 'lora_' not in name and 'adapter_scales' not in name:
+            param.requires_grad = not freeze
+            if verbose and not freeze:
+                logging.info(f"解冻: {name}")
+            elif verbose and freeze:
+                logging.info(f"冻结: {name}")
+
+def log_param_statistics(model, logger=logging):
+    n_tensors_total   = sum(1 for _ in model.parameters())
+    n_tensors_train   = sum(p.requires_grad for p in model.parameters())
+
+    n_elems_total     = sum(p.numel() for p in model.parameters())
+    n_elems_train     = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    logger.info(
+        f'Trainable parameters: '
+        f'{n_tensors_train}/{n_tensors_total} tensors  |  '
+        f'{n_elems_train:,}/{n_elems_total:,} elements '
+        f'(~{n_elems_train/1e6:.2f} M / {n_elems_total/1e6:.2f} M)'
+    )
+
+def tasks_per_stage(unsolved: int, remain_lora: int) -> int:
+    """
+    仍未解决的任务数 / 仍未使用的 LoRA adapter 数
+    至少为 1，避免 0 除
+    """
+    return max(1, math.ceil(unsolved / max(remain_lora, 1)))
+
+
+class CurriculumController:
+    def __init__(self, cfg, policy):
+        mc = cfg.policy.model.world_model_cfg
+        self.stage_num        = mc.curriculum_stage_num
+        self.min_stage0_iters = mc.min_stage0_iters
+        self.max_stage_iters  = mc.max_stage_iters
+        self.policy           = policy
+
+        # ==================== 新增代码 开始 ====================
+        # 从配置中读取标志，决定是否对Encoder应用课程学习。
+        # getattr(mc, 'apply_curriculum_to_encoder', True) 表示：
+        # 尝试从 mc (world_model_cfg) 中获取 'apply_curriculum_to_encoder' 属性。
+        # 如果找不到，则默认值为 True，以保持向后兼容性。
+        self.apply_curriculum_to_encoder = getattr(mc, 'apply_curriculum_to_encoder', False)
+        logging.info(f"[课程学习控制器] 初始化。课程学习将应用于Encoder: {self.apply_curriculum_to_encoder}")
+        # ==================== 新增代码 结束 ====================
+
+        self.stage            = 0
+        self.last_switch_iter = 0
+        self.last_solved      = 0      # 已解决任务数上次快照
+
+    # 每个 train loop 末尾调用
+    def step(self, solved_cnt: int, unsolved_cnt: int, train_iter: int):
+        # ----- stage0 强制训练 -----
+        if self.stage == 0 and train_iter < self.min_stage0_iters:
+            return False
+
+        # ----- 是否需要切换 -----
+        need_switch = False
+
+        # 1. 任务进展触发
+        newly_solved = solved_cnt - self.last_solved
+        remain_lora  = self.stage_num - 1 - (self.stage - 0)  # stage0 不算
+        if remain_lora > 0:
+            tps = tasks_per_stage(unsolved_cnt, remain_lora)
+            if newly_solved >= tps:
+                need_switch = True
+
+        # 2. 迭代数上限触发
+        if train_iter - self.last_switch_iter >= self.max_stage_iters:
+            need_switch = True
+
+        # ----- 执行切换 -----
+        if need_switch and self.stage < self.stage_num - 1:
+            
+            # --- 优化: 当离开阶段 0 时，显式冻结骨干网络 ---
+            is_entering_stage1 = (self.stage == 0)
+
+            self.stage += 1
+
+            # set_curriculum_stage_for_transformer(
+            #     self.policy._learn_model.world_model.transformer,
+            #     self.stage
+            # )
+            # # 如果是从阶段 0 进入阶段 1，则冻结整个骨干网络
+            # if is_entering_stage1:
+            #     logging.info("[课程学习] 进入阶段 1。正在冻结所有非 LoRA 的骨干网络参数。")
+            #     freeze_non_lora_parameters(
+            #         self.policy._learn_model.world_model.transformer,
+            #         freeze=True,
+            #         verbose=True
+            #     )
+
+            # 同时为 ViT Encoder 和 Transformer Decoder 设置新阶段
+            world_model = self.policy._learn_model.world_model
+            
+            # 假设 ViT Encoder 在 self.policy._learn_model.tokenizer.encoder 中
+            # 根据您的 UniZeroMTModel 实现，它在 self.representation_network 中，
+            # 而 tokenizer.encoder 引用了它。
+            vit_encoder = world_model.tokenizer.encoder
+            transformer_backbone = world_model.transformer
+
+            # ==================== 修改部分 开始 ====================
+
+            # 1. 根据配置，条件性地为 ViT Encoder 设置新阶段和冻结
+            if self.apply_curriculum_to_encoder:
+                logging.info(f"[课程学习] 将对 ViT Encoder 应用课程阶段 {self.stage}。")
+                set_curriculum_stage(vit_encoder, self.stage)
+                if is_entering_stage1:
+                    logging.info("[课程学习] 进入阶段 1，正在冻结 ViT Encoder 的非 LoRA 参数。")
+                    freeze_non_lora_parameters(
+                        vit_encoder,
+                        freeze=True,
+                        verbose=True
+                    )
+                # 打印 ViT Encoder 的状态
+                log_module_trainable_status(vit_encoder, "ViT Encoder")
+            else:
+                logging.info("[课程学习] 根据配置，跳过对 ViT Encoder 的课程学习阶段设置和冻结。")
+                # 即使不应用课程学习，也可以打印一下它的状态以供调试
+                log_module_trainable_status(vit_encoder, "ViT Encoder (未应用课程学习)")
+
+            # 2. 总是为 Transformer Decoder 设置新阶段和冻结
+            logging.info(f"[课程学习] 将对 Transformer Backbone 应用课程阶段 {self.stage}。")
+            set_curriculum_stage(transformer_backbone, self.stage)
+            if is_entering_stage1:
+                logging.info("[课程学习] 进入阶段 1，正在冻结 Transformer Backbone 的非 LoRA 参数。")
+                freeze_non_lora_parameters(
+                    transformer_backbone,
+                    freeze=True,
+                    verbose=True
+                )
+            
+            # 打印 Transformer Backbone 的状态
+            log_module_trainable_status(transformer_backbone, "Transformer Backbone")
+
+            # ==================== 修改部分 结束 ====================
+
+            logging.info(f'[Curriculum] switch to stage {self.stage} '
+                         f'(solved={solved_cnt}, unsolved={unsolved_cnt}, '
+                         f'iter={train_iter})')
+                        
+            updated = sum(p.requires_grad for p in self.policy._learn_model.world_model.parameters())
+            logging.info(f'{updated}/{sum(1 for _ in self.policy._learn_model.world_model.parameters())} params will be optimized')
+            log_param_statistics(self.policy._learn_model.world_model)          # 再打印一次，看看数值变化
+            self.last_solved      = solved_cnt
+            self.last_switch_iter = train_iter
+            return True
+        return False
 
 def compute_unizero_mt_normalized_stats(
         eval_returns: dict[int, float]
@@ -319,6 +515,7 @@ def train_unizero_multitask_balance_segment_ddp(
     # ====== UniZero-MT 需要用到的基准分数（与 26 个 Atari100k 任务 id 一一对应）======
     #   原始的 RANDOM_SCORES 和 HUMAN_SCORES
     if benchmark_name == "atari":
+        # Alien开始 按照字母顺序排序
         RANDOM_SCORES = np.array([
             227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
             152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
@@ -534,7 +731,12 @@ def train_unizero_multitask_balance_segment_ddp(
     # 初始化全局变量，用于课程学习：
     solved_task_pool = set()        # 记录已达到目标奖励的任务 id
     cur_curriculum_stage = 0
+    # 初始化一次（rank0 或各 rank 均可）
+    curr_ctrl = CurriculumController(cfg, policy)
 
+    updated = sum(p.requires_grad for p in policy._learn_model.world_model.parameters())
+    logging.info(f'{updated}/{sum(1 for _ in policy._learn_model.world_model.parameters())} params will be optimized')
+    
     while True:
         last_curriculum_stage = cur_curriculum_stage
 
@@ -583,8 +785,8 @@ def train_unizero_multitask_balance_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
@@ -675,13 +877,12 @@ def train_unizero_multitask_balance_segment_ddp(
         #     for replay_buffer in game_buffers
         # )
 
-
         # 获取当前温度
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
-        # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
+        # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0 :
+        if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0 :
         
             # 计算任务权重时，只考虑未解决任务
             try:
@@ -726,19 +927,68 @@ def train_unizero_multitask_balance_segment_ddp(
 
 
         # ddp 同步全局已解决任务数量，更新 curriculum_stage
-        local_solved_count = len([task for task in solved_task_pool])
-        solved_counts_all = [None for _ in range(world_size)]
-        dist.all_gather_object(solved_counts_all, local_solved_count)
-        global_solved = sum(solved_counts_all)
+        # local_solved_count = len([task for task in solved_task_pool])
+        # solved_counts_all = [None for _ in range(world_size)]
+        # dist.all_gather_object(solved_counts_all, local_solved_count)
+        # global_solved = sum(solved_counts_all)
+
+        # ==================== 修改部分 开始 ====================
+        # 正确的DDP同步方式：同步完整的任务ID集合，而不仅仅是数量
+        # 1. 准备一个列表，用于接收来自所有进程的 `solved_task_pool` 集合
+        all_solved_pools = [None for _ in range(world_size)]
+        # 2. 使用 all_gather_object 收集所有进程的局部 `solved_task_pool`
+        dist.all_gather_object(all_solved_pools, solved_task_pool)
+        # 3. 在每个进程上，通过取并集来创建一个全局统一的 `solved_task_pool`
+        global_solved_task_pool = set()
+        for pool in all_solved_pools:
+            if pool:  # 确保pool不是None
+                global_solved_task_pool.update(pool)
+        # 4. 将当前进程的局部 set 更新为全局 set，确保后续逻辑的正确性
+        solved_task_pool = global_solved_task_pool
+        # 5. 从这个全局统一的集合中计算出真正正确的已解决任务总数
+        global_solved = len(solved_task_pool)
+        # ==================== 修改部分 结束 ====================
 
         # 预设阶段数 N=3，每达到 M/N 个任务，即更新阶段（注意：total_tasks 为 M）
-        cur_curriculum_stage = int(global_solved // (total_tasks / cfg.policy.model.world_model_cfg.curriculum_stage_num))
-        print(f"Rank {rank}: cur_curriculum_stage {cur_curriculum_stage}, last_curriculum_stage:{last_curriculum_stage}")
-        
-        if cur_curriculum_stage != last_curriculum_stage:
-            print(f"Rank {rank}: Global curriculum stage 更新为 {cur_curriculum_stage} (全局已解决任务 ={solved_task_pool}, 全局已解决任务数 = {global_solved})")
-            # NOTE: TODO
-            set_curriculum_stage_for_transformer(policy._learn_model.world_model.transformer, cur_curriculum_stage)
+        # cur_curriculum_stage = int(global_solved // (total_tasks / cfg.policy.model.world_model_cfg.curriculum_stage_num))
+        # print(f"Rank {rank}: cur_curriculum_stage {cur_curriculum_stage}, last_curriculum_stage:{last_curriculum_stage}")
+        # if cur_curriculum_stage != last_curriculum_stage and not stage0_flag:
+        #     print(f"Rank {rank}: Global curriculum stage 更新为 {cur_curriculum_stage} (全局已解决任务 ={solved_task_pool}, 全局已解决任务数 = {global_solved})")
+        #     # NOTE: TODO
+        #     set_curriculum_stage_for_transformer(policy._learn_model.world_model.transformer, cur_curriculum_stage)
+        # stage0_flag = last_curriculum_stage == 0 and learner.train_iter < 10000 # TODO: 10k
+        # print(f"Rank {rank}: stage0_flag {stage0_flag}")
+
+
+        # ------ 训练循环尾 ------
+        unsolved_cnt = total_tasks - global_solved
+        switch = curr_ctrl.step(global_solved, unsolved_cnt, learner.train_iter)
+
+        if rank == 0:         # 只在 rank0 写 TensorBoard，避免重复
+            tb_logger.add_scalar('UniZero-MT/stage',   curr_ctrl.stage,   global_step=learner.train_iter)
+            tb_logger.add_scalar('UniZero-MT/last_solved', curr_ctrl.last_solved, global_step=learner.train_iter)
+            tb_logger.add_scalar('UniZero-MT/global_solved', global_solved, global_step=learner.train_iter)
+
+            # 遍历 transformer 中所有子模块，根据其名称查找 CurriculumLoRALinear 模块
+            transformer = policy._learn_model.world_model.transformer
+            for module_name, module in transformer.named_modules():
+                if isinstance(module, CurriculumLoRALinear) and module.adapters is not None:
+                    for adapter_idx, scale_param in enumerate(module.adapter_scales):
+                        # tb_logger.add_scalar(
+                        #     f'UniZero-MT/adapter_scales/{module_name}/adapter_{adapter_idx}',
+                        #     scale_param.item(),
+                        #     global_step=learner.train_iter
+                        # )
+                        tb_logger.add_scalar(
+                            f'UniZero-MT/adapter_scales/{module_name}/adapter_{adapter_idx}',
+                            scale_param().item(),
+                            global_step=learner.train_iter
+                        )
+                        
+        if switch:
+            dist.broadcast_object_list([curr_ctrl.stage], src=0)
+        else:
+            dist.barrier()          # 保证所有 GPU 同步
 
         # 同步所有Rank，确保所有Rank完成训练
         # try:

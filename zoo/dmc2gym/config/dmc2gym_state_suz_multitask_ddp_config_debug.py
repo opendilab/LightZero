@@ -125,6 +125,9 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # lora_r=64,
                     lora_alpha=1,
                     lora_dropout=0.0,
+                    lora_scale_init=1,
+                    min_stage0_iters=10000,
+                    max_stage_iters=20000,
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
