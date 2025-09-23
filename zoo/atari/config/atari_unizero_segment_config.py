@@ -378,7 +378,7 @@ def main(env_id, seed):
     
     from lzero.entry import train_unizero_segment
 
-    main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-200k_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
     # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-200k-1-07_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250922/{env_id[:-14]}/{env_id[:-14]}_uz_pew0005_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_encoder-clip10_label-smooth-valuereward01-policy-005_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
@@ -404,11 +404,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # args.env = 'PongNoFrameskip-v4'
-    args.env = 'MsPacmanNoFrameskip-v4'
-
+    # args.env = 'MsPacmanNoFrameskip-v4'
 
     # args.env = 'BoxingNoFrameskip-v4'
-    # args.env = 'SeaquestNoFrameskip-v4' 
+    args.env = 'SeaquestNoFrameskip-v4' 
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'SpaceInvadersNoFrameskip-v4'
@@ -430,7 +429,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=4
+    export CUDA_VISIBLE_DEVICES=6
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
 

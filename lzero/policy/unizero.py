@@ -682,16 +682,6 @@ class UniZeroPolicy(MuZeroPolicy):
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
 
-        # TODO
-        # ==================== 核心修复：标签平滑 ====================
-        # alpha 是平滑系数，一个小的超参数，例如 0.01 或 0.1
-        # alpha = 0.1 
-        # num_classes = target_value_categorical.shape[-1]
-        # # (1 - alpha) * original_target + alpha / num_classes
-        # target_value_categorical = target_value_categorical * (1 - alpha) + (alpha / num_classes)
-        # target_reward_categorical = target_reward_categorical * (1 - alpha) + (alpha / num_classes)
-        # =============================================================
-
         # Prepare batch for GPT model
         batch_for_gpt = {}
         if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
@@ -786,27 +776,40 @@ class UniZeroPolicy(MuZeroPolicy):
         alpha_loss = None
         current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight # 默认使用固定值
         if self.use_adaptive_entropy_weight:
-            # 计算 alpha 的损失。我们希望 policy_entropy 接近 target_entropy。
-            # .detach() 是关键，因为我们不希望 alpha_loss 的梯度流向策略网络。
-            # alpha_loss = -(self.log_alpha * (policy_entropy.detach() + self.target_entropy)).mean()
-
-            # --- START: 动态计算目标熵 ---
+            # --- 动态计算目标熵 (这部分逻辑是正确的，予以保留) ---
             progress = min(1.0, train_iter / self.target_entropy_decay_steps)
             current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
             action_space_size = self._cfg.model.action_space_size
+            # 注意：我们将 target_entropy 定义为正数，更符合直觉
             current_target_entropy = -np.log(1.0 / action_space_size) * current_ratio
-            # --- END: 动态计算目标熵 ---
 
-            # 使用 current_target_entropy 来计算 alpha_loss
-            alpha_loss = -(self.log_alpha * (policy_entropy.detach() + current_target_entropy)).mean()
+            # --- 计算 alpha_loss (已修正符号) ---
+            # 这是核心修正点：去掉了最前面的负号
+            # detach() 仍然是关键，确保 alpha_loss 的梯度只流向 log_alpha
+            alpha_loss = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean()
 
-
-            # 更新 log_alpha
+            # # --- 更新 log_alpha ---
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
-            
-            # 使用当前更新后的 alpha (截断梯度流)
+            # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
+            with torch.no_grad():
+                # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
+                self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+
+            # --- 更新 log_alpha ---
+            # 仅在需要更新时执行 (与主模型的梯度累积同步)
+            # if (train_iter + 1) % self.accumulation_steps == 0:
+            #     self.alpha_optimizer.zero_grad()
+            #     alpha_loss.backward()
+            #     self.alpha_optimizer.step()
+                
+            #     # [可选但推荐] 增加裁剪作为安全措施
+            #     with torch.no_grad():
+            #         self.log_alpha.clamp_(np.log(1e-4), np.log(10.0)) # 限制alpha在合理范围
+
+
+            # --- 使用当前更新后的 alpha (截断梯度流) ---
             current_alpha = self.log_alpha.exp().detach()
         
             # 重新计算加权的策略损失和总损失
