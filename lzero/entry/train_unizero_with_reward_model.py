@@ -123,15 +123,17 @@ def train_unizero_with_reward_model(
     # 对于 UniZero，tokenizer 扮演了表征网络的功能。
     # ==============================================================
     reward_model = RNDRewardModel(
-        cfg.reward_model,
-        policy.collect_mode.get_attribute('device'),
-        tb_logger,
-        policy._learn_model.representation_network,
-        policy._target_model_for_intrinsic_reward.representation_network,
-        cfg.policy.use_momentum_representation_network,
+        config=cfg.reward_model,
+        device=policy.collect_mode.get_attribute('device'),
+        tb_logger=tb_logger,
+        exp_name=cfg.exp_name,
+        representation_network=policy._learn_model.representation_network,
+        target_representation_network=policy._target_model_for_intrinsic_reward.representation_network,
+        use_momentum_representation_network=cfg.policy.use_momentum_representation_network,
         bp_update_sync=cfg.policy.bp_update_sync,
         multi_gpu=cfg.policy.multi_gpu,
     )
+    print('rnd.device:' + policy.collect_mode.get_attribute('device'))
 
     # Execute the learner's before_run hook
     learner.call_hook('before_run')
@@ -191,30 +193,6 @@ def train_unizero_with_reward_model(
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         logging.info(f"Rank {rank}, Training iteration {learner.train_iter}: New data collection completed!")
 
-        # ****** reward_model related code ******
-        # collect data for reward_model training
-        reward_model.collect_data(new_data)
-
-        if world_size > 1:
-            # Synchronize all ranks before training
-            try:
-                dist.barrier()
-            except Exception as e:
-                logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
-                break
-            
-        # update reward_model
-        if reward_model.cfg.input_type == 'latent_state':
-            # train reward_model with latent_state
-            if len(reward_model.train_latent_state) > reward_model.cfg.batch_size:
-                reward_model.train_with_data()
-        elif reward_model.cfg.input_type in ['obs', 'latent_state']:
-            # train reward_model with obs
-            if len(reward_model.train_obs) > reward_model.cfg.batch_size:
-                reward_model.train_with_data()
-        # clear old data in reward_model
-        reward_model.clear_old_data()
-        
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
         if update_per_collect is None:
@@ -223,9 +201,29 @@ def train_unizero_with_reward_model(
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
+        
+        # ****** reward_model related code ******
+        # collect data for reward_model training
+        reward_model.collect_data(new_data)
+        # update reward_model
+        if reward_model.cfg.input_type == 'latent_state':
+            local_items_count = len(reward_model.train_latent_state) 
+        elif reward_model.cfg.input_type in ['obs', 'obs_latent_state']:
+            local_items_count = len(reward_model.train_obs) 
+        local_data_tensor = torch.tensor([local_items_count], dtype=torch.long, device=cfg.policy.device)
+        
+        if world_size > 1:
+            try:
+                dist.all_reduce(local_data_tensor, op=dist.ReduceOp.MIN)
+            except Exception as e:
+                logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
+        
+        if local_data_tensor.item() >= reward_model.cfg.batch_size:
+            reward_model.train_with_data()
+            
+        reward_model.clear_old_data()
 
         if world_size > 1:
-            # Synchronize all ranks before training
             try:
                 dist.barrier()
             except Exception as e:
@@ -258,8 +256,10 @@ def train_unizero_with_reward_model(
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
                 
                 train_data_augmented.append(learner.train_iter)
+                # train_data.append(learner.train_iter)
 
                 log_vars = learner.train(train_data_augmented, collector.envstep)
+                # log_vars = learner.train(train_data, collector.envstep)
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 

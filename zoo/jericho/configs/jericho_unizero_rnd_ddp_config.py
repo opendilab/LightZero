@@ -16,7 +16,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
-    gpu_num = 4
+    gpu_num = 6
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     env_id = 'zork1.z5'
@@ -37,7 +37,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     
     # key exploration related config
     eps_greedy_exploration_in_collect = True
-    input_type = 'obs'  # options=['obs', 'latent_state', 'obs_latent_state']
+    input_type = 'latent_state'  # options=['obs', 'latent_state', 'obs_latent_state']
     target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentum'
     
     # ------------------------------------------------------------------
@@ -114,12 +114,13 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             # We could set the intrinsic_reward_weight approximately equal to the inverse of max_episode_steps.Please refer to rnd_reward_model for details.
             intrinsic_reward_weight=0.003,  # 1/300
             obs_shape=512,
-            latent_state_dim=256,
-            hidden_size_list=[256, 256],
+            latent_state_dim=768,
+            hidden_size_list=[512, 512],
             learning_rate=3e-3,
             weight_decay=1e-4,
             batch_size=batch_size, 
             update_per_collect=200,
+            
             rnd_buffer_size=int(1e6),
             input_norm=True,
             input_norm_clamp_max=5,
@@ -230,7 +231,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho_rnd/{encoder_option}/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho_rnd/{encoder_option}/{env_id}/uz_{gpu_num}_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_{input_type}_{target_model_for_intrinsic_reward_update_type}_seed{seed}"
         )

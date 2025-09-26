@@ -10,7 +10,7 @@ from ding.model import FCEncoder, ConvEncoder
 from ding.reward_model.base_reward_model import BaseRewardModel
 from ding.torch_utils.data_helper import to_tensor
 from ding.utils import RunningMeanStd
-from ding.utils import SequenceType, REWARD_MODEL_REGISTRY, allreduce, synchronize
+from ding.utils import SequenceType, REWARD_MODEL_REGISTRY, allreduce, synchronize, get_rank, get_world_size, build_logger
 from easydict import EasyDict
 
 
@@ -142,9 +142,10 @@ class RNDRewardModel(BaseRewardModel):
         extrinsic_reward_norm_max=1,
     )
 
-    def __init__(self, config: EasyDict, device: str = 'cpu', tb_logger: 'SummaryWriter' = None,
-                 representation_network: nn.Module = None, target_representation_network: nn.Module = None,
-                 use_momentum_representation_network: bool = True, bp_update_sync: bool = True, multi_gpu: bool = False) -> None:  # noqa
+    def __init__(self, config: EasyDict, device: str = 'cpu', tb_logger: 'SummaryWriter' = None, exp_name: str = "default_experiment",
+                instance_name: str = 'RNDModel', representation_network: nn.Module = None, 
+                target_representation_network: nn.Module = None, use_momentum_representation_network: bool = True, 
+                bp_update_sync: bool = True, multi_gpu: bool = False) -> None:  # noqa
         super(RNDRewardModel, self).__init__()
         self.cfg = config
         self.representation_network = representation_network
@@ -158,10 +159,29 @@ class RNDRewardModel(BaseRewardModel):
         assert self.device == "cpu" or self.device.startswith("cuda")
         self.rnd_buffer_size = config.rnd_buffer_size
         self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
-        if tb_logger is None:
-            from tensorboardX import SummaryWriter
-            tb_logger = SummaryWriter('rnd_reward_model')
-        self.tb_logger = tb_logger
+        
+        self._exp_name = exp_name
+        self._instance_name = instance_name
+        self._rank = get_rank()
+        self._world_size = get_world_size()
+        if self._rank == 0:
+            if tb_logger is not None:
+                self._logger, _ = build_logger(
+                    path='./{}/log/{}'.format(self._exp_name, self._instance_name),
+                    name=self._instance_name,
+                    need_tb=False
+                )
+                self._tb_logger = tb_logger
+            else:
+                self._logger, self._tb_logger = build_logger(
+                    path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
+                )
+        else:
+            self._logger, _ = build_logger(
+                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
+            )
+            self._tb_logger = None
+        
         if self.input_type == 'obs':
             self.input_shape = self.cfg.obs_shape
             self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self.device)
@@ -235,8 +255,9 @@ class RNDRewardModel(BaseRewardModel):
 
         predict_feature, target_feature = self.reward_model(train_data)
         loss = F.mse_loss(predict_feature, target_feature)
-
-        self.tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
+        
+        if self._tb_logger is not None:
+            self._tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
         self._optimizer_rnd.zero_grad()
         loss.backward()
         
@@ -302,10 +323,11 @@ class RNDRewardModel(BaseRewardModel):
 
             # save the rnd_reward statistics into tb_logger
             self.estimate_cnt_rnd += 1
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward.max(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward.mean(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
+            if self._tb_logger is not None:
+                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward.max(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward.mean(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
 
         rnd_reward = rnd_reward.to(self.device).unsqueeze(1).cpu().numpy()
         if self.intrinsic_reward_type == 'add':
@@ -319,11 +341,12 @@ class RNDRewardModel(BaseRewardModel):
         elif self.intrinsic_reward_type == 'assign':
             target_reward_augmented = rnd_reward
 
-        self.tb_logger.add_scalar('augmented_reward/reward_max', np.max(target_reward_augmented), self.estimate_cnt_rnd)
-        self.tb_logger.add_scalar('augmented_reward/reward_mean', np.mean(target_reward_augmented),
-                                  self.estimate_cnt_rnd)
-        self.tb_logger.add_scalar('augmented_reward/reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
-        self.tb_logger.add_scalar('augmented_reward/reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
+        if self._tb_logger is not None:
+            self._tb_logger.add_scalar('augmented_reward/reward_max', np.max(target_reward_augmented), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('augmented_reward/reward_mean', np.mean(target_reward_augmented),
+                                    self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('augmented_reward/reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('augmented_reward/reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
 
         # reshape to (target_reward_augmented.shape[0], T, 1)
         target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, T, 1))
