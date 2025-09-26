@@ -320,7 +320,7 @@ class WorldModelMT(WorldModel):
         self.reanalyze_phase = False
         self._rank = get_rank()
 
-        # tangjia
+        
         self.obs_embeddings_grad = None # 保留参数
 
     def _scale_grad(self, grad: torch.Tensor) -> torch.Tensor:

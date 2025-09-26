@@ -511,7 +511,7 @@ class Transformer(nn.Module):
         if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'reset_expert_selection_stats'):
             last_block.feed_forward.reset_expert_selection_stats()
     
-    # modified by tangjia : 
+    # # : 
     # def has_shared_experts(self) -> bool:
     #     """
     #     检查Transformer是否使用了共享专家

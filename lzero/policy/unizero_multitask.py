@@ -433,7 +433,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
         )
-        # self.a=1
+        
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
 
@@ -789,7 +789,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self._optimizer_world_model.zero_grad()
         
 
-        # ===================================modified by tangjia========================================
+        # ===================================#========================================
         
       
         self._learn_model.world_model.tokenizer.encoder[0].grad = None
@@ -818,7 +818,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             local_shared_expert_grad_list = []
             local_last_block_expert_grad_list = [[] for _ in range(num_experts)] 
             
-            print(f'Rank {rank} collecting gradients')
             gradient_conflict_log_dict = {}
 
             for i in range(local_task_num):
@@ -847,12 +846,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
             
-            print(f'Rank {rank} computing gradient conflicts')
                 
             # Clear shared parameter gradients to avoid accumulation
             self._optimizer_world_model.zero_grad()
             
-            print(f'Rank {rank} computing attention gradient conflicts')
             # 1. Compute gradient conflicts after attention and before MOE
             local_before_moe_grad_list=torch.stack(local_before_moe_grad_list,dim=0) # shape: (local_task_num, encoder_grad_dim)
             before_moe_grad_conflict_ddp=compute_gradient_conflict_distributed(local_before_moe_grad_list, device=self._cfg.device)
@@ -865,7 +862,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             
             # cosine_similarity_matrix  self.logger
              
-            print(f'Rank {rank} computing encoder gradient conflicts')
             # 2. Compute gradient conflicts of encoder
             local_encoder_grad_list=torch.stack(local_encoder_grad_list,dim=0) # shape: (local_task_num, encoder_grad_dim)
             encoder_grad_conflict_ddp=compute_gradient_conflict_distributed(local_encoder_grad_list, device=self._cfg.device)
@@ -875,7 +871,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 matrix_dict['encoder_grad_conflict_matrix']=encoder_grad_conflict_ddp.cosine_similarity_matrix 
 
 
-            print(f'Rank {rank} computing shared expert gradient conflicts')
             # 3. If shared expert exists, compute gradient conflicts on shared expert
             if self._learn_model.world_model.transformer.shared_expert>0 :
                 local_shared_expert_grad_list=torch.stack(local_shared_expert_grad_list,dim=0)
@@ -1143,7 +1138,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'cur_lr_world_model',
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
-            # modified by tangjia
+            # #
             'avg_encoder_grad_conflict',
             'avg_before_moe_grad_conflict',
             'avg_shared_expert_grad_conflict',

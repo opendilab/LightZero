@@ -535,7 +535,9 @@ def train_unizero_multitask_segment_ddp(
         cfg.policy.logger=tb_logger
         
         policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval']) # MOE
-
+        policy.logger=tb_logger
+        
+        
         # 加载预训练模型（如果提供）
         if model_path is not None:
             logging.info(f'开始加载模型: {model_path}')

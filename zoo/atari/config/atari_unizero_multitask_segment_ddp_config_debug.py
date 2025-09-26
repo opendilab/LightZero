@@ -1,6 +1,11 @@
 from easydict import EasyDict
 
 import math
+import sys
+import os
+PROJECT_ROOT = os.path.abspath("/fs-computility/niuyazhe/tangjia/github/LightZero") # 或者直接写死路径
+sys.path.insert(0, PROJECT_ROOT)
+# /fs-computility/niuyazhe/tangjia/github/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_debug.py
 
 def compute_batch_config(env_id_list, effective_batch_size):
     n = len(env_id_list)
@@ -144,7 +149,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     moe_in_transformer=False,
                     # multiplication_moe_in_transformer=False, # ==============TODO:orig==============
                     multiplication_moe_in_transformer=True, # =======TODO: moe8=======
-                    n_shared_experts=1,
+                    n_shared_experts=1, # 共享expert 数量
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
 
@@ -197,7 +202,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size, num_layers):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_unizero_atari_mt_20250522_debug/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_moco-v1_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'debug_log/atari_{len(env_id_list)}games_orig_simnorm-kl_vit_moe8_moco-v1_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
 
     # ========= TODO: global BENCHMARK_NAME =========
@@ -292,7 +297,7 @@ if __name__ == "__main__":
 
 
     num_games = 8 # 26 # 8
-    num_layers = 4 # ==============TODO==============
+    num_layers = 1 # ==============TODO==============
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -324,7 +329,8 @@ if __name__ == "__main__":
             effective_batch_size =  1024 # nlayer4 需要设置replay_ratio=0.25对应的upc=40
         elif num_layers == 8:
             effective_batch_size = 512 # nlayer8 需要设置replay_ratio=0.5对应的upc=80
-
+        elif num_layers == 1:
+            effective_batch_size = 32 
     elif len(env_id_list) == 26:
         # effective_batch_size = 832  # cnn-encoder
         # effective_batch_size = 1024  # base-vit-encoder transformer-nlayer4  or cnn-encoder
@@ -377,12 +383,16 @@ if __name__ == "__main__":
                                    num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                                    num_segments, total_batch_size, num_layers)
-
+        
+        
+        
         with DDPContext():
+            
+            # print(train_unizero_multitask_segment_ddp.__file__)
             train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name= "atari" )
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
         
-        # 手动销毁进程组
+        # 手动销毁进程组 /fs-computility/niuyazhe/tangjia/github/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config_debug.py
         if dist.is_initialized():
             dist.destroy_process_group()
