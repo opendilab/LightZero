@@ -10,7 +10,7 @@ from ding.model import FCEncoder, ConvEncoder
 from ding.reward_model.base_reward_model import BaseRewardModel
 from ding.torch_utils.data_helper import to_tensor
 from ding.utils import RunningMeanStd
-from ding.utils import SequenceType, REWARD_MODEL_REGISTRY, allreduce, synchronize, get_rank, get_world_size, build_logger
+from ding.utils import SequenceType, REWARD_MODEL_REGISTRY, allreduce, synchronize, get_rank, get_world_size, build_logger, broadcast
 from easydict import EasyDict
 
 
@@ -155,8 +155,6 @@ class RNDRewardModel(BaseRewardModel):
         self._bp_update_sync = bp_update_sync
         self.multi_gpu = multi_gpu
         assert self.input_type in ['obs', 'latent_state', 'obs_latent_state'], self.input_type
-        self.device = device
-        assert self.device == "cpu" or self.device.startswith("cuda")
         self.rnd_buffer_size = config.rnd_buffer_size
         self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
         
@@ -164,6 +162,12 @@ class RNDRewardModel(BaseRewardModel):
         self._instance_name = instance_name
         self._rank = get_rank()
         self._world_size = get_world_size()
+        if self.multi_gpu:
+            self._device = 'cuda:{}'.format(self._rank % torch.cuda.device_count()) if 'cuda' in device else 'cpu'
+        else:
+            self._device = device
+            
+        print('rnd.device:' + self._device)
         if self._rank == 0:
             if tb_logger is not None:
                 self._logger, _ = build_logger(
@@ -184,18 +188,25 @@ class RNDRewardModel(BaseRewardModel):
         
         if self.input_type == 'obs':
             self.input_shape = self.cfg.obs_shape
-            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self.device)
+            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self._device)
         elif self.input_type == 'latent_state':
             self.input_shape = self.cfg.latent_state_dim
-            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self.device)
+            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self._device)
         elif self.input_type == 'obs_latent_state':
             if self.use_momentum_representation_network:
                 self.reward_model = RNDNetworkRepr(self.cfg.obs_shape, self.cfg.latent_state_dim, self.cfg.hidden_size_list[0:-1],
-                                                  self.target_representation_network).to(self.device)
+                                                  self.target_representation_network).to(self._device)
             else:
                 self.reward_model = RNDNetworkRepr(self.cfg.obs_shape, self.cfg.latent_state_dim, self.cfg.hidden_size_list[0:-1],
-                                                  self.representation_network).to(self.device)
+                                                  self.representation_network).to(self._device)
 
+        if self.multi_gpu and self._world_size > 1:
+            with torch.no_grad():
+                for _, p in self.reward_model.target.state_dict().items():
+                    broadcast(p.data, 0)
+                for _, p in self.reward_model.predictor.state_dict().items():
+                    broadcast(p.data, 0)
+        
         assert self.intrinsic_reward_type in ['add', 'new', 'assign']
         if self.input_type in ['obs', 'obs_latent_state']:
             self.train_obs = []
@@ -241,15 +252,15 @@ class RNDRewardModel(BaseRewardModel):
         elif self.input_type == 'latent_state':
             train_data = random.sample(self.train_latent_state, self.cfg.batch_size)
 
-        train_data = torch.stack(train_data).to(self.device)
+        train_data = torch.stack(train_data).to(self._device)
 
         if self.cfg.input_norm:
             # Note: observation normalization: transform obs to mean 0, std 1
             self._running_mean_std_rnd_obs.update(train_data.detach().cpu().numpy())
             normalized_train_data = (train_data - to_tensor(self._running_mean_std_rnd_obs.mean).to(
-                self.device)) / to_tensor(
+                self._device)) / to_tensor(
                 self._running_mean_std_rnd_obs.std
-            ).to(self.device)
+            ).to(self._device)
             train_data = torch.clamp(normalized_train_data, min=self.cfg.input_norm_clamp_min,
                                      max=self.cfg.input_norm_clamp_max)
 
@@ -288,15 +299,14 @@ class RNDRewardModel(BaseRewardModel):
         batch_size = obs_batch_orig.shape[0]
         T = target_reward.shape[1]  
 
-        # obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size, self.cfg.obs_shape, T))
         obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size * T, self.cfg.obs_shape))
 
         if self.input_type == 'latent_state':
             with torch.no_grad():
-                latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self.device))
+                latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self._device))
             input_data = latent_state
         elif self.input_type in ['obs', 'obs_latent_state']:
-            input_data = to_tensor(obs_batch_tmp).to(self.device)
+            input_data = to_tensor(obs_batch_tmp).to(self._device)
 
         # NOTE: deepcopy reward part of data is very important,
         # otherwise the reward of data in the replay buffer will be incorrectly modified.
@@ -308,8 +318,8 @@ class RNDRewardModel(BaseRewardModel):
             input_data = input_data.clone()
             # Note: observation normalization: transform obs to mean 0, std 1
             input_data = (input_data - to_tensor(self._running_mean_std_rnd_obs.mean
-                                                 ).to(self.device)) / to_tensor(self._running_mean_std_rnd_obs.std).to(
-                self.device)
+                                                 ).to(self._device)) / to_tensor(self._running_mean_std_rnd_obs.std).to(
+                self._device)
             input_data = torch.clamp(input_data, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max)
         else:
             input_data = input_data
@@ -329,7 +339,7 @@ class RNDRewardModel(BaseRewardModel):
                 self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
                 self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
 
-        rnd_reward = rnd_reward.to(self.device).unsqueeze(1).cpu().numpy()
+        rnd_reward = rnd_reward.to(self._device).unsqueeze(1).cpu().numpy()
         if self.intrinsic_reward_type == 'add':
             if self.cfg.extrinsic_reward_norm:
                 target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max + rnd_reward * self.cfg.intrinsic_reward_weight
@@ -357,16 +367,18 @@ class RNDRewardModel(BaseRewardModel):
         return train_data_augmented
 
     def collect_data(self, data: list) -> None:
-
-        collected_transitions = np.concatenate([game_segment.obs_segment for game_segment in data[0]], axis=0)
+        segments = [game_segment.obs_segment for game_segment in data[0] if len(game_segment.obs_segment)]
+        if not segments:
+            return
+        collected_transitions = np.concatenate(segments, axis=0)
         if self.input_type == 'latent_state':
             with torch.no_grad():
                 self.train_latent_state.extend(
-                    self.representation_network(torch.from_numpy(collected_transitions).to(self.device)))
+                    self.representation_network(torch.from_numpy(collected_transitions).to(self._device)))
         elif self.input_type == 'obs':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
+            self.train_obs.extend(to_tensor(collected_transitions).to(self._device))
         elif self.input_type == 'obs_latent_state':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
+            self.train_obs.extend(to_tensor(collected_transitions).to(self._device))
 
     def clear_old_data(self) -> None:
         if self.input_type == 'latent_state':

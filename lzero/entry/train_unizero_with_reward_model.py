@@ -133,7 +133,6 @@ def train_unizero_with_reward_model(
         bp_update_sync=cfg.policy.bp_update_sync,
         multi_gpu=cfg.policy.multi_gpu,
     )
-    print('rnd.device:' + policy.collect_mode.get_attribute('device'))
 
     # Execute the learner's before_run hook
     learner.call_hook('before_run')
@@ -204,7 +203,11 @@ def train_unizero_with_reward_model(
         
         # ****** reward_model related code ******
         # collect data for reward_model training
-        reward_model.collect_data(new_data)
+        try:
+            reward_model.collect_data(new_data)
+        except Exception as e:
+            logging.exception(f'Rank {rank}: reward_model.collect_data failed {e}')
+            raise
         # update reward_model
         if reward_model.cfg.input_type == 'latent_state':
             local_items_count = len(reward_model.train_latent_state) 
@@ -219,7 +222,10 @@ def train_unizero_with_reward_model(
                 logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
         
         if local_data_tensor.item() >= reward_model.cfg.batch_size:
-            reward_model.train_with_data()
+            try:
+                reward_model.train_with_data()
+            except Exception as e:
+                logging.error(f'Rank {rank}: reward_model.train_with_data failed, error:{e}')
             
         reward_model.clear_old_data()
 
@@ -251,7 +257,11 @@ def train_unizero_with_reward_model(
                     policy.recompute_pos_emb_diff_and_clear_cache()
 
                 # update train_data reward using the augmented reward
-                train_data_augmented = reward_model.estimate(train_data)
+                try:
+                    train_data_augmented = reward_model.estimate(train_data)
+                except Exception as e:
+                    logging.exception(f'Rank {rank}: reward_model.estimate failed, error: {e}')
+                    raise
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
                 

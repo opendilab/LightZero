@@ -377,7 +377,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
         
         if self._cfg.use_wandb:
-            # TODO: add the model to wandb
+            # TODO: add the model to wandb``
             wandb.watch(self._learn_model.representation_network, log="all")
 
         self.accumulation_steps = self._cfg.accumulation_steps

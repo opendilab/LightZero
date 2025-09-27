@@ -115,13 +115,13 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             intrinsic_reward_weight=0.003,  # 1/300
             obs_shape=512,
             latent_state_dim=768,
-            hidden_size_list=[512, 512],
+            hidden_size_list=[256, 256],
             learning_rate=3e-3,
             weight_decay=1e-4,
             batch_size=batch_size, 
             update_per_collect=200,
             
-            rnd_buffer_size=int(1e6),
+            rnd_buffer_size=int(5e4),
             input_norm=True,
             input_norm_clamp_max=5,
             input_norm_clamp_min=-5,
