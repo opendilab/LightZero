@@ -144,15 +144,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
     def __init__(self, cfg, model = None, enable_field = None):
         super().__init__(cfg, model, enable_field)
         self.step=0
-        self.save_freq=200
-        self.use_moe=False
+        self.save_freq=1
         
-        self.cal_profile=False
-        if self.cal_profile:
-            self.profiler=LineProfiler()
-            self.profiler.add_function(self._forward_learn)
-            self.profiler.enable_by_count()
-       
         
     # The default_config for UniZero policy.
     config = dict(
@@ -800,7 +793,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         multi_gpu = dist.is_initialized() and self._cfg.multi_gpu
         rank = dist.get_rank() if multi_gpu else 0
         
-        self.log_conflict_var=False
+        self.log_conflict_var=True
         self.log_conflict_matrix=False
         if self.step % self.save_freq==0:
             self.log_conflict_var=True
@@ -1015,6 +1008,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         if self.log_conflict_var:    
             # Log scalar values from gradient_conflict_log_dict to TensorBoard
             for key, value in gradient_conflict_log_dict.items():
+                print(f'正在记录梯度冲突分析 Rank {rank} Logging {key}: {value}')
+                
                 self.logger.add_scalar(f'gradient_conflict/{key}', value, self.step) 
             
         # print(f'Rank {rank} 正在根据冲突记录日志')
@@ -1085,6 +1080,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             }
             # 合并两个字典
             return_loss_dict.update(multi_task_loss_dicts)
+        # print(f'return_loss_dict:{return_loss_dict}')
+
+        self.step+=1
+        
+        
+        
         return return_loss_dict
 
     def monitor_weights_and_grads(self, model):
@@ -1138,13 +1139,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'cur_lr_world_model',
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
-            # #
-            'avg_encoder_grad_conflict',
-            'avg_before_moe_grad_conflict',
-            'avg_shared_expert_grad_conflict',
-
-        ]
-        
+        ]        
 
         # rank = get_rank()
         task_specific_vars = [

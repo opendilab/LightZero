@@ -377,7 +377,7 @@ def train_unizero_multitask_segment_ddp(
         max_env_step: Optional[int] = int(1e10),
         benchmark_name: str = "atari",
         finetune_components=[],
-        cal_moe_profile: bool = False  # 新增：控制MOE性能监控的开关
+        cal_moe_profile: bool = True  # 新增：控制MOE性能监控的开关
 ) -> 'Policy':
     """
     Overview:
@@ -830,7 +830,7 @@ def train_unizero_multitask_segment_ddp(
                     # +++++++++++++++++++++++++++++++++ MOE expert selection statistics logging +++++++++++++++++++++++++++++++++
                     if cal_moe_profile and cfg.policy.model.world_model_cfg.multiplication_moe_in_transformer and cfg.policy.model.world_model_cfg.num_experts_of_moe_in_transformer:
                         # Control MoE statistics logging frequency
-                        moe_log_interval = getattr(cfg.policy, 'moe_log_interval', 500)  # Default: log once every 500 iterations
+                        moe_log_interval = getattr(cfg.policy, 'moe_log_interval', 1)  # Default: log once every 500 iterations
                         if learner.train_iter % moe_log_interval == 0:
                             collect_and_log_moe_statistics(policy, tb_logger, learner.train_iter, world_size, rank)    
 
