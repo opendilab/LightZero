@@ -144,7 +144,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
     def __init__(self, cfg, model = None, enable_field = None):
         super().__init__(cfg, model, enable_field)
         self.step=0
-        self.save_freq=1
+        self.save_freq=100
         
         
     # The default_config for UniZero policy.
@@ -793,7 +793,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         multi_gpu = dist.is_initialized() and self._cfg.multi_gpu
         rank = dist.get_rank() if multi_gpu else 0
         
-        self.log_conflict_var=True
+        self.log_conflict_var=False
         self.log_conflict_matrix=False
         if self.step % self.save_freq==0:
             self.log_conflict_var=True
