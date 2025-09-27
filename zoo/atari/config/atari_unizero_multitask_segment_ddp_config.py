@@ -55,7 +55,7 @@ def compute_batch_config(
     return batch_sizes, grad_acc_steps
 
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode,
-                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                  num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                   norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
                   total_batch_size, num_layers):
     return EasyDict(dict(
@@ -143,7 +143,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=12, # todo
                     num_heads=24,
 
-                    embed_dim=768,
+                    embed_dim=768, #768
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
@@ -192,6 +192,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             cos_lr_scheduler=False,
             num_segments=num_segments,
             num_simulations=num_simulations,
+            eval_num_simulations=eval_num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
@@ -204,9 +205,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_partition=reanalyze_partition,
         ),
     ))
-
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                     num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
+                     num_simulations, eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size, num_layers):
     configs = []
@@ -247,7 +247,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
             env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations,
-            reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
+            eval_num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type,
             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
         )
         config.policy.task_id = task_id
@@ -333,7 +333,7 @@ if __name__ == "__main__":
 
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
-
+# /fs-computility/niuyazhe/tangjia/code/LightZero-dev-multitask-balance-clean/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
     from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     import os
@@ -346,7 +346,8 @@ if __name__ == "__main__":
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
-    num_simulations = 50
+    num_simulations = 25          # collect时使用的模拟次数
+    eval_num_simulations = 50     # eval时使用的模拟次数（可以设为更高获得更好评估质量）
     max_env_step = int(4e5)
     reanalyze_ratio = 0.0
 
@@ -379,7 +380,8 @@ if __name__ == "__main__":
         elif num_layers == 8:
             effective_batch_size = 512 # nlayer8 需要设置replay_ratio=0.5对应的upc=80
             # effective_batch_size = 256 # moco nlayer8 需要设置replay_ratio=0.5对应的upc=80
-
+        elif num_layers == 1:
+            effective_batch_size = 256 
     elif len(env_id_list) == 26:
         # effective_batch_size = 832  # cnn-encoder
         # effective_batch_size = 1024  # base-vit-encoder transformer-nlayer4  or cnn-encoder
@@ -427,7 +429,7 @@ if __name__ == "__main__":
     # for seed in [1]:
     for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
-                                   num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
+                                   num_simulations, eval_num_simulations, reanalyze_ratio, batch_sizes, num_unroll_steps, infer_context_length,
                                    norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                                    num_segments, total_batch_size, num_layers)
 

@@ -6,7 +6,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook #,ModelGradientHook
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
@@ -124,7 +124,7 @@ class UniZeroMTModel(nn.Module):
                     ))
             elif world_model_cfg.encoder_type == "vit":
                 for task_id in range(1):  # TODO: one share encoder
-                    if world_model_cfg.task_num <=8: 
+                    if world_model_cfg.task_num ==1: 
                         # # vit base
                         # self.representation_network.append(ViT(
                         #     image_size =observation_shape[1],
@@ -144,16 +144,42 @@ class UniZeroMTModel(nn.Module):
                             patch_size = 8,
                             num_classes = obs_act_embed_dim,
                             dim = 768,
-                            depth = 6,
-                            heads = 6,
-                            mlp_dim = 2048,
+                            depth = 12,
+                            heads = 12,
+                            mlp_dim = 3072,
                             dropout = 0.1,
                             emb_dropout = 0.1,
                             final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                            # ==================== 新增/修改部分 开始 ====================
-                            config=world_model_cfg # <--- 将包含LoRA参数的配置传递给ViT
-                            # ==================== 新增/修改部分 结束 ====================
-                        
+
+                        ))
+                    elif world_model_cfg.task_num <=8: 
+                        # # vit base
+                        # self.representation_network.append(ViT(
+                        #     image_size =observation_shape[1],
+                        #     patch_size = 8,
+                        #     num_classes = obs_act_embed_dim,
+                        #     dim = 768,
+                        #     depth = 12,
+                        #     heads = 12,
+                        #     mlp_dim = 3072,
+                        #     dropout = 0.1,
+                        #     emb_dropout = 0.1,
+                        #     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                        # ))
+                        # vit small
+                        self.representation_network.append(ViT(
+                            image_size =observation_shape[1],
+                            patch_size = 8,
+                            num_classes = obs_act_embed_dim,
+                            dim = 768,
+                            depth = 12,
+                            heads = 12,
+                            mlp_dim = 3072,
+                            dropout = 0.1,
+                            emb_dropout = 0.1,
+                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+
+
                         ))
                     elif world_model_cfg.task_num > 8: 
                         # vit base
@@ -195,6 +221,11 @@ class UniZeroMTModel(nn.Module):
             if world_model_cfg.analysis_sim_norm:
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
+
+            # if True: # Fixme: for debug
+            #     # 增加对encoder的hook,监控传播到encoder 上的梯度
+            #     self.encoder_output_hook = ModelGradientHook()
+            #     self.encoder_output_hook.setup_hook(self.representation_network)
 
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
