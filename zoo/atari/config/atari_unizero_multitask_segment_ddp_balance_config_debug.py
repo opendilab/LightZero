@@ -119,7 +119,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=12,
                     # num_heads=24,
 
-                    # num_layers=8,
+                    # num_layers=4,  # TODO=======
+                    # # num_layers=8,
                     # num_heads=24,
 
                     # ===== only for debug =====
@@ -130,31 +131,46 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
+
+                    encoder_type='vit',
+                    # encoder_type='resnet',
+
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
-                    moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False,
-                    num_experts_of_moe_in_transformer=4,
 
-                    # LoRA 参数：
-                    # curriculum_stage_num=3,
+                    moe_in_transformer=False,
+                    # multiplication_moe_in_transformer=False,
+                    multiplication_moe_in_transformer=True, # TODO=======
+                    n_shared_experts=1,
+                    num_experts_per_tok=1,
+                    num_experts_of_moe_in_transformer=8,
+
+                   # LoRA 参数：
+                    # moe_use_lora=False, # TODO
+                    moe_use_lora=True, # TODO
+
                     curriculum_stage_num=curriculum_stage_num,
                     lora_target_modules=["attn", "feed_forward"],
-                    # lora_r= 8,
-                    lora_r=64,
-                    lora_alpha=1,
-                    lora_dropout=0.0,
+                    lora_r=64, # TODO
+                    lora_alpha=32,
+                    lora_dropout=0.1,
+                    lora_scale_init=1,
+
+                    # min_stage0_iters=50000, # 50k
+                    # max_stage_iters=20000, # 20k
+
+                    min_stage0_iters=5, # 50k
+                    max_stage_iters=2, # 20k
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
-
             target_return =target_return_dict[env_id],
             balance_pipeline=True,
             # task_complexity_weight=False, # TODO
-            task_complexity_weight=True, # TODO
+            task_complexity_weight=True, # TODO: 这个选项打开时统计所有环境的norm mean
 
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
@@ -166,8 +182,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            # update_per_collect=80, # TODO
-            update_per_collect=2, # TODO
+            update_per_collect=80, # TODO
+            # update_per_collect=2, # TODO
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -178,8 +194,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            # eval_freq=int(2e4),
-            eval_freq=int(2),
+            # eval_freq=int(1e4),
+            eval_freq=int(1e4),
+            # eval_freq=int(2),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -194,7 +211,11 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_debug/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_final-simnorm_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_balance_20250730_debug/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_encoder-backbone-attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -225,9 +246,27 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/202507/uz_mt_nlayer4_atari8_balance-totalstage5_encoder-backbone.log
 
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config_debug.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_banlance_20250501_debug.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero//zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_vit-large-encoder-ps8-simnorm_totalstage5_banlance20250501.log
+        # only for debug
+        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29501 zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config_debug.py 2>&1 | tee ./log/202507/uz_mt_nlayer4_atari8_balance-totalstage5_encoder-backbone_debug.log
+        
+        cd /cpfs04/user/puyuan/code/LightZero/
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250522_cpfs/uz_mt_nlayer4_atari8_vit-small_moe8-lora_balance-totalstage5_stage-50k-20k_s0.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_nlayer4_atari26_vit-ln_moe8_balance-totalstage9.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_balance_atari26_vit-ln_moe8_totalstage5.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250509/uz_mt_nlayer8_atari8_vit-ln_moe8_balance-totalstage5.log
+
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_balance_atari8_no-encoder-grad-scale_cnn-encoder_moe8_totalstage5_20250509.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_cnn-encoder_totalstage9_balance20250505.log
+
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_vit-base-encoder-ps8_totalstage3_balance_20250501_debug.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari26_vit-large-encoder-ps8-simnorm_totalstage5_balance20250501.log
 
     """
 
@@ -295,14 +334,20 @@ if __name__ == "__main__":
         # target score
         target_scores = {
             # 8games
-            'PongNoFrameskip-v4': 14.6, # 0
-            'MsPacmanNoFrameskip-v4': 1500.6, # 1
-            'SeaquestNoFrameskip-v4': 1000.7, # 2
-            'BoxingNoFrameskip-v4': 12.1, # 3
-            'AlienNoFrameskip-v4': 1000.7, # 4
-            'ChopperCommandNoFrameskip-v4': 3000.8, # 5
-            'HeroNoFrameskip-v4': 3082.4, # 6
-            'RoadRunnerNoFrameskip-v4': 7845.0, # 7
+            # 'PongNoFrameskip-v4': 14.6, # 0 expert
+            'PongNoFrameskip-v4': 20, # 0 expert
+            # 'MsPacmanNoFrameskip-v4': 1500.6, # 1 
+            'MsPacmanNoFrameskip-v4': 6951.6, # 1
+            # 'SeaquestNoFrameskip-v4': 1000.7, # 2
+            'SeaquestNoFrameskip-v4': 42054.7, # 2 expert
+            'BoxingNoFrameskip-v4': 12.1, # 3 expert
+            # 'AlienNoFrameskip-v4': 1000.7, # 4
+            'AlienNoFrameskip-v4': 7127.7, # 4 expert
+            # 'ChopperCommandNoFrameskip-v4': 3000.8, # 5
+            # 'HeroNoFrameskip-v4': 3082.4, # 6
+            'ChopperCommandNoFrameskip-v4': 7387.8, # 5 expert
+            'HeroNoFrameskip-v4': 30826.4, # 6 expert
+            'RoadRunnerNoFrameskip-v4': 7845.0, # 7 expert
             # 后续 Atari 26games 的额外项
             'AmidarNoFrameskip-v4': 100.5, # 8
             'AssaultNoFrameskip-v4': 742.0, # 9
@@ -331,60 +376,41 @@ if __name__ == "__main__":
 
 
     global target_return_dict 
+    # global BENCHMARK_NAME
+    # BENCHMARK_NAME='atari'
 
     # 示例：以 ratio=1 使用
     target_return_dict = get_atari_target_return_dict(ratio=1)
     # target_return_dict = get_atari_target_return_dict(ratio=0.5)
-
+    num_games = 8 # 26 # 8
 
     # 分别定义 Atari 游戏列表（8games 和 26games）
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-    ]
-
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4',
-    #     'AssaultNoFrameskip-v4',
-    #     'AsterixNoFrameskip-v4',
-    #     'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4',
-    #     'CrazyClimberNoFrameskip-v4',
-    #     'DemonAttackNoFrameskip-v4',
-    #     'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4',
-    #     'GopherNoFrameskip-v4',
-    #     'JamesbondNoFrameskip-v4',
-    #     'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4',
-    #     'KungFuMasterNoFrameskip-v4',
-    #     'PrivateEyeNoFrameskip-v4',
-    #     'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4',
-    #     'BreakoutNoFrameskip-v4',
-    # ]
+    if num_games==3:
+            env_id_list = [
+            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4'
+        ]
+    elif num_games==8:
+        env_id_list = [
+            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+            'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+        ]
+    elif num_games==26:
+        # List of Atari games used for multi-task learning
+        env_id_list = [
+            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+            'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+            'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
+            'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
+            'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
+            'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
+            'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+        ]
 
     global curriculum_stage_num
-    # curriculum_stage_num=8
-
-    curriculum_stage_num=3
-    # curriculum_stage_num=5
+    # TODO ==============
+    # curriculum_stage_num=3
+    curriculum_stage_num=5
     # curriculum_stage_num=9
-
 
     action_space_size = 18
     collector_env_num = 8
@@ -392,15 +418,15 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
+    max_env_step = int(4e5)
     reanalyze_ratio = 0.0
     
     if len(env_id_list) == 8:
         effective_batch_size = 512
-        # effective_batch_size = 400 # 如果 8gpu 2个atari8的任务
     elif len(env_id_list) == 26:
-        # effective_batch_size = 512 * 3  # 1536
-        effective_batch_size = 512 * 2  # 1536
+        # effective_batch_size = 832  # cnn-encoder
+        effective_batch_size = 512   # base-vit-encoder 
+        # effective_batch_size = 256   # base-vit-encoder  large-vit-encoder
     elif len(env_id_list) == 18:
         effective_batch_size = 512 * 3  # 1536 
     else:
@@ -437,6 +463,6 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step, benchmark_name="atari")
             # ======== TODO: only for debug ========
-            # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+            train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks

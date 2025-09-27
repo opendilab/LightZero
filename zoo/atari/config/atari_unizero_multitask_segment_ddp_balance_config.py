@@ -121,7 +121,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     num_layers=4,  # TODO=======
                     # num_layers=8,
-
                     num_heads=24,
 
                     # ===== only for debug =====
@@ -155,21 +154,25 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     curriculum_stage_num=curriculum_stage_num,
                     lora_target_modules=["attn", "feed_forward"],
                     lora_r=64, # TODO
-                    lora_alpha=1,
-                    lora_dropout=0.0,
+                    lora_alpha=32,
+                    lora_dropout=0.1,
                     lora_scale_init=1,
 
                     min_stage0_iters=50000, # 50k
                     max_stage_iters=20000, # 20k
+
+                    # ==================== 新增的控制参数 ====================
+                    # 设置为 False，则课程学习和LoRA冻结将只应用于Transformer Backbone
+                    # 设置为 True 或不设置此项，则同时应用于ViT Encoder和Transformer Backbone
+                    apply_curriculum_to_encoder=False, 
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
-
             target_return =target_return_dict[env_id],
             balance_pipeline=True,
             # task_complexity_weight=False, # TODO
-            task_complexity_weight=True, # TODO
+            task_complexity_weight=True, # TODO: 这个选项打开时统计所有环境的norm mean
 
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
@@ -189,7 +192,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # cos_lr_scheduler=True,
             cos_lr_scheduler=False,
             num_segments=num_segments,
+            # (int) the number of simulations in MCTS for renalyze.
             num_simulations=num_simulations,
+            # (int) The number of simulations in MCTS for the collect phase.
+            collect_num_simulations=num_simulations,
+            # (int) The number of simulations in MCTS for the eval phase.
+            eval_num_simulations=50,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
@@ -213,7 +221,9 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-encoder-ps8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250509/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_no-encoder-scale_cnn-encoder_moe8_trans-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250514/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_vit-ln_moe8_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
-    exp_name_prefix = f'data_unizero_atari_mt_balance_20250625/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_fix-lora-update-stablescale_vit-small-ln_moe8-lora_trans-nlayer4_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_encoder-backbone-attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_balance_20250730/atari_{len(env_id_list)}games_balance-total-stage{curriculum_stage_num}_stage-50k-20k_vit-small-ln_trans-nlayer4-moe8_backbone-attn-mlp-lora_no-lora-scale_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -244,6 +254,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
+        cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/202507/uz_mt_nlayer4_atari8_balance-totalstage5_encoder-backbone.log
 
         cd /cpfs04/user/puyuan/code/LightZero/
         python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /cpfs04/user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/20250522_cpfs/uz_mt_nlayer4_atari8_vit-small_moe8-lora_balance-totalstage5_stage-50k-20k_s0.log
@@ -431,8 +443,8 @@ if __name__ == "__main__":
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    # buffer_reanalyze_freq = 1 / 50
-    buffer_reanalyze_freq = 1 / 1000000
+    buffer_reanalyze_freq = 1 / 50
+    # buffer_reanalyze_freq = 1 / 1000000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
