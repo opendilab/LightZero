@@ -106,7 +106,7 @@ class UniZeroMTModel(nn.Module):
         self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
         self.tokenizer = Tokenizer(
             encoder=self.representation_network,
-            decoder_network=self.decoder_network,
+            decoder=self.decoder_network,
             with_lpips=False,
             obs_type=world_model_cfg.obs_type
         )
@@ -162,7 +162,7 @@ class UniZeroMTModel(nn.Module):
         self.decoder_network = None
         self.tokenizer = Tokenizer(
             encoder=self.representation_network,
-            decoder_network=self.decoder_network,
+            decoder=self.decoder_network,
             with_lpips=False,
             obs_type=world_model_cfg.obs_type
         )
@@ -192,7 +192,7 @@ class UniZeroMTModel(nn.Module):
         )
         self.tokenizer = Tokenizer(
             encoder=self.representation_network,
-            decoder_network=self.decoder_network,
+            decoder=self.decoder_network,
             with_lpips=True,
             obs_type=world_model_cfg.obs_type
         )

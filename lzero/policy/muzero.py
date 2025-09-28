@@ -15,7 +15,7 @@ from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
-from lzero.model.utils import cal_dormant_ratio
+from lzero.model.utils import calculate_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
@@ -113,7 +113,7 @@ class MuZeroPolicy(Policy):
         # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
         eval_offline=False,
         # (bool) Whether to calculate the dormant ratio.
-        cal_dormant_ratio=False,
+        calculate_dormant_ratio=False,
         # (bool) Whether to analyze simulation normalization.
         analysis_sim_norm=False,
         # (bool) Whether to analyze dormant ratio.
@@ -423,8 +423,8 @@ class MuZeroPolicy(Policy):
 
         # ========= logging for analysis =========
         # calculate dormant ratio of encoder
-        if self._cfg.cal_dormant_ratio:
-            self.dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
+        if self._cfg.calculate_dormant_ratio:
+            self.dormant_ratio_encoder = calculate_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
                                                            percentage=self._cfg.dormant_threshold)
         # calculate L2 norm of latent state
         latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()
@@ -470,7 +470,7 @@ class MuZeroPolicy(Policy):
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # ========= logging for analysis ===============
-            if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.cal_dormant_ratio:
+            if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.calculate_dormant_ratio:
                 # calculate dormant ratio of encoder
                 action_tmp = action_batch[:, step_k]
                 if len(action_tmp.shape) == 1:
@@ -486,7 +486,7 @@ class MuZeroPolicy(Policy):
                     latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
                 )
                 state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
-                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network,
+                self.dormant_ratio_dynamics = calculate_dormant_ratio(self._learn_model.dynamics_network,
                                                                 state_action_encoding.detach(),
                                                                 percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============

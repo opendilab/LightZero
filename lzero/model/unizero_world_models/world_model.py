@@ -9,7 +9,7 @@ from einops import rearrange
 from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
 
 from lzero.model.common import SimNorm
-from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
+from lzero.model.utils import calculate_dormant_ratio, compute_average_weight_magnitude, compute_effective_rank
 from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
@@ -45,6 +45,7 @@ class WorldModel(nn.Module):
 
         self.transformer = Transformer(self.config)
         self.task_num = 1
+        self.env_num = self.config.env_num
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
         else:
@@ -70,7 +71,10 @@ class WorldModel(nn.Module):
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
-
+        if self.task_embed_option == "concat_task_embed":
+            self.obs_per_embdding_dim = self.config.embed_dim - self.task_embed_dim
+        else:
+            self.obs_per_embdding_dim = self.config.embed_dim
         self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
@@ -1352,7 +1356,7 @@ class WorldModel(nn.Module):
             # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
             
-            dormant_ratio_encoder_dict = cal_dormant_ratio(
+            dormant_ratio_encoder_dict = calculate_dormant_ratio(
                 self.tokenizer.encoder, inputs.detach(), dormant_threshold=self.dormant_threshold
             )
             dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
@@ -1370,11 +1374,11 @@ class WorldModel(nn.Module):
             # The 'representation_layer_name' argument specifies the target layer within the model's named modules.
             
             # Effective rank for the final linear layer of the encoder.
-            e_rank_last_linear = cal_effective_rank(
+            e_rank_last_linear = compute_effective_rank(
                 self.tokenizer.encoder, inputs, representation_layer_name="last_linear"
             )
             # Effective rank for the SimNorm layer of the encoder.
-            e_rank_sim_norm = cal_effective_rank(
+            e_rank_sim_norm = compute_effective_rank(
                 self.tokenizer.encoder, inputs, representation_layer_name="sim_norm"
             )
 
@@ -1485,7 +1489,7 @@ class WorldModel(nn.Module):
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the world model
-            dormant_ratio_world_model = cal_dormant_ratio(self, {
+            dormant_ratio_world_model = calculate_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           dormant_threshold=self.dormant_threshold)
             dormant_ratio_transformer = dormant_ratio_world_model['transformer']

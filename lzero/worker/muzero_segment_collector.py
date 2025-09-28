@@ -133,7 +133,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             - _policy (:obj:`Optional[namedtuple]`): The new policy to be used.
             - _env (:obj:`Optional[BaseEnvManager]`): The new environment to be used.
         """
-        if _env is not not None:
+        if _env is not None:
             self.reset_env(_env)
         if _policy is not None:
             self.reset_policy(_policy)

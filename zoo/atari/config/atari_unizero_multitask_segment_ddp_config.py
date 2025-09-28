@@ -260,8 +260,9 @@ if __name__ == "__main__":
         Run the following command to launch the script:
 
         Example launch command:
+        export CUDA_VISIBLE_DEVICES=4,5,6,7
         cd /path/to/your/project/
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 \\
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 \\
             /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -271,7 +272,8 @@ if __name__ == "__main__":
 
     # --- Main Experiment Settings ---
     num_games = 8  # Options: 3, 8, 26
-    num_layers = 4
+    # num_layers = 4
+    num_layers = 2 # debug
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
@@ -305,7 +307,7 @@ if __name__ == "__main__":
     # The effective batch size is adjusted based on the number of games and model size (layers)
     # to fit within GPU memory constraints.
     if len(env_id_list) == 8:
-        if num_layers == 4:
+        if num_layers in [2, 4]:
             effective_batch_size = 512
         elif num_layers == 8:
             effective_batch_size = 512

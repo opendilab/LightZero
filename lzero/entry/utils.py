@@ -121,7 +121,7 @@ def _is_lora_param(name: str) -> bool:
     return bool(_LORA_PAT.search(name))
 
 
-def freeze_non_lora(
+def freeze_non_lora_parameters(
     module: nn.Module,
     freeze: bool = True,
     *,

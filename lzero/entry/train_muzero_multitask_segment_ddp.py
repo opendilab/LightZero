@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from ding.config import compile_config
-from ding.envs import IEnvManager, create_env_manager, get_vec_env_setting
+from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import Policy, create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
 from ding.utils import EasyTimer, set_pkg_seed, get_rank, get_world_size

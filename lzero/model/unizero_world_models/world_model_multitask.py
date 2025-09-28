@@ -19,8 +19,8 @@ from sklearn.manifold import TSNE
 from lzero.model.common import SimNorm
 from lzero.model.unizero_world_models.world_model import WorldModel
 from lzero.model.utils import (
-    cal_dormant_ratio,
-    cal_effective_rank,
+    calculate_dormant_ratio,
+    compute_effective_rank,
     compute_average_weight_magnitude,
 )
 
@@ -224,7 +224,7 @@ class WorldModelMT(WorldModel):
 
         # Apply weight initialization. The order of initialization is important.
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
-        self._initialize_last_layer()
+        self._initialize_last_layer_mt()
 
         # --- Cache and State Initialization ---
         self._initialize_cache_structures()
@@ -415,7 +415,7 @@ class WorldModelMT(WorldModel):
         self.head_policy = self._create_head_softmoe(self.value_policy_tokens_pattern, self.action_space_size, soft_moe=self.get_soft_moe("policy_soft_moe"))
         self.head_value = self._create_head_softmoe(self.value_policy_tokens_pattern, self.support_size, soft_moe=self.get_soft_moe("value_soft_moe"))
 
-    def _initialize_last_layer(self) -> None:
+    def _initialize_last_layer_mt(self) -> None:
         """Initializes the last linear layer of prediction heads to zero for training stability."""
         last_linear_layer_init_zero = True
         print(f'world_model_mt.py:self.task_num:{self.task_num}')
@@ -1555,7 +1555,7 @@ class WorldModelMT(WorldModel):
                 encoder_index = task_id
             else:
                 encoder_index = 0
-            dormant_ratio_encoder_dict = cal_dormant_ratio(self.tokenizer.encoder[encoder_index], inputs.detach(),
+            dormant_ratio_encoder_dict = calculate_dormant_ratio(self.tokenizer.encoder[encoder_index], inputs.detach(),
                                                     dormant_threshold=self.dormant_threshold)
 
             dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
@@ -1564,9 +1564,9 @@ class WorldModelMT(WorldModel):
             avg_weight_mag_transformer = compute_average_weight_magnitude(self.transformer)
             avg_weight_mag_head = compute_average_weight_magnitude(self.head_dict)
 
-            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
+            e_rank_last_linear = compute_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
             try:
-                e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
+                e_rank_sim_norm = compute_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
             except Exception as e:
                 e_rank_sim_norm = torch.tensor(0.)
                 
@@ -1658,7 +1658,7 @@ class WorldModelMT(WorldModel):
         # if self.analysis_dormant_ratio_weight_rank:
         if self.do_analysis:
             # Calculate dormant ratio of the world model
-            dormant_ratio_world_model = cal_dormant_ratio(self, {
+            dormant_ratio_world_model = calculate_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           dormant_threshold=self.dormant_threshold)
             dormant_ratio_transformer = dormant_ratio_world_model['transformer']

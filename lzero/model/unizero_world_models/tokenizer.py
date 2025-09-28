@@ -115,10 +115,12 @@ class Tokenizer(nn.Module):
         # This handles both single-task (a single nn.Module) and multi-task (an nn.ModuleList) scenarios.
         if isinstance(self.encoder, nn.ModuleList):
             if not 0 <= task_id < len(self.encoder):
-                raise ValueError(
-                    f"Provided task_id {task_id} is invalid for the encoder list of size {len(self.encoder)}."
-                )
-            encoder_module = self.encoder[task_id]
+                # raise ValueError(
+                #     f"Provided task_id {task_id} is invalid for the encoder list of size {len(self.encoder)}."
+                # )
+                encoder_module = self.encoder
+            else:
+                encoder_module = self.encoder[task_id]
         else:
             encoder_module = self.encoder
 
