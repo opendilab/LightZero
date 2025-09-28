@@ -88,11 +88,9 @@ class WorldModel(nn.Module):
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(
-            self.all_but_last_latent_state_pattern,
-            self.config.embed_dim,
-            self._get_final_norm(self.final_norm_option_in_obs_head) 
-        )
+        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
+                                                    self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
+                                                   )
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
             self.bound_type = self.config.bound_type
@@ -109,7 +107,28 @@ class WorldModel(nn.Module):
             self.head_dict = nn.ModuleDict(self.head_dict)
 
         # Apply weight initialization, the order is important
-        self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+
+        # Build the set of modules to skip during re-initialization.
+        # This is compatible with cases where self.tokenizer.encoder does not have 'pretrained_model',
+        # or self.tokenizer does not have 'decoder_network'.
+        # NOTE: This step is crucial — without skipping, pretrained modules (e.g., encoder/decoder) would be unintentionally re-initialized
+        skip_modules = set()
+        if hasattr(self.tokenizer.encoder, 'pretrained_model'):
+            skip_modules.update(self.tokenizer.encoder.pretrained_model.modules())
+        if hasattr(self.tokenizer, 'decoder_network') and self.tokenizer.decoder_network is not None:
+            skip_modules.update(self.tokenizer.decoder_network.modules())
+
+        def custom_init(module):
+            # If the current module is part of the skip list, return without reinitializing
+            if module in skip_modules:
+                return
+            # Otherwise, apply the specified initialization method
+            init_weights(module, norm_type=self.config.norm_type)
+
+        # Recursively apply `custom_init` to all submodules of the model
+        self.apply(custom_init)
+
         self._initialize_last_layer()
 
         # Cache structures
@@ -149,8 +168,10 @@ class WorldModel(nn.Module):
 
         self.reanalyze_phase = False
 
-
     def _get_final_norm(self, norm_option: str) -> nn.Module:
+        """
+        Return the corresponding normalization module based on the specified normalization option.
+        """
         if norm_option == 'LayerNorm':
             return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
         elif norm_option == 'SimNorm':
@@ -1372,6 +1393,15 @@ class WorldModel(nn.Module):
         # Calculate the L2 norm of the latent state roots
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
 
+        # Action tokens
+        if self.continuous_action_space:
+            act_tokens = batch['actions']
+        else:
+            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+
+        # Forward pass to obtain predictions for observations, rewards, and policies
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
+        
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
@@ -1408,14 +1438,29 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'text':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=torch.float32)
+            decode_loss_mode = self.config.decode_loss_mode 
 
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
+            # Reconstruction loss for predicting the next latent (via backbone)
+            # input -> encoder -> backbone(unizero) -> decoder -> latent_recon_loss
+            if decode_loss_mode == "after_backbone":
+                next_latent_state = outputs.logits_observations[:, :-1, :]
+                next_target_ids = batch['observations'][:, 1:, :] 
+                
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=next_latent_state,
+                    target_ids=next_target_ids,
+                ).loss
 
-            # # Calculate reconstruction loss
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
-            #                                                        reconstructed_images)
-            latent_recon_loss = self.latent_recon_loss
+            #Reconstruction loss for predicting the current latent (without using the backbone)
+            # input -> encoder -> decoder -> latent_recon_loss
+            elif decode_loss_mode == "before_backbone":
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=obs_embeddings,
+                    target_ids=batch['observations'],
+                ).loss
+
+            else:
+                latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
@@ -1436,15 +1481,6 @@ class WorldModel(nn.Module):
             #                                                        reconstructed_images)
             latent_recon_loss = self.latent_recon_loss
             perceptual_loss = self.perceptual_loss
-
-        # Action tokens
-        if self.continuous_action_space:
-            act_tokens = batch['actions']
-        else:
-            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
-
-        # Forward pass to obtain predictions for observations, rewards, and policies
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio_weight_rank:
@@ -1547,9 +1583,6 @@ class WorldModel(nn.Module):
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
 
-        if batch['mask_padding'].sum() == 0:
-            assert False, "mask_padding is all zeros"
-
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
         middle_step_losses = {}
@@ -1588,7 +1621,6 @@ class WorldModel(nn.Module):
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
-
         # Calculate overall discounted loss
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ batch['mask_padding'][:,1:].sum()
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
@@ -1653,6 +1685,7 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
+    
     # TODO: test correctness
     def _calculate_policy_loss_cont_simple(self, outputs, batch: dict):
         """

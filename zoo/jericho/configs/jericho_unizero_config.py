@@ -5,7 +5,7 @@ from typing import Any, Dict
 from easydict import EasyDict
 
 
-def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e5)) -> None:
+def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e6)) -> None:
     """
     Main entry point for setting up environment configurations and launching training.
 
@@ -16,21 +16,22 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
+    env_id = 'detective.z5'
+
+    collector_env_num: int = 4       # Number of collector environments
+    n_episode = int(collector_env_num)
+    batch_size=64
+
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
     # ------------------------------------------------------------------
     # Define environment configurations
     env_configurations = {
-        'detective.z5': (10, 50),
-        'omniquest.z5': (10, 100),
-        'acorncourt.z5': (10, 50),
-        'zork1.z5': (10, 400),
+        'detective.z5': (12, 100),
+        'omniquest.z5': (25, 100),
+        'acorncourt.z5': (45, 50),
+        'zork1.z5': (55, 500),
     }
-
-    # env_id = 'detective.z5'
-    # env_id = 'omniquest.z5'
-    # env_id = 'acorncourt.z5'
-    # env_id = 'zork1.z5'
 
     # Set action_space_size and max_steps based on env_id
     action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
@@ -38,18 +39,15 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # ------------------------------------------------------------------
     # User frequently modified configurations
     # ------------------------------------------------------------------
-    evaluator_env_num: int = 2       # Number of evaluator environments
+    evaluator_env_num: int = 3       # Number of evaluator environments
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
-    collector_env_num: int = 4       # Number of collector environments
-    n_episode: int = 4               # Number of episodes per training batch
-    batch_size: int = 64             # Batch size in training
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
 
     num_layers: int = 2              # Number of layers in the model
-    replay_ratio: float = 0.25       # Replay ratio for experience replay
+    replay_ratio: float = 0.1       # Replay ratio for experience replay
     embed_dim: int = 768             # Embedding dimension
 
     # Reanalysis (reanalyze) parameters:
@@ -61,12 +59,19 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     reanalyze_partition: float = 0.75
 
     # Model name or path - configurable according to the predefined model paths or names
-    model_name: str = 'BAAI/bge-base-en-v1.5'
+    encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
+
+    if encoder_option == 'qwen':
+        model_name: str = 'Qwen/Qwen3-0.6B'
+    elif encoder_option == 'legacy':
+        model_name: str = 'BAAI/bge-base-en-v1.5'
+    else:
+        raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
     # ------------------------------------------------------------------
-    # max_env_step = int(5e5) 
+    # max_env_step = int(2e5) 
     # batch_size = 10  
     # num_simulations = 2 
     # num_unroll_steps = 5
@@ -74,7 +79,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # max_steps = 10
     # num_layers = 1
     # replay_ratio = 0.05             
-
     # ------------------------------------------------------------------
     # Configuration dictionary for the Jericho Unizero environment and policy
     # ------------------------------------------------------------------
@@ -94,12 +98,12 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             manager=dict(shared_memory=False),
         ),
         policy=dict(
-            multi_gpu=False,  # Important for distributed data parallel (DDP)
+            multi_gpu=False,  
             use_wandb=False,
             learn=dict(
                 learner=dict(
                     hook=dict(
-                        save_ckpt_after_iter=1000000,
+                        save_ckpt_after_iter=1000000, # To save memory, set a large value. If intermediate checkpoints are needed, reduce this value.
                     ),
                 ),
             ),
@@ -107,10 +111,14 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
+                encoder_option=encoder_option,
                 encoder_url=model_name,
                 model_type="mlp",
                 continuous_action_space=False,
                 world_model_cfg=dict(
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse',
                     policy_entropy_weight=5e-2,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -122,7 +130,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     num_layers=num_layers,
                     num_heads=24,
                     embed_dim=embed_dim,
-                    obs_type="text",  # TODO: Modify as needed.
+                    obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),
 
                     task_embed_option=None,
@@ -140,9 +148,12 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     lora_r= 0,
                     lora_alpha =1,
                     lora_dropout= 0.0,
+
+                    decode_loss_mode=None, # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
+                    latent_recon_loss_weight=0.1
                 ),
             ),
-            update_per_collect=int(collector_env_num*max_steps*replay_ratio),  # Important for DDP
+            update_per_collect=int(collector_env_num*max_steps*replay_ratio ),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
             num_unroll_steps=num_unroll_steps,
@@ -150,17 +161,16 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             learning_rate=0.0001,
-            cos_lr_scheduler=True,
+            cos_lr_scheduler=False,
             fixed_temperature_value=0.25,
             manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
             replay_buffer_size=int(5e5),
-            eval_freq=int(1e4),
+            eval_freq=int(3e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
-            # Reanalysis key parameters:
             buffer_reanalyze_freq=buffer_reanalyze_freq,
             reanalyze_batch_size=reanalyze_batch_size,
             reanalyze_partition=reanalyze_partition,
@@ -178,8 +188,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         ),
         # Use base env manager to avoid bugs present in subprocess env manager.
         env_manager=dict(type="base"),
-        # If necessary, switch to subprocess env manager by uncommenting the following line:
-        # env_manager=dict(type="subprocess"),
         policy=dict(
             type="unizero",
             import_names=["lzero.policy.unizero"],
@@ -195,7 +203,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )
@@ -210,6 +218,13 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
 
 if __name__ == "__main__":
+    """
+    Overview:
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
+        torchrun --nproc_per_node=4 ./zoo/jericho/configs/jericho_unizero_ddp_config.py
+    """
+
     parser = argparse.ArgumentParser(description='Process environment configuration and launch training.')
     parser.add_argument(
         '--env',
@@ -230,9 +245,3 @@ if __name__ == "__main__":
 
     # Start the main process with the provided arguments
     main(args.env, args.seed)
-
-    # ====== the following is only for cprofile ======
-    # def run(max_env_step: int):
-    #     main(args.env, args.seed, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({10000})", filename="./zoo/jericho/detective_unizero_cprofile_10k_envstep", sort="cumulative")

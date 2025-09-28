@@ -57,9 +57,10 @@ class MuZeroPolicy(Policy):
             num_res_blocks=1,
             # (int) The number of channels of hidden states in MuZero model.
             num_channels=64,
-            # (int) The scale of supports used in categorical distribution.
-            # This variable is only effective when ``categorical_distribution=True``.
-            support_scale=300,
+            # (tuple) The range of supports used in categorical distribution.
+            # These variables are only effective when ``model.categorical_distribution=True``.
+            reward_support_range=(-300., 301., 1.),
+            value_support_range=(-300., 301., 1.),
             # (bool) whether to learn bias in the last linear layer in value and policy head.
             bias=True,
             # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
@@ -312,11 +313,12 @@ class MuZeroPolicy(Policy):
                 self._cfg.augmentation,
                 image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
-        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
+        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
         
         # ==============================================================
         # harmonydream (learnable weights for different losses)
@@ -430,7 +432,7 @@ class MuZeroPolicy(Policy):
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-        original_value = self.inverse_scalar_transform_handle(value)
+        original_value = self.value_inverse_scalar_transform_handle(value)
 
         # Note: The following lines are just for debugging.
         predicted_rewards = []
@@ -491,7 +493,7 @@ class MuZeroPolicy(Policy):
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-            original_value = self.inverse_scalar_transform_handle(value)
+            original_value = self.value_inverse_scalar_transform_handle(value)
 
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
@@ -511,8 +513,7 @@ class MuZeroPolicy(Policy):
                     temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
                     consistency_loss += temp_loss
 
-            # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
-            # game buffer now.
+            # NOTE: the target policy is calculated in game buffer now.
             # ==============================================================
             # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
             # NOTE: the +=.
@@ -543,11 +544,11 @@ class MuZeroPolicy(Policy):
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
             if self._cfg.monitor_extra_statistics:
-                original_rewards = self.inverse_scalar_transform_handle(reward)
+                original_rewards = self.reward_inverse_scalar_transform_handle(reward)
                 original_rewards_cpu = original_rewards.detach().cpu()
 
                 predicted_values = torch.cat(
-                    (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
+                    (predicted_values, self.value_inverse_scalar_transform_handle(value).detach().cpu())
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
@@ -738,7 +739,7 @@ class MuZeroPolicy(Policy):
 
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
@@ -891,7 +892,7 @@ class MuZeroPolicy(Policy):
 
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+                pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 

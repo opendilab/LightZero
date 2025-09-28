@@ -63,7 +63,8 @@ def main(env_id, seed):
             model=dict(
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
-                support_scale=300,
+                reward_support_range=(-300., 301., 1.),
+                value_support_range=(-300., 301., 1.),
                 world_model_cfg=dict(
                     # final_norm_option_in_obs_head='LayerNorm',
                     # final_norm_option_in_encoder='LayerNorm',

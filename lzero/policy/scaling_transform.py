@@ -1,18 +1,15 @@
 from typing import Union
-import numpy as np
 import torch
 
 
 class DiscreteSupport(object):
 
-    def __init__(self, min: int, max: int, delta: float = 1.) -> None:
-        assert min < max
-        self.min = min
-        self.max = max
-        self.range = np.arange(min, max + 1, delta)
-        self.size = len(self.range)
-        self.set_size = len(self.range)
-        self.delta = delta
+    def __init__(self, start: float, stop: float, step: float = 1., device: Union[str, torch.device] = 'cpu') -> None:
+        assert start < stop
+        self.arange = torch.arange(start, stop, step, dtype=torch.float32).unsqueeze(0).to(device)
+        self.size = self.arange.shape[1]
+        assert self.size > 0, "DiscreteSupport size must be greater than 0"
+        self.step = step
 
 
 def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.) -> torch.Tensor:
@@ -33,38 +30,9 @@ def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.)
     return output
 
 
-def ensure_softmax(logits, dim=1):
-    """
-    Overview:
-        Ensure that the input tensor is normalized along the specified dimension.
-    Arguments:
-         - logits (:obj:`torch.Tensor`): The input tensor.
-        - dim (:obj:`int`): The dimension along which to normalize the input tensor.
-    Returns:
-        - output (:obj:`torch.Tensor`): The normalized tensor.
-    """
-    # Calculate the sum along the specified dimension (dim=1 in this case)
-    sum_along_dim = logits.sum(dim=dim, keepdim=True)
-    
-    # Create a tensor of ones with the same shape as sum_along_dim
-    ones_like_sum = torch.ones_like(sum_along_dim)
-    
-    # Check if the logits are already normalized (i.e., if the sum along the dimension is approximately 1)
-    # torch.allclose checks if all elements of two tensors are close within a tolerance
-    # atol (absolute tolerance) is set to a small value to allow for numerical precision issues
-    is_normalized = torch.allclose(sum_along_dim, ones_like_sum, atol=1e-5)
-    
-    # If logits are not normalized, apply softmax along the specified dimension
-    if not is_normalized:
-        return torch.softmax(logits, dim=dim)
-    else:
-        # If logits are already normalized, return them as they are
-        return logits
-
-
 def inverse_scalar_transform(
         logits: torch.Tensor,
-        support_size: int,
+        scalar_support: DiscreteSupport,
         epsilon: float = 0.001,
         categorical_distribution: bool = True
 ) -> torch.Tensor:
@@ -77,9 +45,8 @@ def inverse_scalar_transform(
         - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
     if categorical_distribution:
-        scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
-        value_probs = ensure_softmax(logits, dim=1)
-        value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
+        value_probs = torch.softmax(logits, dim=1)
+        value_support = scalar_support.arange
 
         value_support = value_support.to(device=value_probs.device)
         value = (value_support * value_probs).sum(1, keepdim=True)
@@ -106,18 +73,15 @@ class InverseScalarTransform:
 
     def __init__(
             self,
-            support_size: int,
-            device: Union[str, torch.device] = 'cpu',
+            scalar_support: DiscreteSupport,
             categorical_distribution: bool = True
     ) -> None:
-        scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
-        self.value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
-        self.value_support = self.value_support.to(device)
+        self.value_support = scalar_support.arange
         self.categorical_distribution = categorical_distribution
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
-            value_probs = ensure_softmax(logits, dim=1)
+            value_probs = torch.softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
         else:
             value = logits
@@ -143,30 +107,62 @@ def visit_count_temperature(
         return fixed_temperature_value
 
 
-def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.Tensor:
+def phi_transform(
+    discrete_support: DiscreteSupport,
+    x: torch.Tensor,
+) -> torch.Tensor:
     """
     Overview:
-        We then apply a transformation ``phi`` to the scalar in order to obtain equivalent categorical representations.
-         After this transformation, each scalar is represented as the linear combination of its two adjacent supports.
-    Reference:
-        - MuZero paper Appendix F: Network Architecture.
+        Map a real-valued scalar to a categorical distribution over a discrete support using linear interpolation (a.k.a. “soft” one-hot).
+
+        For each scalar value the probability mass is split between the two
+        nearest support atoms so that their weighted sum equals the original
+        value (MuZero, Appendix F).
+
+    Arguments:
+        - discrete_support : DiscreteSupport
+            Container with the support values (must be evenly spaced).
+        - x : torch.Tensor
+            Input tensor of arbitrary shape ``(...,)`` containing real numbers.
+
+    Returns:
+        - torch.Tensor
+            Tensor of shape ``(*x.shape, N)`` where ``N = discrete_support.size``.
+            The last dimension is a probability distribution (sums to 1).
+
+    Notes
+    -----
+    • No in-place ops on the input are used, improving autograd safety.  
+    • Only one `scatter_add_` kernel is launched for efficiency.  
     """
-    min = discrete_support.min
-    max = discrete_support.max
-    set_size = discrete_support.set_size
-    delta = discrete_support.delta
+    # --- constants ----------------------------------------------------------
+    min_bound = discrete_support.arange[0, 0]
+    max_bound = discrete_support.arange[0, -1]
+    step      = discrete_support.step
+    size      = discrete_support.size
 
-    x.clamp_(min, max)
-    x_low = x.floor()
-    x_high = x.ceil()
-    p_high = x - x_low
-    p_low = 1 - p_high
+    # --- 1. clip to the valid range ----------------------------------------
+    x = x.clamp(min_bound, max_bound)
 
-    target = torch.zeros(x.shape[0], x.shape[1], set_size).to(x.device)
-    x_high_idx, x_low_idx = x_high - min / delta, x_low - min / delta
-    target.scatter_(2, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
-    target.scatter_(2, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
+    # --- 2. locate neighbouring indices ------------------------------------
+    pos             = (x - min_bound) / step    # continuous position
+    low_idx_float   = torch.floor(pos)          # lower index
+    low_idx_long    = low_idx_float.long()      # lower index
+    high_idx        = low_idx_long + 1          # upper index (may overflow)
 
+    # --- 3. linear interpolation weights -----------------------------------
+    p_high = pos - low_idx_float                # distance to lower atom
+    p_low  = 1.0 - p_high                       # complementary mass
+
+    # --- 4. stack indices / probs and scatter ------------------------------
+    idx   = torch.stack([low_idx_long,
+                         torch.clamp(high_idx, max=size - 1)], dim=-1)  # (*x, 2)
+    prob  = torch.stack([p_low, p_high], dim=-1)                        # (*x, 2)
+
+    target = torch.zeros(*x.shape, size,
+                         dtype=x.dtype, device=x.device)
+
+    target.scatter_add_(-1, idx, prob)
     return target
 
 

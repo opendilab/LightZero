@@ -160,6 +160,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         self._max_episode_return = float("-inf")
         self._last_eval_iter = 0
         self._end_flag = False
+        
 
     def close(self) -> None:
         """
@@ -261,8 +262,14 @@ class MuZeroEvaluator(ISerialEvaluator):
             for i in range(env_nums):
                 # Handle cases where 'timestep' might not be in the observation.
                 if 'timestep' not in init_obs[i]:
-                    self._logger.warning(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning default value -1.")
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
+                        print(f"Warning: 'timestep' key is missing in init_obs[{i}]. Assigning value -1. Please note that the unizero algorithm may require the 'timestep' key in init_obs.")
                 timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+
+            if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
+
+            dones = np.array([False for _ in range(env_nums)])
 
             game_segments = [
                 GameSegment(
@@ -299,6 +306,16 @@ class MuZeroEvaluator(ISerialEvaluator):
                     action_mask_list = [action_mask_dict[env_id] for env_id in ready_env_id]
                     to_play_list = [to_play_dict[env_id] for env_id in ready_env_id]
                     timestep_list = [timestep_dict[env_id] for env_id in ready_env_id]
+
+                    # In a parallel evaluation setting, it's possible for all active environments to finish their
+                    # episodes simultaneously. This can leave `ready_env_id` temporarily empty while the environments
+                    # are being reset by the manager.
+                    # To prevent processing an empty batch, which would cause an IndexError or other errors downstream,
+                    # we check if `ready_env_id` is empty. If so, we sleep briefly to prevent a busy-wait,
+                    # and `continue` to the next loop iteration to wait for newly reset environments to become available.
+                    if not ready_env_id:
+                        time.sleep(0.01)
+                        continue
 
                     stack_obs_array = to_ndarray(stack_obs_list)
                     stack_obs_prepared = prepare_observation(stack_obs_array, self.policy_config.model.model_type)
@@ -337,6 +354,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
                         timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
+                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                            chance_dict[env_id] = to_ndarray(obs['chance'])
 
                         if done:
                             # --- Handle Episode Completion ---

@@ -153,16 +153,48 @@ class GameBuffer(ABC, object):
             # Indices exceeding `game_segment_length` are padded with the next segment and are not updated
             # in the current implementation. Therefore, we need to sample `pos_in_game_segment` within
             # [0, game_segment_length - num_unroll_steps] to avoid padded data.
-            # TODO: Consider increasing `self._cfg.game_segment_length` to ensure sampling efficiency.
-            # NOTE: Sample the init position from the whole segment, but not from the padded part
-            if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
+            
+            if self._cfg.action_type == 'varied_action_space':
+                # For some environments (e.g., Jericho), the action space size may be different.
+                # To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),
+                # we avoid sampling from the last `num_unroll_steps` steps of the game segment. 
+                if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
+                    pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
+                
+                segment_len = len(game_segment.action_segment)
+                if pos_in_game_segment >= segment_len - 1:
+                    # If the segment is very short (length 0 or 1), we can't randomly sample a position
+                    # before the last one. The only safe position is 0.
+                    if segment_len > 1:
+                        # If the segment has at least 2 actions, we can safely sample from [0, len-2].
+                        # The upper bound for np.random.choice is exclusive, so (segment_len - 1) is correct.
+                        pos_in_game_segment = np.random.choice(segment_len - 1, 1).item()
+                    else:
+                        # If segment length is 0 or 1, the only valid/safe position is 0.
+                        pos_in_game_segment = 0
+
+            else:
+                # For environments with a fixed action space (e.g., Atari),
+                # we can safely sample from the entire game segment range.
+                if pos_in_game_segment >= self._cfg.game_segment_length:
+                    pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
+                
+                segment_len = len(game_segment.action_segment)
+                if pos_in_game_segment >= segment_len - 1:
+                    # If the segment is very short (length 0 or 1), we can't randomly sample a position
+                    # before the last one. The only safe position is 0.
+                    if segment_len > 1:
+                        # If the segment has at least 2 actions, we can safely sample from [0, len-2].
+                        # The upper bound for np.random.choice is exclusive, so (segment_len - 1) is correct.
+                        pos_in_game_segment = np.random.choice(segment_len - 1, 1).item()
+                    else:
+                        # If segment length is 0 or 1, the only valid/safe position is 0.
+                        pos_in_game_segment = 0
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
-
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         
         if print_priority_logs:

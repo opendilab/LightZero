@@ -8,7 +8,7 @@ from easydict import EasyDict
 import lzero.mcts.ptree.ptree_ez as tree_efficientzero
 import lzero.mcts.ptree.ptree_mz as tree_muzero
 from lzero.mcts.ptree import MinMaxStatsList
-from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
+from lzero.policy import DiscreteSupport, InverseScalarTransform, to_detach_cpu_numpy
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_ez as ez_ptree
@@ -71,9 +71,10 @@ class MuZeroMCTSPtree(object):
         # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "mz_ptree.Roots":
@@ -171,8 +172,8 @@ class MuZeroMCTSPtree(object):
                         [
                             network_output.latent_state,
                             network_output.policy_logits,
-                            self.inverse_scalar_transform_handle(network_output.value),
-                            self.inverse_scalar_transform_handle(network_output.reward),
+                            self.value_inverse_scalar_transform_handle(network_output.value),
+                            self.reward_inverse_scalar_transform_handle(network_output.reward),
                         ]
                     )
 
@@ -250,9 +251,10 @@ class EfficientZeroMCTSPtree(object):
         # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "ez_ptree.Roots":
@@ -367,8 +369,8 @@ class EfficientZeroMCTSPtree(object):
                     [
                         network_output.latent_state,
                         network_output.policy_logits,
-                        self.inverse_scalar_transform_handle(network_output.value),
-                        self.inverse_scalar_transform_handle(network_output.value_prefix),
+                        self.value_inverse_scalar_transform_handle(network_output.value),
+                        self.value_inverse_scalar_transform_handle(network_output.value_prefix),
                     ]
                 )
                 network_output.reward_hidden_state = (

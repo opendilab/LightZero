@@ -7,7 +7,7 @@ from easydict import EasyDict
 
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as tree_sampled_efficientzero
 from lzero.mcts.ctree.ctree_sampled_muzero import smz_tree as tree_sampled_muzero
-from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
+from lzero.policy import DiscreteSupport, InverseScalarTransform, to_detach_cpu_numpy
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ezs_ctree
@@ -53,9 +53,10 @@ class SampledUniZeroMCTSCtree(object):
         default_config = self.default_config()
         default_config.update(cfg)
         self._cfg = default_config
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(
@@ -171,8 +172,8 @@ class SampledUniZeroMCTSCtree(object):
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
-                network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
-                network_output.reward = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.reward))
+                network_output.value = to_detach_cpu_numpy(self.value_inverse_scalar_transform_handle(network_output.value))
+                network_output.reward = to_detach_cpu_numpy(self.reward_inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
                 # print("network_output.latent_state.shape:", network_output.latent_state.shape)
@@ -250,9 +251,10 @@ class SampledMuZeroMCTSCtree(object):
         # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(
@@ -366,8 +368,8 @@ class SampledMuZeroMCTSCtree(object):
                     [
                         network_output.latent_state,
                         network_output.policy_logits,
-                        self.inverse_scalar_transform_handle(network_output.value),
-                        self.inverse_scalar_transform_handle(network_output.reward),
+                        self.value_inverse_scalar_transform_handle(network_output.value),
+                        self.reward_inverse_scalar_transform_handle(network_output.reward),
                     ]
                 )
                 latent_state_batch_in_search_path.append(network_output.latent_state)
@@ -444,9 +446,10 @@ class SampledEfficientZeroMCTSCtree(object):
         # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(
@@ -570,8 +573,8 @@ class SampledEfficientZeroMCTSCtree(object):
                     [
                         network_output.latent_state,
                         network_output.policy_logits,
-                        self.inverse_scalar_transform_handle(network_output.value),
-                        self.inverse_scalar_transform_handle(network_output.value_prefix),
+                        self.value_inverse_scalar_transform_handle(network_output.value),
+                        self.value_inverse_scalar_transform_handle(network_output.value_prefix),
                     ]
                 )
                 network_output.reward_hidden_state = (

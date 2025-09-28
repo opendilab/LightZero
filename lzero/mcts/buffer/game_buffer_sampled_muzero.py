@@ -7,7 +7,7 @@ from ding.utils import BUFFER_REGISTRY
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledMuZeroMCTSCtree as MCTSCtree
 # from lzero.mcts.tree_search.mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
-from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
+from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer_muzero import MuZeroGameBuffer
 
 
@@ -44,6 +44,9 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
         self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
+
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
     def sample(self, batch_size: int, policy: Any) -> List[Any]:
         """
@@ -291,7 +294,7 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                         [
                             m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            inverse_scalar_transform(m_output.value, self.value_support),
                             m_output.policy_logits
                         ]
                     )
@@ -454,7 +457,7 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                         [
                             m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            inverse_scalar_transform(m_output.value, self.value_support),
                             m_output.policy_logits
                         ]
                     )

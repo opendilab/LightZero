@@ -20,6 +20,9 @@ from ditk import logging
 from ding.torch_utils import MLP, ResBlock
 from ding.torch_utils.network.normalization import build_normalization
 from ding.utils import SequenceType, get_rank, get_world_size
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from ding.utils import set_pkg_seed, get_rank, get_world_size
+
 
 
 def MLP_V2(
@@ -357,41 +360,144 @@ class DownSample(nn.Module):
                 f"Supported heights are 64, 84, 96."
             )
 
+class QwenNetwork(nn.Module):
+    def __init__(self,
+                 model_path: str = 'Qwen/Qwen3-1.7B',
+                 embedding_size: int = 768,
+                 final_norm_option_in_encoder: str = "layernorm",
+                 group_size: int = 8,
+                 tokenizer=None):
+        super().__init__()
+
+        logging.info(f"Loading Qwen model from: {model_path}")
+        
+        local_rank = get_rank()
+        if local_rank == 0:
+            self.pretrained_model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype="auto", 
+                device_map={"": local_rank},
+                attn_implementation="flash_attention_2"
+            )
+        if get_world_size() > 1:
+            torch.distributed.barrier()
+        if local_rank != 0:
+            self.pretrained_model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype="auto",
+                device_map={"": local_rank}, 
+                attn_implementation="flash_attention_2"
+            )
+        
+        for p in self.pretrained_model.parameters():
+            p.requires_grad = False
+
+        if tokenizer is None:
+            if local_rank == 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            if get_world_size() > 1:
+                torch.distributed.barrier()
+            if local_rank != 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        else:
+            self.tokenizer = tokenizer
+
+        qwen_hidden_size = self.pretrained_model.config.hidden_size
+
+        self.embedding_head = nn.Sequential(
+            nn.Linear(qwen_hidden_size, embedding_size),
+            self._create_norm_layer(final_norm_option_in_encoder, embedding_size, group_size)
+        )
+
+    def _create_norm_layer(self, norm_option, embedding_size, group_size):
+        if norm_option.lower() == "simnorm":
+            return SimNorm(simnorm_dim=group_size)
+        elif norm_option.lower() == "layernorm":
+            return nn.LayerNorm(embedding_size)
+        else:
+            raise NotImplementedError(f"Normalization type '{norm_option}' is not implemented.")
+
+    def encode(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+        """
+        Overview:
+            Encode the input token sequence `x` into a latent representation
+            using a pretrained language model backbone followed by a projection head.
+        Arguments:
+            - x (:obj:`torch.Tensor`):  Input token ids of shape (B, L)
+            - no_grad (:obj:`bool`, optional, default=True): If True, encoding is performed under `torch.no_grad()` to save memory and computation (no gradient tracking).
+        Returns:
+            - latent (:obj:`torch.Tensor`): Encoded latent state of shape (B, D).
+        """
+        pad_id = self.tokenizer.pad_token_id
+        attention_mask = (x != pad_id).long().to(x.device)
+        context = {'input_ids': x.long(), 'attention_mask': attention_mask}
+        if no_grad:
+            with torch.no_grad():
+                outputs = self.pretrained_model(**context, output_hidden_states=True, return_dict=True)
+        else:
+            outputs = self.pretrained_model(**context, output_hidden_states=True, return_dict=True)
+        last_hidden = outputs.hidden_states[-1]
+
+        B, L, H = last_hidden.size()
+        lengths = attention_mask.sum(dim=1)  # [B]
+        positions = torch.clamp(lengths - 1, min=0)  # [B]
+        batch_idx = torch.arange(B, device=last_hidden.device)
+
+        selected = last_hidden[batch_idx, positions]  # [B, H]
+
+        latent = self.embedding_head(selected.to(self.embedding_head[0].weight.dtype))
+        return latent
+
+    def decode(self, embeddings: torch.Tensor, max_length: int = 512) -> str:
+        """
+        Decodes embeddings into text via the decoder network.
+        """
+        embeddings_detached = embeddings.detach()
+        self.pretrained_model.eval()
+        
+        # Directly generate using provided embeddings
+        with torch.no_grad():
+            param = next(self.pretrained_model.parameters())
+            embeddings = embeddings_detached.to(device=param.device, dtype=param.dtype)
+            gen_ids = self.pretrained_model.generate(
+                inputs_embeds=embeddings,
+                max_length=max_length
+            )
+        texts = self.tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
+        self.pretrained_model.train()
+        return texts[0] if len(texts) == 1 else texts
+
+    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+        return self.encode(x, no_grad=no_grad)
+
 
 class HFLanguageRepresentationNetwork(nn.Module):
-    """
-    Overview:
-        A language representation network using a pretrained Hugging Face transformer model.
-        It extracts the [CLS] token embedding and processes it through a projection head and a normalization layer.
-    """
-    def __init__(
-        self,
-        model_path: str = 'google-bert/bert-base-uncased',
-        embedding_size: int = 768,
-        group_size: int = 8,
-        norm_type: str = "layernorm",
-        tokenizer: Optional[Callable] = None
-    ):
+    def __init__(self,
+                model_path: str = 'google-bert/bert-base-uncased',
+                embedding_size: int = 768,
+                group_size: int = 8,
+                final_norm_option_in_encoder: str = "layernorm",
+                tokenizer=None):
         """
         Arguments:
-            - model_path (:obj:`str`): Path or identifier for the pretrained Hugging Face model.
-            - embedding_size (:obj:`int`): The dimension of the final output embedding.
-            - group_size (:obj:`int`): The group size for SimNorm if `norm_type` is 'simnorm'.
-            - norm_type (:obj:`str`): Normalization type, either 'simnorm' or 'layernorm'.
-            - tokenizer (:obj:`Optional[Callable]`): An optional pretrained tokenizer. If None, it's loaded from `model_path`.
+            - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
+            - embedding_size (int): The dimension of the output embeddings. Default is 768.
+            - group_size (int): The group size for SimNorm when using normalization.
+            - final_norm_option_in_encoder (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "layernorm".
+            - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
         """
         super().__init__()
         from transformers import AutoModel, AutoTokenizer
 
         # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
         if get_rank() == 0:
-            logging.info(f"Master process is loading model from: {model_path}")
-            self.model = AutoModel.from_pretrained(model_path)
-            if tokenizer is None:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        
+            self.pretrained_model = AutoModel.from_pretrained(model_path)
+
         if get_world_size() > 1:
-            torch.distributed.barrier() # Wait for rank 0 to finish downloading.
+            # Wait for rank 0 to finish loading the model.
+            torch.distributed.barrier()
+        if get_rank() != 0:
+            self.pretrained_model = AutoModel.from_pretrained(model_path)
 
         if get_rank() != 0:
             logging.info(f"Worker process is loading model from cache: {model_path}")
@@ -403,14 +509,16 @@ class HFLanguageRepresentationNetwork(nn.Module):
             self.tokenizer = tokenizer
 
         self.embedding_size = embedding_size
-        self.embed_proj_head = nn.Linear(self.model.config.hidden_size, self.embedding_size)
+        self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
 
-        if norm_type.lower() == "simnorm":
+        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
-        elif norm_type.lower() == "layernorm":
+        elif final_norm_option_in_encoder.lower() == "layernorm":
             self.norm = nn.LayerNorm(embedding_size)
         else:
-            raise NotImplementedError(f"Normalization type '{norm_type}' is not implemented.")
+            raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
+                                      f"Choose 'simnorm' or 'layernorm'.")
 
     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
         """
@@ -422,20 +530,24 @@ class HFLanguageRepresentationNetwork(nn.Module):
         Returns:
             - (:obj:`torch.Tensor`): The final language embedding of shape (B, embedding_size).
         """
-        attention_mask = (x != self.tokenizer.pad_token_id)
-        
-        def get_cls_embedding(inputs):
-            outputs = self.model(inputs.long(), attention_mask=attention_mask)
-            return outputs.last_hidden_state[:, 0, :]
+
+        # Construct the attention mask to exclude padding tokens.
+        attention_mask = x != self.tokenizer.pad_token_id
 
         if no_grad:
             with torch.no_grad():
-                cls_embedding = get_cls_embedding(x)
+                x = x.long()  # Ensure the input tensor is of type long.
+                outputs = self.pretrained_model(x, attention_mask=attention_mask)
+                # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+                cls_embedding = outputs.last_hidden_state[:, 0, :]
         else:
-            cls_embedding = get_cls_embedding(x)
+            x = x.long()
+            outputs = self.pretrained_model(x, attention_mask=attention_mask)
+            cls_embedding = outputs.last_hidden_state[:, 0, :]
 
         cls_embedding = self.embed_proj_head(cls_embedding)
         cls_embedding = self.norm(cls_embedding)
+        
         return cls_embedding
 
 
@@ -455,19 +567,24 @@ class RepresentationNetworkUniZero(nn.Module):
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
-            final_norm_type: str = 'SimNorm',
+            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> None:
         """
         Arguments:
-            - observation_shape (:obj:`Tuple[int, int, int]`): Shape of the input observation (C, H, W).
-            - num_res_blocks (:obj:`int`): Number of residual blocks.
-            - num_channels (:obj:`int`): Number of channels in the convolutional layers.
-            - downsample (:obj:`bool`): Whether to use the `DownSample` module.
-            - activation (:obj:`nn.Module`): Activation function to use.
-            - norm_type (:obj:`str`): Normalization type for conv layers ('BN' or 'LN').
-            - embedding_dim (:obj:`int`): Dimension of the output latent embedding.
-            - group_size (:obj:`int`): Group size if `final_norm_type` is 'SimNorm'.
-            - final_norm_type (:obj:`str`): Final normalization type ('SimNorm' or 'LayerNorm').
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
+                for video games like atari, RGB 3 channel.
+            - num_res_blocks (:obj:`int`): The number of residual blocks.
+            - num_channels (:obj:`int`): The channel of output hidden state.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
+                defaults to True. This option is often used in video games like Atari. In board games like go, \
+                we don't need this module.
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
+                Use the inplace operation to speed up.
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - embedding_dim (:obj:`int`): The dimension of the latent state.
+            - group_size (:obj:`int`): The dimension for simplicial normalization.
+            - final_norm_option_in_encoder (:obj:`str`): The normalization option for the final layer, defaults to 'SimNorm'. \
+                Options are 'SimNorm' and 'LayerNorm'.
         """
         super().__init__()
         if norm_type not in ['BN', 'LN']:
@@ -506,12 +623,16 @@ class RepresentationNetworkUniZero(nn.Module):
         self.norm_before_last_linear = nn.LayerNorm([num_channels, spatial_size, spatial_size], eps=1e-5)
         self.last_linear = nn.Linear(linear_in_dim, embedding_dim, bias=False)
 
-        if final_norm_type == 'LayerNorm':
-            self.final_norm = nn.LayerNorm(embedding_dim, eps=1e-5)
-        elif final_norm_type == 'SimNorm':
+        elif self.observation_shape[1] in [84, 96]:
+            self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
+
+        self.final_norm_option_in_encoder = final_norm_option_in_encoder
+        if self.final_norm_option_in_encoder == 'LayerNorm':
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'SimNorm':
             self.final_norm = SimNorm(simnorm_dim=group_size)
         else:
-            raise ValueError(f"Unsupported final_norm_type: {final_norm_type}")
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -625,7 +746,8 @@ class RepresentationNetworkMLP(nn.Module):
             activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
-    ) -> None:
+            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
+    ) -> torch.Tensor:
         """
         Arguments:
             - observation_dim (:obj:`int`): The dimension of the input vector observation.
@@ -649,7 +771,15 @@ class RepresentationNetworkMLP(nn.Module):
             output_norm=False,
             last_linear_layer_init_zero=True,
         )
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        if final_norm_option_in_encoder.lower() == "simnorm":
+            self.norm = SimNorm(simnorm_dim=group_size)
+        elif final_norm_option_in_encoder.lower() == "layernorm":
+            self.norm = nn.LayerNorm(hidden_channels)
+        else:
+            raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
+                                      f"Choose 'simnorm' or 'layernorm'.")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -658,8 +788,8 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): (B, hidden_channels)
         """
         x = self.fc_representation(x)
-        # TODO: The effectiveness of applying SimNorm here should be empirically validated.
-        x = self.sim_norm(x)
+        x = self.norm(x)
+
         return x
 
 

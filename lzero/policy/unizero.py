@@ -8,7 +8,7 @@ import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
-from lzero.entry.utils import initialize_zeros_batch
+from lzero.entry.utils import initialize_zeros_batch, initialize_pad_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
@@ -50,9 +50,10 @@ class UniZeroPolicy(MuZeroPolicy):
             num_res_blocks=1,
             # (int) The number of channels of hidden states in MuZero model.
             num_channels=64,
-            # (int) The scale of supports used in categorical distribution.
-            # This variable is only effective when ``categorical_distribution=True``.
-            support_scale=50,
+            # (tuple) The range of supports used in categorical distribution.
+            # These variables are only effective when ``model.categorical_distribution=True``.
+            reward_support_range=(-50., 51., 1.),
+            value_support_range=(-50., 51., 1.),
             # (bool) whether to learn bias in the last linear layer in value and policy head.
             bias=True,
             # (bool) whether to use res connection in dynamics.
@@ -112,8 +113,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=0,
-                # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
-                predict_latent_loss_type='group_kl',
+                # (str) The normalization type for the final layer in both the head and the encoder.
+                # This option must be the same for both 'final_norm_option_in_head' and 'final_norm_option_in_encoder'.
+                # Valid options are 'LayerNorm' and 'SimNorm'.
+                # When set to 'LayerNorm', the 'predict_latent_loss_type' should be 'mse'.
+                # When set to 'SimNorm', the 'predict_latent_loss_type' should be 'group_kl'.
+                final_norm_option_in_head="LayerNorm",
+                final_norm_option_in_encoder="LayerNorm",
+                # (str) The type of loss function for predicting latent variables.
+                # Options are 'mse' (Mean Squared Error) or 'group_kl' (Group Kullback-Leibler divergence).
+                # This choice is dependent on the normalization method selected above.
+                predict_latent_loss_type='mse',
                 # (str) The type of observation. Options are ['image', 'vector'].
                 obs_type='image',
                 # (float) The discount factor for future rewards.
@@ -130,6 +140,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (int) The maximum sequence length for position encoding.
                 max_seq_len=8192,
                 lora_r= 0,
+                # Controls where to compute reconstruction loss: 'after_backbone', 'before_backbone', or None.
+                #   - after_backbone: The reconstruction loss is computed after the encoded representation passes through the backbone.
+		        #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
+                decode_loss_mode=None,
             ),
         ),
         # ****** common ******
@@ -339,16 +353,19 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._cfg.augmentation,
                 image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
-        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
+
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+
+        encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+        self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
         
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
@@ -436,8 +453,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
-        )
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle
+        )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
 
         weighted_total_loss = losses.loss_total
 
@@ -608,7 +625,9 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_obs = torch.full(
+                [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+            ).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
     # @profile
@@ -662,7 +681,7 @@ class UniZeroPolicy(MuZeroPolicy):
             network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
@@ -680,11 +699,13 @@ class UniZeroPolicy(MuZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
 
+            next_latent_state_with_env = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
+            
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
+
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -708,6 +729,14 @@ class UniZeroPolicy(MuZeroPolicy):
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
+                next_latent_state = next_latent_state_with_env[i][action]
+                
+                if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._collect_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
+
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                 #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
@@ -722,7 +751,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
+                    'timestep': timestep[i],
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 
@@ -764,11 +794,13 @@ class UniZeroPolicy(MuZeroPolicy):
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
+            self.last_batch_obs = torch.full(
+                [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+            ).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, timestep: List = [0], task_id: int = None,) -> Dict:
@@ -807,7 +839,7 @@ class UniZeroPolicy(MuZeroPolicy):
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
@@ -819,14 +851,14 @@ class UniZeroPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
+            next_latent_state_with_env = self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             batch_action = []
-
+            
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # print("roots_visit_count_distributions:", distributions, "root_value:", value)
@@ -842,6 +874,15 @@ class UniZeroPolicy(MuZeroPolicy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
+                # Predict the next latent state based on the selected action and policy
+                next_latent_state = next_latent_state_with_env[i][action]
+
+                if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
+                    # Output the plain text content decoded by the decoder from the next latent state
+                    predicted_next = self._eval_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
+                else:
+                    predicted_next = None
+
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
@@ -849,7 +890,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'timestep': timestep[i]
+                    'timestep': timestep[i],
+                    'predicted_next_text': predicted_next,
                 }
                 batch_action.append(action)
 
@@ -871,10 +913,11 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
+            self.last_batch_obs = initialize_pad_batch(
                 self._cfg.model.observation_shape,
                 self._cfg.collector_env_num,
-                self._cfg.device
+                self._cfg.device,
+                pad_token_id=self.pad_token_id
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
@@ -919,15 +962,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 self.last_batch_obs_eval = initialize_zeros_batch(
                     self._cfg.model.observation_shape_list[task_id],
                     self._cfg.evaluator_env_num,
-                    self._cfg.device
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
                 )
                 print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
             else:
-                self.last_batch_obs_eval = initialize_zeros_batch(
+                self.last_batch_obs_eval = initialize_pad_batch( # TODO
                     self._cfg.model.observation_shape,
                     self._cfg.evaluator_env_num,
-                    self._cfg.device
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
                 )
                 print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 

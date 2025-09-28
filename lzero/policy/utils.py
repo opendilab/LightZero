@@ -10,7 +10,20 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
+import nltk
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
+def compute_bleu(reference: str, prediction: str) -> float:
+    """
+    Compute sentence-level BLEU-4 score with smoothing and scale it to 0–1.
+    """
+    if reference is None or prediction is None:
+        return 0.0
+    reference_tokens = reference.strip().split()
+    prediction_tokens = prediction.strip().split()
+    smoothing = SmoothingFunction().method4
+    bleu = sentence_bleu([reference_tokens], prediction_tokens, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smoothing)
+    return bleu
 
 def pad_and_get_lengths(inputs, num_of_sampled_actions):
     """
@@ -54,7 +67,7 @@ def visualize_avg_softmax(logits):
     avg_probabilities = torch.mean(probabilities, dim=0)
 
     # Convert to numpy for visualization.
-    avg_probabilities_np = avg_probabilities.detach().numpy()
+    avg_probabilities_np = avg_probabilities.detach().cpu().numpy()
 
     # Create a bar plot.
     plt.figure(figsize=(10, 8))

@@ -10,3 +10,4 @@ xxhash
 simple_parsing
 einops
 openai
+nltk
