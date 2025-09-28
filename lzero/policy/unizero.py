@@ -440,8 +440,6 @@ class UniZeroPolicy(MuZeroPolicy):
         )
 
         weighted_total_loss = losses.loss_total
-        # 合并 intermediate_losses 字典，避免重复赋值
-        # self.intermediate_losses.update(losses.intermediate_losses)
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
@@ -560,9 +558,9 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder, #.item(),
-            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,#.item(),
-            'analysis/dormant_ratio_head': dormant_ratio_head,#.item(),
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder, 
+            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,
+            'analysis/dormant_ratio_head': dormant_ratio_head,
 
             'analysis/avg_weight_mag_encoder': avg_weight_mag_encoder,
             'analysis/avg_weight_mag_transformer': avg_weight_mag_transformer,
@@ -731,15 +729,25 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = data
             self.last_batch_action = batch_action
 
-            # ========= TODO: for muzero_segment_collector now =========
+            # ========= TODO: This logic is a temporary workaround specific to the muzero_segment_collector. =========
             if active_collect_env_num < self.collector_env_num:
-                # 当collect_env中有一个环境先done时，传回的self.last_batch_obs的长度会减少1, transformer在检索kv_cache时需要知道env_id，实现比较复杂
-                # 因此直接《self.collector_env_num》个环境的self.last_batch_action全部重置为-1，让transformer从0开始，避免检索错误
-                print('==========collect_forward============')
-                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                # When an environment finishes an episode ('done'), the length of `self.last_batch_obs` passed back
+                # becomes smaller than the total number of collector environments.
+                # Handling this dynamic batch size is complex, as the transformer's KV cache retrieval
+                # requires a stable environment ID for correct indexing. A mismatch would cause retrieval errors.
+                #
+                # Therefore, as a simpler solution, we reset the collection state for ALL environments.
+                # By resetting `self.last_batch_action` to -1 for all `self.collector_env_num` environments,
+                # we force the transformer to start its context from scratch, avoiding incorrect cache lookups.
+                print('========== collect_forward ============')
+                print(f'An environment has finished. Active envs: {active_collect_env_num} < Total envs: {self.collector_env_num}. Resetting all.')
+                
                 self._reset_collect(reset_init_data=True)
+                
+                # If the sampling type is 'episode', it's unexpected for the number of active environments to drop,
+                # as this suggests an inconsistent state or a potential issue in the collection logic.
                 if getattr(self._cfg, 'sample_type', '') == 'episode':
-                    print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
+                    print('WARNING: Inconsistent state detected. `sample_type` is "episode", but the number of active environments has changed.')
 
         return output
 

@@ -26,24 +26,33 @@ from lzero.policy import (
 from lzero.policy.muzero import MuZeroPolicy
 
 
-def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
+def generate_task_loss_dict(multi_task_losses: List[float], task_name_template: str, task_id: int) -> Dict[str, float]:
     """
-    生成每个任务的损失字典
-    :param multi_task_losses: 包含每个任务损失的列表
-    :param task_name_template: 任务名称模板，例如 'loss_task{}'
-    :param task_id: 任务起始ID
-    :return: 一个字典，包含每个任务的损失
+    Overview:
+        Generates a dictionary for the losses of each task.
+    Arguments:
+        - multi_task_losses (:obj:`List[float]`): A list containing the loss for each task.
+        - task_name_template (:obj:`str`): A template for the task name, e.g., 'loss_task{}'.
+        - task_id (:obj:`int`): The starting ID for the tasks.
+    Returns:
+        - task_loss_dict (:obj:`Dict[str, float]`): A dictionary containing the loss for each task.
     """
     task_loss_dict = {}
     for task_idx, task_loss in enumerate(multi_task_losses):
         task_name = task_name_template.format(task_idx + task_id)
         try:
+            # Ensure the loss is a scalar value for logging.
             task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
         except Exception:
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
 
 class WrappedModelV2:
+    """
+    Overview:
+        A wrapper class to bundle different parts of a model (tokenizer, transformer, embeddings)
+        for easier management of parameters and gradients.
+    """
     def __init__(self, tokenizer, transformer, pos_emb, task_emb, act_embedding_table):
         self.tokenizer = tokenizer
         self.transformer = transformer
@@ -51,8 +60,11 @@ class WrappedModelV2:
         self.task_emb = task_emb
         self.act_embedding_table = act_embedding_table
 
-    def parameters(self):
-        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+    def parameters(self) -> List[torch.nn.Parameter]:
+        """
+        Overview:
+            Returns a list of all parameters from the tokenizer, transformer, and all embedding layers.
+        """
         return (
             list(self.tokenizer.parameters()) +
             list(self.transformer.parameters()) +
@@ -61,8 +73,13 @@ class WrappedModelV2:
             list(self.act_embedding_table.parameters())
         )
 
-    def zero_grad(self, set_to_none=False):
-        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+    def zero_grad(self, set_to_none: bool = False) -> None:
+        """
+        Overview:
+            Sets the gradients of all parameters in the tokenizer, transformer, and embedding layers to zero.
+        Arguments:
+            - set_to_none (:obj:`bool`): Whether to set gradients to None instead of zero.
+        """
         self.tokenizer.zero_grad(set_to_none=set_to_none)
         self.transformer.zero_grad(set_to_none=set_to_none)
         self.pos_emb.zero_grad(set_to_none=set_to_none)
@@ -72,11 +89,12 @@ class WrappedModelV2:
 @POLICY_REGISTRY.register('muzero_multitask')
 class MuZeroMTPolicy(MuZeroPolicy):
     """
-    概述：
-        MuZero 的多任务策略类，扩展自 MuZeroPolicy。支持同时训练多个任务，通过分离每个任务的损失并进行优化。
+    Overview:
+        The multi-task policy for MuZero, extending MuZeroPolicy. It supports training multiple tasks
+        simultaneously by separating the loss for each task and optimizing them jointly.
     """
 
-    # MuZeroMTPolicy 的默认配置
+    # Default configuration for MuZeroMTPolicy.
     config = dict(
         type='muzero_multitask',
         model=dict(
@@ -175,29 +193,29 @@ class MuZeroMTPolicy(MuZeroPolicy):
             decay=int(1e5),
         ),
 
-        # ****** 多任务相关 ******
-        task_num=2,  # 任务数量，根据实际需求调整
-        task_id=0,    # 当前任务的起始ID
+        # ****** Multi-task related ******
+        task_num=2,  # Number of tasks, adjust as needed.
+        task_id=0,    # The starting ID of the current task.
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
         """
-        概述：
-            返回该算法的默认模型设置。
-        返回：
-            - model_info (:obj:`Tuple[str, List[str]]`): 模型名称和模型导入路径列表。
+        Overview:
+            Returns the default model configuration for this algorithm.
+        Returns:
+            - model_info (:obj:`Tuple[str, List[str]]`): A tuple containing the model name and a list of import paths.
         """
         return 'MuZeroMTModel', ['lzero.model.muzero_model_multitask']
 
     def _init_learn(self) -> None:
         """
-        概述：
-            学习模式初始化方法。初始化学习模型、优化器和MCTS工具。
+        Overview:
+            Initializes the learning mode. This method sets up the learning model, optimizer, and MCTS utilities.
         """
         super()._init_learn()
 
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        # NOTE: In board games, for a fixed learning rate of 0.003, 'Adam' performs better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
                 self._model.parameters(),
@@ -213,14 +231,15 @@ class MuZeroMTPolicy(MuZeroPolicy):
             self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay,
                                                    learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
 
+        # Learning rate scheduler
         if self._cfg.lr_piecewise_constant_decay:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            # NOTE: 1, 0.1, 0.01 are decay rates, not the learning rate itself.
             lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
-        # use model_wrapper for specialized demands of different modes
+        # Use model_wrapper for specialized demands of different modes.
         self._target_model = copy.deepcopy(self._model)
         self._target_model = model_wrap(
             self._target_model,
@@ -230,11 +249,14 @@ class MuZeroMTPolicy(MuZeroPolicy):
         )
         self._learn_model = self._model
 
+        # Image augmentation
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
                 self._cfg.augmentation,
                 image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
             )
+        
+        # Support for categorical distribution
         self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
         self.inverse_scalar_transform_handle = InverseScalarTransform(
@@ -242,16 +264,17 @@ class MuZeroMTPolicy(MuZeroPolicy):
         )
         
         # ==============================================================
-        # harmonydream (learnable weights for different losses)
+        # HarmonyDream (learnable weights for different losses)
         # ==============================================================
         if self._cfg.model.harmony_balance:
-            # List of parameter names
+            # List of parameter names.
             harmony_names = ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
-            # Initialize and name each parameter
+            # Initialize and name each parameter.
             for name in harmony_names:
                 param = torch.nn.Parameter(-torch.log(torch.tensor(1.0)))
                 setattr(self, name, param)
-            
+        
+        # RND model for intrinsic reward
         if self._cfg.use_rnd_model:
             if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
                 self._target_model_for_intrinsic_reward = model_wrap(
@@ -268,31 +291,35 @@ class MuZeroMTPolicy(MuZeroPolicy):
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
 
-        # ========= logging for analysis =========
+        # ========= Logging for analysis =========
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
         self.dormant_ratio_encoder = 0.
         self.dormant_ratio_dynamics = 0.
-        # 初始化多任务相关参数
+        
+        # Initialize multi-task related parameters.
         self.task_num_for_current_rank = self._cfg.task_num
         self.task_id = self._cfg.task_id
 
     def _forward_learn(self, data: List[Tuple[torch.Tensor, torch.Tensor, int]]) -> Dict[str, Union[float, int]]:
         """
-        概述：
-            学习模式的前向函数，是学习过程的核心。数据从重放缓冲区采样，计算损失并反向传播更新模型。
-        参数：
-            - data (:obj:`List[Tuple[torch.Tensor, torch.Tensor, int]]`): 每个任务的数据元组列表，
-              每个元组包含 (current_batch, target_batch, task_id)。
-        返回：
-            - info_dict (:obj:`Dict[str, Union[float, int]]`): 用于记录的信息字典，包含当前学习损失和学习统计信息。
+        Overview:
+            The forward function for learning, which is the core of the learning process.
+            Data is sampled from the replay buffer, and the loss is calculated and backpropagated
+            to update the model.
+        Arguments:
+            - data (:obj:`List[Tuple[torch.Tensor, torch.Tensor, int]]`): A list of data tuples for each task,
+              where each tuple contains (current_batch, target_batch, task_id).
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): A dictionary of information for logging,
+              including the current learning loss and other learning statistics.
         """
         self._learn_model.train()
         self._target_model.train()
 
-        # 初始化多任务损失列表
+        # Initialize lists for multi-task losses.
         reward_loss_multi_task = []
         policy_loss_multi_task = []
         value_loss_multi_task = []
@@ -302,8 +329,8 @@ class MuZeroMTPolicy(MuZeroPolicy):
         value_priority_multi_task = []
         value_priority_mean_multi_task = []
 
-        weighted_total_loss = 0.0  # 初始化为0
-        losses_list = []  # 用于存储每个任务的损失
+        weighted_total_loss = 0.0  # Initialize to zero.
+        losses_list = []  # To store the loss for each task.
 
         for task_idx, (current_batch, target_batch, task_id) in enumerate(data):
             obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -311,13 +338,13 @@ class MuZeroMTPolicy(MuZeroPolicy):
 
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
-            # 数据增强
+            # Data augmentation.
             if self._cfg.use_augmentation:
                 obs_batch = self.image_transforms.transform(obs_batch)
                 if self._cfg.model.self_supervised_learning_loss:
                     obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
-            # 准备动作批次并转换为张量
+            # Prepare action batch and convert to tensor.
             action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
             data_list = [mask_batch, target_reward, target_value, target_policy, weights]
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(
@@ -329,20 +356,20 @@ class MuZeroMTPolicy(MuZeroPolicy):
 
             assert obs_batch.size(0) == self._cfg.batch_size[task_idx] == target_reward.size(0)
 
-            # 变换奖励和价值到缩放形式
+            # Transform rewards and values to scaled representation.
             transformed_target_reward = scalar_transform(target_reward)
             transformed_target_value = scalar_transform(target_value)
 
-            # 转换为类别分布
+            # Convert to categorical distribution.
             target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
             target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
-            # 初始推理
+            # Initial inference.
             network_output = self._learn_model.initial_inference(obs_batch, task_id=task_id)
 
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
-            # 记录 Dormant Ratio 和 L2 Norm
+            # Log Dormant Ratio and L2 Norm.
             if self._cfg.cal_dormant_ratio:
                 self.dormant_ratio_encoder = cal_dormant_ratio(
                     self._learn_model.representation_network, obs_batch.detach(),
@@ -350,21 +377,21 @@ class MuZeroMTPolicy(MuZeroPolicy):
                 )
             latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()
 
-            # 逆变换价值
+            # Inverse transform value.
             original_value = self.inverse_scalar_transform_handle(value)
 
-            # 初始化预测值和策略
+            # Initialize predicted values and policies.
             predicted_rewards = []
             if self._cfg.monitor_extra_statistics:
                 predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                     policy_logits, dim=1
                 ).detach().cpu()
 
-            # 计算优先级
+            # Calculate priority.
             value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
             value_priority = value_priority.data.cpu().numpy() + 1e-6
 
-            # 计算第一个步骤的策略和价值损失
+            # Calculate policy and value loss for the first step.
             policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
             value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
@@ -376,18 +403,18 @@ class MuZeroMTPolicy(MuZeroPolicy):
             consistency_loss = torch.zeros(self._cfg.batch_size[task_idx], device=self._cfg.device)
             target_policy_entropy = 0
 
-            # 循环进行多个unroll步骤
+            # Unroll loop for multiple steps.
             for step_k in range(self._cfg.num_unroll_steps):
-                # 使用动态函数进行递归推理
+                # Recurrent inference using the dynamics function.
                 network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_k])
                 latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
-                # 记录 Dormant Ratio
+                # Log Dormant Ratio for the dynamics network.
                 if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.cal_dormant_ratio:
                     action_tmp = action_batch[:, step_k]
                     if len(action_tmp.shape) == 1:
                         action_tmp = action_tmp.unsqueeze(-1)
-                    # 转换动作为独热编码
+                    # Convert action to one-hot encoding.
                     action_one_hot = torch.zeros(action_tmp.shape[0], policy_logits.shape[-1], device=action_tmp.device)
                     action_tmp = action_tmp.long()
                     action_one_hot.scatter_(1, action_tmp, 1)
@@ -402,10 +429,10 @@ class MuZeroMTPolicy(MuZeroPolicy):
                         percentage=self._cfg.dormant_threshold
                     )
 
-                # 逆变换价值
+                # Inverse transform value.
                 original_value = self.inverse_scalar_transform_handle(value)
 
-                # 计算一致性损失
+                # Calculate consistency loss (self-supervised learning).
                 if self._cfg.model.self_supervised_learning_loss and self._cfg.ssl_loss_weight > 0:
                     beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
                     network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index], task_id=task_id)
@@ -418,17 +445,17 @@ class MuZeroMTPolicy(MuZeroPolicy):
                     temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
                     consistency_loss += temp_loss
 
-                # 计算策略和价值损失
+                # Calculate policy and value losses.
                 policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
                 value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
                 reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
-                # 计算策略熵损失
+                # Calculate policy entropy loss.
                 prob = torch.softmax(policy_logits, dim=-1)
                 entropy = -(prob * torch.log(prob + 1e-9)).sum(-1)
                 policy_entropy_loss += -entropy
 
-                # 计算目标策略熵（仅用于调试）
+                # Calculate target policy entropy (for debugging purposes only).
                 target_normalized_visit_count = target_policy[:, step_k + 1]
                 non_masked_indices = torch.nonzero(mask_batch[:, step_k + 1]).squeeze(-1)
                 if len(non_masked_indices) > 0:
@@ -444,8 +471,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
                         torch.tensor(target_normalized_visit_count.shape[-1], device=self._cfg.device)
                     )
 
-
-                # 记录预测值和奖励（如果监控额外统计）
+                # Log predicted values and rewards if monitoring extra statistics.
                 if self._cfg.monitor_extra_statistics:
                     original_rewards = self.inverse_scalar_transform_handle(reward)
                     original_rewards_cpu = original_rewards.detach().cpu()
@@ -458,52 +484,53 @@ class MuZeroMTPolicy(MuZeroPolicy):
                         (predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu())
                     )
 
-            # 核心学习模型更新步骤
+            # Core learning model update step.
             weighted_loss = self._cfg.policy_loss_weight * policy_loss + \
                             self._cfg.value_loss_weight * value_loss + \
                             self._cfg.reward_loss_weight * reward_loss + \
                             self._cfg.ssl_loss_weight * consistency_loss + \
                             self._cfg.policy_entropy_weight * policy_entropy_loss
 
-            # 将多个任务的损失累加
+            # Accumulate losses from multiple tasks.
             weighted_total_loss += weighted_loss.mean()
 
-            # 保留每个任务的损失用于日志记录
+            # Store per-task losses for logging.
             reward_loss_multi_task.append(reward_loss.mean().item())
             policy_loss_multi_task.append(policy_loss.mean().item())
             value_loss_multi_task.append(value_loss.mean().item())
             consistency_loss_multi_task.append(consistency_loss.mean().item())
             policy_entropy_multi_task.append(policy_entropy_loss.mean().item())
-            lambd_multi_task.append(torch.tensor(0., device=self._cfg.device).item())  # TODO: 如果使用梯度校正，可以在这里调整
+            # TODO: Adjust if using gradient correction.
+            lambd_multi_task.append(torch.tensor(0., device=self._cfg.device).item())
             value_priority_multi_task.append(value_priority.mean().item())
             value_priority_mean_multi_task.append(value_priority.mean().item())
             losses_list.append(weighted_loss.mean().item())
 
-        # 清零优化器的梯度
+        # Zero the optimizer's gradients.
         self._optimizer.zero_grad()
 
-        # 反向传播
+        # Backward pass.
         weighted_total_loss.backward()
 
-        # 梯度裁剪
+        # Gradient clipping.
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(),
             self._cfg.grad_clip_value
         )
 
-        # 多GPU训练时同步梯度
+        # Sync gradients for multi-GPU training.
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
 
-        # 更新优化器
+        # Update optimizer.
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
-        # 更新目标模型
+        # Update target model.
         self._target_model.update(self._learn_model.state_dict())
 
-        # 获取GPU内存使用情况
+        # Get GPU memory usage.
         if torch.cuda.is_available():
             torch.cuda.synchronize()
             current_memory_allocated = torch.cuda.memory_allocated()
@@ -514,7 +541,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             current_memory_allocated_gb = 0.0
             max_memory_allocated_gb = 0.0
 
-        # 构建返回的损失字典
+        # Build the return loss dictionary.
         return_loss_dict = {
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
@@ -525,8 +552,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
-        # print(f'self.task_id:{self.task_id}')
-        # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
+        # Generate task-specific loss dictionaries, prefixing each with "noreduce_".
         multi_task_loss_dicts = {
             **generate_task_loss_dict(consistency_loss_multi_task, 'noreduce_consistency_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(reward_loss_multi_task, 'noreduce_reward_loss_task{}', task_id=self.task_id),
@@ -538,10 +564,10 @@ class MuZeroMTPolicy(MuZeroPolicy):
             **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
         }
 
-        # 合并两个字典
+        # Merge the dictionaries.
         return_loss_dict.update(multi_task_loss_dicts)
 
-        # 返回最终的损失字典
+        # Return the final loss dictionary.
         return return_loss_dict
 
     def _reset_collect(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
@@ -549,7 +575,8 @@ class MuZeroMTPolicy(MuZeroPolicy):
         Overview:
             Reset the observation and action for the collector environment.
         Arguments:
-            - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The ID of the task.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -565,6 +592,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             Reset the observation and action for the evaluator environment.
         Arguments:
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The ID of the task.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -577,15 +605,16 @@ class MuZeroMTPolicy(MuZeroPolicy):
  
     def _monitor_vars_learn(self, num_tasks: int = None) -> List[str]:
         """
-        概述：
-            注册学习模式中需要监控的变量。注册的变量将根据 `_forward_learn` 的返回值记录到tensorboard。
-            如果提供了 `num_tasks`，则为每个任务生成监控变量。
-        参数：
-            - num_tasks (:obj:`int`, 可选): 任务数量。
-        返回：
-            - monitored_vars (:obj:`List[str]`): 需要监控的变量列表。
+        Overview:
+            Registers variables to be monitored during the learning phase. The registered variables
+            will be recorded to TensorBoard based on the return value of `_forward_learn`.
+            If `num_tasks` is provided, it generates monitoring variables for each task.
+        Arguments:
+            - num_tasks (:obj:`int`, optional): The number of tasks.
+        Returns:
+            - monitored_vars (:obj:`List[str]`): A list of variable names to be monitored.
         """
-        # 基本监控变量
+        # Basic monitoring variables.
         monitored_vars = [
             'Current_GPU',
             'Max_GPU',
@@ -596,7 +625,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             'total_grad_norm_before_clip_wm',
         ]
 
-        # 任务特定的监控变量
+        # Task-specific monitoring variables.
         task_specific_vars = [
             'noreduce_consistency_loss',
             'noreduce_reward_loss',
@@ -607,7 +636,8 @@ class MuZeroMTPolicy(MuZeroPolicy):
             'noreduce_value_priority',
             'noreduce_value_priority_mean',
         ]
-        # self.task_num_for_current_rank 作为当前rank的base_index
+        
+        # Use self.task_num_for_current_rank as the number of tasks for the current rank.
         num_tasks = self.task_num_for_current_rank
         print(f'self.task_num_for_current_rank: {self.task_num_for_current_rank}')
         if num_tasks is not None:
@@ -656,16 +686,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             - to_play (:obj:`int`): The player to play.
             - epsilon (:obj:`float`): The epsilon of the eps greedy exploration.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-        Shape:
-            - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
-                    S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
-            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-            - temperature: :math:`(1, )`.
-            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
-            - epsilon: :math:`(1, )`.
-            - ready_env_id: None
+            - task_id (:obj:`int`): The ID of the task.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -692,22 +713,22 @@ class MuZeroMTPolicy(MuZeroPolicy):
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             if not self._cfg.collect_with_pure_policy:
-                # the only difference between collect and eval is the dirichlet noise
+                # The only difference between collect and eval is the dirichlet noise.
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
                 ]
                 if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
+                    # C++ MCTS tree.
                     roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
                 else:
-                    # python mcts_tree
+                    # Python MCTS tree.
                     roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
                 self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
 
-                # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+                # List of lists, shape: ``{list: batch_size} -> {list: action_space_size}``
                 roots_visit_count_distributions = roots.get_distributions()
                 roots_values = roots.get_values()  # shape: {list: batch_size}
 
@@ -715,7 +736,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
                 for i, env_id in enumerate(ready_env_id):
                     distributions, value = roots_visit_count_distributions[i], roots_values[i]
                     if self._cfg.eps.eps_greedy_exploration_in_collect:
-                        # eps greedy collect
+                        # Epsilon-greedy exploration for collection.
                         action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                             distributions, temperature=self._collect_mcts_temperature, deterministic=True
                         )
@@ -723,13 +744,13 @@ class MuZeroMTPolicy(MuZeroPolicy):
                         if np.random.rand() < self.collect_epsilon:
                             action = np.random.choice(legal_actions[i])
                     else:
-                        # normal collect
-                        # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                        # the index within the legal action set, rather than the index in the entire action set.
+                        # Normal collection.
+                        # NOTE: Only legal actions possess visit counts, so ``action_index_in_legal_action_set`` represents
+                        # the index within the legal action set, not the entire action set.
                         action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                             distributions, temperature=self._collect_mcts_temperature, deterministic=False
                         )
-                        # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                        # NOTE: Convert ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                         action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                     output[env_id] = {
                         'action': action,
@@ -746,6 +767,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
                     self.last_batch_obs = data
                     self.last_batch_action = batch_action
             else:
+                # Pure policy collection (without MCTS).
                 for i, env_id in enumerate(ready_env_id):
                     policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]),
                                                   dim=0).tolist()
@@ -761,21 +783,15 @@ class MuZeroMTPolicy(MuZeroPolicy):
 
         return output
 
-    def _get_target_obs_index_in_step_k(self, step):
+    def _get_target_obs_index_in_step_k(self, step: int) -> Tuple[int, int]:
         """
         Overview:
-            Get the begin index and end index of the target obs in step k.
+            Get the begin and end indices of the target observation at step k.
         Arguments:
             - step (:obj:`int`): The current step k.
         Returns:
-            - beg_index (:obj:`int`): The begin index of the target obs in step k.
-            - end_index (:obj:`int`): The end index of the target obs in step k.
-        Examples:
-            >>> self._cfg.model.model_type = 'conv'
-            >>> self._cfg.model.image_channel = 3
-            >>> self._cfg.model.frame_stack_num = 4
-            >>> self._get_target_obs_index_in_step_k(0)
-            >>> (0, 12)
+            - beg_index (:obj:`int`): The beginning index of the target observation.
+            - end_index (:obj:`int`): The ending index of the target observation.
         """
         if self._cfg.model.model_type in ['conv', 'conv_context']:
             beg_index = self._cfg.model.image_channel * step
@@ -798,9 +814,6 @@ class MuZeroMTPolicy(MuZeroPolicy):
         if self._cfg.model.model_type == 'conv_context':
             self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(3)]
-        # elif self._cfg.model.model_type == 'mlp_context':
-        #     self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
-        #     self.last_batch_action = [-1 for _ in range(3)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, task_id: int = None) -> Dict:
@@ -813,14 +826,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-        Shape:
-            - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
-                    S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
-            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
-            - ready_env_id: None
+            - task_id (:obj:`int`): The ID of the task.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -838,36 +844,36 @@ class MuZeroMTPolicy(MuZeroPolicy):
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+                # If not in training, obtain the scalar values of the value/reward.
+                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape (B, 1)
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape (B, A)
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
-                # cpp mcts_tree
+                # C++ MCTS tree.
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
             else:
-                # python mcts_tree
+                # Python MCTS tree.
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)
 
-            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+            # List of lists, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                # the index within the legal action set, rather than the index in the entire action set.
-                #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
-                # sampling during the evaluation phase.
+                # NOTE: Only legal actions possess visit counts, so ``action_index_in_legal_action_set`` represents
+                # the index within the legal action set, not the entire action set.
+                # Setting deterministic=True implies choosing the action with the highest value (argmax)
+                # rather than sampling during the evaluation phase.
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
+                # NOTE: Convert ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
@@ -887,4 +893,3 @@ class MuZeroMTPolicy(MuZeroPolicy):
                 self.last_batch_action = batch_action
 
         return output
-

@@ -198,32 +198,69 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
-# modified from https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
-def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type):
-    # start with all of the candidate parameters
+# The following code is modified from the original implementation at:
+# https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
+
+def configure_optimizers_nanogpt(
+    model: nn.Module,
+    weight_decay: float,
+    learning_rate: float,
+    betas: Tuple[float, float],
+    device_type: str
+) -> torch.optim.AdamW:
+    """
+    Overview:
+        Configures the AdamW optimizer for the nanoGPT model. This function separates model
+        parameters into two groups: one that will be subject to weight decay and one that will not.
+        Typically, 2D and higher-dimensional tensors (e.g., weights of linear layers) are decayed,
+        while 1D tensors (e.g., biases and LayerNorm weights) are not.
+
+    Arguments:
+        - model (:obj:`nn.Module`): The model for which to configure optimizers.
+        - weight_decay (:obj:`float`): The weight decay coefficient to apply.
+        - learning_rate (:obj:`float`): The learning rate for the optimizer.
+        - betas (:obj:`Tuple[float, float]`): The beta coefficients for the AdamW optimizer (e.g., (0.9, 0.95)).
+        - device_type (:obj:`str`): The type of device being used, e.g., 'cuda' or 'cpu'.
+
+    Returns:
+        (:obj:`torch.optim.AdamW`): The configured AdamW optimizer instance.
+    """
+    # Start with all of the candidate parameters from the model.
     param_dict = {pn: p for pn, p in model.named_parameters()}
 
-    # 非常重要 对于balance pipeline ===========
-    # filter out those that do not require grad
+    # TODO: The following code is commented out, which is crucial for a balanced pipeline.
+    # We do not filter out parameters with `requires_grad=False` because their `requires_grad`
+    # attribute might be set to `True` at a later stage during training.
     # param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
 
-    # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-    # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+    # Create optimizer parameter groups. Any parameter that is 2D or higher will be weight decayed,
+    # otherwise no. i.e. all weight tensors in matrix multiplications and embeddings will be decayed,
+    # while all biases and layernorm weights will not.
     decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
     nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
     optim_groups = [
         {'params': decay_params, 'weight_decay': weight_decay},
         {'params': nodecay_params, 'weight_decay': 0.0}
     ]
+
     num_decay_params = sum(p.numel() for p in decay_params)
     num_nodecay_params = sum(p.numel() for p in nodecay_params)
     print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
     print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-    # Create AdamW optimizer and use the fused version if it is available
+
+    # Create the AdamW optimizer.
+    # Check if a fused version of AdamW is available in the current PyTorch installation.
     fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+    
+    # Note: The current logic creates a standard AdamW optimizer on CUDA-enabled systems.
+    # The 'fused' version is only considered on non-CUDA systems, where it will ultimately not be used
+    # because `device_type` would not be 'cuda'.
     if torch.cuda.is_available():
+        # On a CUDA-enabled system, create a standard AdamW optimizer.
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
     else:
+        # On a non-CUDA system, check if the fused optimizer can be used.
+        # This will be False if device_type is not 'cuda'.
         use_fused = fused_available and device_type == 'cuda'
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
@@ -559,7 +596,7 @@ def concat_output_value(output_lst: List) -> np.ndarray:
     # concat the values of the model output list
     value_lst = []
     for output in output_lst:
-        value_lst.append(output.value) # TODO:cpu
+        value_lst.append(output.value)
 
     # print(f'value_lst:{value_lst}')
     # print(f'value_lst[0]:{value_lst[0]}')
