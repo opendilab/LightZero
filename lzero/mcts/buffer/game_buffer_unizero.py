@@ -145,18 +145,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                                                                   self._cfg.num_unroll_steps].tolist()
             timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-            # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # TODO: the child_visits after position <self._cfg.game_segment_length> in the segment (with padded part) may not be updated
             # So the corresponding position should not be used in the training
             mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
-            # TODO: original buffer mask
-            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -294,9 +287,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
             timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-            # TODO: original buffer mask
-            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -461,7 +451,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # =======================================================================
 
-            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
@@ -487,6 +476,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 # do MCTS for a new policy with the recent target model
                 if self.task_id is not None:
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                    # TODO: adapt unizero multitask to timestep in rope
                     # MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep[:self.reanalyze_num], task_id=self.task_id)
                 else:
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep[:self.reanalyze_num])
@@ -582,7 +572,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # ======================================================================
 
-            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
