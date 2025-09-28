@@ -84,15 +84,14 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
-        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm')
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(
             self.all_but_last_latent_state_pattern,
             self.config.embed_dim,
-            self._get_final_norm(self.final_norm_option_in_obs_head)  # 使用指定的归一化方法
+            self._get_final_norm(self.final_norm_option_in_obs_head) 
         )
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
@@ -102,7 +101,6 @@ class WorldModel(nn.Module):
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
-        # 对于 head 部分，查找所有以 "head_" 开头的子模块
         self.head_dict = {}
         for name, module in self.named_children():
             if name.startswith("head_"):
@@ -153,9 +151,6 @@ class WorldModel(nn.Module):
 
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
-        """
-        根据指定的归一化选项返回相应的归一化模块。
-        """
         if norm_option == 'LayerNorm':
             return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
         elif norm_option == 'SimNorm':
@@ -1325,33 +1320,42 @@ class WorldModel(nn.Module):
         # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
 
-        # ========= logging for analysis =========
+        # ======================== Logging for Analysis ========================
+        # This block calculates various metrics for model analysis if the corresponding config flag is enabled.
+        # These metrics help in debugging and understanding model behavior during training.
         if self.analysis_dormant_ratio_weight_rank:
-            # Calculate dormant ratio of the encoder
-            shape = batch['observations'].shape  # (..., C, H, W)
-            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
-            dormant_ratio_encoder_dict = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
-                                                      dormant_threshold=self.dormant_threshold)
-            # print(dormant_ratio_encoder_dict)
+            # --- Dormant Ratio Calculation ---
+            # Calculate the dormant ratio of the encoder to monitor neuron activity.
+            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W)
+            # Reshape observations to create a single large batch for the encoder.
+            # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
+            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+            
+            dormant_ratio_encoder_dict = cal_dormant_ratio(
+                self.tokenizer.encoder, inputs.detach(), dormant_threshold=self.dormant_threshold
+            )
             dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
 
-            # 计算全局平均权重绝对值
+            # --- Average Weight Magnitude Calculation ---
+            # Calculate the global average absolute weight magnitude for different model components.
+            # This is a useful metric for monitoring training stability.
             avg_weight_mag_encoder = compute_average_weight_magnitude(self.tokenizer.encoder)
-            # print("Average Weight Magnitude of encoder:", avg_weight_mag_encoder)
-            # 计算全局平均权重绝对值
             avg_weight_mag_transformer = compute_average_weight_magnitude(self.transformer)
-            # print("Average Weight Magnitude of transformer:", avg_weight_mag_transformer)
-            # print(f"self.head_dict:{self.head_dict}")
             avg_weight_mag_head = compute_average_weight_magnitude(self.head_dict)
-            # print("Average Weight Magnitude of head:", avg_weight_mag_head)
 
-            # 计算 effective rank，对于 representation 层，注意：
-            # representation 层在 model.named_modules() 的名称为 "representation"
-            # print(f"self.tokenizer.encoder:{self.tokenizer.encoder}")
-            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder, inputs, representation_layer_name="last_linear")
-            # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
-            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder, inputs, representation_layer_name="sim_norm")
-            # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
+            # --- Effective Rank Calculation ---
+            # Calculate the effective rank of representations from specific layers in the encoder.
+            # This metric helps analyze the dimensionality and information content of the learned features.
+            # The 'representation_layer_name' argument specifies the target layer within the model's named modules.
+            
+            # Effective rank for the final linear layer of the encoder.
+            e_rank_last_linear = cal_effective_rank(
+                self.tokenizer.encoder, inputs, representation_layer_name="last_linear"
+            )
+            # Effective rank for the SimNorm layer of the encoder.
+            e_rank_sim_norm = cal_effective_rank(
+                self.tokenizer.encoder, inputs, representation_layer_name="sim_norm"
+            )
 
 
             self.past_kv_cache_recurrent_infer.clear()
