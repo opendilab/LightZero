@@ -799,6 +799,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, task_id=task_id
             )
 
+            # ==================== START MODIFICATION 2 ====================
+            # Extract the calculated value_priority from the returned losses.
+            value_priority_tensor = losses.intermediate_losses['value_priority']
+            # Convert to numpy array for the replay buffer, adding a small epsilon.
+            value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
+            # ===================== END MODIFICATION 2 =====================
+
+
             # TODO: Accumulate the weighted total loss. This assumes the loss from `compute_loss` is already weighted.
             weighted_total_loss += losses.loss_total
 
@@ -877,10 +885,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # TODO: The following section for calculating value_priority is commented out.
             # If re-enabled, ensure it correctly computes L1 loss between predicted and target values
             # and handles CPU/Numpy conversion properly.
-            original_value = self.value_inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
-                    batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
-            value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])
-            value_priority = value_priority.data.cpu().numpy() + 1e-6
+            # original_value = self.value_inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
+            #         batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
+            # value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])
+            # value_priority = value_priority.data.cpu().numpy() + 1e-6
             # value_priority = torch.tensor(0., device=self._cfg.device)
             # ============ End of value priority section ============
 
@@ -921,8 +929,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             latent_recon_loss_multi_task.append(latent_recon_loss)
             perceptual_loss_multi_task.append(perceptual_loss)
             latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
-            value_priority_multi_task.append(value_priority)
-            value_priority_mean_multi_task.append(value_priority.mean().item())
+            value_priority_multi_task.append(value_priority_tensor)
+            value_priority_mean_multi_task.append(value_priority_tensor.mean().item())
 
             # Append plasticity metrics.
             dormant_ratio_encoder_multi_task.append(dormant_ratio_encoder)
@@ -999,7 +1007,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             max_memory_allocated_gb = 0.
 
         # Build the dictionary of return values for logging.
-        return_loss_dict = {
+        return_log_dict = {
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
@@ -1034,7 +1042,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
             **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
         }
-        return_loss_dict.update(multi_task_loss_dicts)
+        return_log_dict.update(multi_task_loss_dicts)
 
 
         if self._learn_model.world_model.do_analysis:
@@ -1050,10 +1058,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 **generate_task_loss_dict(e_rank_sim_norm_multi_task, 'noreduce_e_rank_sim_norm_task{}', task_id=self.task_id),
             }
             # Merge the dictionaries.
-            return_loss_dict.update(plasticity_loss_dicts)
+            return_log_dict.update(plasticity_loss_dicts)
 
         # Return the final loss dictionary.
-        return return_loss_dict
+        return return_log_dict
 
     def monitor_weights_and_grads(self, model: torch.nn.Module) -> None:
         """

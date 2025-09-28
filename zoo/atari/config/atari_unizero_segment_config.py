@@ -14,7 +14,7 @@ def main(env_id, seed):
     evaluator_env_num = 3
     num_simulations = 50
     # max_env_step = int(4e5)
-    max_env_step = int(1e6)
+    max_env_step = int(10e6) # TODO
 
     batch_size = 64
     num_layers = 2
@@ -33,12 +33,14 @@ def main(env_id, seed):
     norm_type ="LN"
 
     # ====== only for debug =====
-    collector_env_num = 2
-    num_segments = 2
-    evaluator_env_num = 2
-    num_simulations = 5
-    batch_size = 5
-    buffer_reanalyze_freq = 1/1000000
+    # collector_env_num = 2
+    # num_segments = 2
+    # evaluator_env_num = 2
+    # num_simulations = 5
+    # batch_size = 5
+    # buffer_reanalyze_freq = 1/1000000
+    # replay_ratio = 1
+
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -162,7 +164,6 @@ def main(env_id, seed):
             # train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
-            # replay_buffer_size=int(1e6),
             replay_buffer_size=int(5e5),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
@@ -195,7 +196,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_lz/data_unizero_debug/{env_id[:-14]}/{env_id[:-14]}_uz_vit-encoder-ps8-finalsimnorm_LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor0929/{env_id[:-14]}/{env_id[:-14]}_uz_resnet-encoder_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -205,4 +206,8 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
+
+    args.env = 'PongNoFrameskip-v4'
+    # args.env = 'QbertNoFrameskip-v4'
+
     main(args.env, args.seed)

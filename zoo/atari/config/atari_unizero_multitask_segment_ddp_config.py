@@ -144,7 +144,8 @@ def create_config(
                     device='cuda',
                     action_space_size=action_space_size,
                     num_layers=num_layers,
-                    num_heads=24,
+                    # num_heads=24,
+                    num_heads=8,
                     embed_dim=768,
                     obs_type='image',
                     env_num=len(env_id_list),
@@ -183,6 +184,7 @@ def create_config(
 
             target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
 
+
             # ==================== START: Encoder-Clip Annealing Config ====================
             # (bool) 是否启用 encoder-clip 值的退火。
             use_encoder_clip_annealing=True,
@@ -200,7 +202,7 @@ def create_config(
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
-                        # use_priority=False,
+            # use_priority=False,
             use_priority=True,
             priority_prob_alpha=1,
             priority_prob_beta=1,
@@ -220,7 +222,9 @@ def create_config(
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
             # eval_freq=int(2e4),  # Evaluation frequency for 26 games
-            eval_freq=int(2),  # ======== TODO: only for debug========
+            eval_freq=int(1e4),  # Evaluation frequency for 8 games
+            # eval_freq=int(1e4),  # Evaluation frequency for 8 games
+            # eval_freq=int(2),  # ======== TODO: only for debug========
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -251,9 +255,9 @@ def generate_configs(
     configs = []
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
-    benchmark_tag = "unizero_atari_mt_20250929"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "data_unizero_mt_refactor0929"  # e.g., unizero_atari_mt_20250612
     model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
-    exp_name_prefix = f'data_{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
+    exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -306,8 +310,6 @@ if __name__ == "__main__":
 
     # --- Main Experiment Settings ---
     num_games = 8  # Options: 3, 8, 26
-    # num_games = 3  # Options: 3, 8, 26
-
     # num_layers = 4
     num_layers = 2 # debug
     action_space_size = 18
@@ -316,7 +318,8 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(4e5)
+    # max_env_step = int(4e5)
+    max_env_step = int(10e6) # TODO
     reanalyze_ratio = 0.0
 
     if num_games == 3:
@@ -363,20 +366,20 @@ if __name__ == "__main__":
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    buffer_reanalyze_freq = 1 / 1000000  # Effectively disable buffer reanalyze
+    buffer_reanalyze_freq = 1 / 100000000  # Effectively disable buffer reanalyze
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
     # ====== only for debug =====
-    num_games = 4  # Options: 3, 8, 26
-    num_layers = 2 # debug
-    collector_env_num = 2
-    num_segments = 2
-    evaluator_env_num = 2
-    num_simulations = 5
-    batch_sizes = [num_games] * len(env_id_list)
-    buffer_reanalyze_freq = 1/1000000
-    total_batch_size = num_games * len(env_id_list)
+    # num_games = 4  # Options: 3, 8, 26
+    # num_layers = 2 # debug
+    # collector_env_num = 2
+    # num_segments = 2
+    # evaluator_env_num = 2
+    # num_simulations = 5
+    # batch_sizes = [num_games] * len(env_id_list)
+    # buffer_reanalyze_freq = 1/100000000
+    # total_batch_size = num_games * len(env_id_list)
 
 
     # --- Training Loop ---

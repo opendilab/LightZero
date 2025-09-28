@@ -177,7 +177,8 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         self._timestep += 1
-        # logging.info(f'self._timestep: {self._timestep}')
+        if self._timestep%200==0:
+            logging.info(f'self._timestep: {self._timestep}')
         observation = self.observe()
         if done:
             logging.info(f'one episode done! total episode length is: {self._timestep}')

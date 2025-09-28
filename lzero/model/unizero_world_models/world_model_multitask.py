@@ -1713,6 +1713,29 @@ class WorldModelMT(WorldModel):
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, task_id=task_id)
 
+        if self.config.use_priority:
+            # ==================== START MODIFICATION 5 ====================
+            # Calculate value_priority, similar to MuZero.
+            with torch.no_grad():
+                # 1. Get the predicted value logits for the first step of the sequence (t=0).
+                # The shape is (B, support_size).
+                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+
+                # 2. Convert the categorical prediction to a scalar value.
+                # The shape becomes (B, 1).
+                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+
+                # 3. Get the target scalar value for the first step from the batch.
+                # The shape is (B, num_unroll_steps), so we take the first column.
+                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+
+                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
+                # This is the priority. We use reduction='none' to get per-sample priorities.
+                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
+            # ===================== END MODIFICATION 5 =====================
+        else:
+            value_priority = torch.tensor(0.)
+
         # ========= logging for analysis =========
         # if self.analysis_dormant_ratio_weight_rank:
         if self.do_analysis:
@@ -1901,6 +1924,8 @@ class WorldModelMT(WorldModel):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
+                value_priority=value_priority,
+
             )
         else:
             return LossWithIntermediateLosses(
@@ -1927,6 +1952,8 @@ class WorldModelMT(WorldModel):
                 e_rank_last_linear = e_rank_last_linear,
                 e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
+                value_priority=value_priority,
+
             )
 
     #@profile
