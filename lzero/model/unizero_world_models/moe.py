@@ -1,61 +1,40 @@
 import dataclasses
-from typing import List, Optional
+from typing import List, Any
 
 import torch
 import torch.nn.functional as F
 from simple_parsing.helpers import Serializable
 from torch import nn
 
-# Assume lzero.model.unizero_world_models.transformer._maybe_wrap_linear exists
-# from lzero.model.unizero_world_models.transformer import _maybe_wrap_linear
-def _maybe_wrap_linear(linear_layer: nn.Module, config: 'MoEConfig', name: str) -> nn.Module:
-    """A placeholder for the actual _maybe_wrap_linear function."""
-    # This function is assumed to wrap a linear layer, e.g., for applying LoRA.
-    # The actual implementation is external to this snippet.
-    return linear_layer
+from lzero.model.unizero_world_models.transformer import _maybe_wrap_linear
 
+# Note: The following lines are examples of how _maybe_wrap_linear might be used.
+# _maybe_wrap_linear(nn.Linear(config.embed_dim, 4 * config.embed_dim), config, "feed_forward")
 
-@dataclasses.dataclass
-class MoEConfig(Serializable):
-    """
-    Overview:
-        Configuration for the Mixture-of-Experts (MoE) model components.
-
-    Arguments:
-        - embed_dim (:obj:`int`): The embedding dimension for the input and output tensors.
-        - num_experts (:obj:`int`): The total number of experts in the MoE layer.
-        - num_experts_per_tok (:obj:`int`): The number of experts to route each token to (the 'k' in Top-k routing).
-        - moe_use_lora (:obj:`bool`): Whether to wrap linear layers with LoRA wrappers. Defaults to False.
-        - n_shared_experts (:obj:`int`): The number of shared experts to be applied to all tokens. Defaults to 0.
-    """
-    embed_dim: int
-    num_experts: int
-    num_experts_per_tok: int = 1
-    moe_use_lora: bool = False
-    n_shared_experts: int = 0
+# This implementation is inspired by the following sources:
+# https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/moe.py
+# https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/transformer_layers.py#L149
+# Modified from https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/transformer.py#L108
 
 
 class MultiplicationFeedForward(nn.Module):
     """
     Overview:
-        A feed-forward network layer implementing the SwiGLU variant.
-        This architecture is defined as: FFN(x) = W_2(SiLU(W_1(x)) * W_3(x)).
-        It is commonly used in modern transformer models.
-
-    References:
-        - https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/transformer.py#L108
+        Implements the SwiGLU (Swish-Gated Linear Unit) feed-forward layer, a variant of a transformer feed-forward network
+        that uses element-wise multiplication of two linear projections, one of which is passed through a SiLU activation.
+        This is often expressed as: FFN_SwiGLU(x) = (SiLU(x @ W1) * (x @ W3)) @ W2.
     """
 
-    def __init__(self, config: MoEConfig):
+    def __init__(self, config: Any) -> None:
         """
         Overview:
             Initializes the MultiplicationFeedForward layer.
         Arguments:
-            - config (:obj:`MoEConfig`): The configuration object containing model dimensions and settings.
+            - config (:obj:`Any`): A configuration object containing model hyperparameters.
+                It is expected to have `embed_dim` (int) and `moe_use_lora` (bool).
         """
         super().__init__()
         hidden_dim = 4 * config.embed_dim
-
         if config.moe_use_lora:
             self.w1 = _maybe_wrap_linear(nn.Linear(config.embed_dim, hidden_dim, bias=False), config, "feed_forward")
             self.w2 = _maybe_wrap_linear(nn.Linear(hidden_dim, config.embed_dim, bias=False), config, "feed_forward")
@@ -68,57 +47,168 @@ class MultiplicationFeedForward(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Overview:
-            Performs the forward pass of the SwiGLU-variant feed-forward network.
+            Performs the forward pass of the SwiGLU layer.
         Arguments:
-            - x (:obj:`torch.Tensor`): The input tensor of shape [batch_size, seq_len, embed_dim].
+            - x (:obj:`torch.Tensor`): The input tensor.
         Returns:
-            - (:obj:`torch.Tensor`): The output tensor of shape [batch_size, seq_len, embed_dim].
+            - torch.Tensor: The output tensor after applying the SwiGLU transformation.
         """
-        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+        return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
+
+
+@dataclasses.dataclass
+class MoeArgs(Serializable):
+    """
+    Overview:
+        Dataclass for storing Mixture-of-Experts (MoE) configuration arguments.
+    """
+    num_experts: int  # The total number of experts in the MoE layer.
+    num_experts_per_tok: int  # The number of experts to route each token to (k).
 
 
 class MoELayer(nn.Module):
     """
     Overview:
-        An efficient, vectorized implementation of a Mixture-of-Experts (MoE) layer.
-        This layer routes each token to a subset of experts (Top-k routing) and combines their
-        outputs. The implementation is designed to be highly efficient on parallel hardware
-        by avoiding loops and using vectorized operations. An optional shared expert can
-        be applied to all tokens.
+        A straightforward implementation of a Mixture-of-Experts (MoE) layer.
+        This version iterates through each expert and processes the tokens routed to it.
+        While clear and easy to understand, it can be less efficient than vectorized approaches.
 
-    Algorithm:
-        1.  **Routing**: A gating network computes logits for each expert. Top-k experts are selected for each token.
-        2.  **Dispatch**: Token-expert assignments are flattened and sorted by expert ID. This groups all tokens
-            destined for the same expert into contiguous blocks.
-        3.  **Expert Computation**: Each expert processes its assigned batch of tokens in a single forward pass.
-        4.  **Combine & Scatter**: The outputs from the experts are weighted by the gate probabilities and
-            scattered back to their original token positions.
-        5.  **Shared Expert**: If configured, a shared expert's output is added to the result.
+        The process is as follows:
+        1. The input tensor `x` is flattened from [B, T, D] to [N, D], where N = B * T.
+        2. A gating network calculates logits for each token to determine expert assignment.
+        3. For each token, the top-k experts are selected based on the logits.
+        4. The layer iterates through each expert, gathers all tokens assigned to it,
+           and computes their outputs.
+        5. The outputs are weighted by the gating scores and summed up.
+        6. An optional shared expert can be applied to all tokens.
+        7. The final tensor is reshaped to its original shape [B, T, D].
 
-    References:
-        - https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/moe.py
+    Attributes:
+        - dim (:obj:`int`): The dimension of the input features.
+        - num_experts (:obj:`int`): The total number of experts.
+        - num_experts_per_tok (:obj:`int`): The number of experts activated per token (top-k).
+        - gate (:obj:`nn.Module`): The gating network that produces routing logits.
+        - experts (:obj:`nn.ModuleList`): A list of expert networks.
+        - shared_expert (:obj:`nn.Module` or `None`): An optional shared expert applied to all tokens.
     """
 
-    def __init__(self, config: MoEConfig, experts: List[nn.Module], gate: nn.Module):
+    def __init__(self, config: Any, experts: List[nn.Module], gate: nn.Module, num_experts_per_tok: int = 1) -> None:
         """
         Overview:
-            Initializes the MoE layer.
+            Initializes the MoELayer.
         Arguments:
-            - config (:obj:`MoEConfig`): The configuration object for the MoE layer.
-            - experts (:obj:`List[nn.Module]`): A list of expert neural network modules.
-            - gate (:obj:`nn.Module`): The gating network that computes routing logits.
+            - config (:obj:`Any`): A configuration object. Expected to have `embed_dim` and optionally `n_shared_experts`.
+            - experts (:obj:`List[nn.Module]`): A list of PyTorch modules representing the experts.
+            - gate (:obj:`nn.Module`): The gating module for routing tokens.
+            - num_experts_per_tok (:obj:`int`): The number of experts to use for each token.
         """
         super().__init__()
         self.dim = config.embed_dim
-        self.num_experts = config.num_experts
-        self.num_experts_per_tok = config.num_experts_per_tok
-
+        self.num_experts = len(experts)
+        self.num_experts_per_tok = num_experts_per_tok
         self.gate = gate
         self.experts = nn.ModuleList(experts)
 
-        self.shared_expert: Optional[nn.Module] = None
-        if config.n_shared_experts > 0:
-            # Create a shared expert FFN if configured
+        # If specified in the config, create a shared expert branch.
+        if hasattr(config, "n_shared_experts") and config.n_shared_experts > 0:
+            # TODO: The architecture of the shared expert could be made more configurable.
+            self.shared_expert = nn.Sequential(
+                nn.Linear(self.dim, config.n_shared_experts * (4 * self.dim)),
+                nn.GELU(),
+                nn.Linear(config.n_shared_experts * (4 * self.dim), self.dim)
+            )
+        else:
+            self.shared_expert = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Overview:
+            Performs the forward pass for the MoE layer.
+        Arguments:
+            - x (:obj:`torch.Tensor`): The input tensor of shape [batch_size, seq_len, dim].
+        Returns:
+            - torch.Tensor: The output tensor with the same shape as the input.
+        """
+        # Store original shape and flatten input to 2D: [batch_size * seq_len, dim]
+        original_shape = x.size()
+        x = x.view(-1, self.dim)
+
+        # Compute gate logits, shape: [num_tokens, num_experts]
+        gate_logits = self.gate(x)
+        # Select top-k experts for each token.
+        weights, indices = torch.topk(gate_logits, self.num_experts_per_tok, dim=1)
+        # Normalize the weights of selected experts using softmax.
+        weights = F.softmax(weights, dim=1).to(x.dtype)
+
+        # Initialize the output tensor for expert computations.
+        expert_output = torch.zeros_like(x)
+
+        # Iterate over each expert to compute outputs for the tokens routed to it.
+        for expert_id in range(self.num_experts):
+            # Find the tokens that have this expert in their top-k list.
+            batch_idx, expert_tok_idx = torch.where(indices == expert_id)
+            if batch_idx.numel() == 0:
+                continue
+
+            # Select the subset of tokens for the current expert.
+            token_subset = x[batch_idx]  # Shape: [num_tokens_for_expert, dim]
+            # Compute the output from the current expert.
+            output_expert = self.experts[expert_id](token_subset)
+            # Get the corresponding weights for these tokens.
+            token_weights = weights[batch_idx, expert_tok_idx].unsqueeze(-1)
+            # Apply weights and accumulate the output.
+            expert_output[batch_idx] += output_expert * token_weights
+
+        # If a shared expert exists, add its output.
+        if self.shared_expert is not None:
+            shared_output = self.shared_expert(x)
+            output = expert_output + shared_output
+        else:
+            output = expert_output
+
+        # Restore the original tensor shape and return.
+        return output.view(original_shape)
+
+
+class MoELayerOptimized(nn.Module):
+    """
+    Overview:
+        An optimized implementation of the Mixture-of-Experts (MoE) layer that maintains the same API as `MoELayer`.
+        This version avoids loops over experts by using a vectorized scatter-gather approach, which is significantly
+        more efficient on modern hardware. The forward pass complexity is O(N_tokens + ΣE_i), where ΣE_i is the
+        total number of tokens processed across all experts.
+
+    The process is as follows:
+        1. **Routing**: Get top-k experts and their weights for each token.
+        2. **Flattening**: Create a flat list of (token_index, expert_index, weight) tuples.
+        3. **Sorting**: Sort these tuples by expert_index. This groups all tokens destined for the same expert together.
+        4. **Batch Forward**: Process the tokens for each expert in a single, contiguous batch, avoiding Python loops.
+        5. **Weighted Scatter**: Apply gating weights to the expert outputs and scatter-add them back to a buffer
+           indexed by the original token positions.
+        6. **Shared Expert**: If configured, add the output from the shared expert.
+        7. **Reshape**: Reshape the final output tensor to its original 3D shape.
+    """
+
+    def __init__(self, config: Any, experts: List[nn.Module], gate: nn.Module, num_experts_per_tok: int = 1) -> None:
+        """
+        Overview:
+            Initializes the MoELayerOptimized.
+        Arguments:
+            - config (:obj:`Any`): A configuration object. Expected to have `embed_dim` and optionally `n_shared_experts`.
+            - experts (:obj:`List[nn.Module]`): A list of PyTorch modules representing the experts.
+            - gate (:obj:`nn.Module`): The gating module for routing tokens.
+            - num_experts_per_tok (:obj:`int`): The number of experts to use for each token.
+        """
+        super().__init__()
+        self.dim = config.embed_dim
+        self.num_experts = len(experts)
+        self.num_experts_per_tok = num_experts_per_tok
+        self.gate = gate
+        self.experts = nn.ModuleList(experts)
+
+        self.use_shared = getattr(config, "n_shared_experts", 0) > 0
+        if self.use_shared:
+            # TODO: The architecture of the shared expert could be made more configurable.
             self.shared_expert = nn.Sequential(
                 nn.Linear(self.dim, config.n_shared_experts * (4 * self.dim)),
                 nn.GELU(),
@@ -128,62 +218,56 @@ class MoELayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Overview:
-            Performs the forward pass of the MoE layer.
+            Performs the optimized forward pass for the MoE layer.
         Arguments:
-            - x (:obj:`torch.Tensor`): Input tensor of shape `[batch_size, seq_len, embed_dim]`.
+            - x (:obj:`torch.Tensor`): The input tensor of shape [B, T, D].
         Returns:
-            - (:obj:`torch.Tensor`): Output tensor of the same shape as the input.
+            - torch.Tensor: The output tensor with the same shape as the input.
         """
-        batch_size, seq_len, dim = x.shape
-        x_flat = x.view(-1, dim)  # Shape: [N, D], where N = B * T
+        B, T, D = x.shape
+        x_flat = x.reshape(-1, D)  # [N, D]; N = B*T
 
-        # 1. --- Routing ---
-        # Compute routing logits and select top-k experts for each token.
-        gate_logits = self.gate(x_flat)  # Shape: [N, E]
-        weights, topk_indices = torch.topk(gate_logits, self.num_experts_per_tok, dim=1)  # Shape: [N, k]
-        weights = F.softmax(weights, dim=1, dtype=torch.float).to(x.dtype)  # Shape: [N, k]
+        # 1. Routing: Get top-k experts and weights.
+        gate_logits = self.gate(x_flat)  # [N, E]
+        weights, topk_idx = torch.topk(gate_logits, self.num_experts_per_tok, dim=1)  # [N, k]
+        weights = F.softmax(weights, dim=1).to(x.dtype)  # [N, k]
 
-        # 2. --- Flatten token-expert assignments ---
-        # Create a flat list of (token_index, expert_index) pairs for efficient processing.
-        num_tokens, k = weights.shape
-        flat_token_indices = torch.arange(num_tokens, device=x.device).repeat_interleave(k)  # Shape: [N*k]
-        flat_expert_indices = topk_indices.reshape(-1)  # Shape: [N*k]
-        flat_weights = weights.reshape(-1, 1)  # Shape: [N*k, 1]
-        flat_inputs = x_flat[flat_token_indices]  # Shape: [N*k, D]
+        # 2. Flatten token-expert pairs.
+        N, k = weights.shape
+        flat_token_idx = torch.arange(N, device=x.device).repeat_interleave(k)  # [N*k]
+        flat_expert_idx = topk_idx.reshape(-1)  # [N*k]
+        flat_weight = weights.reshape(-1, 1)  # [N*k, 1]
+        flat_input = x_flat[flat_token_idx]  # [N*k, D]
 
-        # 3. --- Dispatch tokens to experts by sorting ---
-        # Sort by expert index to group tokens for the same expert together.
-        sort_order = torch.argsort(flat_expert_indices)
-        sorted_expert_indices = flat_expert_indices[sort_order]
-        sorted_token_indices = flat_token_indices[sort_order]
-        sorted_weights = flat_weights[sort_order]
-        sorted_inputs = flat_inputs[sort_order]
+        # 3. Sort by expert index to group tokens for batch processing.
+        sort_order = torch.argsort(flat_expert_idx)  # [N*k]
+        flat_expert_idx = flat_expert_idx[sort_order]
+        flat_token_idx = flat_token_idx[sort_order]
+        flat_weight = flat_weight[sort_order]
+        flat_input = flat_input[sort_order]
 
-        # 4. --- Batched expert computation ---
-        # Process tokens for each expert in a single batch.
-        expert_counts = torch.bincount(sorted_expert_indices, minlength=self.num_experts)  # Shape: [E]
-        output_buffer = torch.zeros_like(sorted_inputs)  # Shape: [N*k, D]
+        # Count how many tokens each expert will process.
+        counts = torch.bincount(flat_expert_idx, minlength=self.num_experts)  # [E]
 
+        # Prepare output buffer.
+        out_buffer = torch.zeros_like(flat_input)  # [N*k, D]
+
+        # 4. Perform forward pass for each expert on its batch of tokens.
         ptr = 0
-        for expert_id, count in enumerate(expert_counts.tolist()):
-            if count == 0:
+        for eid, num in enumerate(counts.tolist()):
+            if num == 0:
                 continue
-            
-            # Select the slice of tokens for the current expert.
-            segment = slice(ptr, ptr + count)
-            # Run the expert on its batch of tokens.
-            output_buffer[segment] = self.experts[expert_id](sorted_inputs[segment])
-            ptr += count
+            seg = slice(ptr, ptr + num)
+            out_buffer[seg] = self.experts[eid](flat_input[seg])
+            ptr += num
 
-        # 5. --- Combine outputs and scatter back ---
-        # Weight the outputs and add them back to the original token positions.
-        output_buffer.mul_(sorted_weights)  # In-place weighting
-        
-        token_output = torch.zeros_like(x_flat)  # Shape: [N, D]
-        token_output.index_add_(0, sorted_token_indices, output_buffer)
+        # 5. Apply weights and scatter-add results back to token-indexed buffer.
+        out_buffer.mul_(flat_weight)  # In-place multiplication by weights.
+        token_output = torch.zeros_like(x_flat)  # [N, D]
+        token_output.index_add_(0, flat_token_idx, out_buffer)
 
-        # 6. --- Add shared expert output (if any) ---
-        if self.shared_expert is not None:
+        # 6. Add shared expert output if it exists.
+        if self.use_shared:
             token_output.add_(self.shared_expert(x_flat))
 
-        return token_output.view(batch_size, seq_len, dim)
+        return token_output.reshape(B, T, D)

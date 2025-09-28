@@ -373,6 +373,56 @@ class UniZeroPolicy(MuZeroPolicy):
 
         self.accumulation_steps = self._cfg.accumulation_steps
 
+# ==================== START: 目标熵正则化初始化 ====================
+        # 从配置中读取是否启用自适应alpha，并提供一个默认值
+        self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
+
+        # 在 _init_learn 中增加配置
+        self.target_entropy_start_ratio = self._cfg.get('target_entropy_start_ratio', 0.98)
+        self.target_entropy_end_ratio = self._cfg.get('target_entropy_end_ratio', 0.7)
+        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000) # 例如，在200k步内完成退火 2M envsteps
+
+        if self.use_adaptive_entropy_weight:
+            # 1. 设置目标熵。对于离散动作空间，一个常见的启发式设置是动作空间维度的负对数乘以一个系数。
+            #    这个系数（例如0.98）可以作为一个超参数。
+            action_space_size = self._cfg.model.action_space_size
+            self.target_entropy = -np.log(1.0 / action_space_size) * 0.98
+
+            # 2. 初始化一个可学习的 log_alpha 参数。
+            #    初始化为0，意味着初始的 alpha = exp(0) = 1.0。
+            self.log_alpha = torch.nn.Parameter(torch.zeros(1, device=self._cfg.device), requires_grad=True)
+
+            # 3. 为 log_alpha 创建一个专属的优化器。
+            #    使用与主优化器不同的、较小的学习率（例如1e-4）通常更稳定。
+            alpha_lr = self._cfg.get('adaptive_entropy_alpha_lr', 1e-4)
+            self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
+
+            print("="*20)
+            print(">>> 目标熵正则化 (自适应Alpha) 已启用 <<<")
+            print(f"    目标熵 (Target Entropy): {self.target_entropy:.4f}")
+            print(f"    Alpha 优化器学习率: {alpha_lr:.2e}")
+            print("="*20)
+        # ===================== END: 目标熵正则化初始化 =====================
+
+        # ==================== START: 初始化 Encoder-Clip Annealing 参数 ====================
+        self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
+        if self.use_encoder_clip_annealing:
+            self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
+            self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
+            self.encoder_clip_end = self._cfg.get('encoder_clip_end_value', 10.0)
+            self.encoder_clip_anneal_steps = self._cfg.get('encoder_clip_anneal_steps', 200000)
+
+            print("="*20)
+            print(">>> Encoder-Clip 退火已启用 <<<")
+            print(f"    类型: {self.encoder_clip_anneal_type}")
+            print(f"    范围: {self.encoder_clip_start} -> {self.encoder_clip_end}")
+            print(f"    步数: {self.encoder_clip_anneal_steps}")
+            print("="*20)
+        else:
+            # 如果不启用退火，则使用固定的 clip 阈值
+            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
+        # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
+
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -446,6 +496,8 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
+        batch_for_gpt['scalar_target_value'] = target_value
+
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
@@ -456,10 +508,21 @@ class UniZeroPolicy(MuZeroPolicy):
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
 
-        weighted_total_loss = losses.loss_total
+        # ==================== START MODIFICATION 2 ====================
+        # Extract the calculated value_priority from the returned losses.
+        value_priority_tensor = losses.intermediate_losses['value_priority']
+        # Convert to numpy array for the replay buffer, adding a small epsilon.
+        value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
+        # ===================== END MODIFICATION 2 =====================
+
+        # weighted_total_loss = losses.loss_total
+        # TODO:
+        weighted_total_loss = (weights * losses.loss_total).mean()
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
+
+        # 从 losses 对象中提取策略熵
 
         obs_loss = self.intermediate_losses['loss_obs']
         reward_loss = self.intermediate_losses['loss_rewards']
@@ -489,6 +552,54 @@ class UniZeroPolicy(MuZeroPolicy):
         # Reset gradients at the start of each accumulation cycle
         if (train_iter % self.accumulation_steps) == 0:
             self._optimizer_world_model.zero_grad()
+
+        # ==================== START: 目标熵正则化更新逻辑 ====================
+        alpha_loss = None
+        current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight # 默认使用固定值
+        if self.use_adaptive_entropy_weight:
+            # --- 动态计算目标熵 (这部分逻辑是正确的，予以保留) ---
+            progress = min(1.0, train_iter / self.target_entropy_decay_steps)
+            current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
+            action_space_size = self._cfg.model.action_space_size
+            # 注意：我们将 target_entropy 定义为正数，更符合直觉
+            current_target_entropy = -np.log(1.0 / action_space_size) * current_ratio
+
+            # --- 计算 alpha_loss (已修正符号) ---
+            # 这是核心修正点：去掉了最前面的负号
+            # detach() 仍然是关键，确保 alpha_loss 的梯度只流向 log_alpha
+            alpha_loss = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean()
+
+            # # --- 更新 log_alpha ---
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
+            with torch.no_grad():
+                # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
+                self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+
+            # --- 使用当前更新后的 alpha (截断梯度流) ---
+            current_alpha = self.log_alpha.exp().detach()
+
+            # 重新计算加权的策略损失和总损失
+            # 注意：这里的 policy_entropy 已经是一个batch的平均值
+            weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
+            # 重新构建总损失 (不使用 losses.loss_total)
+            # 确保这里的权重与 LossWithIntermediateLosses 类中的计算方式一致
+            self.obs_loss_weight = 10
+            self.value_loss_weight = 0.5
+            self.reward_loss_weight = 1.
+            self.policy_loss_weight = 1.
+            self.ends_loss_weight = 0.
+            total_loss = (
+                self.reward_loss_weight * reward_loss +
+                self.value_loss_weight * value_loss +
+                self.policy_loss_weight * weighted_policy_loss +
+                self.obs_loss_weight  * obs_loss # 假设 ssl_loss_weight 是 obs_loss 的权重
+                # ... 如果还有其他损失项，也加进来 ...
+            )
+            weighted_total_loss = (weights * total_loss).mean()
+        # ===================== END: 目标熵正则化更新逻辑 =====================
 
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
@@ -569,7 +680,9 @@ class UniZeroPolicy(MuZeroPolicy):
             'target_policy_entropy': average_target_policy_entropy.item(),
             'reward_loss': reward_loss.item(),
             'value_loss': value_loss.item(),
-            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            # Add value_priority to the log dictionary.
+            'value_priority': value_priority_np.mean().item(),
+            'value_priority_orig': value_priority_np,
             'target_reward': target_reward.mean().item(),
             'target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
@@ -592,6 +705,13 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/grad_norm_after': self.grad_norm_after,
         }
         
+        # ==================== START: 添加新日志项 ====================
+        if self.use_adaptive_entropy_weight:
+            return_log_dict['adaptive_alpha'] = current_alpha.item()
+            return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
+            return_log_dict['alpha_loss'] = alpha_loss.item()
+        # ==================== START: 添加新日志项 ====================
+
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
             wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
@@ -921,15 +1041,30 @@ class UniZeroPolicy(MuZeroPolicy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
-        # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+
+        # We must handle both single int and list of ints for env_id.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the collector.
+            if current_steps is None:
+                world_model = self._collect_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+
+                    print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end.')
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
         # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
+        if current_steps is not None and current_steps % clear_interval == 0:
             print(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
@@ -942,8 +1077,7 @@ class UniZeroPolicy(MuZeroPolicy):
             # Free up GPU memory
             torch.cuda.empty_cache()
 
-            print('collector: collect_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
@@ -978,15 +1112,40 @@ class UniZeroPolicy(MuZeroPolicy):
 
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
-        # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # --- BEGIN ROBUST FIX ---
+        # This logic handles the crucial end-of-episode cache clearing for evaluation.
+        # The evaluator calls `_policy.reset([env_id])` when an episode is done.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
+            if current_steps is None:
+                world_model = self._eval_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+
+                    print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end.')
+
+                # The recurrent cache is global.
+                world_model.past_kv_cache_recurrent_infer.clear()
+
+                if hasattr(world_model, 'keys_values_wm_list'):
+                    world_model.keys_values_wm_list.clear()
+
+                torch.cuda.empty_cache()
+                return
+            # --- END ROBUST FIX ---
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
-
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
         # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
+        if current_steps is not None and current_steps % clear_interval == 0:
             print(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the eval model's world model
@@ -1039,6 +1198,10 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/last_step_loss_policy',
             'analysis/last_step_loss_rewards',
             'analysis/last_step_loss_obs',
+
+            'adaptive_alpha',
+            "adaptive_target_entropy_ratio",
+            'alpha_loss',
 
             'Current_GPU',
             'Max_GPU',

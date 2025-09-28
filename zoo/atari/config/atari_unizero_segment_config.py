@@ -30,14 +30,15 @@ def main(env_id, seed):
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
+    norm_type ="LN"
 
     # ====== only for debug =====
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 5
-    # batch_size = 5
-    # buffer_reanalyze_freq = 1/1000000
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 5
+    batch_size = 5
+    buffer_reanalyze_freq = 1/1000000
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -65,14 +66,16 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
+                norm_type=norm_type,
                 world_model_cfg=dict(
-                    # final_norm_option_in_obs_head='LayerNorm',
-                    # final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
+                    norm_type=norm_type,
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
                     
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
-                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    # final_norm_option_in_obs_head='SimNorm',
+                    # final_norm_option_in_encoder='SimNorm',
+                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     
                     # analysis_dormant_ratio_weight_rank=True, # TODO
 
@@ -95,7 +98,11 @@ def main(env_id, seed):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
+                    game_segment_length=game_segment_length,
+                    # use_priority=False,
+                    use_priority=True,
                     rotary_emb=False,
+                    encoder_type='resnet',
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
@@ -111,10 +118,37 @@ def main(env_id, seed):
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
+
+            # (bool) 是否启用自适应策略熵权重 (alpha)
+            use_adaptive_entropy_weight=True,
+            # (float) 自适应alpha优化器的学习率
+            adaptive_entropy_alpha_lr=1e-4,
+            target_entropy_start_ratio =0.98,
+            # target_entropy_end_ratio =0.9,
+            target_entropy_end_ratio =0.7,
+            # target_entropy_end_ratio =0.5, # TODO=====
+
+            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+
+            # ==================== START: Encoder-Clip Annealing Config ====================
+            # (bool) 是否启用 encoder-clip 值的退火。
+            use_encoder_clip_annealing=True,
+            # (str) 退火类型。可选 'linear' 或 'cosine'。
+            encoder_clip_anneal_type='cosine',
+            # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+            encoder_clip_start_value=30.0,
+            # (float) 退火的结束 clip 值 (训练后期，较严格)。
+            encoder_clip_end_value=10.0,
+            # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+
             use_augmentation=False,
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
-            use_priority=False,
+            # use_priority=False,
+            use_priority=True,
+            priority_prob_alpha=1,
+            priority_prob_beta=1,
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
             replay_ratio=replay_ratio,
@@ -161,7 +195,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_lz/data_unizero_0501/{env_id[:-14]}/{env_id[:-14]}_uz_vit-encoder-ps8-finalsimnorm_LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_lz/data_unizero_debug/{env_id[:-14]}/{env_id[:-14]}_uz_vit-encoder-ps8-finalsimnorm_LN_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

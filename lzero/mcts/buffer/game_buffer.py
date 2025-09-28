@@ -194,7 +194,11 @@ class GameBuffer(ABC, object):
             pos_in_game_segment_list.append(pos_in_game_segment)
             
 
-        make_time = [time.time() for _ in range(len(batch_index_list))]
+        # make_time = [time.time() for _ in range(len(batch_index_list))]
+
+        # Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).
+        make_time = [0. for _ in range(len(batch_index_list))]
+
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         
         if print_priority_logs:

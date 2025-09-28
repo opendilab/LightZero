@@ -126,6 +126,7 @@ def create_config(
                 num_channels=256,
                 continuous_action_space=False,
                 world_model_cfg=dict(
+                    norm_type=norm_type,
                     use_global_pooling=False,
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
@@ -148,6 +149,11 @@ def create_config(
                     obs_type='image',
                     env_num=len(env_id_list),
                     task_num=len(env_id_list),
+                    # game_segment_length=game_segment_length,
+                    game_segment_length=20, # TODO
+                    use_priority=True,
+                    priority_prob_alpha=1,
+                    priority_prob_beta=1,
                     encoder_type='vit',
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -165,12 +171,39 @@ def create_config(
                     lora_dropout=0.0,
                 ),
             ),
+            
+            # (bool) 是否启用自适应策略熵权重 (alpha)
+            use_adaptive_entropy_weight=True,
+            # (float) 自适应alpha优化器的学习率
+            adaptive_entropy_alpha_lr=1e-4,
+            target_entropy_start_ratio =0.98,
+            # target_entropy_end_ratio =0.9,
+            target_entropy_end_ratio =0.7,
+            # target_entropy_end_ratio =0.5, # TODO=====
+
+            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+
+            # ==================== START: Encoder-Clip Annealing Config ====================
+            # (bool) 是否启用 encoder-clip 值的退火。
+            use_encoder_clip_annealing=True,
+            # (str) 退火类型。可选 'linear' 或 'cosine'。
+            encoder_clip_anneal_type='cosine',
+            # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+            encoder_clip_start_value=30.0,
+            # (float) 退火的结束 clip 值 (训练后期，较严格)。
+            encoder_clip_end_value=10.0,
+            # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+
             use_task_exploitation_weight=False,
             task_complexity_weight=False,
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
-            use_priority=False,
+                        # use_priority=False,
+            use_priority=True,
+            priority_prob_alpha=1,
+            priority_prob_beta=1,
             print_task_priority_logs=False,
             cuda=True,
             model_path=None,
@@ -186,7 +219,8 @@ def create_config(
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            eval_freq=int(2e4),  # Evaluation frequency for 26 games
+            # eval_freq=int(2e4),  # Evaluation frequency for 26 games
+            eval_freq=int(2),  # ======== TODO: only for debug========
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -217,7 +251,7 @@ def generate_configs(
     configs = []
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
-    benchmark_tag = "unizero_atari_mt_2025XXXX"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "unizero_atari_mt_20250929"  # e.g., unizero_atari_mt_20250612
     model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
     exp_name_prefix = f'data_{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
@@ -262,7 +296,7 @@ if __name__ == "__main__":
         Example launch command:
         export CUDA_VISIBLE_DEVICES=4,5,6,7
         cd /path/to/your/project/
-        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 \\
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
             /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -272,6 +306,8 @@ if __name__ == "__main__":
 
     # --- Main Experiment Settings ---
     num_games = 8  # Options: 3, 8, 26
+    # num_games = 3  # Options: 3, 8, 26
+
     # num_layers = 4
     num_layers = 2 # debug
     action_space_size = 18
@@ -330,6 +366,18 @@ if __name__ == "__main__":
     buffer_reanalyze_freq = 1 / 1000000  # Effectively disable buffer reanalyze
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
+
+    # ====== only for debug =====
+    num_games = 4  # Options: 3, 8, 26
+    num_layers = 2 # debug
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 5
+    batch_sizes = [num_games] * len(env_id_list)
+    buffer_reanalyze_freq = 1/1000000
+    total_batch_size = num_games * len(env_id_list)
+
 
     # --- Training Loop ---
     for seed in [0]:

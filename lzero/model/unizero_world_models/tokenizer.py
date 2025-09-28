@@ -118,7 +118,7 @@ class Tokenizer(nn.Module):
                 # raise ValueError(
                 #     f"Provided task_id {task_id} is invalid for the encoder list of size {len(self.encoder)}."
                 # )
-                encoder_module = self.encoder
+                encoder_module = self.encoder[0]
             else:
                 encoder_module = self.encoder[task_id]
         else:

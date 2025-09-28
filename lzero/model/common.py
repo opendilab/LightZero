@@ -594,6 +594,7 @@ class RepresentationNetworkUniZero(nn.Module):
         self.observation_shape = observation_shape
         self.downsample = downsample
         self.activation = activation
+        self.embedding_dim = embedding_dim
 
         if self.downsample:
             self.downsample_net = DownSample(observation_shape, num_channels, activation, norm_type, 1)

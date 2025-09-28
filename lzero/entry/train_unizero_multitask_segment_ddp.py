@@ -422,8 +422,8 @@ class UniZeroMultiTaskTrainer:
 
         while not self._check_termination():
             self._update_dynamic_batch_sizes()
-            self._collect_step()
             self._evaluation_step()
+            self._collect_step()
 
             if not self._is_data_sufficient():
                 continue
@@ -555,7 +555,7 @@ class UniZeroMultiTaskTrainer:
             if not train_data_multi_task:
                 continue
 
-            learn_kwargs = {'task_weights': task_exploitation_weight}
+            learn_kwargs = {'task_weights': task_exploitation_weight,"train_iter":self.learner.train_iter}
             log_vars = self.learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
 
             # On the first update, calculate and sync exploitation weights if enabled.

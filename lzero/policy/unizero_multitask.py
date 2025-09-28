@@ -596,6 +596,56 @@ class UniZeroMTPolicy(UniZeroPolicy):
             e_rank_sim_norm            = 0.0,
         )
 
+        # ==================== START: 目标熵正则化初始化 ====================
+        # 从配置中读取是否启用自适应alpha，并提供一个默认值
+        self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
+
+        # 在 _init_learn 中增加配置
+        self.target_entropy_start_ratio = self._cfg.get('target_entropy_start_ratio', 0.98)
+        self.target_entropy_end_ratio = self._cfg.get('target_entropy_end_ratio', 0.7)
+        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000) # 例如，在200k步内完成退火 2M envsteps
+
+        if self.use_adaptive_entropy_weight:
+            # 1. 设置目标熵。对于离散动作空间，一个常见的启发式设置是动作空间维度的负对数乘以一个系数。
+            #    这个系数（例如0.98）可以作为一个超参数。
+            action_space_size = self._cfg.model.action_space_size
+            self.target_entropy = -np.log(1.0 / action_space_size) * 0.98
+
+            # 2. 初始化一个可学习的 log_alpha 参数。
+            #    初始化为0，意味着初始的 alpha = exp(0) = 1.0。
+            self.log_alpha = torch.nn.Parameter(torch.zeros(1, device=self._cfg.device), requires_grad=True)
+
+            # 3. 为 log_alpha 创建一个专属的优化器。
+            #    使用与主优化器不同的、较小的学习率（例如1e-4）通常更稳定。
+            alpha_lr = self._cfg.get('adaptive_entropy_alpha_lr', 1e-4)
+            self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
+
+            print("="*20)
+            print(">>> 目标熵正则化 (自适应Alpha) 已启用 <<<")
+            print(f"    目标熵 (Target Entropy): {self.target_entropy:.4f}")
+            print(f"    Alpha 优化器学习率: {alpha_lr:.2e}")
+            print("="*20)
+        # ===================== END: 目标熵正则化初始化 =====================
+
+        # ==================== START: 初始化 Encoder-Clip Annealing 参数 ====================
+        self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
+        if self.use_encoder_clip_annealing:
+            self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
+            self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
+            self.encoder_clip_end = self._cfg.get('encoder_clip_end_value', 10.0)
+            self.encoder_clip_anneal_steps = self._cfg.get('encoder_clip_anneal_steps', 200000)
+
+            print("="*20)
+            print(">>> Encoder-Clip 退火已启用 <<<")
+            print(f"    类型: {self.encoder_clip_anneal_type}")
+            print(f"    范围: {self.encoder_clip_start} -> {self.encoder_clip_end}")
+            print(f"    步数: {self.encoder_clip_anneal_steps}")
+            print("="*20)
+        else:
+            # 如果不启用退火，则使用固定的 clip 阈值
+            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
+        # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
+
 
     @staticmethod
     def _is_zero(x: Union[float, torch.Tensor], eps: float = 1e-8) -> bool:
@@ -635,7 +685,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
     #@profile
-    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None, train_iter=None, ignore_grad=False) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning in the policy. This is the core of the training process.
@@ -736,6 +786,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                                                 device=self._cfg.device)
             batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
             batch_for_gpt['target_policy'] = target_policy[:, :-1]
+            batch_for_gpt['scalar_target_value'] = target_value
 
             # Extract valid target policy data and compute its entropy.
             valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
@@ -745,7 +796,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # Update world model and compute losses.
             intermediate_losses = defaultdict(float)
             losses = self._learn_model.world_model.compute_loss(
-                batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, task_id=task_id
+                batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, task_id=task_id
             )
 
             # TODO: Accumulate the weighted total loss. This assumes the loss from `compute_loss` is already weighted.
@@ -761,6 +812,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             for loss_name, loss_value in losses.intermediate_losses.items():
                 intermediate_losses[f"{loss_name}"] = loss_value
 
+
+
             obs_loss = intermediate_losses['loss_obs']
             reward_loss = intermediate_losses['loss_rewards']
             policy_loss = intermediate_losses['loss_policy']
@@ -771,15 +824,64 @@ class UniZeroMTPolicy(UniZeroPolicy):
             perceptual_loss = intermediate_losses['perceptual_loss']
             latent_state_l2_norms = intermediate_losses['latent_state_l2_norms']
 
+            # 从 losses 对象中提取策略熵
+            # ==================== START: 目标熵正则化更新逻辑 ====================
+            alpha_loss = None
+            current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight # 默认使用固定值
+            if self.use_adaptive_entropy_weight:
+                # --- 动态计算目标熵 (这部分逻辑是正确的，予以保留) ---
+                progress = min(1.0, train_iter / self.target_entropy_decay_steps)
+                current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
+                action_space_size = self._cfg.model.action_space_size
+                # 注意：我们将 target_entropy 定义为正数，更符合直觉
+                current_target_entropy = -np.log(1.0 / action_space_size) * current_ratio
+
+                # --- 计算 alpha_loss (已修正符号) ---
+                # 这是核心修正点：去掉了最前面的负号
+                # detach() 仍然是关键，确保 alpha_loss 的梯度只流向 log_alpha
+                alpha_loss = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean()
+
+                # # --- 更新 log_alpha ---
+                self.alpha_optimizer.zero_grad()
+                alpha_loss.backward()
+                self.alpha_optimizer.step()
+                # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
+                with torch.no_grad():
+                    # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
+                    self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+
+                # --- 使用当前更新后的 alpha (截断梯度流) ---
+                current_alpha = self.log_alpha.exp().detach()
+
+                # 重新计算加权的策略损失和总损失
+                # 注意：这里的 policy_entropy 已经是一个batch的平均值
+                weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
+                # 重新构建总损失 (不使用 losses.loss_total)
+                # 确保这里的权重与 LossWithIntermediateLosses 类中的计算方式一致
+                self.obs_loss_weight = 10
+                self.value_loss_weight = 0.5
+                self.reward_loss_weight = 1.
+                self.policy_loss_weight = 1.
+                self.ends_loss_weight = 0.
+                total_loss = (
+                    self.reward_loss_weight * reward_loss +
+                    self.value_loss_weight * value_loss +
+                    self.policy_loss_weight * weighted_policy_loss +
+                    self.obs_loss_weight  * obs_loss # 假设 ssl_loss_weight 是 obs_loss 的权重
+                    # ... 如果还有其他损失项，也加进来 ...
+                )
+                weighted_total_loss = (weights * total_loss).mean()
+            # ===================== END: 目标熵正则化更新逻辑 =====================
+
             # ============ For value-based priority calculation ============
             # TODO: The following section for calculating value_priority is commented out.
             # If re-enabled, ensure it correctly computes L1 loss between predicted and target values
             # and handles CPU/Numpy conversion properly.
-            # original_value = self.inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
-            #         batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
-            # value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])
-            # value_priority = value_priority.data.cpu().numpy() + 1e-6
-            value_priority = torch.tensor(0., device=self._cfg.device)
+            original_value = self.value_inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
+                    batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
+            value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])
+            value_priority = value_priority.data.cpu().numpy() + 1e-6
+            # value_priority = torch.tensor(0., device=self._cfg.device)
             # ============ End of value priority section ============
 
             # Metrics related to network plasticity.
@@ -907,6 +1009,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
+        # ==================== START: 添加新日志项 ====================
+        if self.use_adaptive_entropy_weight:
+            return_log_dict['adaptive_alpha'] = current_alpha.item()
+            return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
+            return_log_dict['alpha_loss'] = alpha_loss.item()
+        # ==================== START: 添加新日志项 ====================
+
         # Generate task-related loss dictionaries and prefix each task-related loss with "noreduce_".
         multi_task_loss_dicts = {
             **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
@@ -1009,7 +1118,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'cur_lr_world_model',
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
+
+            # 'value_priority',
+            'adaptive_alpha',
+            "adaptive_target_entropy_ratio",
+            'alpha_loss',
         ]
+
+        
 
         # Task-specific variables to be monitored.
         task_specific_vars = [
@@ -1091,8 +1207,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
             network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
+
+            # ========================== 核心修复 ==========================
+            # C++ 绑定需要一个 list，即使它在 MuZero 中代表奖励。
+            reward_roots = reward_roots.detach().cpu().numpy().tolist()
+            # ===============================================================
+
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
@@ -1107,6 +1229,16 @@ class UniZeroMTPolicy(UniZeroPolicy):
             else:
                 # Python MCTS tree implementation.
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
+
+
+            # # 在本文件开始，通过全局变量来控制是否处于调试状态
+            # global DEBUG_ENABLED;DEBUG_ENABLED = True 
+            # import torch.distributed as dist
+            # if dist.get_rank() == 0 and DEBUG_ENABLED:
+            #     print(f"rank {dist.get_rank()} 进入调试模式，输入interact，可以键入整段的python代码调试。通过设置 DEBUG_ENABLED = False, 可以跳过调试状态")
+            #     import ipdb; ipdb.set_trace()
+            # # 同步点，防止其它进程早跑
+            # dist.barrier()
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play,  timestep= timestep, task_id=task_id)
@@ -1223,9 +1355,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data, task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
+
+            # ========================== 核心修复 ==========================
+            # C++ 绑定需要一个 list，即使它在 MuZero 中代表奖励。
+            reward_roots = reward_roots.detach().cpu().numpy().tolist() # TODO=============================
+            # ===============================================================
+
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
@@ -1292,19 +1430,39 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # print('Collector: last_batch_obs and last_batch_action have been reset.')
 
         # Return immediately if env_id is not a single integer (e.g., None or a list).
-        if env_id is None or isinstance(env_id, list):
-            return
+        # if env_id is None or isinstance(env_id, list):
+        #     return
+
+        # We must handle both single int and list of ints for env_id.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the collector.
+            if current_steps is None:
+                world_model = self._collect_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+
+                    print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end.')
+
 
         # Determine the clear interval based on the environment's sample type.
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
         # Clear caches periodically to manage memory.
-        if current_steps % clear_interval == 0:
+        # if current_steps % clear_interval == 0:
+        if current_steps is not None and current_steps % clear_interval == 0:
+        
             print(f'clear_interval: {clear_interval}')
 
             # Clear various KV caches in the collect model's world model.
             world_model = self._collect_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
@@ -1327,7 +1485,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         # Clear various KV caches in the target model's world model.
         world_model = self._target_model.world_model
-        world_model.past_kv_cache_init_infer.clear()
         for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear()
         world_model.past_kv_cache_recurrent_infer.clear()
@@ -1355,20 +1512,48 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 self._cfg.evaluator_env_num,
                 self._cfg.device
             )
-            print(f'Evaluator reset: last_batch_obs_eval shape: {self.last_batch_obs_eval.shape}')
+            # print(f'Evaluator reset: last_batch_obs_eval shape: {self.last_batch_obs_eval.shape}')
 
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
 
-        # Return immediately if env_id is not a single integer.
-        if env_id is None or isinstance(env_id, list):
-            return
+        # --- BEGIN ROBUST FIX ---
+        # This logic handles the crucial end-of-episode cache clearing for evaluation.
+        # The evaluator calls `_policy.reset([env_id])` when an episode is done.
+        if env_id is not None:
+            if isinstance(env_id, int):
+                env_ids_to_reset = [env_id]
+            else: # Assumes it's a list
+                env_ids_to_reset = env_id
+
+            # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
+            if current_steps is None:
+                world_model = self._eval_model.world_model
+                for eid in env_ids_to_reset:
+                    # Clear the specific environment's initial inference cache.
+                    if eid < len(world_model.past_kv_cache_init_infer_envs):
+                        world_model.past_kv_cache_init_infer_envs[eid].clear()
+
+                    print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end.')
+
+                # The recurrent cache is global.
+                world_model.past_kv_cache_recurrent_infer.clear()
+
+                if hasattr(world_model, 'keys_values_wm_list'):
+                    world_model.keys_values_wm_list.clear()
+
+                torch.cuda.empty_cache()
+                return
+            # --- END ROBUST FIX ---
 
         # Determine the clear interval.
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
         # Clear caches periodically.
-        if current_steps % clear_interval == 0:
+        # if current_steps % clear_interval == 0:
+        if current_steps is not None and current_steps % clear_interval == 0:
+
             print(f'clear_interval: {clear_interval}')
 
             # Clear various KV caches in the eval model's world model.
