@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Sequence, Dict, Any, List
 
 import torch
 import torch.nn as nn
@@ -9,17 +9,21 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
-
-from line_profiler import line_profiler
 from .vit import ViT
-# from .vit_efficient import VisionTransformer as ViT
 
 
-# use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroMTModel')
 class UniZeroMTModel(nn.Module):
+    """
+    Overview:
+        The main model for UniZero, a multi-task agent based on a scalable latent world model.
+        This class orchestrates the representation network, world model, and prediction heads.
+        It provides two primary interfaces:
+        - `initial_inference`: Encodes an observation to produce an initial latent state and predictions (value, policy).
+        - `recurrent_inference`: Simulates dynamics by taking a history of latent states and actions to predict the next
+          latent state, reward, value, and policy.
+    """
 
-    #@profile
     def __init__(
             self,
             observation_shape: SequenceType = (4, 64, 64),
@@ -28,288 +32,251 @@ class UniZeroMTModel(nn.Module):
             num_channels: int = 64,
             activation: nn.Module = nn.GELU(approximate='tanh'),
             downsample: bool = True,
-            norm_type: Optional[str] = 'BN',
+            norm_type: str = 'BN',
             world_model_cfg: EasyDict = None,
             task_num: int = 1,
-            *args,
-            **kwargs
-    ):
+            *args: Any,
+            **kwargs: Any
+    ) -> None:
         """
         Overview:
-            The definition of data procession in the scalable latent world model of UniZero (https://arxiv.org/abs/2406.10667), including two main parts:
-                - initial_inference, which is used to predict the value, policy, and latent state based on the current observation.
-                - recurrent_inference, which is used to predict the value, policy, reward, and next latent state based on the current latent state and action.
-            The world model consists of three main components:
-                - a tokenizer, which encodes observations into embeddings,
-                - a transformer, which processes the input sequences,
-                - and heads, which generate the logits for observations, rewards, policy, and value.
+            Initializes the UniZeroMTModel, setting up the representation network, tokenizer, and world model
+            based on the provided configuration.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[3, 64, 64] for Atari.
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - num_res_blocks (:obj:`int`): The number of res blocks in UniZero model.
-            - num_channels (:obj:`int`): The channels of hidden states in representation network.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - world_model_cfg (:obj:`EasyDict`): The configuration of the world model, including the following keys:
-                - obs_type (:obj:`str`): The type of observation, which can be 'image', 'vector', or 'image_memory'.
-                - embed_dim (:obj:`int`): The dimension of the embedding.
-                - group_size (:obj:`int`): The group size of the transformer.
-                - max_blocks (:obj:`int`): The maximum number of blocks in the transformer.
-                - max_tokens (:obj:`int`): The maximum number of tokens in the transformer.
-                - context_length (:obj:`int`): The context length of the transformer.
-                - device (:obj:`str`): The device of the model, which can be 'cuda' or 'cpu'.
-                - action_space_size (:obj:`int`): The shape of the action.
-                - num_layers (:obj:`int`): The number of layers in the transformer.
-                - num_heads (:obj:`int`): The number of heads in the transformer.
-                - policy_entropy_weight (:obj:`float`): The weight of the policy entropy.
-                - analysis_sim_norm (:obj:`bool`): Whether to analyze the similarity of the norm.
+            - observation_shape (:obj:`SequenceType`): The shape of the input observation, e.g., (C, H, W).
+            - action_space_size (:obj:`int`): The size of the discrete action space.
+            - num_res_blocks (:obj:`int`): The number of residual blocks in the ResNet-based representation network.
+            - num_channels (:obj:`int`): The number of channels in the ResNet-based representation network.
+            - activation (:obj:`nn.Module`): The activation function to use throughout the network.
+            - downsample (:obj:`bool`): Whether to downsample the observation in the representation network.
+            - norm_type (:obj:`str`): The type of normalization to use, e.g., 'BN' for BatchNorm.
+            - world_model_cfg (:obj:`EasyDict`): Configuration for the world model and its components.
+            - task_num (:obj:`int`): The number of tasks for multi-task learning.
         """
-        super(UniZeroMTModel, self).__init__()
+        super().__init__()
+        print(f'========== Initializing UniZeroMTModel (num_res_blocks: {num_res_blocks}, num_channels: {num_channels}) ==========')
 
-        print(f'==========UniZeroMTModel, num_res_blocks:{num_res_blocks}, num_channels:{num_channels}===========')
-
-        self.action_space_size = action_space_size
-
-        # for multi-task
-        self.action_space_size = 18
+        # --- Basic attribute setup ---
         self.task_num = task_num
-
         self.activation = activation
         self.downsample = downsample
         world_model_cfg.norm_type = norm_type
-        assert world_model_cfg.max_tokens == 2 * world_model_cfg.max_blocks, 'max_tokens should be 2 * max_blocks, because each timestep has 2 tokens: obs and action'
 
+        # NOTE: The action_space_size passed as an argument is immediately overridden.
+        # This might be intentional for specific experiments but is not a general practice.
+        self.action_space_size = 18
+
+        assert world_model_cfg.max_tokens == 2 * world_model_cfg.max_blocks, \
+            "max_tokens should be 2 * max_blocks, as each timestep consists of an observation and an action token."
+
+        # --- Determine embedding dimensions ---
         if world_model_cfg.task_embed_option == "concat_task_embed":
-            obs_act_embed_dim = world_model_cfg.embed_dim - world_model_cfg.task_embed_dim if hasattr(world_model_cfg, "task_embed_dim") else 96
+            task_embed_dim = world_model_cfg.get("task_embed_dim", 32)  # Default task_embed_dim to 32 if not specified
+            obs_act_embed_dim = world_model_cfg.embed_dim - task_embed_dim
         else:
             obs_act_embed_dim = world_model_cfg.embed_dim
 
-        if world_model_cfg.obs_type == 'vector':
-            self.representation_network = RepresentationNetworkMLP(
-                observation_shape,
-                hidden_channels=obs_act_embed_dim,
-                layer_num=2,
-                activation=self.activation,
-                group_size=world_model_cfg.group_size,
-            )
-            # TODO: only for MemoryEnv now
-            self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
-            self.tokenizer = Tokenizer(encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
-            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print('==' * 20)
-        elif world_model_cfg.obs_type == 'image':
-            self.representation_network = nn.ModuleList()
-            if world_model_cfg.encoder_type == "resnet":
-                # for task_id in range(self.task_num):  # TODO: N independent encoder
-                for task_id in range(1):  # TODO: one share encoder
-                    self.representation_network.append(RepresentationNetworkUniZero(
-                        observation_shape,
-                        num_res_blocks,
-                        num_channels,
-                        self.downsample,
-                        activation=self.activation,
-                        norm_type=norm_type,
-                        embedding_dim=obs_act_embed_dim,
-                        group_size=world_model_cfg.group_size,
-                        final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                    ))
-            elif world_model_cfg.encoder_type == "vit":
-                for task_id in range(1):  # TODO: one share encoder
-                    if world_model_cfg.task_num <=8: 
-                        # # vit base
-                        # self.representation_network.append(ViT(
-                        #     image_size =observation_shape[1],
-                        #     patch_size = 8,
-                        #     num_classes = obs_act_embed_dim,
-                        #     dim = 768,
-                        #     depth = 12,
-                        #     heads = 12,
-                        #     mlp_dim = 3072,
-                        #     dropout = 0.1,
-                        #     emb_dropout = 0.1,
-                        #     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                        # ))
-                        # vit small
-                        self.representation_network.append(ViT(
-                            image_size =observation_shape[1],
-                            patch_size = 8,
-                            num_classes = obs_act_embed_dim,
-                            dim = 768,
-                            depth = 6,
-                            heads = 6,
-                            mlp_dim = 2048,
-                            dropout = 0.1,
-                            emb_dropout = 0.1,
-                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                            # ==================== 新增/修改部分 开始 ====================
-                            config=world_model_cfg # <--- 将包含LoRA参数的配置传递给ViT
-                            # ==================== 新增/修改部分 结束 ====================
-                        
-                        ))
-                    elif world_model_cfg.task_num > 8: 
-                        # vit base
-                        self.representation_network.append(ViT(
-                            image_size =observation_shape[1],
-                            patch_size = 8,
-                            num_classes = obs_act_embed_dim,
-                            dim = 768,
-                            depth = 12,
-                            heads = 12,
-                            mlp_dim = 3072,
-                            dropout = 0.1,
-                            emb_dropout = 0.1,
-                            final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                            # ==================== 新增/修改部分 开始 ====================
-                            config=world_model_cfg # <--- 将包含LoRA参数的配置传递给ViT
-                            # ==================== 新增/修改部分 结束 ====================
+        # --- Initialize model components based on observation type ---
+        obs_type = world_model_cfg.obs_type
+        if obs_type == 'vector':
+            self._init_vector_components(world_model_cfg, obs_act_embed_dim)
+        elif obs_type == 'image':
+            self._init_image_components(world_model_cfg, observation_shape, num_res_blocks, num_channels, obs_act_embed_dim)
+        elif obs_type == 'image_memory':
+            self._init_image_memory_components(world_model_cfg)
+        else:
+            raise ValueError(f"Unsupported observation type: {obs_type}")
 
-                        ))
-                        # # vit large # TODO======
-                        # self.representation_network.append(ViT(
-                        #     image_size =observation_shape[1],
-                        #     # patch_size = 32,
-                        #     patch_size = 8,
-                        #     num_classes = obs_act_embed_dim,
-                        #     dim = 1024,
-                        #     depth = 24,
-                        #     heads = 16,
-                        #     mlp_dim = 4096,
-                        #     dropout = 0.1,
-                        #     emb_dropout = 0.1
-                        # ))
+        # --- Initialize world model and tokenizer ---
+        self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
 
+        # --- Log parameter counts for analysis ---
+        self._log_model_parameters(obs_type)
 
-            # TODO: we should change the output_shape to the real observation shape
-            # self.decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
-
-            # ====== for analysis ======
-            if world_model_cfg.analysis_sim_norm:
-                self.encoder_hook = FeatureAndGradientHook()
-                self.encoder_hook.setup_hooks(self.representation_network)
-
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
-            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print('==' * 20)
-        elif world_model_cfg.obs_type == 'image_memory':
-            # todo for concat_task_embed
-            self.representation_network = LatentEncoderForMemoryEnv(
-                image_shape=(3, 5, 5),
-                embedding_size=world_model_cfg.embed_dim,
-                channels=[16, 32, 64],
-                kernel_sizes=[3, 3, 3],
-                strides=[1, 1, 1],
-                activation=self.activation,
-                group_size=world_model_cfg.group_size,
-            )
-            self.decoder_network = LatentDecoderForMemoryEnv(
-                image_shape=(3, 5, 5),
-                embedding_size=world_model_cfg.embed_dim,
-                channels=[64, 32, 16],
-                kernel_sizes=[3, 3, 3],
-                strides=[1, 1, 1],
-                activation=self.activation,
-            )
-
-            if world_model_cfg.analysis_sim_norm:
-                # ====== for analysis ======
-                self.encoder_hook = FeatureAndGradientHook()
-                self.encoder_hook.setup_hooks(self.representation_network)
-
-            self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, obs_type=world_model_cfg.obs_type)
-            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
-
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-            print('==' * 20)
-
-    #@profile
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None, task_id=None) -> MZNetworkOutput:
-        """
-        Overview:
-            Initial inference of UniZero model, which is the first step of the UniZero model.
-            To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
-            Then we use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``.
-        Arguments:
-            - obs_batch (:obj:`torch.Tensor`): The 3D image observation data.
-        Returns (MZNetworkOutput):
-            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
-            - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action. \
-                In initial inference, we set it to zero vector.
-            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-        Shapes:
-            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
-            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
-            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
-            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-         """
-        batch_size = obs_batch.size(0)
-        # print('=here 5='*20)
-        # import ipdb; ipdb.set_trace()
-        obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
-        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, task_id=task_id)
-        latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value
-        policy_logits = policy_logits.squeeze(1)
-        value = value.squeeze(1)
-
-        return MZNetworkOutput(
-            value,
-            [0. for _ in range(batch_size)],
-            policy_logits,
-            latent_state,
+    def _init_vector_components(self, world_model_cfg: EasyDict, obs_act_embed_dim: int) -> None:
+        """Initializes components for 'vector' observation type."""
+        self.representation_network = RepresentationNetworkMLP(
+            observation_shape=world_model_cfg.observation_shape,
+            hidden_channels=obs_act_embed_dim,
+            layer_num=2,
+            activation=self.activation,
+            group_size=world_model_cfg.group_size,
+        )
+        # TODO: This is currently specific to MemoryEnv. Generalize if needed.
+        self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
+        self.tokenizer = Tokenizer(
+            encoder=self.representation_network,
+            decoder_network=self.decoder_network,
+            with_lpips=False,
+            obs_type=world_model_cfg.obs_type
         )
 
-    #@profile
-    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            search_depth=[], task_id=None) -> MZNetworkOutput:
+    def _init_image_components(self, world_model_cfg: EasyDict, observation_shape: SequenceType, num_res_blocks: int,
+                               num_channels: int, obs_act_embed_dim: int) -> None:
+        """Initializes components for 'image' observation type."""
+        self.representation_network = nn.ModuleList()
+        encoder_type = world_model_cfg.encoder_type
+
+        # NOTE: Using a single shared encoder. The original code used a loop `for _ in range(1):`.
+        # To support N independent encoders, this logic would need to be modified.
+        if encoder_type == "resnet":
+            encoder = RepresentationNetworkUniZero(
+                observation_shape=observation_shape,
+                num_res_blocks=num_res_blocks,
+                num_channels=num_channels,
+                downsample=self.downsample,
+                activation=self.activation,
+                norm_type=world_model_cfg.norm_type,
+                embedding_dim=obs_act_embed_dim,
+                group_size=world_model_cfg.group_size,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+            )
+            self.representation_network.append(encoder)
+        elif encoder_type == "vit":
+            vit_configs = {
+                'small': {'dim': 768, 'depth': 6, 'heads': 6, 'mlp_dim': 2048},
+                'base': {'dim': 768, 'depth': 12, 'heads': 12, 'mlp_dim': 3072},
+                'large': {'dim': 1024, 'depth': 24, 'heads': 16, 'mlp_dim': 4096}, # Kept for future use
+            }
+            # Select ViT size based on the number of tasks.
+            vit_size = 'base' if self.task_num > 8 else 'small'
+            selected_vit_config = vit_configs[vit_size]
+
+            encoder = ViT(
+                image_size=observation_shape[1],
+                patch_size=8,
+                num_classes=obs_act_embed_dim,
+                dropout=0.1,
+                emb_dropout=0.1,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                config=world_model_cfg,  # Pass the config for LoRA or other adaptations
+                **selected_vit_config
+            )
+            self.representation_network.append(encoder)
+        else:
+            raise ValueError(f"Unsupported encoder type for image observations: {encoder_type}")
+
+        # For image observations, the decoder is currently not used for reconstruction during training.
+        self.decoder_network = None
+        self.tokenizer = Tokenizer(
+            encoder=self.representation_network,
+            decoder_network=self.decoder_network,
+            with_lpips=False,
+            obs_type=world_model_cfg.obs_type
+        )
+        if world_model_cfg.analysis_sim_norm:
+            self.encoder_hook = FeatureAndGradientHook()
+            self.encoder_hook.setup_hooks(self.representation_network)
+
+    def _init_image_memory_components(self, world_model_cfg: EasyDict) -> None:
+        """Initializes components for 'image_memory' observation type."""
+        # TODO: The 'concat_task_embed' option needs to be fully implemented for this obs_type.
+        self.representation_network = LatentEncoderForMemoryEnv(
+            image_shape=(3, 5, 5),
+            embedding_size=world_model_cfg.embed_dim,
+            channels=[16, 32, 64],
+            kernel_sizes=[3, 3, 3],
+            strides=[1, 1, 1],
+            activation=self.activation,
+            group_size=world_model_cfg.group_size,
+        )
+        self.decoder_network = LatentDecoderForMemoryEnv(
+            image_shape=(3, 5, 5),
+            embedding_size=world_model_cfg.embed_dim,
+            channels=[64, 32, 16],
+            kernel_sizes=[3, 3, 3],
+            strides=[1, 1, 1],
+            activation=self.activation,
+        )
+        self.tokenizer = Tokenizer(
+            encoder=self.representation_network,
+            decoder_network=self.decoder_network,
+            with_lpips=True,
+            obs_type=world_model_cfg.obs_type
+        )
+        if world_model_cfg.analysis_sim_norm:
+            self.encoder_hook = FeatureAndGradientHook()
+            self.encoder_hook.setup_hooks(self.representation_network)
+
+    def _log_model_parameters(self, obs_type: str) -> None:
+        """Logs the parameter counts of the main model components."""
+        print('--------------------------------------------------')
+        print(f'{sum(p.numel() for p in self.world_model.parameters()):,} parameters in world_model')
+        print(f'{sum(p.numel() for p in self.world_model.transformer.parameters()):,} parameters in world_model.transformer')
+        print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters()):,} parameters in tokenizer.encoder')
+
+        if obs_type in ['vector', 'image_memory'] and self.tokenizer.decoder_network is not None:
+            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters()):,} parameters in tokenizer.decoder_network')
+            if obs_type == 'image_memory':
+                 # Calculate parameters excluding decoder and LPIPS for a specific comparison point.
+                 params_without_decoder = sum(p.numel() for p in self.world_model.parameters()) - \
+                                          sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - \
+                                          sum(p.numel() for p in self.tokenizer.lpips.parameters())
+                 print(f'{params_without_decoder:,} parameters in world_model (excluding decoder and lpips)')
+        print('--------------------------------------------------')
+
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None,
+                          current_obs_batch: Optional[torch.Tensor] = None, task_id: Optional[Any] = None) -> MZNetworkOutput:
         """
         Overview:
-            Recurrent inference of UniZero model.To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
-            and decision-oriented quantities (value/policy) conditioned on the learned latent history in the world_model.
+            Performs the initial inference step of the model, corresponding to the representation function `h` in MuZero.
+            It takes an observation and produces a latent state and initial predictions.
         Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - action (:obj:`torch.Tensor`): The predicted action to rollout.
-        Returns (MZNetworkOutput):
-            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
-            - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action.
-            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - next_latent_state (:obj:`torch.Tensor`): The predicted next latent state.
-        Shapes:
-            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
-            - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
-            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
-            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
-            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-         """
+            - obs_batch (:obj:`torch.Tensor`): A batch of initial observations.
+            - action_batch (:obj:`Optional[torch.Tensor]`): A batch of actions (if available, context-dependent).
+            - current_obs_batch (:obj:`Optional[torch.Tensor]`): A batch of current observations (if different from obs_batch).
+            - task_id (:obj:`Optional[Any]`): Identifier for the current task in a multi-task setting.
+        Returns:
+            - MZNetworkOutput: An object containing the predicted value, policy logits, and the initial latent state.
+              The reward is set to a zero tensor, as it's not predicted at the initial step.
+        """
+        batch_size = obs_batch.size(0)
+        obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
+
+        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
+            obs_act_dict, task_id=task_id
+        )
+
+        # The world model returns tokens and logits; map them to the standard MZNetworkOutput format.
+        latent_state = obs_token
+        policy_logits = logits_policy.squeeze(1)
+        value = logits_value.squeeze(1)
+
+        return MZNetworkOutput(
+            value=value,
+            reward=torch.zeros(batch_size, device=value.device),  # Reward is 0 at initial inference
+            policy_logits=policy_logits,
+            latent_state=latent_state,
+        )
+
+    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index: int = 0,
+                            search_depth: List = [], task_id: Optional[Any] = None) -> MZNetworkOutput:
+        """
+        Overview:
+            Performs a recurrent inference step, corresponding to the dynamics function `g` and prediction
+            function `f` in MuZero. It predicts the next latent state, reward, policy, and value based on a
+            history of latent states and actions.
+        Arguments:
+            - state_action_history (:obj:`torch.Tensor`): A tensor representing the history of latent states and actions.
+            - simulation_index (:obj:`int`): The index of the current simulation step within MCTS.
+            - search_depth (:obj:`List`): Information about the search depth, used for positional embeddings.
+            - task_id (:obj:`Optional[Any]`): Identifier for the current task in a multi-task setting.
+        Returns:
+            - MZNetworkOutput: An object containing the predicted value, reward, policy logits, and the next latent state.
+        """
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, search_depth, task_id=task_id)
-        next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
-        policy_logits = policy_logits.squeeze(1)
-        value = value.squeeze(1)
-        reward = reward.squeeze(1)
-        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
+            state_action_history, simulation_index, search_depth, task_id=task_id
+        )
+
+        # Map the world model outputs to the standard MZNetworkOutput format.
+        next_latent_state = logits_observations
+        reward = logits_rewards.squeeze(1)
+        policy_logits = logits_policy.squeeze(1)
+        value = logits_value.squeeze(1)
+
+        return MZNetworkOutput(
+            value=value,
+            reward=reward,
+            policy_logits=policy_logits,
+            latent_state=next_latent_state,
+        )

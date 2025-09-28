@@ -23,21 +23,7 @@ from line_profiler import line_profiler
 from lzero.model.common import SimNorm
 import logging
 
-# class LearnableScale(nn.Module):
-#     """
-#     可学习且有界的标量参数:
-#       s = s_max * sigmoid(ŝ)         (0, s_max)
-#     """
-#     def __init__(self, init=1.0, s_max=1.2):
-#         super().__init__()
-#         # 反推初始值
-#         inv_sig = math.log(init / (s_max - init + 1e-9))
-#         self.logit = nn.Parameter(torch.tensor(inv_sig))
-#         self.logit.requires_grad = True # TODO
-#         self.s_max = s_max
 
-#     def forward(self):
-#         return self.s_max * torch.sigmoid(self.logit)
 
 class LearnableScale(nn.Module):
     """

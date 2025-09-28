@@ -114,7 +114,6 @@ class UniZeroModel(nn.Module):
                 # vit base
                 self.representation_network = ViT(
                     image_size =observation_shape[1],
-                    # patch_size = 32,
                     patch_size = 8,
                     num_classes = world_model_cfg.embed_dim,
                     dim = 768,
