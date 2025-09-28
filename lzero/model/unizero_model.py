@@ -10,7 +10,7 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
-from .vit import ViT
+from .vit import ViT, ViTConfig
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroModel')
@@ -112,18 +112,20 @@ class UniZeroModel(nn.Module):
                 )
             elif world_model_cfg.encoder_type == "vit":
                 # vit base
-                self.representation_network = ViT(
-                    image_size =observation_shape[1],
-                    patch_size = 8,
-                    num_classes = world_model_cfg.embed_dim,
-                    dim = 768,
-                    depth = 12,
-                    heads = 12,
-                    mlp_dim = 3072,
-                    dropout = 0.1,
-                    emb_dropout = 0.1,
+                vit_config = ViTConfig(
+                    image_size=observation_shape[1],
+                    patch_size=8,
+                    num_classes=world_model_cfg.embed_dim,
+                    dim=768,
+                    depth=12,
+                    heads=12,
+                    mlp_dim=3072,
+                    dropout=0.1,
+                    emb_dropout=0.1,
                     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                    lora_config=world_model_cfg,
                 )
+                self.representation_network = ViT(config=vit_config)
 
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:

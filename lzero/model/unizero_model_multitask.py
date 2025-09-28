@@ -9,7 +9,7 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
-from .vit import ViT
+from .vit import ViT, ViTConfig
 
 
 @MODEL_REGISTRY.register('UniZeroMTModel')
@@ -136,22 +136,24 @@ class UniZeroMTModel(nn.Module):
             vit_configs = {
                 'small': {'dim': 768, 'depth': 6, 'heads': 6, 'mlp_dim': 2048},
                 'base': {'dim': 768, 'depth': 12, 'heads': 12, 'mlp_dim': 3072},
-                'large': {'dim': 1024, 'depth': 24, 'heads': 16, 'mlp_dim': 4096}, # Kept for future use
+                'large': {'dim': 1024, 'depth': 24, 'heads': 16, 'mlp_dim': 4096},
             }
-            # Select ViT size based on the number of tasks.
             vit_size = 'base' if self.task_num > 8 else 'small'
             selected_vit_config = vit_configs[vit_size]
 
-            encoder = ViT(
-                image_size=observation_shape[1],
-                patch_size=8,
-                num_classes=obs_act_embed_dim,
-                dropout=0.1,
-                emb_dropout=0.1,
-                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
-                config=world_model_cfg,  # Pass the config for LoRA or other adaptations
+            vit_params = {
+                'image_size': observation_shape[1],
+                'patch_size': 8,
+                'num_classes': obs_act_embed_dim,
+                'dropout': 0.1,
+                'emb_dropout': 0.1,
+                'final_norm_option_in_encoder': world_model_cfg.final_norm_option_in_encoder,
+                'lora_config': world_model_cfg,
                 **selected_vit_config
-            )
+            }
+            vit_config = ViTConfig(**vit_params)
+            encoder = ViT(config=vit_config)
+            
             self.representation_network.append(encoder)
         else:
             raise ValueError(f"Unsupported encoder type for image observations: {encoder_type}")
