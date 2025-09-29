@@ -33,7 +33,7 @@
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
 
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [文档](https://opendilab.github.io/LightZero) | [LightZero 论文](https://arxiv.org/abs/2310.08348) | [UniZero 论文](https://arxiv.org/abs/2406.10667) | [ReZero 论文](https://arxiv.org/abs/2404.16364) | [🔥ScaleZero 论文](https://arxiv.org/abs/2509.07945)
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [文档](https://opendilab.github.io/LightZero) | [LightZero 论文](https://arxiv.org/abs/2310.08348) | [UniZero 论文](https://openreview.net/forum?id=Gl6dF9soQo) | [ReZero 论文](https://openreview.net/forum?id=F9Y7j3AJTu) | [🔥ScaleZero 论文](https://arxiv.org/abs/2509.07945)
 
 ## 研究日志
 - [2025.09] 🔥 ScaleZero 论文已发布在 arXiv: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945).

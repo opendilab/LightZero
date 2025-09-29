@@ -34,7 +34,7 @@ Updated on 2025.09.29 LightZero-v0.2.0
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
 > For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal).
 
-English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [UniZero Paper](https://arxiv.org/abs/2406.10667) | [ReZero Paper](https://arxiv.org/abs/2404.16364)| [🔥ScaleZero Paper](https://arxiv.org/abs/2509.07945)
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [UniZero Paper](https://openreview.net/forum?id=Gl6dF9soQo) | [ReZero Paper](https://openreview.net/forum?id=F9Y7j3AJTu) | [🔥ScaleZero Paper](https://arxiv.org/abs/2509.07945)
 
 ## News
 
