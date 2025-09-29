@@ -331,9 +331,9 @@ class DownSample(nn.Module):
         Shapes:
             - x (:obj:`torch.Tensor`): (B, C_in, H, W)
             - output (:obj:`torch.Tensor`): (B, C_out, H_out, W_out)
+        x = self.norm1(x)
         """
         x = self.conv1(x)
-        x = self.norm1(x)
         x = self.activation(x)
 
         for block in self.resblocks1:
@@ -552,14 +552,10 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
 
 class RepresentationNetworkUniZero(nn.Module):
-    """
-    Overview:
-        Representation network for UniZero. It encodes a 2D image observation into a 1D latent state.
-        This network is adaptable to different image sizes and uses a final normalization layer for stability.
-    """
+    
     def __init__(
             self,
-            observation_shape: Tuple[int, int, int] = (3, 64, 64),
+            observation_shape: SequenceType = (3, 64, 64),
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
@@ -570,6 +566,9 @@ class RepresentationNetworkUniZero(nn.Module):
             final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> None:
         """
+        Overview:
+            Representation network used in UniZero. Encode the 2D image obs into latent state.
+            Currently, the network only supports obs images with both a width and height of 64.
         Arguments:
             - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
                 for video games like atari, RGB 3 channel.
@@ -587,56 +586,79 @@ class RepresentationNetworkUniZero(nn.Module):
                 Options are 'SimNorm' and 'LayerNorm'.
         """
         super().__init__()
-        if norm_type not in ['BN', 'LN']:
-            raise ValueError(f"Unsupported norm_type: {norm_type}. Must be 'BN' or 'LN'.")
-        logging.info(f"Using norm type: {norm_type}, activation: {activation.__class__.__name__}")
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        logging.info(f"Using norm type: {norm_type}")
+        logging.info(f"Using activation type: {activation}")
 
         self.observation_shape = observation_shape
         self.downsample = downsample
+        if self.downsample:
+            self.downsample_net = DownSample(
+                observation_shape,
+                num_channels,
+                activation=activation,
+                norm_type=norm_type,
+            )
+        else:
+            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
+
+            if norm_type == 'BN':
+                self.norm = nn.BatchNorm2d(num_channels)
+            elif norm_type == 'LN':
+                if downsample:
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                        eps=1e-5)
+                else:
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
+
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                ) for _ in range(num_res_blocks)
+            ]
+        )
         self.activation = activation
         self.embedding_dim = embedding_dim
 
-        if self.downsample:
-            self.downsample_net = DownSample(observation_shape, num_channels, activation, norm_type, 1)
-        else:
-            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-            self.norm = build_normalization(norm_type, dim=3)(num_channels, *observation_shape[1:])
+        # ==================== 修改开始 ====================
+        if self.observation_shape[1] == 64:
+            # 修复：将硬编码的 64 替换为 num_channels
+            self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
 
-        self.resblocks = nn.ModuleList([
-            ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
-            for _ in range(num_res_blocks)
-        ])
+        elif self.observation_shape[1] in [84, 96]:
+            # 修复：将硬编码的 64 替换为 num_channels
+            self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
+        # ==================== 修改结束 ====================
 
-        # Determine spatial size of the feature map before the final linear layer
-        obs_height = self.observation_shape[1]
-        if self.downsample:
-            if obs_height == 64:
-                spatial_size = 8  # 64 -> 32 -> 16 -> 8
-            elif obs_height in [84, 96]:
-                spatial_size = 6  # 96 -> 48 -> 24 -> 12 -> 6
-            else:
-                # Fallback for unsupported sizes, assuming a total downsampling factor of 16
-                spatial_size = math.ceil(obs_height / 16)
-        else:
-            spatial_size = obs_height
-
-        linear_in_dim = num_channels * spatial_size * spatial_size
-        self.norm_before_last_linear = nn.LayerNorm([num_channels, spatial_size, spatial_size], eps=1e-5)
-        self.last_linear = nn.Linear(linear_in_dim, embedding_dim, bias=False)
-
-        self.final_norm_option_in_encoder = final_norm_option_in_encoder
-        if self.final_norm_option_in_encoder == 'LayerNorm':
+        self.final_norm_option_in_encoder=final_norm_option_in_encoder 
+        # 2. 在 __init__ 中统一初始化 final_norm
+        if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
+            self.final_norm = nn.LayerNorm(
+                self.embedding_dim, eps=1e-5, elementwise_affine=False
+            )
         elif self.final_norm_option_in_encoder == 'SimNorm':
+            # 确保 SimNorm 已被定义
             self.final_norm = SimNorm(simnorm_dim=group_size)
+        elif self.final_norm_option_in_encoder == 'L2Norm':
+            # 直接实例化我们自定义的 L2Norm 模块
+            self.final_norm = L2Norm(eps=1e-6)
+        elif self.final_norm_option_in_encoder is None:
+            # 如果不需要归一化，可以设置为 nn.Identity() 或 None
+            self.final_norm = nn.Identity()
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
-
+            
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): (B, C_in, H, W)
-            - output (:obj:`torch.Tensor`): (B, embedding_dim)
+            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
+                H is height.
+            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
+                output width, H_ is output height.
         """
         if self.downsample:
             x = self.downsample_net(x)
@@ -644,14 +666,28 @@ class RepresentationNetworkUniZero(nn.Module):
             x = self.conv(x)
             x = self.norm(x)
             x = self.activation(x)
-        
         for block in self.resblocks:
             x = block(x)
-        
-        x = self.norm_before_last_linear(x)
-        x = x.view(x.size(0), -1)
-        x = self.last_linear(x)
-        x = self.final_norm(x)
+
+        # Important: Transform the output feature plane to the latent state.
+        # For example, for an Atari feature plane of shape (64, 8, 8),
+        # flattening results in a size of 4096, which is then transformed to 768.
+        x = self.last_linear(x.view(x.size(0), -1))
+
+        x = x.view(-1, self.embedding_dim)
+
+        # NOTE: very important for training stability.
+        # x = self.final_norm(x)
+
+        # 3. 在 forward 中统一调用 self.final_norm
+        # 这种结构更加清晰和可扩展
+        if self.final_norm is not None:
+            x = self.final_norm(x)
+
+        # 针对 LayerNorm_Tanh 的特殊处理
+        if self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
+            x = torch.tanh(x)
+
         return x
 
 

@@ -111,6 +111,15 @@ class Tokenizer(nn.Module):
         Returns:
             - torch.Tensor: The encoded latent embeddings with a consistent shape of (B, 1, E), where B is the effective batch size.
         """
+        
+        # global DEBUG_ENABLED;DEBUG_ENABLED = True 
+        # import torch.distributed as dist
+        # if dist.get_rank() == 0 and DEBUG_ENABLED:
+        #     print(f"rank {dist.get_rank()} 进入调试模式，输入interact，可以键入整段的python代码调试。通过设置 DEBUG_ENABLED = False, 可以跳过调试状态")
+        #     import ipdb; ipdb.set_trace()
+        # # 同步点，防止其它进程早跑
+        # dist.barrier()
+
         # Step 1: Select the appropriate encoder module.
         # This handles both single-task (a single nn.Module) and multi-task (an nn.ModuleList) scenarios.
         if isinstance(self.encoder, nn.ModuleList):

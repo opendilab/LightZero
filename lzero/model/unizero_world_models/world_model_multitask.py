@@ -168,7 +168,7 @@ class WorldModelMT(WorldModel):
 
         assert self.num_experts_in_moe_head > 0
         if self.use_normal_head:
-            self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
+            self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm')
             print('We use normal head')
             for task_id in range(self.task_num):
                 if self.continuous_action_space:
@@ -335,7 +335,9 @@ class WorldModelMT(WorldModel):
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer: Optional[nn.Module] = None) -> Head:
         """Creates a standard prediction head."""
         modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
+            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
             nn.GELU(approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim)
         ]
@@ -350,6 +352,7 @@ class WorldModelMT(WorldModel):
     def _create_head_moe(self, block_mask: torch.Tensor, output_dim: int, norm_layer: Optional[nn.Module] = None, moe: Optional[nn.Module] = None) -> Head:
         """Creates a prediction head with a Mixture-of-Experts (MoE) layer."""
         modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
             moe,
             nn.Linear(self.config.embed_dim, output_dim)
         ]

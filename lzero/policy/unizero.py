@@ -18,6 +18,56 @@ from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 
+def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
+    """
+    为UniZero模型配置带有差异化学习率的优化器。
+    """
+    # 1. 定义需要特殊处理的参数
+    param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
+
+    # 2. 将参数分为三组：Transformer主干、Tokenizer、Heads
+    transformer_params = {pn: p for pn, p in param_dict.items() if 'transformer' in pn}
+    tokenizer_params = {pn: p for pn, p in param_dict.items() if 'tokenizer' in pn}
+
+    # Heads的参数是那些既不属于transformer也不属于tokenizer的
+    head_params = {
+        pn: p for pn, p in param_dict.items() 
+        if 'transformer' not in pn and 'tokenizer' not in pn
+    }
+
+    # 3. 为每组设置不同的优化器参数（特别是学习率）
+    #    这里我们仍然使用AdamW，但学习率设置更合理
+    optim_groups = [
+        {
+            'params': list(transformer_params.values()),
+            'lr': learning_rate,  # 1e-4
+            # 'lr': learning_rate * 0.2,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
+            'weight_decay': weight_decay
+            # 'weight_decay': weight_decay * 5.0 
+        },
+        {
+            'params': list(tokenizer_params.values()),
+            'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
+            # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
+            'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+
+        },
+        {
+            'params': list(head_params.values()),
+            'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
+            'weight_decay': 0.0  # 通常Heads的权重不做衰减
+            # 'weight_decay': weight_decay
+
+        }
+    ]
+
+    print("--- Optimizer Groups ---")
+    print(f"Transformer LR: {learning_rate}")
+    print(f"Tokenizer/Heads LR: {learning_rate}")
+
+    optimizer = torch.optim.AdamW(optim_groups, betas=betas)
+    return optimizer
+    
 @POLICY_REGISTRY.register('unizero')
 class UniZeroPolicy(MuZeroPolicy):
     """
@@ -323,19 +373,54 @@ class UniZeroPolicy(MuZeroPolicy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        # NOTE: nanoGPT optimizer
-        self._optimizer_world_model = configure_optimizers_nanogpt(
-            model=self._model.world_model,
-            learning_rate=self._cfg.learning_rate,
-            weight_decay=self._cfg.weight_decay,
-            device_type=self._cfg.device,
-            betas=(0.9, 0.95),
-        )
+        if self._cfg.optim_type == 'SGD':
+            # --- 改为SGD优化器 ---
+            self._optimizer_world_model = torch.optim.SGD(
+                self._model.world_model.parameters(),
+                lr=self._cfg.learning_rate,  # 初始学习率，在配置中设为 0.2
+                momentum=self._cfg.momentum, # 在配置中设为 0.9
+                weight_decay=self._cfg.weight_decay # 在配置中设为 1e-4
+            )
+        elif self._cfg.optim_type == 'AdamW':
+            # NOTE: nanoGPT optimizer
+            self._optimizer_world_model = configure_optimizers_nanogpt(
+                model=self._model.world_model,
+                learning_rate=self._cfg.learning_rate,
+                weight_decay=self._cfg.weight_decay,
+                device_type=self._cfg.device,
+                betas=(0.9, 0.95),
+            )
+        elif self._cfg.optim_type == 'AdamW_mix_lr_wdecay':
+            self._optimizer_world_model = configure_optimizer_unizero(
+                model=self._model.world_model,
+                learning_rate=self._cfg.learning_rate,  # 使用一个合理的AdamW基础学习率
+                weight_decay=self._cfg.weight_decay,
+                device_type=self._cfg.device,
+                betas=(0.9, 0.95),
+            )
 
         if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
             # TODO: check the total training steps
-            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+            # self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+            total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
+            # final_lr = self._cfg.get('final_learning_rate', 0.0)
+            final_lr = self._cfg.get('final_learning_rate', 1e-6)
+
+            self.lr_scheduler = CosineAnnealingLR(
+                self._optimizer_world_model, 
+                T_max=total_iters, 
+                eta_min=final_lr
+            )
+            print(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
+
+
+        if self._cfg.piecewise_decay_lr_scheduler:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            self.lr_scheduler = LambdaLR(self._optimizer_world_model, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)

@@ -116,8 +116,14 @@ def main(env_id, seed):
                     lora_r= 0,
                     lora_alpha =1,
                     lora_dropout= 0.0,
+                    optim_type='AdamW_mix_lr_wdecay', # only for tsne plot
+
                 ),
             ),
+            optim_type='AdamW_mix_lr_wdecay',
+            weight_decay=1e-2, # TODO: encoder 5*wd, transformer wd, head 0
+            learning_rate=0.0001,
+
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
 
@@ -155,8 +161,6 @@ def main(env_id, seed):
             update_per_collect=None,
             replay_ratio=replay_ratio,
             batch_size=batch_size,
-            optim_type='AdamW',
-            learning_rate=0.0001,
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
@@ -196,7 +200,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor0929/{env_id[:-14]}/{env_id[:-14]}_uz_resnet-encoder_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor0929/{env_id[:-14]}/{env_id[:-14]}_uz_resnet-encoder_priority_adamw-wd1e-2_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -207,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    args.env = 'PongNoFrameskip-v4'
-    # args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'PongNoFrameskip-v4'
+    args.env = 'QbertNoFrameskip-v4'
 
     main(args.env, args.seed)
