@@ -38,12 +38,11 @@ English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZ
 
 ## News
 
-- [2025.09] 🔥 ScaleZero 论文已发布在 arXiv: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945).
-- [2025.08] [ReZero 论文](https://openreview.net/forum?id=F9Y7j3AJTu)已被 CoRL 2025 RemembeRL workshop 接收。
-- [2024.06] [UniZero 论文](https://openreview.net/forum?id=Gl6dF9soQo)已被 Transactions on Machine Learning Research 接收。
-- [2023.09] [LightZero 论文](https://proceedings.neurips.cc/paper_files/paper/2023/hash/765043fe026f7d704c96cec027f13843-Abstract-Datasets_and_Benchmarks.html)已被 NeurIPS 2023 Datasets and Benchmarks Track 接收为 Spotlight Presentation。
-- [2023.04] LightZero v0.0.1 正式发布。
-- 
+- [2025.09] 🔥 The ScaleZero paper has been released on arXiv: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945).
+- [2025.08] The [ReZero paper](https://openreview.net/forum?id=F9Y7j3AJTu) has been accepted by the CoRL 2025 RemembeRL workshop.
+- [2024.06] The [UniZero paper](https://openreview.net/forum?id=Gl6dF9soQo) has been accepted by Transactions on Machine Learning Research (TMLR).
+- [2023.09] The [LightZero paper](https://proceedings.neurips.cc/paper_files/paper/2023/hash/765043fe026f7d704c96cec027f13843-Abstract-Datasets_and_Benchmarks.html) has been accepted as a Spotlight Presentation at the NeurIPS 2023 Datasets and Benchmarks Track.
+- [2023.04] LightZero v0.0.1 was officially released.
 
 ## 🔍 Background
 
@@ -68,6 +67,7 @@ For further details, please refer to [Features](#features), [Framework Structure
 ### Outline
 
 - [LightZero](#lightzero)
+  - [News](#news)
   - [🔍 Background](#-background)
   - [🎨 Overview](#-overview)
     - [Outline](#outline)
