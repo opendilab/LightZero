@@ -214,10 +214,12 @@ def main(env_id, seed):
             adaptive_entropy_alpha_lr=1e-4,
             target_entropy_start_ratio =0.98,
             # target_entropy_end_ratio =0.9,
-            target_entropy_end_ratio =0.7,
-            # target_entropy_end_ratio =0.5, # TODO=====
+            # target_entropy_end_ratio =0.7,
+            target_entropy_end_ratio =0.5, # TODO=====
 
-            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+            # target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+            target_entropy_decay_steps = 400000, # 例如，在400k次迭代后达到最终值
+
             
             # ==================== START: Encoder-Clip Annealing Config ====================
             # (bool) 是否启用 encoder-clip 值的退火。
@@ -229,7 +231,9 @@ def main(env_id, seed):
             # (float) 退火的结束 clip 值 (训练后期，较严格)。
             encoder_clip_end_value=10.0,
             # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
-            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+            # encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+            encoder_clip_anneal_steps=400000,  # 例如，在100k次迭代后达到最终值
+
 
             # policy_ls_eps_start=0.5, #TODO=============
             # policy_ls_eps_start=0.1, #TODO=============
@@ -286,7 +290,6 @@ def main(env_id, seed):
             # optim_type='AdamW',
             # # learning_rate=0.001,
             # learning_rate=0.0001,
-
 
             # ==================== [新增] 范数监控频率 ====================
             # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
@@ -350,8 +353,8 @@ def main(env_id, seed):
             # replay_buffer_size=int(1e6),
             replay_buffer_size=int(5e5), # TODO
 
-            eval_freq=int(5e3),
-            # eval_freq=int(1e4), # TODO
+            # eval_freq=int(5e3),
+            eval_freq=int(1e4), # TODO
             # eval_freq=int(2e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -384,7 +387,11 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-05-400k-fix_encoder-clip30-10-400k_adamw1e-4_wd1e-2-encoder1-tran1-head1_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-05-400k-fix_encoder-clip30-10-400k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-07-100k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -420,11 +427,11 @@ if __name__ == "__main__":
     # args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
     # args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
-    args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
+    # args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
     # args.env = 'HeroNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # 下面是atari8以外的2个代表环境
-    # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
     # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # 下面是已经表现不错的
@@ -445,7 +452,7 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=0
+    export CUDA_VISIBLE_DEVICES=4
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
 
