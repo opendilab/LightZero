@@ -1,6 +1,6 @@
 from typing import Union
 import torch
-
+import numpy as np
 
 class DiscreteSupport(object):
 
@@ -10,7 +10,6 @@ class DiscreteSupport(object):
         self.size = self.arange.shape[1]
         assert self.size > 0, "DiscreteSupport size must be greater than 0"
         self.step = step
-
 
 def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.) -> torch.Tensor:
     """

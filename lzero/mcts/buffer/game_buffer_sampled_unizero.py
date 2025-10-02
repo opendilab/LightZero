@@ -48,8 +48,17 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-        # self.task_id = self._cfg.task_id
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
+
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+            self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
+
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
+            self.action_space_size = self._cfg.model.action_space_size
 
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
@@ -115,21 +124,22 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
+
             # pad random action
             if self._cfg.model.continuous_action_space:
                 actions_tmp += [
-                    np.random.randn(self._cfg.model.action_space_size)
+                    np.random.randn(self.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
                 ]
                 root_sampled_actions_tmp += [
-                    np.random.rand(self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+                    np.random.rand(self._cfg.model.num_of_sampled_actions, self.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                 ]
             else:
                 # generate random `padded actions_tmp`
                 actions_tmp += generate_random_actions_discrete(
                     self._cfg.num_unroll_steps - len(actions_tmp),
-                    self._cfg.model.action_space_size,
+                    self.action_space_size,
                     1  # Number of sampled actions for actions_tmp is 1
                 )
 
@@ -138,7 +148,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 reshape = True if self._cfg.mcts_ctree else False
                 root_sampled_actions_tmp += generate_random_actions_discrete(
                     self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp),
-                    self._cfg.model.action_space_size,
+                    self.action_space_size,
                     self._cfg.model.num_of_sampled_actions,
                     reshape=reshape
                 )
@@ -277,18 +287,18 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # pad random action
             if self._cfg.model.continuous_action_space:
                 actions_tmp += [
-                    np.random.randn(self._cfg.model.action_space_size)
+                    np.random.randn(self.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
                 ]
                 root_sampled_actions_tmp += [
-                    np.random.rand(self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+                    np.random.rand(self._cfg.model.num_of_sampled_actions, self.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
                 ]
             else:
                 # generate random `padded actions_tmp`
                 actions_tmp += generate_random_actions_discrete(
                     self._cfg.num_unroll_steps - len(actions_tmp),
-                    self._cfg.model.action_space_size,
+                    self.action_space_size,
                     1  # Number of sampled actions for actions_tmp is 1
                 )
 
@@ -297,7 +307,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 reshape = True if self._cfg.mcts_ctree else False
                 root_sampled_actions_tmp += generate_random_actions_discrete(
                     self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp),
-                    self._cfg.model.action_space_size,
+                    self.action_space_size,
                     self._cfg.model.num_of_sampled_actions,
                     reshape=reshape
                 )
@@ -326,7 +336,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             if self._cfg.model.continuous_action_space:
                 # pad random action
                 bootstrap_action_tmp += [
-                    np.random.randn(self._cfg.model.action_space_size)
+                    np.random.randn(self.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps - len(bootstrap_action_tmp))
                 ]
             bootstrap_action_list.append(bootstrap_action_tmp)
@@ -489,6 +499,12 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # calculate the target value
             # batch_action.shape (32, 10)
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
+
+            if self.task_id is not None:
+                m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
+            else:
+                m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+
             m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
             # =======================================================================
 
@@ -514,18 +530,24 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 # cpp mcts_tree
                 # roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                 roots = MCTSCtree.roots(
-                    transition_batch_size, legal_actions, self._cfg.model.action_space_size,
+                    transition_batch_size, legal_actions, self.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                if self.task_id is not None:
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                if self.task_id is not None:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
@@ -629,7 +651,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         if self._cfg.model.continuous_action_space is True:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+                list(np.ones(self.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
@@ -647,7 +669,12 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
+            if self.task_id is not None:
+                # m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, task_id=self.task_id)
+
+                m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
+            else:
+                m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
 
             # if not in training, obtain the scalars of the value/reward
@@ -658,6 +685,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     m_output.policy_logits
                 ]
             )
+            
             network_output.append(m_output)
 
             if self._cfg.use_root_value:
