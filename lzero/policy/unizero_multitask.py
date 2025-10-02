@@ -194,50 +194,103 @@ class WrappedModelV3:
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
 
 
+# def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
+#     """
+#     为UniZero模型配置带有差异化学习率的优化器。
+#     """
+#     # 1. 定义需要特殊处理的参数
+#     param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
+
+#     # 2. 将参数分为三组：Transformer主干、Tokenizer、Heads
+#     transformer_params = {pn: p for pn, p in param_dict.items() if 'transformer' in pn}
+#     tokenizer_params = {pn: p for pn, p in param_dict.items() if 'tokenizer' in pn}
+
+#     # Heads的参数是那些既不属于transformer也不属于tokenizer的
+#     head_params = {
+#         pn: p for pn, p in param_dict.items() 
+#         if 'transformer' not in pn and 'tokenizer' not in pn
+#     }
+
+#     # 3. 为每组设置不同的优化器参数（特别是学习率）
+#     #    这里我们仍然使用AdamW，但学习率设置更合理
+#     optim_groups = [
+#         {
+#             'params': list(transformer_params.values()),
+#             'lr': learning_rate,  # 1e-4
+#             # 'lr': learning_rate * 0.2,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
+#             'weight_decay': weight_decay
+#             # 'weight_decay': weight_decay * 5.0 
+#         },
+#         {
+#             'params': list(tokenizer_params.values()),
+#             'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
+#             # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
+#             'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+
+#         },
+#         {
+#             'params': list(head_params.values()),
+#             'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
+#             'weight_decay': 0.0  # 通常Heads的权重不做衰减
+#             # 'weight_decay': weight_decay
+
+#         }
+#     ]
+
+#     print("--- Optimizer Groups ---")
+#     print(f"Transformer LR: {learning_rate}")
+#     print(f"Tokenizer/Heads LR: {learning_rate}")
+
+#     optimizer = torch.optim.AdamW(optim_groups, betas=betas)
+#     return optimizer
+
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
     为UniZero模型配置带有差异化学习率的优化器。
+    (修正版，确保参数组互斥)
     """
-    # 1. 定义需要特殊处理的参数
-    param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
+    # 1. 创建空的参数列表用于分组
+    transformer_params = []
+    tokenizer_params = []
+    head_params = []
 
-    # 2. 将参数分为三组：Transformer主干、Tokenizer、Heads
-    transformer_params = {pn: p for pn, p in param_dict.items() if 'transformer' in pn}
-    tokenizer_params = {pn: p for pn, p in param_dict.items() if 'tokenizer' in pn}
+    # 2. 遍历所有可训练参数，并使用 if/elif/else 结构确保每个参数只被分配到一个组
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
 
-    # Heads的参数是那些既不属于transformer也不属于tokenizer的
-    head_params = {
-        pn: p for pn, p in param_dict.items() 
-        if 'transformer' not in pn and 'tokenizer' not in pn
-    }
-
-    # 3. 为每组设置不同的优化器参数（特别是学习率）
+        if 'transformer' in name:
+            transformer_params.append(param)
+        elif 'tokenizer' in name:
+            tokenizer_params.append(param)
+        else:
+            head_params.append(param)
+            
+    # 3. 为每组设置不同的优化器参数
     #    这里我们仍然使用AdamW，但学习率设置更合理
     optim_groups = [
         {
-            'params': list(transformer_params.values()),
+            'params': transformer_params,
             'lr': learning_rate,  # 1e-4
-            # 'lr': learning_rate * 0.2,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
             'weight_decay': weight_decay
-            # 'weight_decay': weight_decay * 5.0 
         },
         {
-            'params': list(tokenizer_params.values()),
+            'params': tokenizer_params,
             'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
-            # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
             'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
-
         },
         {
-            'params': list(head_params.values()),
+            'params': head_params,
             'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
             'weight_decay': 0.0  # 通常Heads的权重不做衰减
-            # 'weight_decay': weight_decay
-
         }
     ]
 
     print("--- Optimizer Groups ---")
+    # 打印每个组的参数数量以供调试
+    print(f"Transformer params: {len(transformer_params)}")
+    print(f"Tokenizer params: {len(tokenizer_params)}")
+    print(f"Head params: {len(head_params)}")
     print(f"Transformer LR: {learning_rate}")
     print(f"Tokenizer/Heads LR: {learning_rate}")
 

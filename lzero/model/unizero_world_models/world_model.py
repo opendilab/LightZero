@@ -334,7 +334,9 @@ class WorldModel(nn.Module):
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
         modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
+            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
             nn.GELU(approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim)
         ]

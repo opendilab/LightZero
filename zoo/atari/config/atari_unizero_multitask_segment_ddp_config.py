@@ -155,20 +155,20 @@ def create_config(
                     task_num=len(env_id_list),
                     # game_segment_length=game_segment_length,
                     game_segment_length=20, # TODO
-                    # use_priority=True,
-                    use_priority=False, # TODO=====
+                    use_priority=True,
+                    # use_priority=False, # TODO=====
                     priority_prob_alpha=1,
                     priority_prob_beta=1,
-                    # encoder_type='vit',
-                    encoder_type='resnet',
+                    encoder_type='vit',
+                    # encoder_type='resnet',
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
                     moe_in_transformer=False,
 
-                    # multiplication_moe_in_transformer=True,
-                    multiplication_moe_in_transformer=False, # TODO=====
+                    multiplication_moe_in_transformer=True,
+                    # multiplication_moe_in_transformer=False, # TODO=====
 
                     n_shared_experts=1,
                     num_experts_per_tok=1,
@@ -188,8 +188,8 @@ def create_config(
             learning_rate=0.0001,
 
             # (bool) 是否启用自适应策略熵权重 (alpha)
-            # use_adaptive_entropy_weight=True,
-            use_adaptive_entropy_weight=False,
+            use_adaptive_entropy_weight=True,
+            # use_adaptive_entropy_weight=False,
 
             # (float) 自适应alpha优化器的学习率
             adaptive_entropy_alpha_lr=1e-4,
@@ -216,8 +216,8 @@ def create_config(
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
-            use_priority=False, # TODO=====
-            # use_priority=True,
+            # use_priority=False, # TODO=====
+            use_priority=True,
             priority_prob_alpha=1,
             priority_prob_beta=1,
             print_task_priority_logs=False,
@@ -271,7 +271,10 @@ def generate_configs(
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
     benchmark_tag = "data_unizero_mt_refactor0929"  # e.g., unizero_atari_mt_20250612
     # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
-    model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+    # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+    
+    model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
