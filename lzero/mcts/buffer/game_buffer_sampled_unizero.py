@@ -7,7 +7,7 @@ from ding.utils import BUFFER_REGISTRY
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledUniZeroMCTSCtree as MCTSCtree
 # from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
-from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
+from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer_unizero import UniZeroGameBuffer
 
 if TYPE_CHECKING:
@@ -60,6 +60,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             print("No task_id found in configuration. Task ID is set to None.")
             self.action_space_size = self._cfg.model.action_space_size
 
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
     def reanalyze_buffer(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -510,7 +512,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
                     m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    inverse_scalar_transform(m_output.value, self.value_support),
                     m_output.policy_logits
                 ]
             )
@@ -668,19 +670,18 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # calculate the target value
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
             if self.task_id is not None:
-                m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, task_id=self.task_id)
+                # m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, task_id=self.task_id)
+
+                m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
             else:
                 m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
 
-            # print(f'model.training:{model.training}')
-            # model.training = False
-            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
                     m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    inverse_scalar_transform(m_output.value, self.value_support),
                     m_output.policy_logits
                 ]
             )

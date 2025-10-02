@@ -6,7 +6,7 @@ from ding.utils import BUFFER_REGISTRY
 
 from lzero.mcts.tree_search.mcts_ctree import UniZeroMCTSCtree as MCTSCtree
 from lzero.mcts.utils import prepare_observation
-from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
+from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer_muzero import MuZeroGameBuffer
 
 if TYPE_CHECKING:
@@ -60,6 +60,9 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             self.task_id = None
             print("No task_id found in configuration. Task ID is set to None.")
             self.action_space_size = self._cfg.model.action_space_size
+
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
     #@profile
     def sample(
@@ -145,18 +148,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                                                                   self._cfg.num_unroll_steps].tolist()
             timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-            # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # TODO: the child_visits after position <self._cfg.game_segment_length> in the segment (with padded part) may not be updated
             # So the corresponding position should not be used in the training
             mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
-            # TODO: original buffer mask
-            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -294,9 +290,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
             timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-            # TODO: original buffer mask
-            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -461,7 +454,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # =======================================================================
 
-            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
@@ -487,6 +479,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 # do MCTS for a new policy with the recent target model
                 if self.task_id is not None:
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                    # TODO: adapt unizero multitask to timestep in rope
                     # MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep[:self.reanalyze_num], task_id=self.task_id)
                 else:
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep[:self.reanalyze_num])
@@ -582,12 +575,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # ======================================================================
 
-            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
                     m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    inverse_scalar_transform(m_output.value, self.value_support),
                     m_output.policy_logits
                 ]
             )
@@ -667,3 +659,34 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         batch_target_values = np.asarray(batch_target_values)
 
         return batch_rewards, batch_target_values
+    
+    def update_priority(self, train_data: List[np.ndarray], batch_priorities: np.ndarray) -> None:
+        """
+        Overview:
+            Update the priority of training data.
+        Arguments:
+            - train_data (:obj:`List[np.ndarray]`): training data to be updated priority.
+            - batch_priorities (:obj:`np.ndarray`): priorities to update to.
+        NOTE:
+            train_data = [current_batch, target_batch]
+            current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        """
+        # TODO: NOTE: -4 is batch_index_list
+        indices = train_data[0][-4]
+        metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
+        # only update the priorities for data still in replay buffer
+        for i in range(len(indices)):
+            # ==================== START OF FINAL FIX ====================
+
+            # FIX 1: Handle ValueError by using the first timestamp of the segment for comparison.
+            first_transition_time = metas['make_time'][i][0]
+
+            if first_transition_time > self.clear_time:
+                # FIX 2: Handle IndexError by converting the float index to an integer before use.
+                idx = int(indices[i])
+                prio = metas['batch_priorities'][i]
+
+                # Now, idx is a valid integer index.
+                self.game_pos_priorities[idx] = prio
+
+            # ===================== END OF FINAL FIX =====================

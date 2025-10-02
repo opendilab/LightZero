@@ -58,7 +58,8 @@ def main(env_id, seed):
             model=dict(
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
-                support_scale=300,
+                reward_support_range=(-300., 301., 1.),
+                value_support_range=(-300., 301., 1.),
                 world_model_cfg=dict(
                     support_size=601,
                     policy_entropy_weight=5e-3,

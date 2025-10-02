@@ -1,7 +1,7 @@
 import pytest
 import torch
 from easydict import EasyDict
-from lzero.policy import inverse_scalar_transform, select_action
+from lzero.policy import DiscreteSupport, inverse_scalar_transform, select_action
 import numpy as np
 from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 
@@ -74,7 +74,8 @@ policy_config = EasyDict(
         model=dict(
             action_space_size=9,
             categorical_distribution=True,
-            support_scale=300,
+            reward_support_range=(-300., 301., 1.),
+            value_support_range=(-300., 301., 1.),
         ),
         env_type='not_board_games',
     )
@@ -100,7 +101,8 @@ value_prefix_pool = network_output['value_prefix']
 policy_logits_pool = network_output['policy_logits']
 
 # network output process
-pred_values_pool = inverse_scalar_transform(pred_values_pool, policy_config.model.support_scale).detach().cpu().numpy()
+discrete_support = DiscreteSupport(*policy_config.model.value_support_range)
+pred_values_pool = inverse_scalar_transform(pred_values_pool, discrete_support).detach().cpu().numpy()
 latent_state_roots = latent_state_roots.detach().cpu().numpy()
 reward_hidden_state_state = (
     reward_hidden_state_state[0].detach().cpu().numpy(), reward_hidden_state_state[1].detach().cpu().numpy()

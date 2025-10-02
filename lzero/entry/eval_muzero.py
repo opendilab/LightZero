@@ -1,6 +1,7 @@
 import os
 from functools import partial
 from typing import Optional, Tuple
+import logging
 
 import numpy as np
 import torch
@@ -51,7 +52,7 @@ def eval_muzero(
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
-
+    # print(f"cfg.seed:{cfg.seed}")
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
