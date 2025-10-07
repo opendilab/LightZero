@@ -28,13 +28,21 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2025.06.03 LightZero-v0.2.0
+Updated on 2025.09.29 LightZero-v0.2.0
 
-English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
 > For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal).
 
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [UniZero Paper](https://openreview.net/forum?id=Gl6dF9soQo) | [ReZero Paper](https://openreview.net/forum?id=F9Y7j3AJTu) | [🔥ScaleZero Paper](https://arxiv.org/abs/2509.07945)
+
+## News
+
+- [2025.09] 🔥 The ScaleZero paper has been released on arXiv: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945).
+- [2025.08] The [ReZero paper](https://openreview.net/forum?id=F9Y7j3AJTu) has been accepted by the CoRL 2025 RemembeRL workshop.
+- [2024.06] The [UniZero paper](https://openreview.net/forum?id=Gl6dF9soQo) has been accepted by Transactions on Machine Learning Research (TMLR).
+- [2023.09] The [LightZero paper](https://proceedings.neurips.cc/paper_files/paper/2023/hash/765043fe026f7d704c96cec027f13843-Abstract-Datasets_and_Benchmarks.html) has been accepted as a Spotlight Presentation at the NeurIPS 2023 Datasets and Benchmarks Track.
+- [2023.04] LightZero v0.0.1 was officially released.
 
 ## 🔍 Background
 
@@ -59,6 +67,7 @@ For further details, please refer to [Features](#features), [Framework Structure
 ### Outline
 
 - [LightZero](#lightzero)
+  - [News](#news)
   - [🔍 Background](#-background)
   - [🎨 Overview](#-overview)
     - [Outline](#outline)
@@ -608,11 +617,10 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   year={2024}
 }
 
-@article{pu2024unizero,
+@article{puunizero,
   title={UniZero: Generalized and Efficient Planning with Scalable Latent World Models},
-  author={Pu, Yuan and Niu, Yazhe and Ren, Jiyuan and Yang, Zhenjie and Li, Hongsheng and Liu, Yu},
-  journal={arXiv preprint arXiv:2406.10667},
-  year={2024}
+  author={Pu, Yuan and Niu, Yazhe and Yang, Zhenjie and Ren, Jiyuan and Li, Hongsheng and Liu, Yu},
+  journal={Transactions on Machine Learning Research}
 }
 
 @article{xuan2024rezero,
@@ -620,6 +628,13 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Liu, Yu and Yang, Jing},
   journal={arXiv preprint arXiv:2404.16364},
   year={2024}
+}
+
+@article{pu2025one,
+  title={One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning},
+  author={Pu, Yuan and Niu, Yazhe and Tang, Jia and Xiong, Junyu and Hu, Shuai and Li, Hongsheng},
+  journal={arXiv preprint arXiv:2509.07945},
+  year={2025}
 }
 ```
 
