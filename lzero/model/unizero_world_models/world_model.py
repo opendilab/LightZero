@@ -1596,7 +1596,96 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
+
+    def compute_loss_ppo(
+            self,
+            batch: Dict[str, torch.Tensor],
+            inverse_scalar_transform_handle,
+            clip_ratio: float,
+            value_coef: float,
+            entropy_coef: float,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute PPO objectives (policy/value/entropy) for a mini-batch."""
+        policy_logits = batch['policy_logits']
+        action_mask = batch['action_mask'].bool()
+        actions = batch['actions'].long()
+        old_log_prob = batch['old_log_prob'].float()
+        advantages = batch['advantages'].float()
+        returns = batch['returns'].float()
+
+        masked_logits = policy_logits.masked_fill(~action_mask, -1e9)
+        dist = Categorical(logits=masked_logits)
+        log_prob = dist.log_prob(actions)
+        entropy = dist.entropy()
+
+        ratio = torch.exp(log_prob - old_log_prob)
+        surrogate1 = ratio * advantages
+        surrogate2 = torch.clamp(ratio, 1.0 - clip_ratio, 1.0 + clip_ratio) * advantages
+        policy_loss = -torch.min(surrogate1, surrogate2).mean()
+
+        value_pred = inverse_scalar_transform_handle(batch['values']).squeeze(-1)
+        value_loss = torch.nn.functional.mse_loss(value_pred, returns)
+
+        entropy_mean = entropy.mean()
+        entropy_loss = -entropy_mean
+
+        loss_total = policy_loss + value_coef * value_loss + entropy_coef * entropy_loss
+
+        return {
+            'loss_total': loss_total,
+            'loss_policy': policy_loss,
+            'loss_value': value_loss,
+            'loss_entropy': entropy_loss,
+            'entropy_mean': entropy_mean,
+            'ratio_mean': ratio.mean(),
+            'advantage_mean': advantages.mean(),
+            'return_mean': returns.mean(),
+        }
+
     
+    def compute_loss_ppo(
+            self,
+            batch: Dict[str, torch.Tensor],
+            inverse_scalar_transform_handle,
+            clip_ratio: float,
+            value_coef: float,
+            entropy_coef: float,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute PPO losses given policy logits and associated targets."""
+        policy_logits = batch['policy_logits']
+        action_mask = batch['action_mask'].bool()
+        actions = batch['actions'].long()
+        old_log_prob = batch['old_log_prob'].float()
+        advantages = batch['advantages'].float()
+        returns = batch['returns'].float()
+
+        pred_values = inverse_scalar_transform_handle(batch['values']).squeeze(-1)
+
+        masked_logits = policy_logits.masked_fill(~action_mask, -1e9)
+        dist = Categorical(logits=masked_logits)
+        log_prob = dist.log_prob(actions)
+        entropy = dist.entropy()
+
+        ratio = torch.exp(log_prob - old_log_prob)
+        surrogate1 = ratio * advantages
+        surrogate2 = torch.clamp(ratio, 1.0 - clip_ratio, 1.0 + clip_ratio) * advantages
+        policy_loss = -torch.min(surrogate1, surrogate2).mean()
+        value_loss = F.mse_loss(pred_values, returns)
+        entropy_mean = entropy.mean()
+        entropy_loss = -entropy_mean
+
+        loss_total = policy_loss + value_coef * value_loss + entropy_coef * entropy_loss
+
+        return {
+            'loss_total': loss_total,
+            'loss_policy': policy_loss,
+            'loss_value': value_loss,
+            'loss_entropy': entropy_loss,
+            'entropy_mean': entropy_mean,
+            'ratio_mean': ratio.mean(),
+            'advantage_mean': advantages.mean(),
+            'return_mean': returns.mean(),
+        }
     # TODO: test correctness
     def _calculate_policy_loss_cont_simple(self, outputs, batch: dict):
         """

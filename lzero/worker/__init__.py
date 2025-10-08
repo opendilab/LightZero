@@ -3,3 +3,5 @@ from .alphazero_evaluator import AlphaZeroEvaluator
 from .muzero_collector import MuZeroCollector
 from .muzero_segment_collector import MuZeroSegmentCollector
 from .muzero_evaluator import MuZeroEvaluator
+from .muzero_collector_ppo import MuZeroCollectorPPO
+from .muzero_evaluator_ppo import MuZeroEvaluatorPPO
