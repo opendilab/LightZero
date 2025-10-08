@@ -58,6 +58,11 @@ def train_alphazero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+
+    # Pass full config to policy so it can access cfg.env and create_cfg for simulation env
+    cfg.policy.full_cfg = cfg
+    cfg.policy.create_cfg = create_cfg
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
