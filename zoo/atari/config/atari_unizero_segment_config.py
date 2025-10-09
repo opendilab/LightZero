@@ -16,6 +16,7 @@ def main(env_id, seed):
     # max_env_step = int(4e5)
     max_env_step = int(5e6) # TODO
 
+    # batch_size = 2 # only for debug
     # batch_size = 64
     batch_size = 256
     num_layers = 2
@@ -138,8 +139,7 @@ def main(env_id, seed):
             # target_entropy_end_ratio =0.9,
             target_entropy_end_ratio =0.7,
             # target_entropy_end_ratio =0.5, # TODO=====
-
-            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值 需要与replay ratio协同调整
 
             # ==================== START: Encoder-Clip Annealing Config ====================
             # (bool) 是否启用 encoder-clip 值的退火。
@@ -152,6 +152,17 @@ def main(env_id, seed):
             encoder_clip_end_value=10.0,
             # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
             encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+
+            # ==================== START: label smooth ====================
+            policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
+            policy_ls_eps_end=0.01,
+            policy_ls_eps_decay_steps=50000, # 50k
+            label_smoothing_eps=0.1,  #TODO============= for value
+
+            # ==================== [新增] 范数监控频率 ====================
+            # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+            monitor_norm_freq=10000,
+            # monitor_norm_freq=2,  # only for debug
 
             use_augmentation=False,
             manual_temperature_decay=False,
@@ -203,7 +214,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor0929/{env_id[:-14]}/{env_id[:-14]}_uz_resnet-encoder_priority_adamw-wd1e-2_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1010/{env_id[:-14]}/{env_id[:-14]}_uz_encoder-clip_label-smooth_resnet-encoder_priority_adamw-wd1e-2_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

@@ -17,6 +17,25 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
+from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
+import torch.nn.functional as F
+
+def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
+    """
+    使用向量化操作高效地缩放一个模块的所有权重。
+    """
+    if not (0.0 < scale_factor < 1.0):
+        return # 如果缩放因子无效，则不执行任何操作
+
+    # 1. 将模块的所有参数展平成一个单一向量
+    params_vec = parameters_to_vector(module.parameters())
+
+    # 2. 在这个向量上执行一次乘法操作
+    params_vec.data.mul_(scale_factor)
+
+    # 3. 将缩放后的向量复制回模块的各个参数
+    vector_to_parameters(params_vec, module.parameters())
+
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
@@ -197,6 +216,23 @@ class UniZeroPolicy(MuZeroPolicy):
             ),
         ),
         # ****** common ******
+        # (bool) 是否启用自适应策略熵权重 (alpha)
+        use_adaptive_entropy_weight=True,
+        # (float) 自适应alpha优化器的学习率
+        adaptive_entropy_alpha_lr=1e-4,
+        # ==================== START: Encoder-Clip Annealing Config ====================
+        # (bool) 是否启用 encoder-clip 值的退火。
+        use_encoder_clip_annealing=True,
+        # (str) 退火类型。可选 'linear' 或 'cosine'。
+        encoder_clip_anneal_type='cosine',
+        # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+        encoder_clip_start_value=30.0,
+        # (float) 退火的结束 clip 值 (训练后期，较严格)。
+        encoder_clip_end_value=10.0,
+        # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+        encoder_clip_anneal_steps=100000,  # 例如，在200k次迭代后达到最终值
+        # ===================== END: Encoder-Clip Annealing Config =====================
+
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
@@ -368,6 +404,46 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return 'UniZeroModel', ['lzero.model.unizero_model']
 
+
+    # ==================== [新增] 模型范数监控函数 ====================
+    def _monitor_model_norms(self) -> Dict[str, float]:
+        """
+        Overview:
+            计算并返回模型关键组件（Encoder, Transformer, Heads）的参数矩阵范数。
+            此函数应在 torch.no_grad() 环境下调用，以提高效率。
+        Returns:
+            - norm_metrics (:obj:`Dict[str, float]`): 包含所有范数指标的字典，用于日志记录。
+        """
+        world_model = self._learn_model.world_model
+        norm_metrics = {}
+
+        # 定义要监控的模块组
+        module_groups = {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'head_value': world_model.head_value,
+            'head_reward': world_model.head_rewards,
+            'head_policy': world_model.head_policy,
+        }
+
+        for group_name, group_module in module_groups.items():
+            total_norm_sq = 0.0
+            for param_name, param in group_module.named_parameters():
+                if param.requires_grad:
+                    # 计算单层参数的L2范数
+                    param_norm = param.data.norm(2).item()
+                    # 替换点号，使其在TensorBoard中正确显示为层级
+                    log_name = f'norm/{group_name}/{param_name.replace(".", "/")}'
+                    norm_metrics[log_name] = param_norm
+                    total_norm_sq += param_norm ** 2
+
+            # 计算整个模块的总范数
+            total_group_norm = np.sqrt(total_norm_sq)
+            norm_metrics[f'norm/{group_name}/_total_norm'] = total_group_norm
+
+        return norm_metrics
+    # =================================================================
+
     def _init_learn(self) -> None:
         """
         Overview:
@@ -495,6 +571,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: 初始化 Encoder-Clip Annealing 参数 ====================
         self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
+        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0) # TODO
         if self.use_encoder_clip_annealing:
             self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
             self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
@@ -509,8 +586,15 @@ class UniZeroPolicy(MuZeroPolicy):
             print("="*20)
         else:
             # 如果不启用退火，则使用固定的 clip 阈值
-            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
+            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0)
         # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
+
+        # --- NEW: Policy Label Smoothing Parameters ---
+        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps
+        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
+        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
+
+        print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -532,6 +616,13 @@ class UniZeroPolicy(MuZeroPolicy):
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
+
+        # --- NEW: Calculate current epsilon for policy ---
+        if self.policy_ls_eps_start > 0:
+            progress = min(1.0, train_iter / self.policy_ls_eps_decay_steps)
+            current_policy_label_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
+        else:
+            current_policy_label_eps = 0.0
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
@@ -561,8 +652,11 @@ class UniZeroPolicy(MuZeroPolicy):
         transformed_target_value = scalar_transform(target_value)
 
         # Convert to categorical distributions
-        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+        # target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+        # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+
+        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
@@ -594,8 +688,31 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
+
+        # ==================== [修改] 集成范数监控逻辑 ====================
+        norm_log_dict = {}
+        # 检查是否达到监控频率
+        if self._cfg.monitor_norm_freq > 0 and train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0):
+            with torch.no_grad():
+                # 1. 监控模型参数范数
+                param_norm_metrics = self._monitor_model_norms()
+                norm_log_dict.update(param_norm_metrics)
+
+                # 2. 监控中间张量 x (Transformer的输出)
+                intermediate_x = losses.intermediate_losses.get('intermediate_tensor_x')
+                if intermediate_x is not None:
+                    # x 的形状为 (B, T, E)
+                    # 计算每个 token 的 L2 范数
+                    token_norms = intermediate_x.norm(p=2, dim=-1)
+
+                    # 记录这些范数的统计数据
+                    norm_log_dict['norm/x_token/mean'] = token_norms.mean().item()
+                    norm_log_dict['norm/x_token/std'] = token_norms.std().item()
+                    norm_log_dict['norm/x_token/max'] = token_norms.max().item()
+                    norm_log_dict['norm/x_token/min'] = token_norms.min().item()
+        # =================================================================
 
         # ==================== START MODIFICATION 2 ====================
         # Extract the calculated value_priority from the returned losses.
@@ -634,6 +751,17 @@ class UniZeroPolicy(MuZeroPolicy):
         e_rank_sim_norm = self.intermediate_losses['e_rank_sim_norm']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
+        latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
+        logits_value_mean=self.intermediate_losses['logits_value_mean']
+        logits_value_max=self.intermediate_losses['logits_value_max']
+        logits_value_min=self.intermediate_losses['logits_value_min']
+        logits_policy_mean=self.intermediate_losses['logits_policy_mean']
+        logits_policy_max=self.intermediate_losses['logits_policy_max']
+        logits_policy_min=self.intermediate_losses['logits_policy_min']
+        temperature_value=self.intermediate_losses['temperature_value']
+        temperature_reward=self.intermediate_losses['temperature_reward']
+        temperature_policy=self.intermediate_losses['temperature_policy']
+
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
@@ -641,6 +769,8 @@ class UniZeroPolicy(MuZeroPolicy):
         # Reset gradients at the start of each accumulation cycle
         if (train_iter % self.accumulation_steps) == 0:
             self._optimizer_world_model.zero_grad()
+
+
 
         # ==================== START: 目标熵正则化更新逻辑 ====================
         alpha_loss = None
@@ -693,6 +823,38 @@ class UniZeroPolicy(MuZeroPolicy):
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()
+
+        # -----------------------------------------------------------------
+        # 仍然在 torch.no_grad() 环境下执行
+        # =================================================================
+        with torch.no_grad():
+            # 1. Encoder-Clip
+            # ==================== START: 动态计算当前 Clip 阈值 ====================
+            current_clip_value = self.latent_norm_clip_threshold  # 默认使用固定值
+            if self.use_encoder_clip_annealing:
+                progress = min(1.0, train_iter / self.encoder_clip_anneal_steps)
+
+                if self.encoder_clip_anneal_type == 'cosine':
+                    # 余弦调度: 从1平滑过渡到0
+                    cosine_progress = 0.5 * (1.0 + np.cos(np.pi * progress))
+                    current_clip_value = self.encoder_clip_end + \
+                                         (self.encoder_clip_start - self.encoder_clip_end) * cosine_progress
+                else:  # 默认为线性调度
+                    current_clip_value = self.encoder_clip_start * (1 - progress) + \
+                                         self.encoder_clip_end * progress
+            # ===================== END: 动态计算当前 Clip 阈值 =====================
+
+            # 1. Encoder-Clip (使用动态计算出的 current_clip_value)
+            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                if obs_embeddings is not None:
+                    max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
+                    if max_latent_norm > current_clip_value:
+                        scale_factor = current_clip_value / max_latent_norm.item()
+                        # 不再频繁打印，或者可以改为每隔N步打印一次
+                        if train_iter % 1000 == 0:
+                            print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
+                        scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:
@@ -788,10 +950,23 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/e_rank_sim_norm':  e_rank_sim_norm,
 
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
+            'analysis/latent_action_l2_norms': latent_action_l2_norms,
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
+                    "logits_value_mean":logits_value_mean,
+        "logits_value_max":logits_value_max,
+        "logits_value_min":logits_value_min,
+        "logits_policy_mean":logits_policy_mean,
+        "logits_policy_max":logits_policy_max,
+        "logits_policy_min":logits_policy_min,
+
+             "temperature_value":temperature_value,
+        "temperature_reward":temperature_reward,
+        "temperature_policy":temperature_policy,
+
+        "current_policy_label_eps":current_policy_label_eps,
         }
         
         # ==================== START: 添加新日志项 ====================
@@ -800,6 +975,11 @@ class UniZeroPolicy(MuZeroPolicy):
             return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
             return_log_dict['alpha_loss'] = alpha_loss.item()
         # ==================== START: 添加新日志项 ====================
+
+        # ==================== START: 添加新日志项 ====================
+        if self.use_encoder_clip_annealing:
+            return_log_dict['current_encoder_clip_value'] = current_clip_value
+        # ===================== END: 添加新日志项 =====================
 
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
@@ -1325,7 +1505,43 @@ class UniZeroPolicy(MuZeroPolicy):
             'commitment_loss',
             'reconstruction_loss',
             'perceptual_loss',
+
+
+        "logits_value_mean",
+        "logits_value_max",
+        "logits_value_min",
+        "logits_policy_mean",
+        "logits_policy_max",
+        "logits_policy_min",
+
+                     "temperature_value",
+        "temperature_reward",
+        "temperature_policy",
+                "current_policy_label_eps",
+                         'adaptive_alpha',
+                         "adaptive_target_entropy_ratio",
+            'alpha_loss',
+            "current_encoder_clip_value",
+
+                # ==================== [新增] 添加范数和中间张量监控变量 ====================
+            # 模块总范数
+            'norm/encoder/_total_norm',
+            'norm/transformer/_total_norm',
+            'norm/head_value/_total_norm',
+            'norm/head_reward/_total_norm',
+            'norm/head_policy/_total_norm',
+            # 中间张量 x 的统计信息
+            'norm/x_token/mean',
+            'norm/x_token/std',
+            'norm/x_token/max',
+            'norm/x_token/min',
         ]
+        # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
+        # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
+        # 或者在本地打印 `norm_log_dict` 来进行详细分析。
+        # wandb等工具可以更好地处理大量的动态指标。
+        # ========================================================================
+    
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
@@ -1334,11 +1550,16 @@ class UniZeroPolicy(MuZeroPolicy):
         Returns:
             - state_dict (:obj:`Dict[str, Any]`): The dict of current policy learn state, for saving and restoring.
         """
-        return {
+        state_dict = {
             'model': self._learn_model.state_dict(),
             'target_model': self._target_model.state_dict(),
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
+        # ==================== START: 保存Alpha优化器状态 ====================
+        if self.use_adaptive_entropy_weight:
+            state_dict['alpha_optimizer'] = self.alpha_optimizer.state_dict()
+        # ===================== END: 保存Alpha优化器状态 =====================
+        return state_dict
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
@@ -1349,7 +1570,12 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+        # self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+
+        # ==================== START: 加载Alpha优化器状态 ====================
+        # if self.use_adaptive_entropy_weight and 'alpha_optimizer' in state_dict:
+        #     self.alpha_optimizer.load_state_dict(state_dict['alpha_optimizer'])
+        # ===================== END: 加载Alpha优化器状态 =====================
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """
