@@ -102,8 +102,11 @@ def create_config(
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
             full_action_space=True,
-            collect_max_episode_steps=int(5e3),
-            eval_max_episode_steps=int(5e3),
+            # collect_max_episode_steps=int(5e3),
+            # eval_max_episode_steps=int(5e3),
+
+            collect_max_episode_steps=int(50), # debug
+            eval_max_episode_steps=int(50),
         ),
         policy=dict(
             multi_gpu=True,  # Essential for DDP (Distributed Data Parallel)
@@ -195,7 +198,8 @@ def create_config(
             adaptive_entropy_alpha_lr=1e-4,
             target_entropy_start_ratio =0.98,
             # target_entropy_end_ratio =0.9, # TODO=====
-            target_entropy_end_ratio =0.7,
+            # target_entropy_end_ratio =0.7,
+            target_entropy_end_ratio =0.5,
             target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
 
 
@@ -210,6 +214,8 @@ def create_config(
             encoder_clip_end_value=10.0,
             # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
             encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+            # encoder_clip_anneal_steps=50000,  # 例如，在30k次迭代后达到最终值
+
 
             # ==================== START: label smooth ====================
             policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
@@ -280,13 +286,15 @@ def generate_configs(
     configs = []
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
-    benchmark_tag = "data_unizero_mt_refactor1010"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "data_unizero_mt_refactor1010_debug"  # e.g., unizero_atari_mt_20250612
+    # benchmark_tag = "data_unizero_mt_refactor1010"  # e.g., unizero_atari_mt_20250612
+
     # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
     # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
     
     # model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
-    model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-100k-098-07_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+    model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-100k-098-05_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
@@ -329,9 +337,14 @@ if __name__ == "__main__":
         Run the following command to launch the script:
 
         Example launch command:
+        export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
         export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
+
+        export CUDA_VISIBLE_DEVICES=4,5,6,7
+
         cd /path/to/your/project/
-        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251010_2.log
             /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -390,7 +403,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Batch size not configured for {len(env_id_list)} environments.")
 
-    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size)
+    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size, gpu_num=4) # TODO
     total_batch_size = effective_batch_size  # Currently for logging purposes
 
     # --- Model and Training Settings ---
@@ -402,15 +415,15 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ====== only for debug =====
-    # num_games = 4  # Options: 3, 8, 26
-    # num_layers = 2 # debug
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 5
-    # batch_sizes = [num_games] * len(env_id_list)
-    # buffer_reanalyze_freq = 1/100000000
-    # total_batch_size = num_games * len(env_id_list)
+    num_games = 8  # Options: 3, 8, 26
+    num_layers = 2 # debug
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 5
+    batch_sizes = [num_games] * len(env_id_list)
+    buffer_reanalyze_freq = 1/100000000
+    total_batch_size = num_games * len(env_id_list)
 
 
     # --- Training Loop ---

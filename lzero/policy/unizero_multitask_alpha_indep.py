@@ -873,7 +873,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         orig_policy_loss_multi_task = []
         policy_entropy_multi_task = []
         weighted_total_loss = 0.0  # Initialize to 0.0 to avoid in-place operations.
-        total_alpha_loss = 0.0
 
         latent_state_l2_norms_multi_task = []
         average_target_policy_entropy_multi_task = []
@@ -901,16 +900,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 新增一个列表来收集当前批次中所有任务的真实全局ID
         global_task_ids_in_batch = [] 
         alpha_loss = None
-
-
-        # 用于Alpha日志记录的新列表
-        alpha_loss_multi_task = []
-        target_entropy_multi_task = []
-
-        # 仅在自适应alpha启用时，预先获取当前alpha值，确保在单次迭代中对所有任务一致
-        current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight
-        if self.use_adaptive_entropy_weight:
-            current_alpha = self.log_alpha.exp().detach()
 
         losses_list = []  # Used to store the loss tensor for each task, required by gradient correction methods.
         for task_id, data_one_task in enumerate(data):
@@ -1032,7 +1021,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # ==================== START: 目标熵正则化更新逻辑 ====================
             current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight # 默认使用固定值
             if self.use_adaptive_entropy_weight:
-
                 # --- 动态计算目标熵 (这部分逻辑是正确的，予以保留) ---
                 progress = min(1.0, train_iter / self.target_entropy_decay_steps)
                 current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
@@ -1043,19 +1031,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # --- 计算 alpha_loss (已修正符号) ---
                 # 这是核心修正点：去掉了最前面的负号
                 # detach() 仍然是关键，确保 alpha_loss 的梯度只流向 log_alpha
-                alpha_loss_task = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean() # NOTE:=
+                alpha_loss = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean() # NOTE:=
 
                 # # --- 更新 log_alpha ---
-                # self.alpha_optimizer.zero_grad()
-                # alpha_loss.backward()
-                # self.alpha_optimizer.step()
-
-                # 累加alpha_loss
-                total_alpha_loss += alpha_loss_task
-                # 为日志记录收集每个任务的alpha_loss和目标熵
-                alpha_loss_multi_task.append(alpha_loss_task)
-                target_entropy_multi_task.append(current_target_entropy)
-
+                self.alpha_optimizer.zero_grad()
+                alpha_loss.backward()
+                self.alpha_optimizer.step()
                 # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
                 with torch.no_grad():
                     # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
@@ -1149,16 +1130,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # Core learn model update step.
         self._optimizer_world_model.zero_grad()
 
-        if self.use_adaptive_entropy_weight:
-            self.alpha_optimizer.zero_grad()
-        # 2. 计算最终的alpha loss (在累加后取平均)
-        final_alpha_loss = None
-        if self.use_adaptive_entropy_weight:
-            if len(data) > 0:
-                final_alpha_loss = total_alpha_loss / len(data)
-            else: # 防御性编程，避免除以0
-                final_alpha_loss = torch.tensor(0.0, device=self._cfg.device)
-
         # Assuming losses_list is a list of tensors with gradients, e.g., [loss1, loss2, ...].
         if self._cfg.use_moco:
             # Call MoCo's backward method, which handles gradient correction internally.
@@ -1166,35 +1137,17 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             elif self._cfg.moco_version=="v1":
                 lambd, stats = self.grad_correct.backward(losses_list)
-            
-            # 单独为alpha loss进行反向传播
-            if self.use_adaptive_entropy_weight:
-                final_alpha_loss.backward()
         
         elif self._cfg.only_use_moco_stats:
             # Only compute MoCo stats without applying gradient correction.
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
-
             # Each rank performs its own backpropagation.
-            # weighted_total_loss.backward()
-
-            # 如果启用自适应alpha，将alpha loss加到主损失上一起反向传播
-            if self.use_adaptive_entropy_weight:
-                (weighted_total_loss + final_alpha_loss).backward()
-            elif weighted_total_loss != 0.0: # 确保有损失可以反向传播
-                weighted_total_loss.backward()
-
+            weighted_total_loss.backward()
         else:
             # If not using gradient correction, each rank performs standard backpropagation.
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
+            weighted_total_loss.backward()
 
-            # weighted_total_loss.backward()
-
-            # 如果启用自适应alpha，将alpha loss加到主损失上一起反向传播
-            if self.use_adaptive_entropy_weight:
-                (weighted_total_loss + final_alpha_loss).backward()
-            elif weighted_total_loss != 0.0: # 确保有损失可以反向传播
-                weighted_total_loss.backward()
 
         # -----------------------------------------------------------------
         # 仍然在 torch.no_grad() 环境下执行
@@ -1255,13 +1208,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         self._optimizer_world_model.step()
 
-        # 4. 更新Alpha优化器
-        if self.use_adaptive_entropy_weight:
-            self.alpha_optimizer.step()
-            # 裁剪log_alpha以保证稳定性
-            with torch.no_grad():
-                self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
-
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
@@ -1293,7 +1239,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         if self.use_adaptive_entropy_weight:
             return_log_dict['adaptive_alpha'] = current_alpha.item()
             return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
-            return_log_dict['final_alpha_loss'] = final_alpha_loss.item()
+            return_log_dict['alpha_loss'] = alpha_loss.item()
         # ==================== START: 添加新日志项 ====================
 
         # Generate task-related loss dictionaries and prefix each task-related loss with "noreduce_".
@@ -1313,10 +1259,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(lambd, 'noreduce_lambd_task{}', task_id=self.task_id), 
             **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
             **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
-
-                    # 新增alpha相关日志
-            **generate_task_loss_dict(alpha_loss_multi_task, 'noreduce_alpha_loss_task{}', self.task_id),
-            **generate_task_loss_dict(target_entropy_multi_task, 'noreduce_target_entropy_task{}', self.task_id),
         }
         return_log_dict.update(multi_task_loss_dicts)
 
@@ -1406,7 +1348,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 'value_priority',
             'adaptive_alpha',
             "adaptive_target_entropy_ratio",
-            'final_alpha_loss',
+            'alpha_loss',
         ]
 
         
@@ -1433,10 +1375,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'noreduce_avg_weight_mag_transformer',
             'noreduce_avg_weight_mag_head',
             'noreduce_e_rank_last_linear',
-            'noreduce_e_rank_sim_norm',
-            "noreduce_alpha_loss",
-            "noreduce_target_entropy",
-
+            'noreduce_e_rank_sim_norm'
         ]
 
         # Use self.task_num_for_current_rank as the number of tasks for the current rank.

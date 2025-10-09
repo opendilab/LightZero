@@ -437,12 +437,17 @@ def train_unizero_multitask_segment_ddp(
     tasks_per_rank = total_tasks // world_size
     remainder = total_tasks % world_size
 
+    # ==================== START: 关键修复 ====================
+    # 1. 精确计算当前Rank负责的任务数量
     if rank < remainder:
         start_idx = rank * (tasks_per_rank + 1)
         end_idx = start_idx + tasks_per_rank + 1
+        num_tasks_for_this_rank = tasks_per_rank + 1
     else:
         start_idx = rank * tasks_per_rank + remainder
         end_idx = start_idx + tasks_per_rank
+        num_tasks_for_this_rank = tasks_per_rank
+    # ==================== END: 关键修复 ====================
 
     tasks_for_this_rank = input_cfg_list[start_idx:end_idx]
 
@@ -465,8 +470,16 @@ def train_unizero_multitask_segment_ddp(
         # Use the config of the first task to create a shared policy.
         task_id, [cfg, create_cfg] = tasks_for_this_rank[0]
 
-        for config in tasks_for_this_rank:
-            config[1][0].policy.task_num = tasks_per_rank
+        # ==================== START: 关键修复 ====================
+        # 2. 将正确的任务数量设置到 *所有* 相关配置中
+        #    在创建Policy实例之前，必须确保配置是正确的
+        for config_tuple in tasks_for_this_rank:
+            # config_tuple is (task_id, [cfg_obj, create_cfg_obj])
+            config_tuple[1][0].policy.task_num = num_tasks_for_this_rank
+        
+        # 3. 确保用于创建Policy的那个cfg对象也拥有正确的task_num
+        cfg.policy.task_num = num_tasks_for_this_rank
+        # ==================== END: 关键修复 ====================
 
         # Ensure the specified policy type is supported.
         assert create_cfg.policy.type in ['unizero_multitask', 'sampled_unizero_multitask'], \
@@ -602,7 +615,9 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # Check if it's time for evaluation.
-            if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
+            # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
+            if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # only for debug TODO
+            
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
