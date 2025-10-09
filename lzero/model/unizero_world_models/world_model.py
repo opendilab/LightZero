@@ -1611,7 +1611,7 @@ class WorldModel(nn.Module):
 
         global_step = kwargs.get('global_step', 0)
         # if global_step >= 0 and global_step % 10000 == 0: # 20k
-        if global_step > 0 and global_step % 100000000000 == 0: # 20k
+        if global_step > 0 and global_step % 100000000000 == 0: # 20k # TODO
 
             with torch.no_grad():
                 # 将logits转换为标量值

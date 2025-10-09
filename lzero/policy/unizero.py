@@ -538,7 +538,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         self.accumulation_steps = self._cfg.accumulation_steps
 
-# ==================== START: 目标熵正则化初始化 ====================
+        # ==================== START: 目标熵正则化初始化 ====================
         # 从配置中读取是否启用自适应alpha，并提供一个默认值
         self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
 
@@ -593,7 +593,6 @@ class UniZeroPolicy(MuZeroPolicy):
         self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps
         self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
         self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
-
         print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
 
     # @profile
@@ -769,7 +768,6 @@ class UniZeroPolicy(MuZeroPolicy):
         # Reset gradients at the start of each accumulation cycle
         if (train_iter % self.accumulation_steps) == 0:
             self._optimizer_world_model.zero_grad()
-
 
 
         # ==================== START: 目标熵正则化更新逻辑 ====================

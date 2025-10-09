@@ -13,7 +13,7 @@ from lzero.model import ImageTransforms
 from lzero.policy import prepare_obs_stack_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
-from lzero.policy.unizero import UniZeroPolicy
+from lzero.policy.unizero import UniZeroPolicy, scale_module_weights_vectorized
 from .utils import configure_optimizers_nanogpt
 import sys
 
@@ -756,6 +756,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             print("="*20)
         # ===================== END: 目标熵正则化初始化 =====================
 
+        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
         # ==================== START: 初始化 Encoder-Clip Annealing 参数 ====================
         self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
         if self.use_encoder_clip_annealing:
@@ -775,6 +776,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
         # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
 
+        # --- NEW: Policy Label Smoothing Parameters ---
+        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps
+        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
+        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
+        print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
 
     @staticmethod
     def _is_zero(x: Union[float, torch.Tensor], eps: float = 1e-8) -> bool:
@@ -855,6 +861,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
         e_rank_last_linear_multi_task = []
         e_rank_sim_norm_multi_task = []
 
+        # --- NEW: Calculate current epsilon for policy ---
+        # if self.policy_ls_eps_start > 0:
+        #     progress = min(1.0, train_iter / self.policy_ls_eps_decay_steps)
+        #     current_policy_label_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
+        # else:
+        #     current_policy_label_eps = 0.0
+        current_policy_label_eps = 0.01
+        
+
 
         losses_list = []  # Used to store the loss tensor for each task, required by gradient correction methods.
         for task_id, data_one_task in enumerate(data):
@@ -894,8 +909,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             transformed_target_value = scalar_transform(target_value)
 
             # Convert scaled representations to categorical distributions.
-            target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-            target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+            # target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+            # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+
+            target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
+            target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
+
 
             # Prepare the batch for the transformer-based world model.
             batch_for_gpt = {}
@@ -924,8 +943,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             # Update world model and compute losses.
             intermediate_losses = defaultdict(float)
+            # losses = self._learn_model.world_model.compute_loss(
+            #     batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, task_id=task_id
+            # )
+
             losses = self._learn_model.world_model.compute_loss(
-                batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, task_id=task_id
+                batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, current_policy_label_eps=current_policy_label_eps,task_id=task_id
             )
 
             # ==================== START MODIFICATION 2 ====================
@@ -1092,6 +1115,43 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # If not using gradient correction, each rank performs standard backpropagation.
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
             weighted_total_loss.backward()
+
+
+        # -----------------------------------------------------------------
+        # 仍然在 torch.no_grad() 环境下执行
+        # =================================================================
+        with torch.no_grad():
+            # 1. Encoder-Clip
+            # ==================== START: 动态计算当前 Clip 阈值 ====================
+            current_clip_value = self.latent_norm_clip_threshold  # 默认使用固定值
+            if self.use_encoder_clip_annealing:
+                progress = min(1.0, train_iter / self.encoder_clip_anneal_steps)
+
+                if self.encoder_clip_anneal_type == 'cosine':
+                    # 余弦调度: 从1平滑过渡到0
+                    cosine_progress = 0.5 * (1.0 + np.cos(np.pi * progress))
+                    current_clip_value = self.encoder_clip_end + \
+                                         (self.encoder_clip_start - self.encoder_clip_end) * cosine_progress
+                else:  # 默认为线性调度
+                    current_clip_value = self.encoder_clip_start * (1 - progress) + \
+                                         self.encoder_clip_end * progress
+            # ===================== END: 动态计算当前 Clip 阈值 =====================
+
+            # 1. Encoder-Clip (使用动态计算出的 current_clip_value)
+            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                if obs_embeddings is not None:
+                    max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
+                    if max_latent_norm > current_clip_value:
+                        scale_factor = current_clip_value / max_latent_norm.item()
+                        # 不再频繁打印，或者可以改为每隔N步打印一次
+                        if train_iter % 1000 == 0:
+                            print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
+                        scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
+
+
+
+
 
         # For debugging purposes.
         # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():

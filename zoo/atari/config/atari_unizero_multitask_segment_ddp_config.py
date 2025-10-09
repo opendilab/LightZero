@@ -159,8 +159,8 @@ def create_config(
                     # use_priority=False, # TODO=====
                     priority_prob_alpha=1,
                     priority_prob_beta=1,
-                    encoder_type='vit',
-                    # encoder_type='resnet',
+                    # encoder_type='vit',
+                    encoder_type='resnet',
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
@@ -210,6 +210,17 @@ def create_config(
             encoder_clip_end_value=10.0,
             # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
             encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+
+            # ==================== START: label smooth ====================
+            policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
+            policy_ls_eps_end=0.01,
+            policy_ls_eps_decay_steps=50000, # 50k
+            label_smoothing_eps=0.1,  #TODO============= for value
+
+            # ==================== [新增] 范数监控频率 ====================
+            # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+            monitor_norm_freq=10000,
+            # monitor_norm_freq=2,  # only for debug
 
             use_task_exploitation_weight=False,
             task_complexity_weight=False,
@@ -269,11 +280,13 @@ def generate_configs(
     configs = []
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
-    benchmark_tag = "data_unizero_mt_refactor0929"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "data_unizero_mt_refactor1010"  # e.g., unizero_atari_mt_20250612
     # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
     # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
     
-    model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+    # model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+
+    model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-100k-098-07_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
@@ -316,9 +329,9 @@ if __name__ == "__main__":
         Run the following command to launch the script:
 
         Example launch command:
-        export CUDA_VISIBLE_DEVICES=4,5,6,7
+        export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
         cd /path/to/your/project/
-        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
             /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -328,8 +341,8 @@ if __name__ == "__main__":
 
     # --- Main Experiment Settings ---
     num_games = 8  # Options: 3, 8, 26
-    num_layers = 4
-    # num_layers = 2 # debug
+    # num_layers = 4
+    num_layers = 2 # debug
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
