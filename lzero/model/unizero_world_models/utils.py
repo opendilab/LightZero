@@ -179,17 +179,44 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     total_memory_gb = total_memory_bytes / (1024 ** 3)
     return total_memory_gb
 
-def hash_state(state):
+# def hash_state(state):
+#     """
+#     Hash the state vector.
+
+#     Arguments:
+#         state: The state vector to be hashed.
+#     Returns:
+#         The hash value of the state vector.
+#     """
+#     # Use xxhash for faster hashing
+#     return xxhash.xxh64(state).hexdigest()
+
+def hash_state(state: np.ndarray) -> int:
     """
-    Hash the state vector.
+    Overview:
+        Computes a fast and robust hash for a NumPy array state.
+
+    Why this is optimal:
+        1.  Algorithm (`xxhash.xxh64`): Uses one of the fastest non-cryptographic hash
+            functions available, ideal for performance-critical applications like caching.
+        2.  Input Preparation (`state.tobytes()`): Ensures correctness by creating a
+            canonical byte representation of the array. This guarantees that two
+            logically identical arrays will produce the same hash, regardless of their
+            internal memory layout (e.g., C-contiguous, F-contiguous, or strided views).
+        3.  Output Format (`.intdigest()`): Directly produces an integer hash value,
+            which is the most efficient key type for Python dictionaries, avoiding the
+            overhead of string keys.
 
     Arguments:
-        state: The state vector to be hashed.
+        - state (np.ndarray): The state array to be hashed.
+
     Returns:
-        The hash value of the state vector.
+        - int: A 64-bit integer hash of the state.
     """
-    # Use xxhash for faster hashing
-    return xxhash.xxh64(state).hexdigest()
+    # Ensure the array is contiguous in memory before converting to bytes,
+    # although .tobytes() handles this, being explicit can sometimes be clearer.
+    # For simplicity and since .tobytes() defaults to C-order, we can rely on it.
+    return xxhash.xxh64(state.tobytes()).intdigest()
 
 @dataclass
 class WorldModelOutput:

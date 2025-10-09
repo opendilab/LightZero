@@ -15,6 +15,7 @@ def main(env_id, seed):
     num_simulations = 50
     # max_env_step = int(4e5)
     max_env_step = int(5e6) # TODO
+    # max_env_step = int(1e6) # TODO pong
 
     # batch_size = 2 # only for debug
     # batch_size = 64
@@ -137,11 +138,10 @@ def main(env_id, seed):
             # adaptive_entropy_alpha_lr=1e-3,
             target_entropy_start_ratio =0.98,
             # target_entropy_end_ratio =0.9,
-            # target_entropy_end_ratio =0.7,
-            # target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值 需要与replay ratio协同调整
-
-            target_entropy_end_ratio =0.5, # TODO=====
-            target_entropy_decay_steps = 400000, # 例如，在100k次迭代后达到最终值 需要与replay ratio协同调整
+            target_entropy_end_ratio =0.7,
+            target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值 需要与replay ratio协同调整
+            # target_entropy_end_ratio =0.5, # TODO=====
+            # target_entropy_decay_steps = 400000, # 例如，在100k次迭代后达到最终值 需要与replay ratio协同调整
 
 
             # ==================== START: Encoder-Clip Annealing Config ====================
@@ -217,7 +217,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1010/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-400k-098-05-encoder-clip30-10-100k_label-smooth_resnet-encoder_priority_adamw-wd1e-2-encoder1-trans1-head1_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1010/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_label-smooth_resnet-encoder_priority_adamw-wd1e-2-encoder1-trans1-head1_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -228,7 +228,33 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    # args.env = 'PongNoFrameskip-v4'
-    args.env = 'QbertNoFrameskip-v4'
+
+
+    # 测试的atari8中的4个base环境
+    # args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
+    # args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+
+    # args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
+    # args.env = 'HeroNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+
+    # args.env = 'AlienNoFrameskip-v4'
+
+    # 下面是atari8以外的2个代表环境
+    # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+
+    # 下面是已经表现不错的
+    # args.env = 'BoxingNoFrameskip-v4' # 反应型环境 密集奖励
+    # args.env = 'ChopperCommandNoFrameskip-v4'
+    args.env = 'RoadRunnerNoFrameskip-v4'
 
     main(args.env, args.seed)
+
+    """
+    tmux new -s uz-st-refactor-boxing
+
+    conda activate /mnt/nfs/zhangjinouwen/puyuan/conda_envs/lz
+    export CUDA_VISIBLE_DEVICES=5
+    cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251010_fix_uz_st_road.log
+    """

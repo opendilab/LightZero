@@ -195,6 +195,22 @@ class WorldModel(nn.Module):
 
         self.reanalyze_phase = False
 
+    def _initialize_cache_structures(self) -> None:
+        """Initialize cache structures for past keys and values."""
+        from collections import defaultdict
+
+        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
+        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
+
+        self.past_kv_cache_recurrent_infer = {}
+        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
+        # 辅助数据结构，用于反向查找：pool_index -> key
+        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
+
+        self.keys_values_wm_list = []
+        self.keys_values_wm_size_list = []
+        
     def _analyze_latent_representation(
             self, 
             latent_states: torch.Tensor, 
@@ -515,21 +531,7 @@ class WorldModel(nn.Module):
                             nn.init.zeros_(layer.bias)
                         break
 
-    def _initialize_cache_structures(self) -> None:
-        """Initialize cache structures for past keys and values."""
-        from collections import defaultdict
 
-        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
-        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
-
-        self.past_kv_cache_recurrent_infer = {}
-        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
-        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
-        # 辅助数据结构，用于反向查找：pool_index -> key
-        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
-
-        self.keys_values_wm_list = []
-        self.keys_values_wm_size_list = []
 
     def _initialize_projection_input_dim(self) -> None:
         """Initialize the projection input dimension based on the number of observation tokens."""
