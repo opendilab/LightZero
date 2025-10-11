@@ -94,9 +94,8 @@ def main(env_id, seed):
         ),
         policy=dict(
             # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
-            # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000, ), ), ),  # 50k
-
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000, ), ), ),  # 100k
+            # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000, ), ), ),  # 50k
             # sample_type='episode',  # NOTE: very important for memory env
             model=dict(
                 observation_shape=(3, 64, 64),
@@ -104,9 +103,11 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
-
                 norm_type=norm_type,
-
+                num_res_blocks=2,
+                num_channels=128,
+                # num_res_blocks=1, # TODO
+                # num_channels=64,
                 world_model_cfg=dict(
                     game_segment_length=game_segment_length,
                     
@@ -114,10 +115,7 @@ def main(env_id, seed):
                     # encoder_type="dinov2", #TODO========
 
                     norm_type=norm_type,
-                    num_res_blocks=2,
-                    num_channels=128,
-                    # num_res_blocks=1, # TODO
-                    # num_channels=64,
+
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     # policy_entropy_weight=5e-2, # TODO(pu) mspacman
@@ -215,9 +213,8 @@ def main(env_id, seed):
             target_entropy_start_ratio =0.98,
             # target_entropy_end_ratio =0.9,
             # target_entropy_end_ratio =0.7,
-            target_entropy_end_ratio =0.5, # TODO=====
-
             # target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+            target_entropy_end_ratio =0.5, # TODO=====
             target_entropy_decay_steps = 400000, # 例如，在400k次迭代后达到最终值
 
             
@@ -231,8 +228,8 @@ def main(env_id, seed):
             # (float) 退火的结束 clip 值 (训练后期，较严格)。
             encoder_clip_end_value=10.0,
             # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
-            # encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
-            encoder_clip_anneal_steps=400000,  # 例如，在100k次迭代后达到最终值
+            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+            # encoder_clip_anneal_steps=400000,  # 例如，在100k次迭代后达到最终值
 
 
             # policy_ls_eps_start=0.5, #TODO=============
@@ -293,7 +290,7 @@ def main(env_id, seed):
 
             # ==================== [新增] 范数监控频率 ====================
             # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
-            monitor_norm_freq=5000,
+            monitor_norm_freq=10000,
             # monitor_norm_freq=2,
 
             # ============================================================
@@ -387,7 +384,9 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-05-400k-fix_encoder-clip30-10-400k_adamw1e-4_wd1e-2-encoder1-tran1-head1_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+    main_config.exp_name = f'data_unizero_longrun_20251010/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-05-400k-fix_encoder-clip30-10-100k_adamw1e-4_wd1e-2-encoder1-tran1-head1_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_longrun_20251010/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-05-400k-fix_encoder-clip30-10-400k_adamw1e-4_wd1e-2-encoder1-tran1-head1_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_longrun_20250923/{env_id[:-14]}/{env_id[:-14]}_uz_targetentropy-alpha-098-05-400k-fix_encoder-clip30-10-400k_adamw1e-4_wd1e-2-encoder5times-tranwd-headnodecay_envnum{collector_env_num}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_c25_seed{seed}'
 
@@ -452,9 +451,9 @@ if __name__ == "__main__":
     main(args.env, args.seed)
 
     """
-    export CUDA_VISIBLE_DEVICES=4
+    export CUDA_VISIBLE_DEVICES=0
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
-    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoder-LN_labelsmooth-valuerew0-policy005_msp.log 2>&1
+    python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/wd1e-2-encoder1-trans1-head1_targetentropy-alpha-400k-098-05-encoder-clip30-10-100k-qbert.log 2>&1
 
     
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py > /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/logs/unizero_adamw1e-4_64_encoderdinov2_mspac.log 2>&1
