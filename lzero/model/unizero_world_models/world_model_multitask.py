@@ -1899,6 +1899,10 @@ class WorldModelMT(WorldModel):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
 
+        # 为了让外部的训练循环能够获取encoder的输出，我们将其加入返回字典
+        # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
+        detached_obs_embeddings = obs_embeddings.detach()
+
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
                 latent_recon_loss_weight=self.latent_recon_loss_weight,
@@ -1927,7 +1931,9 @@ class WorldModelMT(WorldModel):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
+
                 value_priority=value_priority,
+                obs_embeddings=detached_obs_embeddings, # <-- 新增
 
             )
         else:
@@ -1955,7 +1961,10 @@ class WorldModelMT(WorldModel):
                 e_rank_last_linear = e_rank_last_linear,
                 e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
+                
                 value_priority=value_priority,
+                obs_embeddings=detached_obs_embeddings, # <-- 新增
+
 
             )
 
