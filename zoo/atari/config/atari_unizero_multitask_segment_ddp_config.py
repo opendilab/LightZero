@@ -202,7 +202,8 @@ def create_config(
             # target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
 
             target_entropy_end_ratio =0.5, # for action_space=18
-            target_entropy_decay_steps = 150000, # 例如，在150k次迭代 300k envsteps后达到最终值
+            target_entropy_decay_steps = 100000, # 例如，在150k次迭代 300k envsteps后达到最终值
+            # target_entropy_decay_steps = 150000, # 例如，在150k次迭代 300k envsteps后达到最终值
 
             # ==================== START: Encoder-Clip Annealing Config ====================
             # (bool) 是否启用 encoder-clip 值的退火。
@@ -288,7 +289,7 @@ def generate_configs(
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
     # benchmark_tag = "data_unizero_mt_refactor1010_debug"  # e.g., unizero_atari_mt_20250612
-    benchmark_tag = "data_unizero_mt_refactor1010_fix"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "data_unizero_mt_refactor1012"  # e.g., unizero_atari_mt_20250612
 
     # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
     # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
@@ -296,7 +297,8 @@ def generate_configs(
     # model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
     # model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-100k-098-07_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
-    model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-150k-098-05_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+    model_tag = f"resnet_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    # model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-150k-098-05_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
@@ -346,7 +348,7 @@ if __name__ == "__main__":
         export CUDA_VISIBLE_DEVICES=4,5,6,7
 
         cd /path/to/your/project/
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251010_fix_alpha-150k-098-05.log
+        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251012_resnet_nlayer4_alpha-100k-098-05.log
             /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -356,8 +358,8 @@ if __name__ == "__main__":
 
     # --- Main Experiment Settings ---
     num_games = 8  # Options: 3, 8, 26
-    # num_layers = 4
-    num_layers = 2 # debug
+    num_layers = 4
+    # num_layers = 2 # debug
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8

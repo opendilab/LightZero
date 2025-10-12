@@ -437,6 +437,45 @@ def train_unizero_multitask_balance_segment_ddp(
             tb_logger.add_scalar('Curriculum/Stage', curriculum_controller.stage, learner.train_iter)
             tb_logger.add_scalar('Curriculum/GlobalSolvedTasks', global_solved_count, learner.train_iter)
 
+            # TODO 遍历 transformer 中所有子模块，根据其名称查找 CurriculumLoRALinear 模块
+            # transformer = policy._learn_model.world_model.transformer
+            # for module_name, module in transformer.named_modules():
+            #     if isinstance(module, CurriculumLoRALinear) and module.adapters is not None:
+            #         for adapter_idx, scale_param in enumerate(module.adapter_scales):
+            #             tb_logger.add_scalar(
+            #                 f'Curriculum/adapter_scales/{module_name}/adapter_{adapter_idx}',
+            #                 scale_param().item(),
+            #                 global_step=learner.train_iter
+            #             )
+            
+            # 新增的 alpha 缩放因子日志记录
+            try:
+                transformer = policy._learn_model.world_model.transformer
+                for module_name, module in transformer.named_modules():
+                    if isinstance(module, CurriculumLoRALinear):
+                        # 检查模块是否有 base_weight_scale 属性
+                        if hasattr(module, 'base_weight_scale') and module.base_weight_scale is not None:
+                            # 1. 记录基座权重的缩放因子 (alpha_0)
+                            tb_logger.add_scalar(
+                                f'Curriculum/alpha_scales/{module_name}/alpha_0_base_weight',
+                                module.base_weight_scale().item(),
+                                global_step=learner.train_iter
+                            )
+
+                        # 检查模块是否有 adapter_scales 属性
+                        if hasattr(module, 'adapter_scales') and module.adapter_scales is not None:
+                            # 2. 遍历并记录所有适配器的缩放因子 (alpha_1, alpha_2, ...)
+                            for adapter_idx, scale_param in enumerate(module.adapter_scales):
+                                # adapter_idx 是从 0 开始的，对应 alpha_{idx+1}
+                                tb_logger.add_scalar(
+                                    f'Curriculum/alpha_scales/{module_name}/alpha_{adapter_idx + 1}',
+                                    scale_param().item(),
+                                    global_step=learner.train_iter
+                                )
+            except Exception as e:
+                logging.warning(f"Failed to log alpha scales: {e}")
+                        
+
         # Ensure all processes are aware of a potential stage switch
         dist.barrier()
 

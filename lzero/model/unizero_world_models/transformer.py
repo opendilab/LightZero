@@ -23,23 +23,6 @@ from torch.nn import functional as F
 from .kv_caching import KeysValues
 from lzero.model.common import SimNorm
 
-# The following class is a previous implementation and is kept for reference.
-# class LearnableScale(nn.Module):
-#     """
-#     A learnable scalar parameter bounded within a specific range.
-#       s = s_max * sigmoid(ŝ) -> (0, s_max)
-#     """
-#     def __init__(self, init=1.0, s_max=1.2):
-#         super().__init__()
-#         # Inverse sigmoid to find the initial logit value
-#         inv_sig = math.log(init / (s_max - init + 1e-9))
-#         self.logit = nn.Parameter(torch.tensor(inv_sig))
-#         self.logit.requires_grad = True # TODO
-#         self.s_max = s_max
-
-#     def forward(self):
-#         return self.s_max * torch.sigmoid(self.logit)
-
 
 class LearnableScale(nn.Module):
     """
@@ -80,48 +63,27 @@ class LearnableScale(nn.Module):
         """
         return self.offset + self.scale * torch.tanh(self.logit)
 
-
 ##############################################
-# CurriculumLoRALinear Implementation
+# Optimized CurriculumLoRALinear Implementation (Recommended Version)
 ##############################################
 
 class CurriculumLoRALinear(nn.Module):
     """
-    CurriculumLoRALinear extends a standard linear layer with curriculum-based LoRA adapters.
+    Optimized CurriculumLoRALinear.
+    
+    Effective weight at stage s:
+    W_eff = α₀*W₀ + Σ_{j=1 to s} αⱼ*Δθⱼ
 
-    This module internally stores a base weight and bias. It also initializes multiple
-    LoRA adapters (number = curriculum_stage_num - 1), which are activated sequentially.
-
-    Forward pass logic:
-    - If `curriculum_stage == 0`:
-        Output = F.linear(x, W, bias)
-    - If `curriculum_stage >= 1`:
-        Output = base_output + sum_{i=0}^{curriculum_stage-1} scaling * adapter_i(x)
-      where only the adapter for the current stage (index == curriculum_stage - 1) is trainable.
-      Previous adapters contribute to the forward pass but their gradients are detached.
-
-    Note:
-    - The `set_curriculum_stage(stage)` method must be called externally to switch between stages.
-    - Logging messages indicate the module's dimensions and the freeze/unfreeze status of its parameters.
+    Optimization logic at stage s (s >= 1):
+    - Train: Δθₛ, α₀, and {αⱼ | 1 <= j < s}
+    - Freeze: W₀, {Δθⱼ | 1 <= j < s}, and αₛ
+    
+    This avoids the redundancy of training αₛ alongside Δθₛ.
     """
 
     def __init__(self, in_features: int, out_features: int, bias: bool = True,
                  r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0.0,
                  curriculum_stage_num: int = 1, lora_scale_init: float = 1.0) -> None:
-        """
-        Overview:
-            Initializes the CurriculumLoRALinear layer. If `curriculum_stage_num > 1`,
-            it creates `curriculum_stage_num - 1` LoRA adapters.
-        Arguments:
-            - in_features (:obj:`int`): Size of each input sample.
-            - out_features (:obj:`int`): Size of each output sample.
-            - bias (:obj:`bool`): If True, adds a learnable bias to the output.
-            - r (:obj:`int`): The rank of the LoRA decomposition. If 0, LoRA is disabled.
-            - lora_alpha (:obj:`int`): The alpha parameter for LoRA scaling.
-            - lora_dropout (:obj:`float`): The dropout probability for LoRA layers.
-            - curriculum_stage_num (:obj:`int`): The total number of curriculum stages.
-            - lora_scale_init (:obj:`float`): The initial value for the learnable scale of each adapter.
-        """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -130,9 +92,9 @@ class CurriculumLoRALinear(nn.Module):
         self.scaling = lora_alpha / r if r > 0 else 1.0
         self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
         self.curriculum_stage_num = curriculum_stage_num
-        self.curriculum_stage = 0  # Initial stage is 0
+        self.curriculum_stage = 0
 
-        # Initialize base weights (part of the base transformer), trainable by default
+        # Base weights (W₀ and bias)
         self.weight = nn.Parameter(torch.empty(out_features, in_features))
         if bias:
             self.bias = nn.Parameter(torch.empty(out_features))
@@ -144,7 +106,10 @@ class CurriculumLoRALinear(nn.Module):
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             nn.init.uniform_(self.bias, -bound, bound)
 
-        # Initialize LoRA adapters, which exist only if r > 0 and curriculum_stage_num > 1
+        # Learnable scale for the base weight (α₀)
+        self.base_weight_scale = LearnableScale(init=1.0, s_range=0.2)
+        
+        # A scale for each adapter (α₁, α₂, ...)
         self.adapters = nn.ModuleList()
         self.adapter_scales = nn.ModuleList()
 
@@ -156,90 +121,251 @@ class CurriculumLoRALinear(nn.Module):
                 })
                 self.adapters.append(adapter)
                 self.adapter_scales.append(LearnableScale(lora_scale_init, s_range=0.2))
-
         else:
             self.adapters = None
 
-        # Initially (stage 0), the base layer is trainable, and all adapters are frozen
-        self.weight.requires_grad = True
-        if self.bias is not None:
-            self.bias.requires_grad = True
-        if self.adapters is not None:
-            for adapter in self.adapters:
-                adapter['lora_A'].requires_grad = False
-                adapter['lora_B'].requires_grad = False
+        self.set_curriculum_stage(0)
 
     def set_curriculum_stage(self, stage: int) -> None:
-        """
-        Overview:
-            Sets the current curriculum stage and updates the `requires_grad` status of parameters accordingly.
-            - Stage 0: The base layer is trainable; all adapters are frozen.
-            - Stage >= 1: The base layer is frozen. Only the current adapter (index = stage - 1) is trainable.
-                          Previous adapters contribute to the forward pass but do not propagate gradients.
-        Arguments:
-            - stage (:obj:`int`): The curriculum stage to set, in the range [0, curriculum_stage_num - 1].
-        """
         assert 0 <= stage < self.curriculum_stage_num, f"Stage must be within [0, {self.curriculum_stage_num-1}]"
         self.curriculum_stage = stage
-
         module_id = f"({self.in_features}x{self.out_features})"
+        
+        # --- Stage 0: Base Training ---
         if stage == 0:
             self.weight.requires_grad = True
-            if self.bias is not None:
-                self.bias.requires_grad = True
-            if self.adapters is not None:
+            if self.bias is not None: self.bias.requires_grad = True
+            
+            # Freeze everything else
+            self.base_weight_scale.logit.requires_grad = False
+            if self.adapters:
                 for adapter in self.adapters:
                     adapter['lora_A'].requires_grad = False
                     adapter['lora_B'].requires_grad = False
-            logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: Base layer is trainable, all adapters are frozen.")
+                for scale in self.adapter_scales:
+                    scale.logit.requires_grad = False
+            logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: Base layer trainable.")
+
+        # --- Stage >= 1: Adaptation ---
         else:
-            # For stages > 0, freeze the base layer
+            # Freeze base model
             self.weight.requires_grad = False
-            if self.bias is not None:
-                self.bias.requires_grad = False
+            if self.bias is not None: self.bias.requires_grad = False
             
-            if self.adapters is not None:
+            # α₀ is trainable from stage 1 onwards
+            self.base_weight_scale.logit.requires_grad = True
+            
+            if self.adapters:
+                # Set trainability for LoRA adapters
                 for idx, adapter in enumerate(self.adapters):
                     is_current_adapter = (idx == stage - 1)
                     adapter['lora_A'].requires_grad = is_current_adapter
                     adapter['lora_B'].requires_grad = is_current_adapter
-                    status = "activated (trainable)" if is_current_adapter else "frozen (forward-only)"
-                    logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: Adapter {idx} is {status}.")
+                
+                # --- OPTIMIZED LOGIC FOR SCALES ---
+                # Set trainability for adapter scales {α_j}
+                for idx, scale in enumerate(self.adapter_scales):
+                    # A scale α_j is trainable if it belongs to a *previous* stage (j < s).
+                    # The current stage's scale α_s (idx = stage - 1) is NOT trained.
+                    is_previous_scale = (idx < stage - 1)
+                    scale.logit.requires_grad = is_previous_scale
+            
+            logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: Activating adapter {stage - 1} and scales for stages < {stage - 1}.")
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Overview:
-            Performs the forward pass of the CurriculumLoRALinear layer.
-        Arguments:
-            - x (:obj:`torch.Tensor`): The input tensor.
-        Returns:
-            - torch.Tensor: The output tensor.
-        """
-        baseline_out = F.linear(x, self.weight, self.bias)
+        # Apply scaling to base weight if in an adaptation stage
+        if self.curriculum_stage > 0:
+            alpha_0 = self.base_weight_scale()
+            scaled_weight = self.weight * alpha_0
+            baseline_out = F.linear(x, scaled_weight, self.bias)
+        else:
+            baseline_out = F.linear(x, self.weight, self.bias)
+
         if self.curriculum_stage == 0 or self.adapters is None:
             return baseline_out
 
         adapter_out = 0
-        # For the first `curriculum_stage` adapters, only the last one backpropagates.
-        # Others are detached to contribute only to the forward pass.
+        # Iterate through all adapters up to the current stage
         for idx in range(self.curriculum_stage):
             if idx >= len(self.adapters):
                 break
+            
             adapter = self.adapters[idx]
+            scale = self.adapter_scales[idx]()
+            
             lora_x = self.lora_dropout(x)
             out = F.linear(lora_x, adapter['lora_A'])
             out = F.linear(out, adapter['lora_B'])
             
-            scale = self.adapter_scales[idx]()
-            # TODO: All adapter scales are currently trainable.
-            
-            if idx == self.curriculum_stage - 1:
-                # Only the current adapter's output contributes to the gradient computation.
-                adapter_out = adapter_out + self.scaling * out * scale
-            else:
-                # Outputs from previous adapters are detached.
-                adapter_out = adapter_out + self.scaling * out.detach() * scale
+            # The forward pass is a simple sum. The magic happens in `set_curriculum_stage`
+            # which controls `requires_grad`. No need for `.detach()` here.
+            # Gradients will naturally flow only to parameters with `requires_grad=True`.
+            adapter_out = adapter_out + self.scaling * out * scale
+
         return baseline_out + adapter_out
+    
+
+# ##############################################
+# # CurriculumLoRALinear Implementation
+# ##############################################
+
+# class CurriculumLoRALinear(nn.Module):
+#     """
+#     CurriculumLoRALinear extends a standard linear layer with curriculum-based LoRA adapters.
+
+#     This module internally stores a base weight and bias. It also initializes multiple
+#     LoRA adapters (number = curriculum_stage_num - 1), which are activated sequentially.
+
+#     Forward pass logic:
+#     - If `curriculum_stage == 0`:
+#         Output = F.linear(x, W, bias)
+#     - If `curriculum_stage >= 1`:
+#         Output = base_output + sum_{i=0}^{curriculum_stage-1} scaling * adapter_i(x)
+#       where only the adapter for the current stage (index == curriculum_stage - 1) is trainable.
+#       Previous adapters contribute to the forward pass but their gradients are detached.
+
+#     Note:
+#     - The `set_curriculum_stage(stage)` method must be called externally to switch between stages.
+#     - Logging messages indicate the module's dimensions and the freeze/unfreeze status of its parameters.
+#     """
+
+#     def __init__(self, in_features: int, out_features: int, bias: bool = True,
+#                  r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0.0,
+#                  curriculum_stage_num: int = 1, lora_scale_init: float = 1.0) -> None:
+#         """
+#         Overview:
+#             Initializes the CurriculumLoRALinear layer. If `curriculum_stage_num > 1`,
+#             it creates `curriculum_stage_num - 1` LoRA adapters.
+#         Arguments:
+#             - in_features (:obj:`int`): Size of each input sample.
+#             - out_features (:obj:`int`): Size of each output sample.
+#             - bias (:obj:`bool`): If True, adds a learnable bias to the output.
+#             - r (:obj:`int`): The rank of the LoRA decomposition. If 0, LoRA is disabled.
+#             - lora_alpha (:obj:`int`): The alpha parameter for LoRA scaling.
+#             - lora_dropout (:obj:`float`): The dropout probability for LoRA layers.
+#             - curriculum_stage_num (:obj:`int`): The total number of curriculum stages.
+#             - lora_scale_init (:obj:`float`): The initial value for the learnable scale of each adapter.
+#         """
+#         super().__init__()
+#         self.in_features = in_features
+#         self.out_features = out_features
+#         self.r = r
+#         self.lora_alpha = lora_alpha
+#         self.scaling = lora_alpha / r if r > 0 else 1.0
+#         self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
+#         self.curriculum_stage_num = curriculum_stage_num
+#         self.curriculum_stage = 0  # Initial stage is 0
+
+#         # Initialize base weights (part of the base transformer), trainable by default
+#         self.weight = nn.Parameter(torch.empty(out_features, in_features))
+#         if bias:
+#             self.bias = nn.Parameter(torch.empty(out_features))
+#         else:
+#             self.register_parameter('bias', None)
+#         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+#         if self.bias is not None:
+#             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+#             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+#             nn.init.uniform_(self.bias, -bound, bound)
+
+#         # Initialize LoRA adapters, which exist only if r > 0 and curriculum_stage_num > 1
+#         self.adapters = nn.ModuleList()
+#         self.adapter_scales = nn.ModuleList()
+
+#         if r > 0 and (curriculum_stage_num - 1) > 0:
+#             for _ in range(curriculum_stage_num - 1):
+#                 adapter = nn.ParameterDict({
+#                     'lora_A': nn.Parameter(torch.randn(r, in_features) * 0.01),
+#                     'lora_B': nn.Parameter(torch.zeros(out_features, r))
+#                 })
+#                 self.adapters.append(adapter)
+#                 self.adapter_scales.append(LearnableScale(lora_scale_init, s_range=0.2))
+
+#         else:
+#             self.adapters = None
+
+#         # Initially (stage 0), the base layer is trainable, and all adapters are frozen
+#         self.weight.requires_grad = True
+#         if self.bias is not None:
+#             self.bias.requires_grad = True
+#         if self.adapters is not None:
+#             for adapter in self.adapters:
+#                 adapter['lora_A'].requires_grad = False
+#                 adapter['lora_B'].requires_grad = False
+
+#     def set_curriculum_stage(self, stage: int) -> None:
+#         """
+#         Overview:
+#             Sets the current curriculum stage and updates the `requires_grad` status of parameters accordingly.
+#             - Stage 0: The base layer is trainable; all adapters are frozen.
+#             - Stage >= 1: The base layer is frozen. Only the current adapter (index = stage - 1) is trainable.
+#                           Previous adapters contribute to the forward pass but do not propagate gradients.
+#         Arguments:
+#             - stage (:obj:`int`): The curriculum stage to set, in the range [0, curriculum_stage_num - 1].
+#         """
+#         assert 0 <= stage < self.curriculum_stage_num, f"Stage must be within [0, {self.curriculum_stage_num-1}]"
+#         self.curriculum_stage = stage
+
+#         module_id = f"({self.in_features}x{self.out_features})"
+#         if stage == 0:
+#             self.weight.requires_grad = True
+#             if self.bias is not None:
+#                 self.bias.requires_grad = True
+#             if self.adapters is not None:
+#                 for adapter in self.adapters:
+#                     adapter['lora_A'].requires_grad = False
+#                     adapter['lora_B'].requires_grad = False
+#             logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: Base layer is trainable, all adapters are frozen.")
+#         else:
+#             # For stages > 0, freeze the base layer
+#             self.weight.requires_grad = False
+#             if self.bias is not None:
+#                 self.bias.requires_grad = False
+            
+#             if self.adapters is not None:
+#                 for idx, adapter in enumerate(self.adapters):
+#                     is_current_adapter = (idx == stage - 1)
+#                     adapter['lora_A'].requires_grad = is_current_adapter
+#                     adapter['lora_B'].requires_grad = is_current_adapter
+#                     status = "activated (trainable)" if is_current_adapter else "frozen (forward-only)"
+#                     logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: Adapter {idx} is {status}.")
+
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         """
+#         Overview:
+#             Performs the forward pass of the CurriculumLoRALinear layer.
+#         Arguments:
+#             - x (:obj:`torch.Tensor`): The input tensor.
+#         Returns:
+#             - torch.Tensor: The output tensor.
+#         """
+#         baseline_out = F.linear(x, self.weight, self.bias)
+#         if self.curriculum_stage == 0 or self.adapters is None:
+#             return baseline_out
+
+#         adapter_out = 0
+#         # For the first `curriculum_stage` adapters, only the last one backpropagates.
+#         # Others are detached to contribute only to the forward pass.
+#         for idx in range(self.curriculum_stage):
+#             if idx >= len(self.adapters):
+#                 break
+#             adapter = self.adapters[idx]
+#             lora_x = self.lora_dropout(x)
+#             out = F.linear(lora_x, adapter['lora_A'])
+#             out = F.linear(out, adapter['lora_B'])
+            
+#             scale = self.adapter_scales[idx]()
+
+#             # NOTE: All adapter scales are currently trainable.
+#             if idx == self.curriculum_stage - 1:
+#                 # Only the current adapter's output contributes to the gradient computation.
+#                 adapter_out = adapter_out + self.scaling * out * scale
+#             else:
+#                 # Outputs from previous adapters are detached.
+#                 adapter_out = adapter_out + self.scaling * out.detach() * scale
+
+#         return baseline_out + adapter_out
 
 
 ##############################################

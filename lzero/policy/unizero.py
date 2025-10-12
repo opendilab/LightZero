@@ -1334,6 +1334,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
                     print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end.')
 
+        # ======== TODO: 20251015 ========
         # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
@@ -1416,6 +1417,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 return
             # --- END ROBUST FIX ---
 
+        # ======== TODO: 20251015 ========
         # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
