@@ -405,6 +405,54 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 <details><summary>Click to expand</summary>
 
 #### ICML
+- [STAIR: Improving Safety Alignment with Introspective Reasoning](https://openreview.net/forum?id=aHzPGyUhZa) 2025
+  - Yichi Zhang, Siyuan Zhang, Yao Huang, Zeyu Xia, Zhengwei Fang, Xiao Yang, Ranjie Duan, Dong Yan, Yinpeng Dong, Jun Zhu
+  - Key: LLM, Safety Alignment, Reasoning
+  - ExpEnv: StrongReject, XsTest, WildChat, Do-Not-Answer, GSM8k, AlpacaEval 2.0, BIG-bench HHH, SimpleQA, InfoFlow, AdvGLUE
+- [rStar-Math: Small LLMs Can Master Math Reasoning with Self-Evolved Deep Thinking](https://openreview.net/forum?id=5zwF1GizFa) 2025
+  - Xinyu Guan, Li Lyna Zhang, Yifei Liu, Ning Shang, Youran Sun, Yi Zhu, Fan Yang, Mao Yang
+  - Key: LLM, Reasoning, Self-evolution
+  - ExpEnv: GSM8K, MATH, AIME 2024, AMC 2023, Olympiad Bench, College Math, Gaokao (Chinese College Entrance Exam 2023)
+- [Monte-Carlo Tree Search with Uncertainty Propagation via Optimal Transport](https://openreview.net/forum?id=DUGFTH9W8B) 2025
+  - Tuan Quang Dam, Pascal Stenger, Lukas Schneider, Joni Pajarinen, Carlo D'Eramo, Odalric-Ambrym Maillard
+  - Key: Monte-Carlo Tree Search, Planning under Uncertainty
+  - ExpEnv: FrozenLake, NChain, RiverSwim, SixArms, Taxi, Rocksample, Pocman, Tag, LaserTag
+- [Re-ranking Reasoning Context with Tree Search Makes Large Vision-Language Models Stronger](https://openreview.net/forum?id=DJcEoC9JpQ) 2025
+  - Qi Yang, Chenghao Zhang, Lubin Fan, Kun Ding, Jieping Ye, Shiming Xiang
+  - Key: Large Vision Language Model, Multimodal Retrieval-Augmented Generation, In-context Learning, Monte Carlo Tree Search
+  - ExpEnv: ScienceQA, MMMU, MathV, VizWiz, VSR-MC 
+- [Mastering Board Games by External and Internal Planning with Language Models](https://openreview.net/forum?id=KKwBo3u3IW) 2025
+  - John Schultz, Jakub Adamek, Matej Jusup, Marc Lanctot, Michael Kaisers, Sarah Perrin, Daniel Hennes, Jeremy Shar, Cannada A. Lewis, Anian Ruoss, Tom Zahavy, Petar Veličković, Laurel Prince, Satinder Singh, Eric Malmi, Nenad Tomasev
+  - Key: search, planning, language models, games, chess
+  - ExpEnv: Chess, Chess960, Connect Four, Hex 
+- [Language Models as Implicit Tree Search](https://openreview.net/forum?id=bEqMmGu6qg) 2025
+  - Ziliang Chen, Zhao-Rong Lai, Yufeng Yang, Liangda Fang, ZHANFU YANG, Liang Lin
+  - Key: RL-free preference optimization; LLM based MCTS; LLM alignment;LLM reasoning
+  - ExpEnv: Anthropic HH, GSM8K, MATH, Game24
+- [Free Process Rewards without Process Labels](https://openreview.net/forum?id=8ThnPFhGm8) 2025
+  - Lifan Yuan, Wendi Li, Huayu Chen, Ganqu Cui, Ning Ding, Kaiyan Zhang, Bowen Zhou, Zhiyuan Liu, Hao Peng
+  - Key: Process Reward Model
+  - ExpEnv: MATH
+- [Monte Carlo Tree Search for Comprehensive Exploration in LLM-Based Automatic Heuristic Design](https://openreview.net/forum?id=Do1OdZzYHr) 2025
+  - Zhi Zheng, Zhuoliang Xie, Zhenkun Wang, Bryan Hooi
+  - Key: Automatic Heuristic Design, Combinatorial Optimization, Large Language Model, Neural Combinatorial Optimization, Monte Carlo Tree Search
+  - ExpEnv: TSP, Knapsack, CVRP, Multiple Knapsack, Bin Packing, Admissible Set Problem, Bayesian Optimization
+- [Boosting Virtual Agent Learning and Reasoning: A Step-Wise, Multi-Dimensional, and Generalist Reward Model with Benchmark](https://openreview.net/forum?id=OKWlVPHeW1) 2025
+  - Bingchen Miao, Yang Wu, Minghe Gao, Qifan Yu, Wendong Bu, Wenqiao Zhang, Yunfei Li, Siliang Tang, Tat-Seng Chua, Juncheng Li
+  - Key: Virtual Agent; Digital Agent; Reward Model
+  - ExpEnv: WebArena, VisualWebArena, Android World, OSWorld
+- [Online Robust Reinforcement Learning Through Monte-Carlo Planning](https://openreview.net/forum?id=m25ma7O7Ec) 2025
+  - Tuan Quang Dam, Kishan Panaganti, Brahim Driss, Adam Wierman
+  - Key: Monte-carlo tree search, distributionally robust reinforcement learning, online reinforcement learning
+  - ExpEnv: Gambler’s Problem, Frozen Lake, American Option Pricing 
+- [Trust-Region Twisted Policy Improvement](https://openreview.net/group?id=ICML.cc/2025/Conference#tab-accept-oral) 2025
+  - Joery A. de Vries, Jinke He, Yaniv Oren, Matthijs T. J. Spaan
+  - Key: Reinforcement Learning; Sequential Monte-Carlo; Monte-Carlo Tree Search; planning; model-based; policy improvement
+  - ExpEnv: Brax, Jumanji 
+- [KBQA-o1: Agentic Knowledge Base Question Answering with Monte Carlo Tree Search](https://openreview.net/forum?id=QuecSemZIy) 2025
+  - Haoran Luo, Haihong E, Yikai Guo, Qika Lin, Xiaobao Wu, Xinyu Mu, Wenhao Liu, Meina Song, Yifan Zhu, Anh Tuan Luu
+  - Key: Knowledge Base Question Answering, Large Language Model, LLM Agents, Monte Carlo Tree Search
+  - ExpEnv: GrailQA, WebQSP, GraphQ
 - [Language Agent Tree Search Unifies Reasoning, Acting, and Planning in Language Models](https://icml.cc/virtual/2024/poster/33107) 2024  
   - Andy Zhou, Kai Yan, Michal Shlapentokh-Rothman, Haohan Wang, Yu-Xiong Wang  
   - Key: language models, decision-making, Monte Carlo Tree Search, reasoning, acting, planning  
