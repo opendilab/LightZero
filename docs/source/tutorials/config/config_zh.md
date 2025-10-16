@@ -43,7 +43,8 @@
     - `downsample`: 是否进行降采样。
     - `norm_type`: 归一化使用的方法。
     - `num_channels`: 卷积层提取的特征个数。
-    - `support_scale`: 价值支持集的范围 (-support_scale, support_scale)。
+    - `reward_support_range`: 价值支持集的范围 (`(start, stop, step)`)。<!-- TODO : ADAPT THIS DESCRIPTION, I DON'T SPEAK CHINESE -->
+    - `value_support_range`: 价值支持集的范围 (`(start, stop, step)`)。<!-- TODO : ADAPT THIS DESCRIPTION, I DON'T SPEAK CHINESE -->
     - `bias`: 是否使用偏置。
     - `discrete_action_encoding_type`: 离散化动作空间使用的编码类型。
     - `self_supervised_learning_loss`: 是否使用自监督学习损失（参照EfficientZero的实现）。
