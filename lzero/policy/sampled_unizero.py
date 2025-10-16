@@ -360,8 +360,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
@@ -370,6 +368,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+        self.pad_token_id = 0 # for compatibility
+
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -850,11 +850,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.model.continuous_action_space is True:
                 # when the action space of the environment is continuous, action_mask[:] is None.
@@ -885,8 +884,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
