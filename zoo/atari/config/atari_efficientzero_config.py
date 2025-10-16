@@ -45,9 +45,8 @@ atari_efficientzero_config = dict(
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            reward_support_size=101,
-            value_support_size=101,
-            support_scale=50,
+            reward_support_range=(-50., 51., 1.),
+            value_support_range=(-50., 51., 1.),
         ),
         cuda=True,
         env_type='not_board_games',

@@ -38,9 +38,8 @@ gomoku_muzero_config = dict(
             image_channel=3,
             num_res_blocks=1,
             num_channels=32,
-            support_scale=10,
-            reward_support_size=21,
-            value_support_size=21,
+            reward_support_range=(-10., 11., 1.),
+            value_support_range=(-10., 11., 1.),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
