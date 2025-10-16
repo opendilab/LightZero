@@ -18,6 +18,17 @@ max_env_step = int(5e5)
 reuse_search = True
 collect_with_pure_policy = True
 buffer_reanalyze_freq = 1
+
+# ====== only for debug =====
+# collector_env_num = 8
+# num_segments = 8
+# evaluator_env_num = 2
+# num_simulations = 5
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0.1
+# batch_size = 64
+# num_unroll_steps = 10
+# replay_ratio = 0.01
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -32,6 +43,9 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # # TODO: only for debug
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
     ),
     policy=dict(
         model=dict(

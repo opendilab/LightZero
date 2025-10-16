@@ -11,6 +11,7 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     HFLanguageRepresentationNetwork, QwenNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
+from .vit import ViT, ViTConfig
 from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 
 
@@ -88,7 +89,7 @@ class UniZeroModel(nn.Module):
             # TODO: only for MemoryEnv now
             self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, with_lpips=False)
+                                       decoder=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -125,7 +126,7 @@ class UniZeroModel(nn.Module):
                     self.decoder_network_tokenizer = None
             else:
                 raise ValueError(f"Unsupported encoder option: {kwargs['encoder_option']}")     
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, 
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, 
                                     with_lpips=False, projection=projection, encoder_option=kwargs['encoder_option'])     
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
@@ -134,23 +135,41 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
-            self.representation_network = RepresentationNetworkUniZero(
-                observation_shape,
-                num_res_blocks,
-                num_channels,
-                self.downsample,
-                activation=self.activation,
-                norm_type=norm_type,
-                embedding_dim=world_model_cfg.embed_dim,
-                group_size=world_model_cfg.group_size,
-                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
-            )
+            if world_model_cfg.encoder_type == "resnet":
+                self.representation_network = RepresentationNetworkUniZero(
+                    observation_shape,
+                    num_res_blocks,
+                    num_channels,
+                    self.downsample,
+                    activation=self.activation,
+                    norm_type=norm_type,
+                    embedding_dim=world_model_cfg.embed_dim,
+                    group_size=world_model_cfg.group_size,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                )
+            elif world_model_cfg.encoder_type == "vit":
+                # vit base
+                vit_config = ViTConfig(
+                    image_size=observation_shape[1],
+                    patch_size=8,
+                    num_classes=world_model_cfg.embed_dim,
+                    dim=768,
+                    depth=12,
+                    heads=12,
+                    mlp_dim=3072,
+                    dropout=0.1,
+                    emb_dropout=0.1,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                    lora_config=world_model_cfg,
+                )
+                self.representation_network = ViT(config=vit_config)
 
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False,)
+                
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -181,7 +200,7 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network)
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')

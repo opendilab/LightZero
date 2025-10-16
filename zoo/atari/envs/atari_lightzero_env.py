@@ -24,6 +24,8 @@ class AtariEnvLightZero(BaseEnv):
         _reward_space, obs, _eval_episode_return, has_reset, _seed, _dynamic_seed
     """
     config = dict(
+        # (bool) Whether to use the full action space of the environment. Default is False. If set to True, the action space size is 18 for Atari.
+        full_action_space=False,
         # (int) The number of environment instances used for data collection.
         collector_env_num=8,
         # (int) The number of environment instances used for evaluator.
@@ -175,11 +177,14 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         self._timestep += 1
-        # logging.info(f'self._timestep: {self._timestep}')
+        if self._timestep%200==0:
+            logging.info(f'self._timestep: {self._timestep}')
         observation = self.observe()
         if done:
             logging.info(f'one episode done! total episode length is: {self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
+            print(f'one episode of {self.cfg.env_id} done')
+
         return BaseEnvTimestep(observation, self.reward, done, info)
 
     def observe(self) -> dict:
