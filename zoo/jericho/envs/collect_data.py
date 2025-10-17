@@ -1,12 +1,17 @@
 
 import json
+import logging
 import os
+import threading
 from collections import deque
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field, replace
 from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
 import jericho
 from jericho.util import unabbreviate
+
+logger = logging.getLogger("collect_data")
 
 # ================================================================
 # 基础配置类定义
@@ -20,10 +25,12 @@ class WalkthroughHyperParams:
         - reverse_backtrack: 是否从 walkthrough 的末尾回溯生成扩展
         - skip_original_action: 是否跳过原始动作
         - extension_score_threshold: 用于筛选扩展episode的分数阈值
-        - extension_episode_limit: 最大扩展episode数量
-        - extension_max_nodes: 最大节点数限制
         - max_episode_steps: 限制单个episode的最大步数
         - history_turns: 输入给LLM时包含的历史交互轮数
+        - tail_pivot_steps: walkthrough 末尾用于扩展的步数（0 表示全部剩余步数）
+        - max_success_expansions: 成功（胜利且分数达标）的扩展 episode 最大数量
+        - max_total_expansions: 总扩展 episode 上限（成功与否均计算），用于防止长时间探索
+        - progress_path: walkthrough 扩展进度保存文件
     """
 
     enabled: bool = False
@@ -31,23 +38,27 @@ class WalkthroughHyperParams:
     reverse_backtrack: bool = True
     skip_original_action: bool = True
     extension_score_threshold: Optional[float] = None
-    extension_episode_limit: int = 10
-    extension_max_nodes: int = 5000
     max_episode_steps: Optional[int] = None
     history_turns: int = 3
+    tail_pivot_steps: int = 1
+    max_success_expansions: Optional[int] = None
+    max_total_expansions: Optional[int] = None
+    progress_path: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.expansion_mode = (self.expansion_mode or 'dfs').lower()
         if self.expansion_mode not in {'dfs', 'bfs'}:
             raise ValueError(f"Unsupported expansion_mode '{self.expansion_mode}'. Use 'dfs' or 'bfs'.")
-        if self.extension_episode_limit < 0:
-            raise ValueError("extension_episode_limit cannot be negative.")
-        if self.extension_max_nodes < 0:
-            raise ValueError("extension_max_nodes cannot be negative.")
         if self.history_turns < 0:
             raise ValueError("history_turns cannot be negative.")
         if self.max_episode_steps is not None and self.max_episode_steps <= 0:
             raise ValueError("max_episode_steps must be positive when provided.")
+        if self.tail_pivot_steps is not None and self.tail_pivot_steps < 0:
+            raise ValueError("tail_pivot_steps cannot be negative.")
+        if self.max_success_expansions is not None and self.max_success_expansions < 0:
+            raise ValueError("max_success_expansions cannot be negative.")
+        if self.max_total_expansions is not None and self.max_total_expansions < 0:
+            raise ValueError("max_total_expansions cannot be negative.")
 
 
 @dataclass
@@ -83,7 +94,7 @@ def load_action_cache(path: Optional[str]) -> Dict[str, List[str]]:
         cache = {str(k): list(v) for k, v in data.items()}
         return cache
     except Exception as exc:
-        print(f"[CACHE] Failed to load action cache from {path}: {exc}")
+        logger.warning("[CACHE] Failed to load action cache from %s: %s", path, exc)
         return {}
 
 
@@ -95,9 +106,36 @@ def save_action_cache(path: Optional[str], cache: Dict[str, List[str]]) -> None:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(cache, f, ensure_ascii=False)
-        print(f"[CACHE] Saved action cache with {len(cache)} entries to {path}.")
+        logger.info("[CACHE] Saved action cache with %d entries to %s.", len(cache), path)
     except Exception as exc:
-        print(f"[CACHE] Failed to save action cache to {path}: {exc}")
+        logger.warning("[CACHE] Failed to save action cache to %s: %s", path, exc)
+
+
+def load_progress(path: Optional[str]) -> Dict[str, int]:
+    """加载 walkthrough 扩展进度 {game: processed_tail_steps}"""
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return {str(k): int(v) for k, v in data.items()}
+    except Exception as exc:
+        logger.warning("[WALK] Failed to load progress from %s: %s", path, exc)
+    return {}
+
+
+def save_progress(path: Optional[str], progress: Dict[str, int]) -> None:
+    """保存 walkthrough 扩展进度"""
+    if not path:
+        return
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(progress, f, ensure_ascii=False, indent=2)
+        logger.info("[WALK] Saved progress for %d games to %s.", len(progress), path)
+    except Exception as exc:
+        logger.warning("[WALK] Failed to save progress to %s: %s", path, exc)
 
 # ================================================================
 # 数据结构定义
@@ -136,6 +174,7 @@ class Sample:
     episode_id: Optional[str] = None
     episode_length: Optional[int] = None
     valid_actions: List[str] = field(default_factory=list)
+    cumulative_return: Optional[float] = None
 
     def to_dialogue_entry(
         self,
@@ -157,6 +196,10 @@ class Sample:
             effective_history = []
 
         prompt_lines: List[str] = []
+        prompt_lines.append(
+            "You are a player in a text-based adventure game. Your task is to evaluate and select "
+            "actions that are promising based on the given game state."
+        )
         if history_turns and history_turns > 0:
             if effective_history:
                 prompt_lines.append(
@@ -181,10 +224,7 @@ class Sample:
                 "Candidate actions (you may choose actions outside this list, but these are often useful): "
                 + f"[{actions_display}]"
             )
-        prompt_lines.append(
-            "You must put your answer inside <answer> </answer> tags, i.e., <answer> answer here </answer>. "
-            "And your final answer will be extracted automatically by the \\boxed{} tag."
-        )
+        prompt_lines.append("The single best next action to maximize your score is:")
         prompt = "\n".join(prompt_lines)
 
         dialogue_entry = [
@@ -202,13 +242,14 @@ class Sample:
                 'from': 'metadata',
                 'episode_info': {
                     'game': self.game,
-                    'episode_id': self.episode_id,
-                    'total_steps': total_steps,
-                    'total_return': total_return,
-                    'history_step': len(effective_history),
-                    'current_score': self.current_score
-                }
+                'episode_id': self.episode_id,
+                'total_steps': total_steps,
+                'total_return': total_return,
+                'history_step': len(effective_history),
+                'current_score': self.current_score,
+                'episode_final_return': self.episode_score
             }
+        }
         ]
         return dialogue_entry
 
@@ -270,7 +311,7 @@ def _bfs_collect_episodes(
     max_actions_per_state: int,
     mode_label: str,
     game_name: str
-) -> List[Tuple[List[EpisodeStep], Optional[float]]]:
+) -> Tuple[List[Tuple[List[EpisodeStep], Optional[float]]], int, int]:
     """Breadth-first traversal to gather terminal trajectories."""
     # 初始化 Jericho 环境（基于 ROM 文件）
     env = jericho.FrotzEnv(rom_path)
@@ -302,7 +343,7 @@ def _bfs_collect_episodes(
         last_depth_logged = -1
         episodes: List[Tuple[List[EpisodeStep], Optional[float]]] = []
         expansions = 0
-        print(f"[BFS] Start from depth 0 with initial score {_format_score(current_score)}.")
+        logger.debug("[BFS] Start from depth 0 with initial score %s.", _format_score(current_score))
 
         while queue:
             node = queue.popleft()
@@ -313,17 +354,23 @@ def _bfs_collect_episodes(
             best_val = depth_best_scores.get(node.depth, float('-inf'))
             if current_val > best_val:
                 depth_best_scores[node.depth] = current_val
-                print(
-                    f"[BFS] Depth {node.depth} best score updated to {_format_score(node.current_score)} "
-                    f"(episodes={len(episodes)}, queue={len(queue)})."
+                logger.debug(
+                    "[BFS] Depth %d best score updated to %s (episodes=%d, queue=%d).",
+                    node.depth,
+                    _format_score(node.current_score),
+                    len(episodes),
+                    len(queue)
                 )
                 best_val = current_val
 
             if node.depth > last_depth_logged:
                 best_display = _format_score(None if best_val == float('-inf') else best_val)
-                print(
-                    f"[BFS] Entering depth {node.depth}: current queue size {len(queue)}, "
-                    f"collected episodes {len(episodes)}, best score {best_display}."
+                logger.debug(
+                    "[BFS] Entering depth %d: current queue size %d, collected episodes %d, best score %s.",
+                    node.depth,
+                    len(queue),
+                    len(episodes),
+                    best_display
                 )
                 last_depth_logged = node.depth
             # 如果该节点是终止状态，尝试记录 episode
@@ -331,9 +378,11 @@ def _bfs_collect_episodes(
                 if _better_score(best_terminal_scores.get(state_hash), node.current_score):
                     best_terminal_scores[state_hash] = node.current_score
                     episodes.append((node.steps, node.current_score))
-                    print(
-                        f"[BFS] Terminal revisit accepted at depth {node.depth} with score "
-                        f"{_format_score(node.current_score)} (episodes={len(episodes)})."
+                    logger.debug(
+                        "[BFS] Terminal revisit accepted at depth %d with score %s (episodes=%d).",
+                        node.depth,
+                        _format_score(node.current_score),
+                        len(episodes)
                     )
                     if max_episodes and len(episodes) >= max_episodes:
                         break
@@ -386,9 +435,12 @@ def _bfs_collect_episodes(
                     if score_after is not None and _better_score(best_terminal_scores.get(new_hash), score_after):
                         best_terminal_scores[new_hash] = score_after
                         episodes.append((new_steps, score_after))
-                        print(
-                            f"[BFS] Terminal episode depth {next_depth} score {_format_score(score_after)} "
-                            f"(length={len(new_steps)}, total={len(episodes)})."
+                        logger.debug(
+                            "[BFS] Terminal episode depth %d score %s (length=%d, total=%d).",
+                            next_depth,
+                            _format_score(score_after),
+                            len(new_steps),
+                            len(episodes)
                         )
                         if max_episodes and len(episodes) >= max_episodes:
                             env.set_state(saved_state)
@@ -414,20 +466,26 @@ def _bfs_collect_episodes(
 
                 env.set_state(saved_state)
 
-        print(
-            f"[BFS] Finished exploration: depths explored {len(depth_best_scores)}, "
-            f"episodes collected {len(episodes)}, expansions {expansions}."
+        logger.debug(
+            "[BFS] Finished exploration: depths explored %d, episodes collected %d, expansions %d.",
+            len(depth_best_scores),
+            len(episodes),
+            expansions
         )
         for depth in sorted(depth_best_scores):
             best = depth_best_scores[depth]
             count = depth_node_counts.get(depth, 0)
             best_display = _format_score(None if best == float('-inf') else best)
-            print(
-                f"[BFS] Depth {depth}: best score {best_display}, nodes processed {count}."
+            logger.debug(
+                "[BFS] Depth %d: best score %s, nodes processed %d.",
+                depth,
+                best_display,
+                count
             )
         return episodes
     finally:
         env.close()
+        del env
 
 
 def _walkthrough_extension_threshold(params: WalkthroughHyperParams, fallback: Optional[float]) -> Optional[float]:
@@ -450,25 +508,19 @@ def _expand_from_state(
     game_name: str,
     expansion_label: str,
     skip_action: Optional[str],
-    already_collected: int,
     start_depth: int,
     max_total_steps: Optional[int],
-    blocked_hashes: Optional[Set[str]]
-) -> List[Tuple[List[EpisodeStep], Optional[float]]]:
+    blocked_hashes: Optional[Set[str]],
+    walkthrough_target_score: Optional[float],
+    walkthrough_target_won: bool,
+    success_cap: Optional[int] = None,
+    total_cap: Optional[int] = None
+) -> Tuple[List[Tuple[List[EpisodeStep], Optional[float]]], int, int]:
     """
     从指定起始状态（通常为 walkthrough 中的一个节点）继续进行探索，
     生成新的扩展 episode（用于数据增强）。
     支持 BFS 或 DFS 两种扩展方式。
     """
-    if params.extension_episode_limit and already_collected >= params.extension_episode_limit:
-        return []
-
-    max_nodes = params.extension_max_nodes
-    remaining_limit = (
-        params.extension_episode_limit - already_collected
-        if params.extension_episode_limit
-        else None
-    )
     threshold_value = _score_value(score_threshold)
     extension_threshold = _walkthrough_extension_threshold(params, score_threshold)
     extension_threshold_value = _score_value(extension_threshold)
@@ -482,6 +534,9 @@ def _expand_from_state(
     frontier = NodeQueue()  # type: ignore[call-arg]
     root_depth = start_depth
     visited_depth: Dict[str, int] = {base_hash: root_depth}
+    best_states: Dict[str, Tuple[float, int]] = {
+        base_hash: (_score_value(base_score), len(prefix_steps))
+    }
 
     root = SearchNode(
         state=base_state,
@@ -499,16 +554,26 @@ def _expand_from_state(
 
     collected: List[Tuple[List[EpisodeStep], Optional[float]]] = []
     expansions = 0
+    success_expansions = 0
+    total_expansions = 0
+
+    success_limit = success_cap if success_cap is not None else params.max_success_expansions
+    total_limit = total_cap if total_cap is not None else params.max_total_expansions
+
+    if success_limit is not None and success_limit <= 0:
+        return collected, success_expansions, total_expansions
+    if total_limit is not None and total_limit <= 0:
+        return collected, success_expansions, total_expansions
 
     while frontier:
+        if total_limit is not None and total_expansions >= total_limit:
+            break
+        if success_limit is not None and success_expansions >= success_limit:
+            break
         if params.expansion_mode == 'bfs':
             node = frontier.popleft()  # type: ignore[attr-defined]
         else:
             node = frontier.pop()
-
-        if max_nodes and expansions >= max_nodes:
-            print(f"[WALK] Reached expansion cap ({expansions}).")
-            break
 
         env.set_state(node.state)
         state_hash = node.state_hash
@@ -560,8 +625,7 @@ def _expand_from_state(
             next_depth = node.depth + 1
 
             if max_total_steps is not None and len(new_steps) > max_total_steps:
-                env.set_state(saved_state)
-                continue
+                done = True
 
             prev_depth = visited_depth.get(new_hash)
             if prev_depth is not None and prev_depth <= next_depth:
@@ -573,17 +637,58 @@ def _expand_from_state(
                 env.set_state(saved_state)
                 continue
 
+            candidate_score = _score_value(score_after)
+            candidate_length = len(new_steps)
+            best_entry = best_states.get(new_hash)
+            if best_entry is not None:
+                best_score, best_length = best_entry
+                if candidate_score < best_score or (
+                    candidate_score == best_score and candidate_length >= best_length
+                ):
+                    env.set_state(saved_state)
+                    continue
+            best_states[new_hash] = (candidate_score, candidate_length)
+
             if done:
                 final_val = _score_value(score_after)
-                if final_val >= extension_threshold_value and final_val >= threshold_value:
-                    collected.append((new_steps, score_after))
-                    print(
-                        f"[WALK] Collected extension episode depth {next_depth} score {_format_score(score_after)} "
-                        f"(len={len(new_steps)})."
+                won_flag = False
+                try:
+                    won_flag = bool(env.victory())
+                except Exception:
+                    won_flag = bool(info.get('won')) if isinstance(info, dict) else False
+                target_match = (
+                    walkthrough_target_score is None
+                    or (score_after is not None and score_after == walkthrough_target_score)
+                )
+                success = (
+                    final_val >= extension_threshold_value
+                    and final_val >= threshold_value
+                    and won_flag
+                    and walkthrough_target_won
+                    and target_match
+                )
+                total_expansions += 1
+                if total_expansions % 1000 == 0:
+                    success_limit_str = success_limit if success_limit is not None else '∞'
+                    total_limit_str = total_limit if total_limit is not None else '∞'
+                    logger.info(
+                        "[WALK] %s progress: attempts=%s/%s, successes=%s/%s.",
+                        expansion_label,
+                        total_expansions,
+                        total_limit_str,
+                        success_expansions,
+                        success_limit_str
                     )
+                if success:
+                    collected.append((new_steps, score_after))
+                    success_expansions += 1
+                    if success_limit is not None and success_expansions >= success_limit:
+                        env.set_state(saved_state)
+                        return collected, success_expansions, total_expansions
+                if total_limit is not None and total_expansions >= total_limit:
+                    env.set_state(saved_state)
+                    return collected, success_expansions, total_expansions
                 env.set_state(saved_state)
-                if remaining_limit and len(collected) + already_collected >= params.extension_episode_limit:
-                    return collected
                 continue
 
             child = SearchNode(
@@ -601,10 +706,7 @@ def _expand_from_state(
                 frontier.append(child)
             env.set_state(saved_state)
 
-        if remaining_limit and len(collected) + already_collected >= params.extension_episode_limit:
-            break
-
-    return collected
+    return collected, success_expansions, total_expansions
 
 
 def _collect_walkthrough_episodes(
@@ -615,7 +717,10 @@ def _collect_walkthrough_episodes(
     action_cache: Dict[str, List[str]],
     cache_dirty: List[bool],
     include_walkthrough_episode: bool,
-    include_extension: bool
+    include_extension: bool,
+    tail_steps: Optional[int],
+    progress_data: Optional[Dict[str, int]],
+    progress_dirty: Optional[List[bool]]
 ) -> List[Tuple[List[EpisodeStep], Optional[float]]]:
     """
     使用 Jericho 自带的 walkthrough（官方通关步骤）
@@ -629,7 +734,7 @@ def _collect_walkthrough_episodes(
     try:
         walkthrough_actions = env.get_walkthrough()
         if not walkthrough_actions:
-            print(f"[WALK] No walkthrough available for {game_name}.")
+            logger.info("[WALK] No walkthrough available for %s.", game_name)
             return []
 
         obs, info = env.reset()
@@ -642,7 +747,7 @@ def _collect_walkthrough_episodes(
         ]
         walkway_steps: List[EpisodeStep] = []
 
-        print(f"[WALK] Executing walkthrough for {game_name} with {len(walkthrough_actions)} actions.")
+        logger.info("[WALK] Executing walkthrough for %s with %d actions.", game_name, len(walkthrough_actions))
 
         for action in walkthrough_actions:
             expanded_action = unabbreviate(action) if action else action
@@ -676,43 +781,72 @@ def _collect_walkthrough_episodes(
                 break
 
         final_state, final_obs, final_score, final_hash = trajectory_states[-1]
+        try:
+            walkthrough_won = bool(env.victory())
+        except Exception:
+            walkthrough_won = False
         if not walkway_steps:
-            print(f"[WALK] Walkthrough generated no steps for {game_name}.")
+            logger.info("[WALK] Walkthrough generated no steps for %s.", game_name)
             return []
 
         episodes: List[Tuple[List[EpisodeStep], Optional[float]]] = []
         final_val = _score_value(final_score)
         threshold_val = _score_value(score_threshold)
 
-        if include_walkthrough_episode and final_val >= threshold_val:
+        if include_walkthrough_episode and final_val >= threshold_val and walkthrough_won:
             episodes.append((list(walkway_steps), final_score))
-            print(
-                f"[WALK] Collected walkthrough episode length {len(walkway_steps)} "
-                f"score {_format_score(final_score)}."
+            logger.info(
+                "[WALK] Collected walkthrough episode length %d score %s (won=%s).",
+                len(walkway_steps),
+                _format_score(final_score),
+                walkthrough_won
             )
         elif include_walkthrough_episode:
-            print(
-                f"[WALK] Walkthrough score {_format_score(final_score)} below threshold "
-                f"{_format_score(score_threshold)}; skipping base episode."
+            logger.info(
+                "[WALK] Walkthrough score %s below threshold %s or victory=%s; skipping base episode.",
+                _format_score(final_score),
+                _format_score(score_threshold),
+                walkthrough_won
             )
         else:
-            print("[WALK] Walkthrough episode excluded by configuration.")
+            logger.info("[WALK] Walkthrough episode excluded by configuration.")
 
         if (
             not include_extension
             or not params.reverse_backtrack
-            or params.extension_episode_limit == 0
+            or not walkthrough_won
         ):
             return episodes
 
         walkthrough_hashes: Set[str] = {entry[3] for entry in trajectory_states}
 
-        collected_extension = 0
-        for pivot in range(len(walkway_steps) - 1, -1, -1):
-            if params.extension_episode_limit and collected_extension >= params.extension_episode_limit:
-                break
+        processed_count = 0
+        if progress_data is not None:
+            processed_count = int(progress_data.get(game_name, 0))
+
+        total_pivots = len(walkway_steps)
+        if processed_count >= total_pivots:
+            logger.info("[WALK] All walkthrough pivots already processed for %s (total %d).", game_name, total_pivots)
+            return episodes
+
+        available_pivots = list(range(total_pivots - 1, -1, -1))[processed_count:]
+        tail_limit = tail_steps if tail_steps and tail_steps > 0 else len(available_pivots)
+        pivot_sequence = available_pivots[:tail_limit]
+
+        if not pivot_sequence:
+            logger.info("[WALK] No remaining pivots to process for %s.", game_name)
+            return episodes
+
+        steps_processed = 0
+        total_new_branches = 0
+        total_success_expansions = 0
+        total_attempt_expansions = 0
+
+        success_limit = params.max_success_expansions
+        total_limit = params.max_total_expansions
+
+        for pivot in pivot_sequence:
             state_snapshot, pivot_obs, pivot_score, pivot_hash = trajectory_states[pivot]
-            # Adjust pivot depth so that prior steps are reflected correctly when extending.
             pivot_depth = pivot
             prefix = walkway_steps[:pivot]
             skip_action = walkway_steps[pivot].action if params.skip_original_action else None
@@ -724,7 +858,7 @@ def _collect_walkthrough_episodes(
             blocked_hashes.discard(pivot_hash)
 
             env.set_state(state_snapshot)
-            extension = _expand_from_state(
+            extension, pivot_successes, pivot_attempts = _expand_from_state(
                 env=env,
                 params=params,
                 base_state=state_snapshot,
@@ -738,22 +872,65 @@ def _collect_walkthrough_episodes(
                 game_name=game_name,
                 expansion_label='WalkthroughExt',
                 skip_action=skip_action,
-                already_collected=collected_extension,
                 start_depth=pivot_depth,
                 max_total_steps=params.max_episode_steps,
-                blocked_hashes=blocked_hashes
+                blocked_hashes=blocked_hashes,
+                walkthrough_target_score=final_score,
+                walkthrough_target_won=walkthrough_won,
+                success_cap=success_limit,
+                total_cap=total_limit
             )
             episodes.extend(extension)
-            collected_extension += len(extension)
-            if collected_extension and params.extension_episode_limit and collected_extension >= params.extension_episode_limit:
-                break
+            branch_count = len(extension)
+            total_new_branches += branch_count
+            total_success_expansions += pivot_successes
+            total_attempt_expansions += pivot_attempts
+            steps_processed += 1
+            tail_index = processed_count + steps_processed
+            logger.info(
+                "[WALK] Game=%s pivot#%d (step index %d) produced %d trajectories.",
+                game_name,
+                tail_index,
+                pivot,
+                branch_count
+            )
 
-        if collected_extension:
-            print(f"[WALK] Generated {collected_extension} extension episodes for {game_name}.")
+        if progress_data is not None and steps_processed:
+            if progress_lock is not None:
+                with progress_lock:
+                    progress_data[game_name] = processed_count + steps_processed
+                    if progress_dirty is not None:
+                        progress_dirty[0] = True
+            else:
+                progress_data[game_name] = processed_count + steps_processed
+                if progress_dirty is not None:
+                    progress_dirty[0] = True
+
+        if steps_processed:
+            agg_success_cap = (
+                steps_processed * success_limit if success_limit is not None else '∞'
+            )
+            agg_total_cap = (
+                steps_processed * total_limit if total_limit is not None else '∞'
+            )
+            success_summary = f"[{total_success_expansions}/{agg_success_cap}]"
+            total_summary = f"[{total_attempt_expansions}/{agg_total_cap}]"
+            logger.info(
+                "[WALK] Walkthrough extension for %s: processed %d pivots (total processed %d/%d), "
+                "generated %d trajectories; success=%s, attempts=%s.",
+                game_name,
+                steps_processed,
+                processed_count + steps_processed,
+                total_pivots,
+                total_new_branches,
+                success_summary,
+                total_summary
+            )
 
         return episodes
     finally:
         env.close()
+        del env
 
 
 
@@ -798,14 +975,17 @@ def _dfs_collect_episodes(
         leaf_count = 0
         leaf_interval = 100
 
-        print(f"[DFS] Start from depth 0 with initial score {_format_score(current_score)}.")
+        logger.debug("[DFS] Start from depth 0 with initial score %s.", _format_score(current_score))
 
         def report_leaf(depth: int, score: Optional[float]) -> None:
             nonlocal leaf_count
             leaf_count += 1
             if leaf_count % leaf_interval == 0:
-                print(
-                    f"[DFS] Processed {leaf_count} leaves; last depth {depth}; score {_format_score(score)}."
+                logger.debug(
+                    "[DFS] Processed %d leaves; last depth %d; score %s.",
+                    leaf_count,
+                    depth,
+                    _format_score(score)
                 )
 
         while stack:
@@ -817,17 +997,22 @@ def _dfs_collect_episodes(
             best_val = depth_best_scores.get(node.depth, float('-inf'))
             if current_val > best_val:
                 depth_best_scores[node.depth] = current_val
-                print(
-                    f"[DFS] Best score improved: {_format_score(node.current_score)} at depth {node.depth} (episodes={len(episodes)})."
+                logger.debug(
+                    "[DFS] Best score improved: %s at depth %d (episodes=%d).",
+                    _format_score(node.current_score),
+                    node.depth,
+                    len(episodes)
                 )
 
             if node.done:
                 if _better_score(best_terminal_scores.get(state_hash), node.current_score):
                     best_terminal_scores[state_hash] = node.current_score
                     episodes.append((node.steps, node.current_score))
-                    print(
-                        f"[DFS] Terminal accepted at depth {node.depth} with score "
-                        f"{_format_score(node.current_score)} (episodes={len(episodes)})."
+                    logger.debug(
+                        "[DFS] Terminal accepted at depth %d with score %s (episodes=%d).",
+                        node.depth,
+                        _format_score(node.current_score),
+                        len(episodes)
                     )
                     if max_episodes and len(episodes) >= max_episodes:
                         break
@@ -838,7 +1023,7 @@ def _dfs_collect_episodes(
                 report_leaf(node.depth, node.current_score)
                 continue
             if max_nodes and expansions >= max_nodes:
-                print(f"[DFS] Reached max node limit at {expansions} expansions.")
+                logger.debug("[DFS] Reached max node limit at %d expansions.", expansions)
                 break
 
             actions = action_cache.get(state_hash)
@@ -894,9 +1079,12 @@ def _dfs_collect_episodes(
                     if score_after is not None and _better_score(best_terminal_scores.get(new_hash), score_after):
                         best_terminal_scores[new_hash] = score_after
                         episodes.append((new_steps, score_after))
-                        print(
-                            f"[DFS] Terminal episode depth {next_depth} score {_format_score(score_after)} "
-                            f"(length={len(new_steps)}, total={len(episodes)})."
+                        logger.debug(
+                            "[DFS] Terminal episode depth %d score %s (length=%d, total=%d).",
+                            next_depth,
+                            _format_score(score_after),
+                            len(new_steps),
+                            len(episodes)
                         )
                         report_leaf(next_depth, score_after)
                         if max_episodes and len(episodes) >= max_episodes:
@@ -918,20 +1106,27 @@ def _dfs_collect_episodes(
 
                 env.set_state(saved_state)
 
-        print(
-            f"[DFS] Finished exploration: depths explored {len(depth_best_scores)}, "
-            f"episodes collected {len(episodes)}, expansions {expansions}, leaves {leaf_count}."
+        logger.debug(
+            "[DFS] Finished exploration: depths explored %d, episodes collected %d, expansions %d, leaves %d.",
+            len(depth_best_scores),
+            len(episodes),
+            expansions,
+            leaf_count
         )
         for depth in sorted(depth_best_scores):
             best = depth_best_scores[depth]
             count = depth_node_counts.get(depth, 0)
             best_display = _format_score(None if best == float('-inf') else best)
-            print(
-                f"[DFS] Depth {depth}: best score {best_display}, nodes processed {count}."
+            logger.debug(
+                "[DFS] Depth %d: best score %s, nodes processed %d.",
+                depth,
+                best_display,
+                count
             )
         return episodes
     finally:
         env.close()
+        del env
 
 def _generate_samples_from_episode(
     game_name: str,
@@ -944,6 +1139,8 @@ def _generate_samples_from_episode(
     samples: List[Tuple[str, float, Sample]] = []
     compare_score = episode_score if episode_score is not None else float('-inf')
 
+    running_return = 0.0
+
     for idx, step in enumerate(steps, start=1):
         if idx > 1:
             if history_window is None or history_window <= 0:
@@ -955,6 +1152,9 @@ def _generate_samples_from_episode(
         else:
             history = []
 
+        if step.current_score is not None:
+            running_return += float(step.current_score)
+
         sample = Sample(
             game=game_name,
             observation=step.observation,
@@ -964,7 +1164,8 @@ def _generate_samples_from_episode(
             episode_score=episode_score,
             episode_id=f"{episode_id}-step{idx}",
             episode_length=len(steps),
-            valid_actions=list(step.valid_actions)
+            valid_actions=list(step.valid_actions),
+            cumulative_return=running_return
         )
         samples.append((step.state_hash, compare_score, sample))
 
@@ -975,7 +1176,7 @@ def _generate_samples_from_episode(
 def build_dataset_for_game(
     rom_path: str,
     game_name: str,
-    samples_per_game: int,
+    samples_per_game: Optional[int],
     score_threshold: Optional[float] = 300,
     bfs_max_depth: int = 40,
     bfs_max_nodes: int = 5000,
@@ -986,7 +1187,10 @@ def build_dataset_for_game(
     cache_dirty: Optional[List[bool]] = None,
     max_actions_per_state: int = 0,
     walkthrough_params: Optional[WalkthroughHyperParams] = None,
-    collection_switches: Optional[CollectionSwitches] = None
+    collection_switches: Optional[CollectionSwitches] = None,
+    walkthrough_progress: Optional[Dict[str, int]] = None,
+    progress_dirty: Optional[List[bool]] = None,
+    progress_lock: Optional[threading.Lock] = None
 ) -> List[List[Dict[str, Any]]]:
     """Collect samples for a single game using the configured search strategy."""
     """
@@ -1018,9 +1222,14 @@ def build_dataset_for_game(
         collector = _bfs_collect_episodes
         mode_label = 'BFS'
 
-    print(
-        f"[DATA] Collecting game='{game_name}' mode={mode_label} threshold={score_threshold} "
-        f"depth={bfs_max_depth} nodes={bfs_max_nodes} history_window={history_window}."
+    logger.info(
+        "[DATA] Collecting game='%s' mode=%s threshold=%s depth=%d nodes=%d history_window=%s.",
+        game_name,
+        mode_label,
+        score_threshold,
+        bfs_max_depth,
+        bfs_max_nodes,
+        history_window
     )
 
     samples_by_state: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
@@ -1040,12 +1249,16 @@ def build_dataset_for_game(
             game_name=game_name
         )
     else:
-        print(f"[DATA] Skipping search-based {mode_label} collection for {game_name} per configuration.")
+        logger.info(
+            "[DATA] Skipping search-based %s collection for %s per configuration.",
+            mode_label,
+            game_name
+        )
 
     if walkthrough_params.enabled and (
         collection_switches.use_walkthrough_episode or collection_switches.use_walkthrough_extensions
     ):
-        walk_eps = _collect_walkthrough_episodes(
+        walk_eps, _, _ = _collect_walkthrough_episodes(
             rom_path=rom_path,
             game_name=game_name,
             params=walkthrough_params,
@@ -1053,25 +1266,37 @@ def build_dataset_for_game(
             action_cache=action_cache,
             cache_dirty=cache_dirty,
             include_walkthrough_episode=collection_switches.use_walkthrough_episode,
-            include_extension=collection_switches.use_walkthrough_extensions
+            include_extension=collection_switches.use_walkthrough_extensions,
+            tail_steps=walkthrough_params.tail_pivot_steps,
+            progress_data=walkthrough_progress,
+            progress_dirty=progress_dirty
         )
         episodes.extend(walk_eps)
         if walk_eps:
-            print(f"[DATA] Added {len(walk_eps)} walkthrough-derived trajectories for {game_name}.")
+            logger.info("[DATA] Added %d walkthrough-derived trajectories for %s.", len(walk_eps), game_name)
     elif walkthrough_params.enabled:
-        print(f"[DATA] Walkthrough processing enabled but all walkthrough-related outputs disabled; skipping for {game_name}.")
+        logger.info(
+            "[DATA] Walkthrough processing enabled but outputs disabled; skipping for %s.",
+            game_name
+        )
 
-    print(
-        f"[DATA] {game_name} produced {len(episodes)} terminal trajectories "
-        f"(search_enabled={collection_switches.use_search_episodes}, mode={mode_label})."
+    logger.info(
+        "[DATA] %s produced %d terminal trajectories (search_enabled=%s, mode=%s).",
+        game_name,
+        len(episodes),
+        collection_switches.use_search_episodes,
+        mode_label
     )
 
     for idx, (steps, episode_score) in enumerate(episodes):
         if score_threshold is not None and _score_value(episode_score) < _score_value(score_threshold):
             continue
         episode_id = f"{game_name}-{mode_label.lower()}-{idx}"
-        print(
-            f"[DATA] Episode {episode_id}: length={len(steps)} score={_format_score(episode_score)}."
+        logger.debug(
+            "[DATA] Episode %s: length=%d score=%s.",
+            episode_id,
+            len(steps),
+            _format_score(episode_score)
         )
         for state_hash, compare_score, sample in _generate_samples_from_episode(
             game_name=game_name,
@@ -1089,7 +1314,7 @@ def build_dataset_for_game(
                 }
 
     samples = [entry['sample'] for entry in samples_by_state.values()]
-    if samples_per_game and samples_per_game > 0:
+    if samples_per_game is not None and samples_per_game > 0:
         samples = samples[:samples_per_game]
 
     dataset: List[List[Dict[str, Any]]] = []
@@ -1098,7 +1323,7 @@ def build_dataset_for_game(
         entry = sample.to_dialogue_entry(
             params=walkthrough_params,
             total_steps=total_steps,
-            total_return=sample.episode_score
+            total_return=sample.cumulative_return
         )
         dataset.append(entry)
     return dataset
@@ -1117,9 +1342,9 @@ def save_dataset(dataset: Iterable[Iterable[Dict[str, Any]]], output_path: str) 
                 if isinstance(loaded, list):
                     existing_entries = loaded
                 else:
-                    print(f"[DATA] Existing dataset at {output_path} is not a list; overwriting.")
+                    logger.warning("[DATA] Existing dataset at %s is not a list; overwriting.", output_path)
         except json.JSONDecodeError:
-            print(f"[DATA] Failed to parse existing dataset at {output_path}; starting fresh.")
+            logger.warning("[DATA] Failed to parse existing dataset at %s; starting fresh.", output_path)
 
     existing_entries.extend(new_entries)
 
@@ -1132,16 +1357,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Build a Jericho RLHF dataset.")
-    parser.add_argument('--samples-per-game', type=int, default=1000,
-                        help="Maximum number of samples to include per game.")
+    parser.add_argument('--samples-per-game', type=int, default=None,
+                        help="Optional cap for samples per game (omit for all).")
     parser.add_argument('--bfs-max-depth', type=int, default=500,
                         help="Maximum depth explored during search.")
     parser.add_argument('--bfs-max-nodes', type=int, default=1000,
                         help="Maximum number of node expansions during search.")
     parser.add_argument('--bfs-max-episodes', type=int, default=1000,
                         help="Maximum number of terminal episodes to record.")
-    parser.add_argument('--history-windows', type=List, default=[4, 10],
-                        help="JSON list of history lengths (e.g., [4, 10]).")
     parser.add_argument('--search-mode', type=str, choices=['bfs', 'dfs'], default='dfs',
                         help="Search strategy to use (breadth-first or depth-first).")
     parser.add_argument('--max-actions-per-state', type=int, default=55,
@@ -1149,26 +1372,60 @@ def main():
     parser.add_argument('--action-cache', type=str, default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/rft_datasets/action_cache.json',
                         help="Path to persist and reuse the valid action cache.")
     parser.add_argument('--output', type=str,
-                        default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/rft_datasets/jericho_dataset',
+                        default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/rft_datasets/parallel/jericho_dataset',
                         help="Output file prefix; window suffixes will be appended.")
+    parser.add_argument('--parallel-games', type=int, default=11,
+                        help="Number of games to process in parallel for each history window.")
     args = parser.parse_args()
 
-    action_cache = load_action_cache(args.action_cache)
-    cache_dirty = [False]
+    output_prefix = args.output
+    output_dir = os.path.dirname(os.path.abspath(output_prefix))
+    base_name = os.path.splitext(os.path.basename(output_prefix))[0]
+    logs_dir = os.path.join(output_dir, 'logs')
+    os.makedirs(logs_dir, exist_ok=True)
 
-    history_windows = args.history_windows
-    if not history_windows:
-        history_windows = [4]
+    logger.handlers.clear()
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    general_log_path = os.path.join(logs_dir, f"{base_name}.log")
+    general_handler = logging.FileHandler(general_log_path, encoding='utf-8')
+    general_handler.setFormatter(formatter)
+    logger.addHandler(general_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    parallel_games = max(1, args.parallel_games or 1)
+    shared_cache = parallel_games == 1
+
+    if shared_cache:
+        action_cache = load_action_cache(args.action_cache)
+        cache_dirty = [False]
+    else:
+        logger.info(
+            "[MAIN] Parallel mode (%d games): shared action cache disabled to avoid contention.",
+            parallel_games
+        )
+        action_cache = {}
+        cache_dirty = [False]
+
+    history_windows = [4]
+
+    progress_lock = threading.Lock() if parallel_games > 1 else None
+
+    progress_path = os.path.join(output_dir, f"{base_name}_progress.json") if output_dir else None
 
     walkthrough_params = WalkthroughHyperParams(
         enabled=True,
         expansion_mode='dfs',
         reverse_backtrack=True,
         skip_original_action=True,
-        extension_score_threshold=None,
-        extension_episode_limit=200,
-        extension_max_nodes=1500,
-        history_turns=history_windows[0],
+        tail_pivot_steps=3,
+        max_success_expansions=2000,
+        max_total_expansions=500000,
+        progress_path=progress_path
     )
 
     collection_switches = CollectionSwitches(
@@ -1177,61 +1434,118 @@ def main():
         use_walkthrough_extensions=True,
     )
 
+    progress_data = load_progress(walkthrough_params.progress_path) if walkthrough_params.progress_path else {}
+    progress_dirty = [False]
+
     per_game_thresholds: Dict[str, float] = {
+        'acorncourt': 25.0,
         'zork1': 330.0,
         'detective': 320.0,
-        'acorncourt': 25.0,
         'omniquest': 40.0,
+        'pentari': 60,
+        'ludicorp': 130,
+        'balances': 40,
+        'library': 25,
+        'deephome': 280,
+        'temple': 30,
+        'ztuu': 80
     }
     per_game_max_steps: Dict[str, Optional[int]] = {
         'zork1': 500,
         'detective': 100,
         'acorncourt': 50,
         'omniquest': 100,
+        'pentari': 100,
+        'ludicorp': 400,
+        'balances': 300,
+        'library': 150, 
+        'deephome': 400,
+        'temple': 300,
+        'ztuu': 100, 
     }
-
-    output_dir = os.path.dirname(os.path.abspath(args.output))
-    base_name = os.path.splitext(os.path.basename(args.output))[0]
 
     for history_window in history_windows:
         datasets: List[List[Dict[str, Any]]] = []
         walkthrough_params.history_turns = history_window
 
-        for game, game_threshold in per_game_thresholds.items():
-            walkthrough_params.extension_score_threshold = game_threshold
-            walkthrough_params.max_episode_steps = per_game_max_steps.get(game)
+        def collect_single_game(game: str, game_threshold: float) -> Tuple[str, List[List[Dict[str, Any]]]]:
+            local_cache = action_cache if shared_cache else {}
+            local_cache_dirty = cache_dirty if shared_cache else [False]
+            local_progress_dirty = progress_dirty
+            local_params = replace(walkthrough_params)
+            local_params.history_turns = history_window
+            local_params.extension_score_threshold = game_threshold
+            local_params.max_episode_steps = per_game_max_steps.get(game)
             rom_path = (
                 '/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/'
                 f'envs/z-machine-games-master/jericho-game-suite/{game}.z5'
             )
-            print(
-                f"[MAIN] Collecting data for {game} (threshold={game_threshold}, history={history_window}) "
-                f"from {rom_path}."
+            thread_id = threading.get_ident()
+
+            class ThreadFilter(logging.Filter):
+                def filter(self, record: logging.LogRecord) -> bool:
+                    return record.thread == thread_id
+
+            game_log_path = os.path.join(logs_dir, f"{base_name}_his_{history_window}_{game}.log")
+            game_handler = logging.FileHandler(game_log_path, encoding='utf-8')
+            game_handler.setFormatter(formatter)
+            game_handler.addFilter(ThreadFilter())
+            logger.addHandler(game_handler)
+
+            logger.info(
+                "[MAIN] Collecting data for %s (threshold=%s, history=%s) from %s.",
+                game,
+                game_threshold,
+                history_window,
+                rom_path
             )
-            game_data = build_dataset_for_game(
-                rom_path=rom_path,
-                game_name=game,
-                samples_per_game=args.samples_per_game,
-                score_threshold=game_threshold,
-                bfs_max_depth=args.bfs_max_depth,
+
+            try:
+                game_data = build_dataset_for_game(
+                    rom_path=rom_path,
+                    game_name=game,
+                    samples_per_game=args.samples_per_game,
+                    score_threshold=game_threshold,
+                    bfs_max_depth=args.bfs_max_depth,
                 bfs_max_nodes=args.bfs_max_nodes,
                 bfs_max_episodes=args.bfs_max_episodes,
                 history_window=history_window,
                 search_mode=args.search_mode,
-                action_cache=action_cache,
-                cache_dirty=cache_dirty,
+                action_cache=local_cache,
+                cache_dirty=local_cache_dirty,
                 max_actions_per_state=args.max_actions_per_state,
-                walkthrough_params=walkthrough_params,
-                collection_switches=collection_switches
-            )
-            datasets.extend(game_data)
+                    walkthrough_params=local_params,
+                    collection_switches=collection_switches,
+                    walkthrough_progress=progress_data,
+                    progress_dirty=local_progress_dirty,
+                    progress_lock=progress_lock
+                )
+                per_game_output = os.path.join(output_dir, f"{base_name}_his_{history_window}_{game}.json")
+                save_dataset(game_data, per_game_output)
+                logger.info("[MAIN] Saved %d samples to %s.", len(game_data), per_game_output)
+                return game, game_data
+            finally:
+                logger.removeHandler(game_handler)
+                game_handler.close()
+
+        with ThreadPoolExecutor(max_workers=parallel_games) as executor:
+            futures = [
+                executor.submit(collect_single_game, game, game_threshold)
+                for game, game_threshold in per_game_thresholds.items()
+            ]
+            for future in as_completed(futures):
+                _, game_dataset = future.result()
+                datasets.extend(game_dataset)
 
         output_path = os.path.join(output_dir, f"{base_name}_his_{history_window}.json")
-        save_dataset(datasets, output_path)
-        print(f"[MAIN] Saved {len(datasets)} samples to {output_path}.")
+    save_dataset(datasets, output_path)
+    logger.info("[MAIN] Saved %d samples to %s.", len(datasets), output_path)
 
-    # if cache_dirty[0]:
-    #     save_action_cache(args.action_cache, action_cache)
+    if walkthrough_params.progress_path and progress_dirty[0]:
+        save_progress(walkthrough_params.progress_path, progress_data)
+
+    if shared_cache and cache_dirty[0]:
+        save_action_cache(args.action_cache, action_cache)
 
 
 
