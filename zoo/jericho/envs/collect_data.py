@@ -718,7 +718,8 @@ def _collect_walkthrough_episodes(
     include_extension: bool,
     tail_steps: Optional[int],
     progress_data: Optional[Dict[str, int]],
-    progress_dirty: Optional[List[bool]]
+    progress_dirty: Optional[List[bool]],
+    progress_lock: Optional[threading.Lock] = None
 ) -> Tuple[List[Tuple[List[EpisodeStep], Optional[float]]], int, int]:
     """
     使用 Jericho 自带的 walkthrough（官方通关步骤）
@@ -892,13 +893,14 @@ def _collect_walkthrough_episodes(
             )
 
         if progress_data is not None and steps_processed:
+            new_value = processed_count + steps_processed
             if progress_lock is not None:
                 with progress_lock:
-                    progress_data[game_name] = processed_count + steps_processed
+                    progress_data[game_name] = new_value
                     if progress_dirty is not None:
                         progress_dirty[0] = True
             else:
-                progress_data[game_name] = processed_count + steps_processed
+                progress_data[game_name] = new_value
                 if progress_dirty is not None:
                     progress_dirty[0] = True
 
@@ -923,7 +925,7 @@ def _collect_walkthrough_episodes(
                 total_summary
             )
 
-        return episodes
+        return episodes, total_success_expansions, total_attempt_expansions
     finally:
         env.close()
         del env
@@ -1202,6 +1204,9 @@ def build_dataset_for_game(
     if cache_dirty is None:
         cache_dirty = [False]
 
+    if progress_lock is None:
+        progress_lock = threading.Lock()
+
     if walkthrough_params is None:
         walkthrough_params = WalkthroughHyperParams()
     if collection_switches is None:
@@ -1265,7 +1270,8 @@ def build_dataset_for_game(
             include_extension=collection_switches.use_walkthrough_extensions,
             tail_steps=walkthrough_params.tail_pivot_steps,
             progress_data=walkthrough_progress,
-            progress_dirty=progress_dirty
+            progress_dirty=progress_dirty,
+            progress_lock=progress_lock
         )
         episodes.extend(walk_eps)
         if walk_eps:
@@ -1419,9 +1425,9 @@ def main():
         expansion_mode='dfs',
         reverse_backtrack=True,
         skip_original_action=True,
-        tail_pivot_steps=5,
+        tail_pivot_steps=1,
         max_success_expansions=2000,
-        max_total_expansions=10,
+        max_total_expansions=5,
         progress_path=progress_path
     )
 
