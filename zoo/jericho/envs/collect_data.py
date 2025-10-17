@@ -482,7 +482,7 @@ def _bfs_collect_episodes(
                 best_display,
                 count
             )
-        return episodes
+        return episodes, total_success_expansions, total_attempt_expansions
     finally:
         env.close()
         del env
@@ -512,7 +512,6 @@ def _expand_from_state(
     max_total_steps: Optional[int],
     blocked_hashes: Optional[Set[str]],
     walkthrough_target_score: Optional[float],
-    walkthrough_target_won: bool,
     success_cap: Optional[int] = None,
     total_cap: Optional[int] = None
 ) -> Tuple[List[Tuple[List[EpisodeStep], Optional[float]]], int, int]:
@@ -664,7 +663,6 @@ def _expand_from_state(
                     final_val >= extension_threshold_value
                     and final_val >= threshold_value
                     and won_flag
-                    and walkthrough_target_won
                     and target_match
                 )
                 total_expansions += 1
@@ -721,21 +719,21 @@ def _collect_walkthrough_episodes(
     tail_steps: Optional[int],
     progress_data: Optional[Dict[str, int]],
     progress_dirty: Optional[List[bool]]
-) -> List[Tuple[List[EpisodeStep], Optional[float]]]:
+) -> Tuple[List[Tuple[List[EpisodeStep], Optional[float]]], int, int]:
     """
     使用 Jericho 自带的 walkthrough（官方通关步骤）
     采集高质量的参考 episode，并可从中回溯扩展新轨迹。
     """
     
     if not params.enabled:
-        return []
+        return [], 0, 0
 
     env = jericho.FrotzEnv(rom_path)
     try:
         walkthrough_actions = env.get_walkthrough()
         if not walkthrough_actions:
             logger.info("[WALK] No walkthrough available for %s.", game_name)
-            return []
+            return [], 0, 0
 
         obs, info = env.reset()
         current_score = info.get('score') if info else None
@@ -787,13 +785,13 @@ def _collect_walkthrough_episodes(
             walkthrough_won = False
         if not walkway_steps:
             logger.info("[WALK] Walkthrough generated no steps for %s.", game_name)
-            return []
+            return [], 0, 0
 
         episodes: List[Tuple[List[EpisodeStep], Optional[float]]] = []
         final_val = _score_value(final_score)
         threshold_val = _score_value(score_threshold)
 
-        if include_walkthrough_episode and final_val >= threshold_val and walkthrough_won:
+        if include_walkthrough_episode and final_val >= threshold_val:
             episodes.append((list(walkway_steps), final_score))
             logger.info(
                 "[WALK] Collected walkthrough episode length %d score %s (won=%s).",
@@ -814,9 +812,8 @@ def _collect_walkthrough_episodes(
         if (
             not include_extension
             or not params.reverse_backtrack
-            or not walkthrough_won
         ):
-            return episodes
+            return episodes, 0, 0
 
         walkthrough_hashes: Set[str] = {entry[3] for entry in trajectory_states}
 
@@ -827,7 +824,7 @@ def _collect_walkthrough_episodes(
         total_pivots = len(walkway_steps)
         if processed_count >= total_pivots:
             logger.info("[WALK] All walkthrough pivots already processed for %s (total %d).", game_name, total_pivots)
-            return episodes
+            return episodes, 0, 0
 
         available_pivots = list(range(total_pivots - 1, -1, -1))[processed_count:]
         tail_limit = tail_steps if tail_steps and tail_steps > 0 else len(available_pivots)
@@ -835,7 +832,7 @@ def _collect_walkthrough_episodes(
 
         if not pivot_sequence:
             logger.info("[WALK] No remaining pivots to process for %s.", game_name)
-            return episodes
+            return episodes, 0, 0
 
         steps_processed = 0
         total_new_branches = 0
@@ -876,7 +873,6 @@ def _collect_walkthrough_episodes(
                 max_total_steps=params.max_episode_steps,
                 blocked_hashes=blocked_hashes,
                 walkthrough_target_score=final_score,
-                walkthrough_target_won=walkthrough_won,
                 success_cap=success_limit,
                 total_cap=total_limit
             )
@@ -1385,6 +1381,7 @@ def main():
     os.makedirs(logs_dir, exist_ok=True)
 
     logger.handlers.clear()
+    logger.propagate = False
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
@@ -1422,9 +1419,9 @@ def main():
         expansion_mode='dfs',
         reverse_backtrack=True,
         skip_original_action=True,
-        tail_pivot_steps=3,
+        tail_pivot_steps=5,
         max_success_expansions=2000,
-        max_total_expansions=500000,
+        max_total_expansions=10,
         progress_path=progress_path
     )
 
@@ -1466,8 +1463,6 @@ def main():
 
     for history_window in history_windows:
         datasets: List[List[Dict[str, Any]]] = []
-        walkthrough_params.history_turns = history_window
-
         def collect_single_game(game: str, game_threshold: float) -> Tuple[str, List[List[Dict[str, Any]]]]:
             local_cache = action_cache if shared_cache else {}
             local_cache_dirty = cache_dirty if shared_cache else [False]
@@ -1538,8 +1533,8 @@ def main():
                 datasets.extend(game_dataset)
 
         output_path = os.path.join(output_dir, f"{base_name}_his_{history_window}.json")
-    save_dataset(datasets, output_path)
-    logger.info("[MAIN] Saved %d samples to %s.", len(datasets), output_path)
+        save_dataset(datasets, output_path)
+        logger.info("[MAIN] Saved %d samples to %s.", len(datasets), output_path)
 
     if walkthrough_params.progress_path and progress_dirty[0]:
         save_progress(walkthrough_params.progress_path, progress_data)
