@@ -58,6 +58,13 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
     #    这里我们仍然使用AdamW，但学习率设置更合理
     optim_groups = [
         {
+            'params': list(tokenizer_params.values()),
+            'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
+            # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
+            'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+            # 'weight_decay': weight_decay  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+        },
+        {
             'params': list(transformer_params.values()),
             'lr': learning_rate,  # 1e-4
             # 'lr': learning_rate * 0.2,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
@@ -65,17 +72,10 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
             # 'weight_decay': weight_decay * 5.0 
         },
         {
-            'params': list(tokenizer_params.values()),
-            'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
-            # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
-            # 'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
-            'weight_decay': weight_decay  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
-        },
-        {
             'params': list(head_params.values()),
             'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
-            # 'weight_decay': 0.0  # 通常Heads的权重不做衰减
-            'weight_decay': weight_decay
+            'weight_decay': 0.0  # 通常Heads的权重不做衰减
+            # 'weight_decay': weight_decay
 
         }
     ]
