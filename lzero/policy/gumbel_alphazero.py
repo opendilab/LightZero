@@ -379,38 +379,22 @@ class GumbelAlphaZeroPolicy(Policy):
         return output
 
     def _get_simulation_env(self):
-        if self._cfg.simulation_env_id == 'tictactoe':
-            from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.tictactoe.config.tictactoe_gumbel_alphazero_bot_mode_config import \
-                    tictactoe_gumbel_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.tictactoe.config.tictactoe_gumbel_alphazero_sp_mode_config import \
-                    tictactoe_gumbel_alphazero_config
-            else:
-                raise NotImplementedError
-            self.simulate_env = TicTacToeEnv(tictactoe_gumbel_alphazero_config.env)
+        """
+        Overview:
+            Create simulation environment for MCTS using registry-based approach.
+            Uses ENV_REGISTRY to instantiate environment based on simulation_env_id.
+        """
+        from ding.utils import import_module, ENV_REGISTRY
 
-        elif self._cfg.simulation_env_id == 'gomoku':
-            from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.gomoku.config.gomoku_gumbel_alphazero_bot_mode_config import gomoku_gumbel_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.gomoku.config.gomoku_gumbel_alphazero_sp_mode_config import gomoku_gumbel_alphazero_config
-            else:
-                raise NotImplementedError
-            self.simulate_env = GomokuEnv(gomoku_gumbel_alphazero_config.env)
-        elif self._cfg.simulation_env_id == 'connect4':
-            from zoo.board_games.connect4.envs.connect4_env import Connect4Env
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.connect4.config.connect4_gumbel_alphazero_bot_mode_config import connect4_gumbel_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.connect4.config.connect4_gumbel_alphazero_sp_mode_config import connect4_gumbel_alphazero_config
-            else:
-                raise NotImplementedError
-            self.simulate_env = Connect4Env(connect4_gumbel_alphazero_config.env)
-        else:
-            raise NotImplementedError
+        # Import env modules to trigger registration
+        import_names = self._cfg.create_cfg.env.get('import_names', [])
+        import_module(import_names)
+
+        # Get env class from registry
+        env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
+
+        # Create simulation env with config from main config
+        self.simulate_env = env_cls(self._cfg.full_cfg.env)
 
     @torch.no_grad()
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
