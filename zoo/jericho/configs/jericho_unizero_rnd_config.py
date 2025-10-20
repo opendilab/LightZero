@@ -124,7 +124,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             input_norm_clamp_max=5,
             input_norm_clamp_min=-5,
             extrinsic_reward_norm=True,
-            extrinsic_reward_norm_max=1,
+            extrinsic_reward_norm_max=10,
+            # extrinsic_reward_norm_max=1,
         ),
         policy=dict(
             multi_gpu=False,  
