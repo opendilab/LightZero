@@ -512,30 +512,40 @@ def _expand_from_state(
     max_total_steps: Optional[int],
     blocked_hashes: Optional[Set[str]],
     walkthrough_target_score: Optional[float],
+    best_states_tracker: Optional[Dict[str, Tuple[float, int]]] = None,
     success_cap: Optional[int] = None,
     total_cap: Optional[int] = None
 ) -> Tuple[List[Tuple[List[EpisodeStep], Optional[float]]], int, int]:
     """
     从指定起始状态（通常为 walkthrough 中的一个节点）继续进行探索，
-    生成新的扩展 episode（用于数据增强）。
-    支持 BFS 或 DFS 两种扩展方式。
+    使用 BFS 逐层扩展，生成新的扩展 episode（用于数据增强）。
     """
     threshold_value = _score_value(score_threshold)
     extension_threshold = _walkthrough_extension_threshold(params, score_threshold)
     extension_threshold_value = _score_value(extension_threshold)
 
-    NodeQueue: Any
-    if params.expansion_mode == 'bfs':
-        NodeQueue = deque  # type: ignore[assignment]
-    else:
-        NodeQueue = list  # type: ignore[assignment]
-
-    frontier = NodeQueue()  # type: ignore[call-arg]
+    bfs_mode = (params.expansion_mode or 'bfs').lower() != 'dfs'
+    frontier = deque() if bfs_mode else []
     root_depth = start_depth
     visited_depth: Dict[str, int] = {base_hash: root_depth}
-    best_states: Dict[str, Tuple[float, int]] = {
-        base_hash: (_score_value(base_score), len(prefix_steps))
-    }
+    if best_states_tracker is None:
+        best_states: Dict[str, Tuple[float, int]] = {}
+    else:
+        best_states = best_states_tracker
+
+    def _update_best_state_entry(state_hash: str, score: Optional[float], length: int) -> bool:
+        candidate_score = _score_value(score)
+        best_entry = best_states.get(state_hash)
+        if best_entry is not None:
+            best_score, best_length = best_entry
+            if candidate_score < best_score or (
+                candidate_score == best_score and length >= best_length
+            ):
+                return False
+        best_states[state_hash] = (candidate_score, length)
+        return True
+
+    _update_best_state_entry(base_hash, base_score, len(prefix_steps))
 
     root = SearchNode(
         state=base_state,
@@ -546,10 +556,10 @@ def _expand_from_state(
         state_hash=base_hash,
         done=False
     )
-    if isinstance(frontier, list):
+    if bfs_mode:
         frontier.append(root)
     else:
-        frontier.append(root)  # type: ignore[attr-defined]
+        frontier.append(root)
 
     collected: List[Tuple[List[EpisodeStep], Optional[float]]] = []
     expansions = 0
@@ -564,15 +574,17 @@ def _expand_from_state(
     if total_limit is not None and total_limit <= 0:
         return collected, success_expansions, total_expansions
 
+    total_steps_limit = total_limit
+    total_steps = 0
+    
     while frontier:
         if total_limit is not None and total_expansions >= total_limit:
             break
         if success_limit is not None and success_expansions >= success_limit:
             break
-        if params.expansion_mode == 'bfs':
-            node = frontier.popleft()  # type: ignore[attr-defined]
-        else:
-            node = frontier.pop()
+        if bfs_mode and total_steps >= total_steps_limit:
+            break
+        node = frontier.popleft() if bfs_mode else frontier.pop()
 
         env.set_state(node.state)
         state_hash = node.state_hash
@@ -602,7 +614,20 @@ def _expand_from_state(
             env.set_state(node.state)
             saved_state = env.get_state()
             next_obs, reward, done, info = env.step(action)
+            
+            total_steps += 1
             score_after = info.get('score') if info else None
+            
+            if bfs_mode and total_steps % 1000 == 0:
+                logger.info(
+                    "[WALK] %s progress: attempts=%s/%s, successes=%s/%s.",
+                    expansion_label,
+                    total_steps,
+                    total_steps_limit,
+                    success_expansions,
+                    success_limit
+                )
+            
             if reward is not None:
                 step_reward = float(reward)
             elif current_score is not None and score_after is not None:
@@ -636,17 +661,10 @@ def _expand_from_state(
                 env.set_state(saved_state)
                 continue
 
-            candidate_score = _score_value(score_after)
             candidate_length = len(new_steps)
-            best_entry = best_states.get(new_hash)
-            if best_entry is not None:
-                best_score, best_length = best_entry
-                if candidate_score < best_score or (
-                    candidate_score == best_score and candidate_length >= best_length
-                ):
-                    env.set_state(saved_state)
-                    continue
-            best_states[new_hash] = (candidate_score, candidate_length)
+            if not _update_best_state_entry(new_hash, score_after, candidate_length):
+                env.set_state(saved_state)
+                continue
 
             if done:
                 final_val = _score_value(score_after)
@@ -816,6 +834,18 @@ def _collect_walkthrough_episodes(
         ):
             return episodes, 0, 0
 
+        shared_best_states: Dict[str, Tuple[float, int]] = {}
+        for idx, (_, _, state_score, state_hash) in enumerate(trajectory_states):
+            candidate_score = _score_value(state_score)
+            existing_entry = shared_best_states.get(state_hash)
+            if existing_entry is not None:
+                best_score, best_length = existing_entry
+                if candidate_score < best_score or (
+                    candidate_score == best_score and idx >= best_length
+                ):
+                    continue
+            shared_best_states[state_hash] = (candidate_score, idx)
+
         walkthrough_hashes: Set[str] = {entry[3] for entry in trajectory_states}
 
         processed_count = 0
@@ -842,6 +872,17 @@ def _collect_walkthrough_episodes(
 
         success_limit = params.max_success_expansions
         total_limit = params.max_total_expansions
+
+        logger.info(
+            "[WALK] Starting walkthrough extension for %s: remaining pivots=%d (tail limit=%d), "
+            "success cap=%s, attempt cap=%s, mode=%s.",
+            game_name,
+            len(available_pivots),
+            len(pivot_sequence),
+            success_limit if success_limit is not None else '∞',
+            total_limit if total_limit is not None else '∞',
+            params.expansion_mode.upper()
+        )
 
         for pivot in pivot_sequence:
             state_snapshot, pivot_obs, pivot_score, pivot_hash = trajectory_states[pivot]
@@ -874,6 +915,7 @@ def _collect_walkthrough_episodes(
                 max_total_steps=params.max_episode_steps,
                 blocked_hashes=blocked_hashes,
                 walkthrough_target_score=final_score,
+                best_states_tracker=shared_best_states,
                 success_cap=success_limit,
                 total_cap=total_limit
             )
@@ -1224,19 +1266,25 @@ def build_dataset_for_game(
         mode_label = 'BFS'
 
     logger.info(
-        "[DATA] Collecting game='%s' mode=%s threshold=%s depth=%d nodes=%d history_window=%s.",
+        "[DATA] Collecting game='%s' history_window=%s search_enabled=%s walkthrough_enabled=%s.",
         game_name,
-        mode_label,
-        score_threshold,
-        bfs_max_depth,
-        bfs_max_nodes,
-        history_window
+        history_window,
+        collection_switches.use_search_episodes,
+        walkthrough_params.enabled
     )
 
     samples_by_state: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
 
     episodes: List[Tuple[List[EpisodeStep], Optional[float]]] = []
     if collection_switches.use_search_episodes:
+        logger.info(
+            "[DATA] Running %s search for %s (depth=%d, nodes=%d, episode_cap=%d).",
+            mode_label,
+            game_name,
+            bfs_max_depth,
+            bfs_max_nodes,
+            bfs_max_episodes
+        )
         episodes = collector(
             rom_path=rom_path,
             score_threshold=score_threshold,
@@ -1259,6 +1307,13 @@ def build_dataset_for_game(
     if walkthrough_params.enabled and (
         collection_switches.use_walkthrough_episode or collection_switches.use_walkthrough_extensions
     ):
+        logger.info(
+            "[DATA] Running walkthrough baseline for %s (tail_steps=%s, success_cap=%s, total_cap=%s).",
+            game_name,
+            walkthrough_params.tail_pivot_steps,
+            walkthrough_params.max_success_expansions,
+            walkthrough_params.max_total_expansions
+        )
         walk_eps, _, _ = _collect_walkthrough_episodes(
             rom_path=rom_path,
             game_name=game_name,
@@ -1371,10 +1426,10 @@ def main():
                         help="Search strategy to use (breadth-first or depth-first).")
     parser.add_argument('--max-actions-per-state', type=int, default=55,
                         help="Limit the number of actions expanded per state (0 for no limit).")
-    parser.add_argument('--action-cache', type=str, default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/rft_datasets/action_cache.json',
+    parser.add_argument('--action-cache', type=str, default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/data_lz/rft_datasets/action_cache.json',
                         help="Path to persist and reuse the valid action cache.")
     parser.add_argument('--output', type=str,
-                        default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/rft_datasets/parallel/jericho_dataset',
+                        default='/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/data_lz/rft_datasets_bfs_total_step/parallel/jericho_dataset',
                         help="Output file prefix; window suffixes will be appended.")
     parser.add_argument('--parallel-games', type=int, default=11,
                         help="Number of games to process in parallel for each history window.")
@@ -1422,12 +1477,12 @@ def main():
 
     walkthrough_params = WalkthroughHyperParams(
         enabled=True,
-        expansion_mode='dfs',
+        expansion_mode='bfs',
         reverse_backtrack=True,
         skip_original_action=True,
-        tail_pivot_steps=1,
+        tail_pivot_steps=10,
         max_success_expansions=2000,
-        max_total_expansions=5,
+        max_total_expansions=20000,
         progress_path=progress_path
     )
 
@@ -1477,6 +1532,7 @@ def main():
             local_params.history_turns = history_window
             local_params.extension_score_threshold = game_threshold
             local_params.max_episode_steps = per_game_max_steps.get(game)
+            local_params.expansion_mode = 'bfs'
             rom_path = (
                 '/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/'
                 f'envs/z-machine-games-master/jericho-game-suite/{game}.z5'
