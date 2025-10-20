@@ -109,6 +109,10 @@ class PriorZeroCollector(OriginalCollector):
         # [FIX] Set policy_config in kwargs before calling super().__init__
         # because parent class needs it
         kwargs['policy_config'] = policy_config
+
+        # Extract debug_mode before passing to parent (parent doesn't accept this parameter)
+        self.debug_mode = kwargs.pop('debug_mode', False)
+
         super().__init__(**kwargs)
 
         self.vllm_engine = vllm_engine
@@ -184,6 +188,14 @@ class PriorZeroCollector(OriginalCollector):
             else:
                 prompt = instruction
 
+            # [FIX] Ensure prompt is a string
+            if prompt is None:
+                self._logger.error(f"[ERROR] Prompt {i} is None! Instruction was: {instruction[:100] if instruction else 'None'}")
+                prompt = ""  # Fallback to empty string
+            elif not isinstance(prompt, str):
+                self._logger.error(f"[ERROR] Prompt {i} is not a string! Type: {type(prompt)}, Value: {prompt}")
+                prompt = str(prompt)  # Force conversion to string
+
             prompts.append(prompt)
 
         # Configure sampling parameters
@@ -199,28 +211,53 @@ class PriorZeroCollector(OriginalCollector):
             try:
                 start_time = time.time()
 
-                # Async generation
-                results_generator = self.vllm_engine.generate(
-                    prompts,
-                    sampling_params,
-                    request_ids
-                )
+                # [DEBUG] Log prompts and parameters before generation
+                if self.debug_mode and attempt == 0:
+                    self._logger.info(f"[DEBUG] Sending {len(prompts)} prompts to vLLM engine")
+                    for i, prompt in enumerate(prompts[:2]):  # Show first 2 prompts
+                        self._logger.info(f"[DEBUG] Prompt {i} (len={len(prompt)}): {prompt[:200]}...")
+                    self._logger.info(f"[DEBUG] Sampling params: temp={sampling_params.temperature}, max_tokens={sampling_params.max_tokens}, top_p={sampling_params.top_p}")
+                    self._logger.info(f"[DEBUG] Request IDs: {request_ids[:2]}...")
+
+                # [FIX] vLLM V1 generate() takes single prompt, not list
+                # Create generators for each prompt individually
+                generators = []
+                for i, (prompt, req_id) in enumerate(zip(prompts, request_ids)):
+                    gen = self.vllm_engine.generate(
+                        prompt,  # Single prompt string
+                        sampling_params,
+                        req_id  # Single request_id string
+                    )
+                    generators.append((i, gen))
 
                 # Collect results
                 llm_outputs = [None] * len(prompts)
 
                 try:
-                    # [FIX] Use async-timeout or wrap the entire iteration, not the generator itself
-                    # results_generator is already an async iterator, iterate it directly
-                    async for result in results_generator:
-                        # Parse request_id to get original index
-                        # Format: "collect_{train_iter}_{env_idx}"
-                        original_index = int(result.request_id.split('_')[-1])
-                        llm_outputs[original_index] = result
+                    # [FIX] Merge results from all generators
+                    import asyncio
 
-                        # Check timeout manually if needed
-                        if time.time() - start_time > timeout:
-                            raise asyncio.TimeoutError(f"LLM generation timeout after {timeout}s")
+                    # Collect all results concurrently
+                    async def collect_from_generator(idx, gen):
+                        """Collect final result from a generator"""
+                        final_result = None
+                        async for result in gen:
+                            final_result = result
+                            # Check timeout
+                            if time.time() - start_time > timeout:
+                                raise asyncio.TimeoutError(f"LLM generation timeout after {timeout}s")
+                        return idx, final_result
+
+                    # Gather all results concurrently
+                    tasks = [collect_from_generator(idx, gen) for idx, gen in generators]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    # Process results
+                    for result in results:
+                        if isinstance(result, Exception):
+                            raise result
+                        idx, output = result
+                        llm_outputs[idx] = output
 
                 except asyncio.TimeoutError:
                     self._logger.warning(f"⚠ LLM generation timeout after {timeout}s (attempt {attempt+1}/{max_retries})")
@@ -249,15 +286,36 @@ class PriorZeroCollector(OriginalCollector):
 
                 self._logger.debug(f"✓ LLM generation completed in {elapsed:.2f}s ({len(prompts)} prompts)")
 
+                # [DEBUG] Log detailed LLM outputs if debug mode is enabled
+                if self.debug_mode:
+                    for i, (prompt, output) in enumerate(zip(prompts, llm_outputs)):
+                        if output is not None:
+                            output_text = output.outputs[0].text if output.outputs else "[No output]"
+                            self._logger.info(f"[DEBUG] Env {i} - Prompt: {prompt[:100]}... -> LLM Output: {output_text[:100]}...")
+                        else:
+                            self._logger.warning(f"[DEBUG] Env {i} - LLM output is None")
+
                 return llm_outputs
 
             except Exception as e:
-                self._logger.error(f"✗ LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
+                import traceback
+                error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
+                error_trace = traceback.format_exc()
+
+                # [FIX] Always log the full traceback on first attempt or in debug mode
+                if attempt == 0 or self.debug_mode:
+                    self._logger.error(f"✗ LLM generation error (attempt {attempt+1}/{max_retries}): {error_msg}")
+                    self._logger.error(f"Full traceback:\n{error_trace}")
+                else:
+                    self._logger.error(f"✗ LLM generation error (attempt {attempt+1}/{max_retries}): {error_msg}")
+
                 if attempt < max_retries - 1:
                     self.llm_stats['retry_count'] += 1
                     await asyncio.sleep(0.5)  # Brief pause before retry
                 else:
                     # Final failure
+                    self._logger.error(f"✗ LLM generation failed after {max_retries} attempts. Last error: {error_msg}")
+                    self._logger.error(f"Final traceback:\n{error_trace}")
                     self.llm_stats['failed_calls'] += len(prompts)
                     return [None] * len(prompts)
 
@@ -396,9 +454,10 @@ class PriorZeroCollector(OriginalCollector):
                 # [PRIORZERO-NEW] Get LLM Priors
                 # ==============================================================
                 if not collect_with_pure_policy:
-                    # Extract text observations
+                    # Extract text observations and valid actions
                     raw_obs_list = []
                     histories_list = []
+                    valid_actions_list = []  # [PRIORZERO] Store valid actions for each env
                     for env_id in sorted(list(ready_env_id)):
                         # Extract raw text
                         raw_obs_text = extract_raw_obs_text(obs[env_id])
@@ -407,6 +466,10 @@ class PriorZeroCollector(OriginalCollector):
                         # Get history for this environment
                         history = list(self.history_buffers[env_id])
                         histories_list.append(history)
+
+                        # [PRIORZERO] Extract valid actions from observation
+                        valid_actions = obs[env_id].get('valid_actions', [])
+                        valid_actions_list.append(valid_actions)
 
                     # Generate request IDs
                     request_ids = [
@@ -423,8 +486,10 @@ class PriorZeroCollector(OriginalCollector):
 
                     # Add to policy kwargs
                     policy_kwargs['llm_prior_outputs'] = llm_outputs
+                    policy_kwargs['valid_actions_list'] = valid_actions_list  # [PRIORZERO] Pass valid actions
                 else:
                     policy_kwargs['llm_prior_outputs'] = None
+                    policy_kwargs['valid_actions_list'] = None
 
                 # ==============================================================
                 # Policy Forward Pass
@@ -433,7 +498,8 @@ class PriorZeroCollector(OriginalCollector):
                 policy_kwargs_forward = {
                     'ready_env_id': sorted(list(ready_env_id)),
                     'timestep': timestep,
-                    'llm_prior_outputs': policy_kwargs.get('llm_prior_outputs')
+                    'llm_prior_outputs': policy_kwargs.get('llm_prior_outputs'),
+                    'valid_actions_list': policy_kwargs.get('valid_actions_list')  # [PRIORZERO] Pass valid actions
                 }
 
                 if self.task_id is not None:
@@ -464,6 +530,11 @@ class PriorZeroCollector(OriginalCollector):
                 # ==============================================================
                 timesteps = self._env.step(actions)
 
+                # [DEBUG] Log actions taken if debug mode is enabled
+                if self.debug_mode:
+                    for env_id, action in actions.items():
+                        self._logger.info(f"[DEBUG] Env {env_id} - Action taken: {action}")
+
             interaction_duration = self._timer.value / len(timesteps)
 
             # ==================================================================
@@ -485,6 +556,11 @@ class PriorZeroCollector(OriginalCollector):
                         episode_timestep.done,
                         episode_timestep.info
                     )
+
+                    # [DEBUG] Log observation and reward if debug mode is enabled
+                    if self.debug_mode:
+                        raw_obs_preview = extract_raw_obs_text(obs_new)[:150]
+                        self._logger.info(f"[DEBUG] Env {env_id} - Obs: {raw_obs_preview}... | Reward: {reward} | Done: {done}")
 
                     # Store search statistics
                     if collect_with_pure_policy:
@@ -509,10 +585,16 @@ class PriorZeroCollector(OriginalCollector):
                     # [PRIORZERO-NEW] Update History Buffer
                     # ===========================================================
                     raw_obs_text = extract_raw_obs_text(obs[env_id])
-                    action_text = getattr(self._policy, 'action_inv_map', {}).get(
-                        actions[env_id],
-                        f"action_{actions[env_id]}"
-                    )
+                    # [PRIORZERO] Use dynamic action mapping if available
+                    dynamic_action_inv_map = policy_output.get(env_id, {}).get('dynamic_action_inv_map', None)
+                    if dynamic_action_inv_map is not None:
+                        action_text = dynamic_action_inv_map.get(actions[env_id], f"action_{actions[env_id]}")
+                    else:
+                        # Fallback to static mapping
+                        action_text = getattr(self._policy, 'action_inv_map', {}).get(
+                            actions[env_id],
+                            f"action_{actions[env_id]}"
+                        )
                     self.history_buffers[env_id].append((raw_obs_text, action_text, float(reward)))
 
                     # Update state

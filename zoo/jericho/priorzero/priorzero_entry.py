@@ -19,6 +19,8 @@ import os
 import sys
 from functools import partial
 from pathlib import Path
+from typing import Tuple, Optional
+
 
 # ==============================================================================
 # [CRITICAL] Ensure local LightZero is used for PriorZero-specific adaptations
@@ -53,7 +55,8 @@ async def train_priorzero(
     create_cfg: dict,
     seed: int = 0,
     max_train_iter: int = int(1e6),
-    enable_save: bool = True
+    max_env_step: Optional[int] = int(1e10),
+    enable_save: bool = True,
 ):
     """
     [PRIORZERO-MODIFIED]
@@ -207,6 +210,7 @@ async def train_priorzero(
         exp_name=cfg.exp_name,
         vllm_engine=vllm_engine,
         policy_config=cfg.policy,
+        debug_mode=cfg.get('debug_mode', False),
     )
     logger.info("✓ Collector created")
 
@@ -224,7 +228,7 @@ async def train_priorzero(
     logger.info("✓ Evaluator created")
 
     # Initialize WandB if enabled (PriorZero enhancement)
-    if cfg.policy.get('use_wandb', False):
+    if cfg.policy.get('use_wandb', True):
         if get_rank() == 0:
             wandb.init(
                 project=cfg.policy.get('wandb_project', 'priorzero'),
@@ -252,107 +256,131 @@ async def train_priorzero(
     logger.info(f"World model layers: {cfg.policy.model.world_model_cfg.num_layers}")
     logger.info("="*80)
 
-    train_iter = 0
+    # [ALIGN WITH UNIZERO] Initialize reanalyze-related counters (train_unizero_segment.py line 119-121)
+    buffer_reanalyze_count = 0
+    train_epoch = 0
+    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+    batch_size = cfg.policy.batch_size
     best_eval_reward = -float('inf')
 
     try:
-        while train_iter < max_train_iter:
+        while True:
             # ============================================================
-            # Collect Data
+            # Set temperature for visit count distributions (align with train_unizero_segment.py line 136-144)
             # ============================================================
-            logger.info(f"\n[Iter {train_iter}] Collecting data...")
-            collect_kwargs = {}  # Can add temperature, epsilon, etc.
-
-            new_data = await collector.collect(
-                train_iter=train_iter,
-                policy_kwargs=collect_kwargs
-            )
-
-            # Push to replay buffer
-            replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
-            logger.info(f"  ✓ Data collected, buffer size: {len(replay_buffer)}")
+            collect_kwargs = {
+                'temperature': 1.0,  # Can use visit_count_temperature if needed
+                'epsilon': 0.0  # Default epsilon value
+            }
 
             # ============================================================
-            # Training
+            # Evaluation (align with train_unizero_segment.py line 158-162)
             # ============================================================
-            if train_iter >= cfg.policy.train_start_after_envsteps:
-                logger.info(f"[Iter {train_iter}] Training...")
-
-                # Determine number of updates
-                if cfg.policy.update_per_collect is None:
-                    # Auto-calculate based on collected data
-                    num_updates = max(
-                        1,
-                        int(collector.envstep * cfg.policy.replay_ratio)
-                    )
-                else:
-                    num_updates = cfg.policy.update_per_collect
-
-                for update_idx in range(num_updates):
-                    # Sample batch
-                    train_data = replay_buffer.sample(cfg.policy.batch_size)
-                    if train_data is None:
-                        logger.warning("  ⚠ No data to sample, skipping update")
-                        break
-
-                    # Training step (includes game_segments for LLM training)
-                    if hasattr(train_data, 'game_segments'):
-                        train_data_with_segments = (
-                            *train_data,
-                            train_iter,
-                            train_data.game_segments
-                        )
-                    else:
-                        logger.warning("  ⚠ No game_segments in train_data")
-                        train_data_with_segments = (*train_data, train_iter, [])
-
-                    log_vars = policy.learn(data=train_data_with_segments)
-
-                    # Log to TensorBoard
-                    for k, v in log_vars.items():
-                        tb_logger.add_scalar(f'train/{k}', v, train_iter)
-
-                    # Periodic logging
-                    if update_idx % 10 == 0:
-                        logger.info(
-                            f"  Update {update_idx}/{num_updates}: "
-                            f"total_loss={log_vars.get('total_loss', 0):.4f}, "
-                            f"wm_loss={log_vars.get('wm_total_loss', 0):.4f}, "
-                            f"llm_loss={log_vars.get('llm_total_loss', 0):.4f}"
-                        )
-
-                    train_iter += 1
-
-                    # Check max iterations
-                    if train_iter >= max_train_iter:
-                        break
-
-            # ============================================================
-            # Evaluation
-            # ============================================================
-            if evaluator.should_eval(train_iter):
-                logger.info(f"\n[Iter {train_iter}] Evaluating...")
+            if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
+                logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
 
                 stop, eval_reward_dict = await evaluator.eval(
-                    save_ckpt_fn=policy.save if enable_save else None,
-                    train_iter=train_iter,
+                    save_ckpt_fn=learner.save_checkpoint if enable_save else None,
+                    train_iter=learner.train_iter,
                     envstep=collector.envstep
                 )
 
                 mean_reward = eval_reward_dict.get('reward_mean', 0)
                 logger.info(f"  ✓ Evaluation done: reward_mean={mean_reward:.2f}")
 
-                # Save best model
-                if mean_reward > best_eval_reward and enable_save:
-                    best_eval_reward = mean_reward
-                    ckpt_path = os.path.join(cfg.exp_name, 'ckpt_best.pth.tar')
-                    policy.save(ckpt_path)
-                    logger.info(f"  🏆 New best model saved: {ckpt_path}")
-
-                # Check stop condition
                 if stop:
                     logger.info(f"  🎉 Training converged! (reward >= {cfg.env.stop_value})")
                     break
+
+            # ============================================================
+            # Collect Data (align with train_unizero_segment.py line 165)
+            # ============================================================
+            logger.info(f"\n[Iter {learner.train_iter}] Collecting data...")
+
+            # [FIX] Clear KV cache BEFORE collection to prevent index overflow during MCTS
+            policy.recompute_pos_emb_diff_and_clear_cache()
+
+            new_data = await collector.collect(
+                train_iter=learner.train_iter,
+                policy_kwargs=collect_kwargs
+            )
+
+            # Determine updates per collection (align with train_unizero_segment.py line 168)
+            from lzero.entry.utils import calculate_update_per_collect
+            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)
+
+            # Update replay buffer (align with train_unizero_segment.py line 171-172)
+            replay_buffer.push_game_segments(new_data)
+            replay_buffer.remove_oldest_data_to_fit()
+            # [FIX] Use get_num_of_transitions() instead of len()
+            buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
+            logger.info(f"  ✓ Data collected, buffer size: {buffer_size} transitions")
+
+            # ============================================================
+            # Periodically reanalyze buffer (align with train_unizero_segment.py line 175-186)
+            # ============================================================
+            if cfg.policy.buffer_reanalyze_freq >= 1:
+                # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+            else:
+                # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+                if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                    logger.info(f"[Reanalyze] Starting buffer reanalysis...")
+                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                    buffer_reanalyze_count += 1
+                    logger.info(f"  ✓ Buffer reanalyze count: {buffer_reanalyze_count}")
+
+            # ============================================================
+            # Training (align with train_unizero_segment.py line 189-221)
+            # ============================================================
+            if collector.envstep > cfg.policy.train_start_after_envsteps:
+                # Check if there is sufficient data for training
+                if cfg.policy.sample_type == 'episode':
+                    data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
+                else:
+                    data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+
+                if not data_sufficient:
+                    logger.warning(
+                        f'  ⚠ Data in replay_buffer is not sufficient: '
+                        f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect...'
+                    )
+                    continue
+
+                logger.info(f"[Iter {learner.train_iter}] Training...")
+
+                for i in range(update_per_collect):
+                    # Reanalyze buffer during training (align with train_unizero_segment.py line 202-210)
+                    if cfg.policy.buffer_reanalyze_freq >= 1:
+                        if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                            logger.info(f"[Reanalyze] Starting buffer reanalysis (update {i}/{update_per_collect})...")
+                            replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                            buffer_reanalyze_count += 1
+                            logger.info(f"  ✓ Buffer reanalyze count: {buffer_reanalyze_count}")
+
+                    # Sample batch (align with train_unizero_segment.py line 212)
+                    train_data = replay_buffer.sample(batch_size, policy)
+
+                    # Append train_iter (align with train_unizero_segment.py line 216)
+                    train_data.append(learner.train_iter)
+
+                    # Train (align with train_unizero_segment.py line 217)
+                    log_vars = learner.train(train_data, collector.envstep)
+
+                    # Update priority if enabled (align with train_unizero_segment.py line 219-220)
+                    if cfg.policy.use_priority:
+                        replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+
+            # Increment epoch counter (align with train_unizero_segment.py line 222)
+            train_epoch += 1
+            # Note: KV cache is cleared BEFORE collection (see line 298), not after epoch
+
+            # ============================================================
+            # Check stopping criteria (align with train_unizero_segment.py line 226-227)
+            # ============================================================
+            if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
+                logger.info("Stopping condition met, training ends!")
+                break
 
     except KeyboardInterrupt:
         logger.warning("\n⚠ Training interrupted by user (Ctrl+C)")
@@ -364,8 +392,10 @@ async def train_priorzero(
 
     finally:
         # ============================================================
-        # Cleanup
+        # Cleanup (align with train_unizero_segment.py line 229)
         # ============================================================
+        learner.call_hook('after_run')
+
         logger.info("\nCleaning up...")
         collector_env.close()
         evaluator_env.close()
@@ -373,9 +403,11 @@ async def train_priorzero(
 
         logger.info("="*80)
         logger.info("Training Complete!")
-        logger.info(f"Total iterations: {train_iter}")
+        logger.info(f"Total iterations: {learner.train_iter}")
         logger.info(f"Best eval reward: {best_eval_reward:.2f}")
         logger.info("="*80)
+
+    return policy
 
 
 def main():
@@ -390,15 +422,16 @@ def main():
     parser.add_argument('--max_iter', type=int, default=int(1e6), help='Max training iterations')
     parser.add_argument('--quick_test', action='store_true', help='Use quick test config')
     parser.add_argument('--no_save', action='store_true', help='Disable checkpoint saving')
+    parser.add_argument('--debug', action='store_true', help='Enable detailed debug logging (obs, action, LLM output)')
 
     args = parser.parse_args()
 
     # Get configuration
     if args.quick_test:
         logger.info("Using quick test configuration")
-        main_cfg, create_cfg = get_priorzero_config_for_quick_test(args.env_id, args.seed)
+        main_cfg, create_cfg = get_priorzero_config_for_quick_test(args.env_id, args.seed, debug_mode=args.debug)
     else:
-        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed)
+        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, debug_mode=args.debug)
 
     # Run training
     asyncio.run(train_priorzero(

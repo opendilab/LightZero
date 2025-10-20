@@ -178,18 +178,48 @@ class JerichoEnv(BaseEnv):
 
         if return_str:
             if self.for_unizero:
-                return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+                return {
+                    'observation': full_obs,
+                    'action_mask': action_mask,
+                    'to_play': -1,
+                    'timestep': self._timestep,
+                    'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                }
 
             else:
-                return {'observation': full_obs, 'action_mask': action_mask}
+                return {
+                    'observation': full_obs,
+                    'action_mask': action_mask,
+                    'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                }
         else:
             if self.for_unizero:
                 if self.save_replay:
-                    return {'observation': full_obs, 'observation_str': full_obs_str,'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+                    return {
+                        'observation': full_obs,
+                        'observation_str': full_obs_str,
+                        'obs_attn_mask': obs_attn_mask,
+                        'action_mask': action_mask,
+                        'to_play': -1,
+                        'timestep': self._timestep,
+                        'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                    }
                 else:
-                    return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+                    return {
+                        'observation': full_obs,
+                        'obs_attn_mask': obs_attn_mask,
+                        'action_mask': action_mask,
+                        'to_play': -1,
+                        'timestep': self._timestep,
+                        'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                    }
             else:
-                return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
+                return {
+                    'observation': full_obs,
+                    'obs_attn_mask': obs_attn_mask,
+                    'action_mask': action_mask,
+                    'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                }
 
     def reset(self, return_str: bool = False) -> Dict[str, Any]:
         """

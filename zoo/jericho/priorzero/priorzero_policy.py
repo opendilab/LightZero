@@ -36,7 +36,15 @@ from peft import get_peft_model, LoraConfig, TaskType
 
 # Import from local LightZero
 from lzero.policy.unizero import UniZeroPolicy as OriginalUniZeroPolicy
-from lzero.policy import phi_transform, InverseScalarTransform, to_torch_float_tensor, mz_network_output_unpack
+from lzero.policy import (
+    phi_transform,
+    InverseScalarTransform,
+    scalar_transform,  # [PRIORZERO] Added for reward/value transformation
+    DiscreteSupport,   # [PRIORZERO] Added for categorical distribution support
+    to_torch_float_tensor,
+    mz_network_output_unpack
+)
+from lzero.policy.utils import select_action
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.entry.utils import initialize_zeros_batch
 # Import UniZeroModel to ensure it's registered in MODEL_REGISTRY
@@ -279,6 +287,22 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         super()._init_learn()
         logging.info("✓ UniZero World Model and optimizer initialized")
 
+        # [PRIORZERO-FIX] Ensure scalar transform handles are initialized
+        # These are normally initialized in UniZeroPolicy.__init__ but we need to ensure they exist
+        if not hasattr(self, 'value_support') or self.value_support is None:
+            self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        if not hasattr(self, 'reward_support') or self.reward_support is None:
+            self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        if not hasattr(self, 'value_inverse_scalar_transform_handle'):
+            self.value_inverse_scalar_transform_handle = InverseScalarTransform(
+                self.value_support, self._cfg.model.categorical_distribution
+            )
+        if not hasattr(self, 'reward_inverse_scalar_transform_handle'):
+            self.reward_inverse_scalar_transform_handle = InverseScalarTransform(
+                self.reward_support, self._cfg.model.categorical_distribution
+            )
+        logging.info("✓ Scalar transform handles verified/initialized")
+
         # ======================================================================
         # 2. [PRIORZERO-NEW] Initialize LLM Policy Model
         # ======================================================================
@@ -374,7 +398,20 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         # Unpack data
         # NOTE: game_segments is our custom GameSegment with mcts_policy_segment
-        current_batch, target_batch, train_iter, game_segments = data
+        # [FIX] Handle case where game_segments might not be included
+        if len(data) == 4:
+            current_batch, target_batch, train_iter, game_segments = data
+        elif len(data) == 3:
+            current_batch, target_batch, train_iter = data
+            game_segments = None
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "[PRIORZERO] game_segments not included in training data. "
+                "SFT/RFT training will be skipped."
+            )
+        else:
+            raise ValueError(f"Unexpected data format: expected 3 or 4 elements, got {len(data)}")
 
         # ==============================================================================
         # Part 1: UniZero World Model Training (Full Implementation)
@@ -402,8 +439,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         target_value = target_value.view(batch_size, -1)
 
         # Apply scalar transform (for value and reward)
-        transformed_target_reward = self.scalar_transform(target_reward)
-        transformed_target_value = self.scalar_transform(target_value)
+        # [FIX] Use scalar_transform function (not self.scalar_transform)
+        # scalar_transform is a standalone function imported from lzero.policy
+        transformed_target_reward = scalar_transform(target_reward)
+        transformed_target_value = scalar_transform(target_value)
 
         # Convert to categorical distribution (for distributional RL)
         target_reward_categorical = phi_transform(
@@ -415,11 +454,34 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         # Prepare batch for world model
         # NOTE: This follows the exact format required by UniZero world model
+        # [FIX] Convert action_batch to tensor and handle shape correctly
+        if not isinstance(action_batch, torch.Tensor):
+            action_batch = torch.from_numpy(action_batch).to(self._cfg.device)
+
+        if action_batch.shape[-1] == 1:
+            actions_processed = action_batch.squeeze(-1).long()
+        elif len(action_batch.shape) == 1:
+            actions_processed = action_batch.long()
+        else:
+            actions_processed = action_batch.long()
+
         if timestep_batch is not None:
+            # Convert timestep_batch to tensor if needed
+            if not isinstance(timestep_batch, torch.Tensor):
+                timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device)
+
+            # Handle timestep_batch shape
+            if timestep_batch.shape[-1] == 1:
+                timestep_processed = timestep_batch.squeeze(-1).long()
+            elif len(timestep_batch.shape) == 1:
+                timestep_processed = timestep_batch.long()
+            else:
+                timestep_processed = timestep_batch.long()
+
             batch_for_gpt = {
                 'observations': obs_batch_ori,
-                'actions': action_batch.squeeze(-1).long(),
-                'timestep': timestep_batch.squeeze(-1).long(),
+                'actions': actions_processed,
+                'timestep': timestep_processed,
                 'rewards': target_reward_categorical[:, :-1],
                 'mask_padding': (mask_batch == 1.0)[:, :-1],
                 'target_value': target_value_categorical[:, :-1],
@@ -428,7 +490,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         else:
             batch_for_gpt = {
                 'observations': obs_batch_ori,
-                'actions': action_batch.squeeze(-1).long(),
+                'actions': actions_processed,
                 'rewards': target_reward_categorical[:, :-1],
                 'mask_padding': (mask_batch == 1.0)[:, :-1],
                 'target_value': target_value_categorical[:, :-1],
@@ -454,76 +516,78 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         num_sft_samples = 0
         num_rft_samples = 0
 
-        # Collect training data from game segments
-        sft_prompts = []
-        sft_targets = []
-        rft_prompts = []
-        rft_rewards = []
+        # [FIX] Only perform LLM training if game_segments available
+        if game_segments is not None:
+            # Collect training data from game segments
+            sft_prompts = []
+            sft_targets = []
+            rft_prompts = []
+            rft_rewards = []
 
-        for segment in game_segments:
-            segment_length = len(segment.obs_segment)
+            for segment in game_segments:
+                segment_length = len(segment.obs_segment)
 
-            for i in range(segment_length):
-                # Skip if no MCTS policy available
-                if segment.mcts_policy_segment[i] is None:
-                    continue
+                for i in range(segment_length):
+                    # Skip if no MCTS policy available
+                    if segment.mcts_policy_segment[i] is None:
+                        continue
 
-                # Get raw observation text (assume it's stored in obs_segment)
-                # NOTE: For text environments, obs_segment should contain text
-                raw_obs_text = str(segment.obs_segment[i])
+                    # Get raw observation text (assume it's stored in obs_segment)
+                    # NOTE: For text environments, obs_segment should contain text
+                    raw_obs_text = str(segment.obs_segment[i])
 
-                # Build history context
-                history = []
-                for j in range(max(0, i - self.llm_policy_cfg.history_length), i):
-                    if j < len(segment.obs_segment):
-                        history.append((
-                            str(segment.obs_segment[j]),
-                            self.action_inv_map.get(segment.action_segment[j], f"action_{segment.action_segment[j]}"),
-                            float(segment.reward_segment[j]) if j < len(segment.reward_segment) else 0.0
-                        ))
+                    # Build history context
+                    history = []
+                    for j in range(max(0, i - self.llm_policy_cfg.history_length), i):
+                        if j < len(segment.obs_segment):
+                            history.append((
+                                str(segment.obs_segment[j]),
+                                self.action_inv_map.get(segment.action_segment[j], f"action_{segment.action_segment[j]}"),
+                                float(segment.reward_segment[j]) if j < len(segment.reward_segment) else 0.0
+                            ))
 
-                # Build prompt
-                instruction = build_llm_prompt(
-                    current_obs=raw_obs_text,
-                    history=history,
-                    use_cot=self.llm_policy_cfg.use_cot
-                )
-
-                # Apply chat template
-                prompt = self.llm_tokenizer.apply_chat_template(
-                    [{"role": "user", "content": instruction}],
-                    tokenize=False,
-                    add_generation_prompt=True
-                )
-
-                # ============================================================
-                # SFT: Supervised Fine-Tuning with MCTS Policy
-                # ============================================================
-                if self.llm_policy_cfg.sft_target == 'mcts_policy':
-                    mcts_policy_vec = segment.mcts_policy_segment[i]
-
-                    # Convert MCTS policy to ranked action text
-                    target_text = format_mcts_policy_to_text(
-                        mcts_policy_vec,
-                        self.action_inv_map,
-                        top_k=5
+                    # Build prompt
+                    instruction = build_llm_prompt(
+                        current_obs=raw_obs_text,
+                        history=history,
+                        use_cot=self.llm_policy_cfg.use_cot
                     )
 
-                    sft_prompts.append(prompt)
-                    sft_targets.append(target_text)
-                    num_sft_samples += 1
+                    # Apply chat template
+                    prompt = self.llm_tokenizer.apply_chat_template(
+                        [{"role": "user", "content": instruction}],
+                        tokenize=False,
+                        add_generation_prompt=True
+                    )
 
-                # ============================================================
-                # RFT: Reinforcement Fine-Tuning with Environment Reward
-                # ============================================================
-                if self.llm_policy_cfg.enable_rft and i < len(segment.reward_segment):
-                    env_reward = float(segment.reward_segment[i])
+                    # ============================================================
+                    # SFT: Supervised Fine-Tuning with MCTS Policy
+                    # ============================================================
+                    if self.llm_policy_cfg.sft_target == 'mcts_policy':
+                        mcts_policy_vec = segment.mcts_policy_segment[i]
 
-                    # Only use transitions with non-zero reward for RFT
-                    if abs(env_reward) > 1e-6:
-                        rft_prompts.append(prompt)
-                        rft_rewards.append(env_reward)
-                        num_rft_samples += 1
+                        # Convert MCTS policy to ranked action text
+                        target_text = format_mcts_policy_to_text(
+                            mcts_policy_vec,
+                            self.action_inv_map,
+                            top_k=5
+                        )
+
+                        sft_prompts.append(prompt)
+                        sft_targets.append(target_text)
+                        num_sft_samples += 1
+
+                    # ============================================================
+                    # RFT: Reinforcement Fine-Tuning with Environment Reward
+                    # ============================================================
+                    if self.llm_policy_cfg.enable_rft and i < len(segment.reward_segment):
+                        env_reward = float(segment.reward_segment[i])
+
+                        # Only use transitions with non-zero reward for RFT
+                        if abs(env_reward) > 1e-6:
+                            rft_prompts.append(prompt)
+                            rft_rewards.append(env_reward)
+                            num_rft_samples += 1
 
         # ============================================================
         # Train LLM with SFT
@@ -656,37 +720,136 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         self._target_model.update(self._learn_model.state_dict())
 
         # ==============================================================================
-        # Part 4: Logging
+        # Part 4: Logging (Aligned with UniZero)
         # ==============================================================================
 
-        # Get base logs from parent class
-        # NOTE: We need to extract individual loss components from wm_losses
-        log_dict = {
-            # World model losses
-            'wm_total_loss': wm_total_loss.item(),
-            'wm_value_loss': wm_losses.value_loss.mean().item() if hasattr(wm_losses, 'value_loss') else 0.0,
-            'wm_policy_loss': wm_losses.policy_loss.mean().item() if hasattr(wm_losses, 'policy_loss') else 0.0,
-            'wm_reward_loss': wm_losses.reward_loss.mean().item() if hasattr(wm_losses, 'reward_loss') else 0.0,
+        # Extract intermediate losses from world model (like UniZero)
+        intermediate_losses = wm_losses.intermediate_losses
+        obs_loss = intermediate_losses.get('loss_obs', torch.tensor(0.0))
+        reward_loss = intermediate_losses.get('loss_rewards', torch.tensor(0.0))
+        policy_loss = intermediate_losses.get('loss_policy', torch.tensor(0.0))
+        value_loss = intermediate_losses.get('loss_value', torch.tensor(0.0))
+        latent_recon_loss = intermediate_losses.get('latent_recon_loss', torch.tensor(0.0))
+        perceptual_loss = intermediate_losses.get('perceptual_loss', torch.tensor(0.0))
+        orig_policy_loss = intermediate_losses.get('orig_policy_loss', torch.tensor(0.0))
+        policy_entropy = intermediate_losses.get('policy_entropy', torch.tensor(0.0))
+        first_step_losses = intermediate_losses.get('first_step_losses', {})
+        middle_step_losses = intermediate_losses.get('middle_step_losses', {})
+        last_step_losses = intermediate_losses.get('last_step_losses', {})
 
-            # LLM losses
+        # Analysis metrics (dormant ratio, weight magnitude, etc.)
+        dormant_ratio_encoder = intermediate_losses.get('dormant_ratio_encoder', 0.0)
+        dormant_ratio_transformer = intermediate_losses.get('dormant_ratio_transformer', 0.0)
+        dormant_ratio_head = intermediate_losses.get('dormant_ratio_head', 0.0)
+        avg_weight_mag_encoder = intermediate_losses.get('avg_weight_mag_encoder', 0.0)
+        avg_weight_mag_transformer = intermediate_losses.get('avg_weight_mag_transformer', 0.0)
+        avg_weight_mag_head = intermediate_losses.get('avg_weight_mag_head', 0.0)
+        e_rank_last_linear = intermediate_losses.get('e_rank_last_linear', 0.0)
+        e_rank_sim_norm = intermediate_losses.get('e_rank_sim_norm', 0.0)
+        latent_state_l2_norms = intermediate_losses.get('latent_state_l2_norms', torch.tensor(0.0))
+        latent_action_l2_norms = intermediate_losses.get('latent_action_l2_norms', 0.0)
+
+        # Logits statistics
+        logits_value_mean = intermediate_losses.get('logits_value_mean', 0.0)
+        logits_value_max = intermediate_losses.get('logits_value_max', 0.0)
+        logits_value_min = intermediate_losses.get('logits_value_min', 0.0)
+        logits_policy_mean = intermediate_losses.get('logits_policy_mean', 0.0)
+        logits_policy_max = intermediate_losses.get('logits_policy_max', 0.0)
+        logits_policy_min = intermediate_losses.get('logits_policy_min', 0.0)
+
+        # Temperature parameters
+        temperature_value = intermediate_losses.get('temperature_value', 0.0)
+        temperature_reward = intermediate_losses.get('temperature_reward', 0.0)
+        temperature_policy = intermediate_losses.get('temperature_policy', 0.0)
+
+        # Value priority for prioritized replay
+        value_priority_tensor = intermediate_losses.get('value_priority', torch.tensor([0.0]))
+        value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
+
+        # Compute target policy entropy (for analysis)
+        valid_target_policy = target_policy[:, :-1][mask_batch[:, :-1] == 1.0]
+        target_policy_entropy = -torch.sum(
+            valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
+        ).mean()
+
+        # Build comprehensive log dict (aligned with UniZero)
+        log_dict = {
+            # ============ Core Losses ============
+            'weighted_total_loss': wm_total_loss.item(),
+            'obs_loss': obs_loss.item() if torch.is_tensor(obs_loss) else obs_loss,
+            'reward_loss': reward_loss.item() if torch.is_tensor(reward_loss) else reward_loss,
+            'policy_loss': policy_loss.item() if torch.is_tensor(policy_loss) else policy_loss,
+            'value_loss': value_loss.item() if torch.is_tensor(value_loss) else value_loss,
+            'latent_recon_loss': latent_recon_loss.item() if torch.is_tensor(latent_recon_loss) else latent_recon_loss,
+            'perceptual_loss': perceptual_loss.item() if torch.is_tensor(perceptual_loss) else perceptual_loss,
+            'orig_policy_loss': orig_policy_loss.item() if torch.is_tensor(orig_policy_loss) else orig_policy_loss,
+            'policy_entropy': policy_entropy.item() if torch.is_tensor(policy_entropy) else policy_entropy,
+            'target_policy_entropy': target_policy_entropy.item(),
+
+            # ============ Step-wise Losses ============
+            'analysis/first_step_loss_value': first_step_losses.get('loss_value', torch.tensor(0.0)).item() if isinstance(first_step_losses.get('loss_value'), torch.Tensor) else 0.0,
+            'analysis/first_step_loss_policy': first_step_losses.get('loss_policy', torch.tensor(0.0)).item() if isinstance(first_step_losses.get('loss_policy'), torch.Tensor) else 0.0,
+            'analysis/first_step_loss_rewards': first_step_losses.get('loss_rewards', torch.tensor(0.0)).item() if isinstance(first_step_losses.get('loss_rewards'), torch.Tensor) else 0.0,
+            'analysis/first_step_loss_obs': first_step_losses.get('loss_obs', torch.tensor(0.0)).item() if isinstance(first_step_losses.get('loss_obs'), torch.Tensor) else 0.0,
+
+            'analysis/middle_step_loss_value': middle_step_losses.get('loss_value', torch.tensor(0.0)).item() if isinstance(middle_step_losses.get('loss_value'), torch.Tensor) else 0.0,
+            'analysis/middle_step_loss_policy': middle_step_losses.get('loss_policy', torch.tensor(0.0)).item() if isinstance(middle_step_losses.get('loss_policy'), torch.Tensor) else 0.0,
+            'analysis/middle_step_loss_rewards': middle_step_losses.get('loss_rewards', torch.tensor(0.0)).item() if isinstance(middle_step_losses.get('loss_rewards'), torch.Tensor) else 0.0,
+            'analysis/middle_step_loss_obs': middle_step_losses.get('loss_obs', torch.tensor(0.0)).item() if isinstance(middle_step_losses.get('loss_obs'), torch.Tensor) else 0.0,
+
+            'analysis/last_step_loss_value': last_step_losses.get('loss_value', torch.tensor(0.0)).item() if isinstance(last_step_losses.get('loss_value'), torch.Tensor) else 0.0,
+            'analysis/last_step_loss_policy': last_step_losses.get('loss_policy', torch.tensor(0.0)).item() if isinstance(last_step_losses.get('loss_policy'), torch.Tensor) else 0.0,
+            'analysis/last_step_loss_rewards': last_step_losses.get('loss_rewards', torch.tensor(0.0)).item() if isinstance(last_step_losses.get('loss_rewards'), torch.Tensor) else 0.0,
+            'analysis/last_step_loss_obs': last_step_losses.get('loss_obs', torch.tensor(0.0)).item() if isinstance(last_step_losses.get('loss_obs'), torch.Tensor) else 0.0,
+
+            # ============ Analysis Metrics ============
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
+            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,
+            'analysis/dormant_ratio_head': dormant_ratio_head,
+            'analysis/avg_weight_mag_encoder': avg_weight_mag_encoder,
+            'analysis/avg_weight_mag_transformer': avg_weight_mag_transformer,
+            'analysis/avg_weight_mag_head': avg_weight_mag_head,
+            'analysis/e_rank_last_linear': e_rank_last_linear,
+            'analysis/e_rank_sim_norm': e_rank_sim_norm,
+            'analysis/latent_state_l2_norms': latent_state_l2_norms.item() if torch.is_tensor(latent_state_l2_norms) else latent_state_l2_norms,
+            'analysis/latent_action_l2_norms': latent_action_l2_norms,
+
+            # ============ Logits Statistics ============
+            'logits_value_mean': logits_value_mean,
+            'logits_value_max': logits_value_max,
+            'logits_value_min': logits_value_min,
+            'logits_policy_mean': logits_policy_mean,
+            'logits_policy_max': logits_policy_max,
+            'logits_policy_min': logits_policy_min,
+
+            # ============ Temperature Parameters ============
+            'temperature_value': temperature_value,
+            'temperature_reward': temperature_reward,
+            'temperature_policy': temperature_policy,
+
+            # ============ Targets ============
+            'target_reward': target_reward.mean().item(),
+            'target_value': target_value.mean().item(),
+            'transformed_target_reward': transformed_target_reward.mean().item(),
+            'transformed_target_value': transformed_target_value.mean().item(),
+            'value_priority': value_priority_np.mean().item(),
+            'value_priority_orig': value_priority_np,
+
+            # ============ Gradient Norms ============
+            'total_grad_norm_before_clip_wm': wm_grad_norm.item(),
+            'llm_grad_norm': llm_grad_norm.item(),
+
+            # ============ Learning Rates ============
+            'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'llm_lr': self._optimizer_llm.param_groups[0]['lr'],
+
+            # ============ [PRIORZERO] LLM-specific Metrics ============
             'llm_sft_loss': llm_sft_loss.item(),
             'llm_rft_loss': llm_rft_loss.item(),
             'llm_total_loss': llm_loss.item(),
-
-            # Combined
-            'total_loss': total_loss.item(),
-
-            # Gradient norms
-            'wm_grad_norm': wm_grad_norm.item(),
-            'llm_grad_norm': llm_grad_norm.item(),
-
-            # Sample counts
             'num_sft_samples': num_sft_samples,
             'num_rft_samples': num_rft_samples,
-
-            # Learning rates
-            'wm_lr': self._optimizer_world_model.param_groups[0]['lr'],
-            'llm_lr': self._optimizer_llm.param_groups[0]['lr'],
+            'total_loss': total_loss.item(),
         }
 
         # ==============================================================================
@@ -868,47 +1031,52 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             roots_values = roots.get_values()
 
             # ======================================================================
-            # Select Actions and Prepare Output
+            # [PRIORZERO] Get valid_actions_list for dynamic action mapping
+            # ======================================================================
+            valid_actions_list = kwargs.get('valid_actions_list', None)
+
+            # ======================================================================
+            # Select Actions and Prepare Output (Aligned with UniZero)
             # ======================================================================
             output = {}
 
             for i, env_id in enumerate(ready_env_id):
-                # Get visit count distribution
-                visit_count_dist = np.array(roots_visit_count[i], dtype=np.float32)
+                # [FIX] Get visit count distribution (only contains legal actions)
+                distributions = roots_visit_count[i]
+                value = roots_values[i]
 
-                # Normalize to get policy
-                if visit_count_dist.sum() > 0:
-                    policy = visit_count_dist / visit_count_dist.sum()
+                # [FIX] Use select_action from UniZero (aligns with UniZero line 1115-1117)
+                # NOTE: Only legal actions possess visit counts, so action_index_in_legal_action_set
+                # represents the index within the legal action set, not the entire action set
+                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                    distributions,
+                    temperature=temperature if temperature is not None else self._collect_mcts_temperature,
+                    deterministic=False
+                )
+
+                # [FIX] Convert action_index_in_legal_action_set to the actual action in full action space
+                # (aligns with UniZero line 1119)
+                legal_action_indices = np.where(action_mask[i] == 1.0)[0]
+                action = legal_action_indices[action_index_in_legal_action_set]
+
+                # [PRIORZERO] Create dynamic action_inv_map for this specific state
+                # This maps action_index -> action_text using the current state's valid_actions
+                if valid_actions_list is not None and i < len(valid_actions_list):
+                    dynamic_action_inv_map = {
+                        idx: act_text
+                        for idx, act_text in enumerate(valid_actions_list[i])
+                    }
                 else:
-                    policy = np.ones_like(visit_count_dist) / len(visit_count_dist)
-
-                # Apply action mask
-                masked_policy = policy * action_mask[i]
-                if masked_policy.sum() > 0:
-                    masked_policy /= masked_policy.sum()
-                else:
-                    # If all actions masked, use uniform over valid actions
-                    masked_policy = action_mask[i] / action_mask[i].sum()
-
-                # Select action (with temperature)
-                if temperature == 0:
-                    # Greedy selection
-                    action = np.argmax(masked_policy)
-                else:
-                    # Sample from temperature-scaled distribution
-                    action_probs = masked_policy ** (1.0 / temperature)
-                    action_probs /= action_probs.sum()
-                    action = np.random.choice(len(action_probs), p=action_probs)
-
-                # Compute visit count entropy (for logging)
-                entropy = -np.sum(policy * np.log(policy + 1e-9))
+                    # Fallback to static mapping if valid_actions not available
+                    dynamic_action_inv_map = self.action_inv_map
 
                 output[env_id] = {
                     'action': int(action),
-                    'visit_count_distributions': visit_count_dist.tolist(),
-                    'visit_count_distribution_entropy': float(entropy),
-                    'searched_value': float(roots_values[i]),
-                    'predicted_value': float(pred_values_np[i]),
+                    'visit_count_distributions': distributions,
+                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                    'searched_value': value,
+                    'predicted_value': pred_values_np[i],
+                    'dynamic_action_inv_map': dynamic_action_inv_map,  # [PRIORZERO] Include dynamic mapping
                 }
 
         return output

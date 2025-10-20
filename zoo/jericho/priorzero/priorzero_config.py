@@ -60,6 +60,7 @@ def get_priorzero_config(
     exp_name: str = None,
     enable_llm: bool = True,
     enable_rft: bool = True,
+    debug_mode: bool = False,
 ) -> Tuple[EasyDict, EasyDict]:
     """
     Generate complete PriorZero configuration.
@@ -70,6 +71,7 @@ def get_priorzero_config(
         exp_name: Experiment name (auto-generated if None)
         enable_llm: Whether to enable LLM policy (if False, degrades to pure UniZero)
         enable_rft: Whether to enable RFT training (if False, only use SFT)
+        debug_mode: Whether to enable detailed debug logging (obs, action, LLM output, etc.)
 
     Returns:
         main_config: Main configuration dictionary
@@ -79,8 +81,14 @@ def get_priorzero_config(
     # ==============================================================================
     # 1. Basic Settings
     # ==============================================================================
-    action_space_size = 20  # Default for Jericho
-    max_steps = 100
+    # Action space and max steps per environment (from jericho_unizero_config.py)
+    env_configurations = {
+        'detective.z5': (12, 100),
+        'omniquest.z5': (25, 100),
+        'acorncourt.z5': (45, 50),
+        'zork1.z5': (55, 500),
+    }
+    action_space_size, max_steps = env_configurations.get(env_id, (20, 100))
 
     # World model encoder (for processing text observations)
     wm_encoder_option = 'legacy'  # Options: 'legacy', 'clip', 'custom'
@@ -113,7 +121,7 @@ def get_priorzero_config(
         game_path=f"/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
         tokenizer_path=wm_model_name,
         env_type="jericho",
-        max_action_num=200,
+        max_action_num=action_space_size,
         max_seq_len=512,
         save_replay=False,
         save_replay_path="",
@@ -158,17 +166,23 @@ def get_priorzero_config(
             # Obs type
             obs_type="text",  # Important: text-based observations
 
+            # Environment settings
+            env_num=max(4, 2),  # max(collector_env_num, evaluator_env_num), will be updated in quick_test
+            action_space_size=action_space_size,
+
             # Transformer settings
             num_layers=4,  # Reduced for faster training
             num_heads=8,
             embed_dim=768,
 
             # Context and unroll
-            context_length=8,  # Number of past transitions to condition on
+            # Note: Each timestep contains 2 tokens: observation and action
             num_unroll_steps=10,  # Number of steps to unroll in training
+            infer_context_length=4,  # Inference context length
             tokens_per_block=2,  # obs + action
-            max_blocks=10,
-            max_tokens=20,  # tokens_per_block * max_blocks
+            max_blocks=10,  # num_unroll_steps (default)
+            max_tokens=2 * 10,  # 2 * num_unroll_steps
+            context_length=2 * 4,  # 2 * infer_context_length
 
             # Regularization
             embed_pdrop=0.1,
@@ -332,7 +346,8 @@ def get_priorzero_config(
         # Training schedule
         num_unroll_steps=10,
         td_steps=5,
-        train_start_after_envsteps=1000,
+        train_start_after_envsteps=0,
+        # train_start_after_envsteps=1000,
         update_per_collect=None,  # Will be set automatically
         replay_ratio=0.25,
 
@@ -346,7 +361,8 @@ def get_priorzero_config(
         eval_freq=500,
 
         # Game segments
-        game_segment_length=200,
+        # game_segment_length=200,
+        game_segment_length=20,
         num_segments=4,  # Must equal collector_env_num
 
         # Misc
@@ -361,7 +377,7 @@ def get_priorzero_config(
 
         # Environment type
         env_type='not_board_games',
-        action_type='fixed_action_space',
+        action_type='varied_action_space',  # Jericho has varied action space per state
         battle_mode='play_with_bot_mode',
 
         # Data processing
@@ -373,6 +389,21 @@ def get_priorzero_config(
         use_rnd_model=False,  # Random Network Distillation for exploration
         analysis_sim_norm=False,
         sample_type='transition',
+
+        # ==============================================================================
+        # [ALIGN WITH UNIZERO] Reanalyze Configuration (atari_unizero_segment_config.py line 201-206)
+        # ==============================================================================
+        # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch,
+        # 2 means reanalyze once every two epochs, 1/50 means reanalyze once every 50 epochs.
+        buffer_reanalyze_freq=1/5000000000,  # Effectively disabled for Jericho (set very low)
+        # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences
+        # (<cfg.policy.num_unroll_steps> transitions per sequence)
+        reanalyze_batch_size=160,
+        # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer,
+        # 0.5 means samples from the first half of the buffer.
+        reanalyze_partition=0.75,
+        # Reanalyze ratio (used in some algorithms, kept for compatibility)
+        reanalyze_ratio=0.0,
     )
 
     # ==============================================================================
@@ -402,6 +433,9 @@ def get_priorzero_config(
         # Experiment settings
         exp_name=exp_name or f"priorzero_{env_id}_seed{seed}",
         seed=seed,
+
+        # Debug settings
+        debug_mode=debug_mode,
     )
 
     # ==============================================================================
@@ -455,7 +489,7 @@ def get_priorzero_config(
     return main_config, create_config
 
 
-def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0):
+def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0, debug_mode: bool = False):
     """
     Get a lightweight configuration for quick testing (reduced resources).
 
@@ -464,29 +498,44 @@ def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0)
     - CI/CD pipelines
     - Local development without powerful GPUs
     """
-    main_config, create_config = get_priorzero_config(env_id, seed)
+    main_config, create_config = get_priorzero_config(env_id, seed, debug_mode=debug_mode)
 
     # Reduce computational requirements
     main_config.env.collector_env_num = 2
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
 
-    main_config.policy.num_simulations = 10
-    main_config.policy.batch_size = 8
+    # main_config.policy.num_simulations = 10
+    # main_config.policy.batch_size = 8
+    # main_config.policy.game_segment_length = 50
+    # main_config.policy.num_segments = 2
+    # main_config.policy.replay_buffer_size = 1000
+
+    # main_config.policy.model.world_model_cfg.num_layers = 2
+
+    main_config.policy.num_simulations = 2
+    main_config.policy.batch_size = 2
     main_config.policy.game_segment_length = 50
     main_config.policy.num_segments = 2
     main_config.policy.replay_buffer_size = 1000
 
-    main_config.policy.model.world_model_cfg.num_layers = 2
+    main_config.policy.model.world_model_cfg.num_layers = 1
+    # Update env_num to match the reduced collector/evaluator counts
+    main_config.policy.model.world_model_cfg.env_num = max(
+        main_config.env.collector_env_num,
+        main_config.env.evaluator_env_num
+    )
     main_config.policy.model.world_model_cfg.num_heads = 4
-    main_config.policy.model.world_model_cfg.context_length = 4
+    main_config.policy.model.world_model_cfg.context_length = 3
     main_config.policy.model.world_model_cfg.num_unroll_steps = 5
+    main_config.policy.model.world_model_cfg.max_blocks = 5
+    main_config.policy.model.world_model_cfg.max_blocks = 10
 
     main_config.policy.llm_policy_cfg.prompt_max_len = 1024
     main_config.policy.llm_policy_cfg.generate_max_len = 128
     main_config.policy.llm_policy_cfg.history_length = 3
 
-    main_config.exp_name = f"debug_{main_config.exp_name}"
+    main_config.exp_name = f"{main_config.exp_name}_debug"
 
     return main_config, create_config
 

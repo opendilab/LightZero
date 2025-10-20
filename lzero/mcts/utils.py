@@ -98,7 +98,63 @@ def prepare_observation(observation_list, model_type='conv'):
         - np.ndarray: Reshaped array of observations.
     """
     assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
-    observation_array = np.array(observation_list)
+
+    # [FIX] Handle inhomogeneous shapes in observation_list
+    # For text-based environments (e.g., Jericho), observations may have varying shapes
+    try:
+        observation_array = np.array(observation_list)
+    except ValueError as e:
+        # If shapes are inhomogeneous, check if we can handle it
+        if "inhomogeneous" in str(e) or "sequence" in str(e):
+            # For MLP models with text observations, pad/truncate to consistent shape
+            if model_type in ['mlp', 'mlp_context']:
+                import logging
+                logger = logging.getLogger(__name__)
+
+                # Find the target shape (use the first element as reference)
+                if len(observation_list) > 0:
+                    first_obs = observation_list[0]
+                    if isinstance(first_obs, np.ndarray):
+                        target_shape = first_obs.shape
+
+                        # Check if all observations can be reshaped to target_shape
+                        processed_obs = []
+                        for obs in observation_list:
+                            if isinstance(obs, np.ndarray):
+                                if obs.shape == target_shape:
+                                    processed_obs.append(obs)
+                                elif obs.size == np.prod(target_shape):
+                                    # Can reshape to target shape
+                                    processed_obs.append(obs.reshape(target_shape))
+                                else:
+                                    # Pad or truncate
+                                    logger.warning(
+                                        f"[OBSERVATION_SHAPE_MISMATCH] Expected {target_shape}, "
+                                        f"got {obs.shape}. Padding/truncating."
+                                    )
+                                    obs_flat = obs.flatten()
+                                    target_size = np.prod(target_shape)
+                                    if obs_flat.size < target_size:
+                                        # Pad with zeros
+                                        padded = np.zeros(target_size)
+                                        padded[:obs_flat.size] = obs_flat
+                                        processed_obs.append(padded.reshape(target_shape))
+                                    else:
+                                        # Truncate
+                                        processed_obs.append(obs_flat[:target_size].reshape(target_shape))
+                            else:
+                                processed_obs.append(first_obs)  # Fallback
+
+                        observation_array = np.array(processed_obs)
+                    else:
+                        raise ValueError(f"Cannot process non-ndarray observations: {type(first_obs)}")
+                else:
+                    raise ValueError("observation_list is empty")
+            else:
+                raise e
+        else:
+            raise e
+
     batch_size = observation_array.shape[0]
 
     if model_type in ['conv', 'conv_context']:
