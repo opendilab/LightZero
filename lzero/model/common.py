@@ -489,6 +489,18 @@ class HFLanguageRepresentationNetwork(nn.Module):
         super().__init__()
         from transformers import AutoModel, AutoTokenizer
 
+        # [FIX] Load tokenizer for ALL ranks, not just non-zero ranks
+        if tokenizer is not None:
+            self.tokenizer = tokenizer
+        else:
+            # Load tokenizer with same distributed logic as model
+            if get_rank() == 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            if get_world_size() > 1:
+                torch.distributed.barrier()
+            if get_rank() != 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+
         # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
         if get_rank() == 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
@@ -498,15 +510,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
             torch.distributed.barrier()
         if get_rank() != 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
-
-        if get_rank() != 0:
-            logging.info(f"Worker process is loading model from cache: {model_path}")
-            self.model = AutoModel.from_pretrained(model_path)
-            if tokenizer is None:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        
-        if tokenizer is not None:
-            self.tokenizer = tokenizer
 
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)

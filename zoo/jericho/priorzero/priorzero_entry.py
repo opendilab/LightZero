@@ -20,13 +20,21 @@ import sys
 from functools import partial
 from pathlib import Path
 
+# ==============================================================================
+# [CRITICAL] Ensure local LightZero is used for PriorZero-specific adaptations
+# ==============================================================================
+from ensure_local_lightzero import ensure_local_lightzero
+ensure_local_lightzero()
+
+
 import ray
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed
-from ding.worker import create_buffer
+from ding.utils import set_pkg_seed, get_rank
+from ding.worker import create_buffer, BaseLearner
 from tensorboardX import SummaryWriter
 from loguru import logger
 from vllm import AsyncLLMEngine
@@ -36,6 +44,8 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from priorzero_config import get_priorzero_config, get_priorzero_config_for_quick_test
 from priorzero_collector import PriorZeroCollector
 from priorzero_evaluator import PriorZeroEvaluator
+# Import policy to ensure registration happens
+import priorzero_policy  # noqa: F401
 
 
 async def train_priorzero(
@@ -64,23 +74,79 @@ async def train_priorzero(
     # ==================================================================
     # 2. Initialize Ray (for distributed vLLM)
     # ==================================================================
-    if not ray.is_initialized():
-        ray.init(ignore_reinit_error=True, num_gpus=torch.cuda.device_count())
-        logger.info(f"✓ Ray initialized with {torch.cuda.device_count()} GPUs")
+    # Note: vLLM will initialize Ray internally if needed.
+    # We skip manual Ray initialization to avoid conflicts with existing clusters.
+    if ray.is_initialized():
+        logger.info(f"✓ Ray already initialized (connected to existing cluster)")
+    else:
+        logger.info(f"✓ Ray not initialized - vLLM will handle initialization if needed")
 
     # ==================================================================
     # 3. Create vLLM Engine
     # ==================================================================
     logger.info("Creating vLLM engine...")
-    engine_args = AsyncEngineArgs(
-        model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
-        tensor_parallel_size=cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size,
-        gpu_memory_utilization=cfg.policy.llm_policy_cfg.gpu_memory_utilization,
-        worker_use_ray=True,
-        trust_remote_code=True,
-    )
-    vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
-    logger.info("✓ vLLM Engine created successfully")
+
+    # [ROBUST FIX] Handle shared GPU environment
+    # Issue: vLLM V1 engine fails when other processes release GPU memory during init
+    # Solution: Use alternative initialization method that bypasses V1 checks
+    import os
+
+    # Note: In vLLM>=0.3.0, worker_use_ray is replaced by distributed_executor_backend
+    # For single GPU: use "mp" (multiprocessing)
+    # For multi-GPU: use "ray" if available
+    tensor_parallel = cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size
+    distributed_backend = "ray" if tensor_parallel > 1 and ray.is_initialized() else None
+
+    # [ROBUST FIX] Lower GPU memory utilization in shared environment
+    # This leaves more headroom for memory fluctuations
+    gpu_mem_util = cfg.policy.llm_policy_cfg.gpu_memory_utilization
+    if gpu_mem_util > 0.85:
+        gpu_mem_util = 0.75  # More conservative in shared environment
+        logger.info(f"✓ Adjusted GPU memory utilization to {gpu_mem_util} for stability")
+
+    # [ROBUST FIX] Use alternative initialization to avoid V1 engine issues
+    # Set env var BEFORE importing to ensure it takes effect
+    use_v1_env = os.environ.get('VLLM_USE_V1', None)
+    if use_v1_env is None:
+        # Only set if not already set by user
+        os.environ['VLLM_USE_V1'] = '0'
+        logger.info("✓ Using vLLM V0 engine for stability in shared GPU environment")
+
+    try:
+        engine_args = AsyncEngineArgs(
+            model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
+            tensor_parallel_size=tensor_parallel,
+            gpu_memory_utilization=gpu_mem_util,
+            distributed_executor_backend=distributed_backend,
+            trust_remote_code=True,
+            # [ROBUST FIX] Disable prefix caching in shared environment to reduce memory complexity
+            enable_prefix_caching=False,
+            # [ROBUST FIX] Disable enforce_eager to avoid memory profiling issues
+            enforce_eager=False,
+        )
+        vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
+        logger.info(f"✓ vLLM Engine created (backend: {distributed_backend or 'default'})")
+    except (ValueError, RuntimeError) as e:
+        if "VLLM_USE_V1" in str(e) or "memory profiling" in str(e):
+            # Fallback: Try without V1 env var
+            logger.warning(f"⚠️  Initial vLLM initialization failed: {e}")
+            logger.info("Retrying with alternative configuration...")
+            if 'VLLM_USE_V1' in os.environ:
+                del os.environ['VLLM_USE_V1']
+
+            engine_args = AsyncEngineArgs(
+                model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
+                tensor_parallel_size=tensor_parallel,
+                gpu_memory_utilization=gpu_mem_util * 0.9,  # Even more conservative
+                distributed_executor_backend=distributed_backend,
+                trust_remote_code=True,
+                enable_prefix_caching=False,
+                enforce_eager=True,  # Force eager mode as fallback
+            )
+            vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
+            logger.info(f"✓ vLLM Engine created with fallback configuration")
+        else:
+            raise
 
     # ==================================================================
     # 4. Create Environments
@@ -107,21 +173,31 @@ async def train_priorzero(
     # ==================================================================
     logger.info("Creating policy, buffer, and components...")
 
-    # Create policy
+    # Create policy (align with UniZero)
     policy = create_policy(
         cfg.policy,
         enable_field=['learn', 'collect', 'eval']
     )
     logger.info("✓ Policy created")
 
-    # Create replay buffer
-    replay_buffer = create_buffer(cfg.replay_buffer)
-    logger.info("✓ Replay buffer created")
-
-    # Create TensorBoard logger
+    # Create TensorBoard logger (align with UniZero)
     os.makedirs(f'./{cfg.exp_name}/log/', exist_ok=True)
-    tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial'))
+    tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
     logger.info(f"✓ TensorBoard logger: ./{cfg.exp_name}/log/")
+
+    # Create learner (align with UniZero - this sets up policy._logger)
+    learner = BaseLearner(
+        cfg.policy.learn.learner,
+        policy.learn_mode,
+        tb_logger,
+        exp_name=cfg.exp_name
+    )
+    logger.info("✓ BaseLearner created")
+
+    # Create replay buffer (align with UniZero - use GameBuffer from policy type)
+    from lzero.mcts import UniZeroGameBuffer
+    replay_buffer = UniZeroGameBuffer(cfg.policy)
+    logger.info("✓ Replay buffer created")
 
     # Create collector
     collector = PriorZeroCollector(
@@ -146,6 +222,22 @@ async def train_priorzero(
         vllm_engine=vllm_engine,
     )
     logger.info("✓ Evaluator created")
+
+    # Initialize WandB if enabled (PriorZero enhancement)
+    if cfg.policy.get('use_wandb', False):
+        if get_rank() == 0:
+            wandb.init(
+                project=cfg.policy.get('wandb_project', 'priorzero'),
+                name=cfg.exp_name,
+                config=cfg,
+                tags=['priorzero', 'unizero', 'llm-policy'],
+            )
+            logger.info("✓ WandB initialized")
+        # Set train iter and env step for policy wandb logging
+        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+
+    # Call learner's before_run hook (align with UniZero)
+    learner.call_hook('before_run')
 
     # ==================================================================
     # 6. Main Training Loop
@@ -262,14 +354,6 @@ async def train_priorzero(
                     logger.info(f"  🎉 Training converged! (reward >= {cfg.env.stop_value})")
                     break
 
-            # ============================================================
-            # Periodic Checkpoint Saving
-            # ============================================================
-            if enable_save and train_iter % 1000 == 0 and train_iter > 0:
-                ckpt_path = os.path.join(cfg.exp_name, f'ckpt_iter{train_iter}.pth.tar')
-                policy.save(ckpt_path)
-                logger.info(f"  💾 Checkpoint saved: {ckpt_path}")
-
     except KeyboardInterrupt:
         logger.warning("\n⚠ Training interrupted by user (Ctrl+C)")
 
@@ -286,12 +370,6 @@ async def train_priorzero(
         collector_env.close()
         evaluator_env.close()
         tb_logger.close()
-
-        # Final save
-        if enable_save:
-            final_ckpt = os.path.join(cfg.exp_name, 'ckpt_final.pth.tar')
-            policy.save(final_ckpt)
-            logger.info(f"✓ Final checkpoint saved: {final_ckpt}")
 
         logger.info("="*80)
         logger.info("Training Complete!")
@@ -333,4 +411,7 @@ def main():
 
 
 if __name__ == "__main__":
+    import os
+    # Disable tokenizer parallelism to prevent multi-process conflicts
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
     main()

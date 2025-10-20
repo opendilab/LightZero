@@ -93,7 +93,11 @@ class GameSegment(OriginalGameSegment):
             to_play: Player ID (for multi-agent)
             **kwargs: Additional arguments (timestep, chance, raw_obs_text, llm_prior_text)
         """
-        # Call parent append
+        # [PRIORZERO-NEW] Extract PriorZero-specific kwargs before passing to parent
+        raw_obs_text = kwargs.pop('raw_obs_text', None)
+        llm_prior_text = kwargs.pop('llm_prior_text', None)
+
+        # Call parent append with remaining kwargs
         super().append(action, obs, reward, action_mask, to_play, **kwargs)
 
         # [PRIORZERO-NEW] Initialize placeholders for new segments
@@ -102,11 +106,9 @@ class GameSegment(OriginalGameSegment):
         self.search_value_segment.append(None)
 
         # [PRIORZERO-NEW] Store raw text observation if provided
-        raw_obs_text = kwargs.get('raw_obs_text', None)
         self.raw_obs_segment.append(raw_obs_text)
 
         # [PRIORZERO-NEW] Store LLM prior text if provided (for debugging)
-        llm_prior_text = kwargs.get('llm_prior_text', None)
         self.llm_prior_segment.append(llm_prior_text)
 
     def store_search_stats(
@@ -354,10 +356,29 @@ if __name__ == "__main__":
         def __init__(self, n):
             self.n = n
 
+    # Create a mock config with all required attributes
+    class MockConfig:
+        def __init__(self):
+            self.num_unroll_steps = 10
+            self.td_steps = 5
+            self.discount_factor = 0.99
+            self.gray_scale = False
+            self.transform2string = False
+            self.sampled_algo = False
+            self.gumbel_algo = False
+            self.use_ture_chance_label_in_chance_encoder = False
+            self.model = type('obj', (object,), {
+                'frame_stack_num': 4,
+                'action_space_size': 10,
+                'observation_shape': (84, 84, 3),
+                'image_channel': 3
+            })()
+
     action_space = MockActionSpace(n=10)
+    mock_config = MockConfig()
 
     # Create a game segment
-    segment = GameSegment(action_space, game_segment_length=100)
+    segment = GameSegment(action_space, game_segment_length=100, config=mock_config)
 
     # Reset with initial observations
     init_obs = [np.zeros((84, 84, 3)) for _ in range(4)]

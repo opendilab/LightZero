@@ -985,8 +985,18 @@ class WorldModel(nn.Module):
         Returns:
             - torch.FloatTensor: The outputs from the world model.
         """
+        # [FIX] Initialize outputs_wm to avoid UnboundLocalError if neither branch is taken
+        outputs_wm = None
+
         n, num_observations_tokens, _ = last_obs_embeddings.shape
-        if n <= self.env_num and current_obs_embeddings is not None:
+
+        # [FIX] Handle the case when batch_action is None (initial inference without action)
+        # In this case, we should just process the observations for initial latent state
+        if batch_action is None and current_obs_embeddings is None:
+            # Initial observation encoding without action, just return forward pass
+            # This happens at the very first step when collecting initial observations
+            outputs_wm = self.forward({'obs_embeddings': last_obs_embeddings}, start_pos=start_pos)
+        elif n <= self.env_num and current_obs_embeddings is not None:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
                  # Determine whether it is the first step in an episode.
@@ -1106,6 +1116,14 @@ class WorldModel(nn.Module):
             # outputs_wm.logits_value.shape (B, H, 101) = (B*H, 101)
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
+        else:
+            # [FIX] Handle unexpected case where neither branch is taken
+            raise ValueError(
+                f"Unexpected state in wm_forward_for_initial_infererence: "
+                f"n={n}, env_num={self.env_num}, "
+                f"batch_action={'None' if batch_action is None else 'provided'}, "
+                f"current_obs_embeddings={'None' if current_obs_embeddings is None else 'provided'}"
+            )
 
         return outputs_wm
 

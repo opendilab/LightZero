@@ -16,9 +16,15 @@ Date: 2025-01-20
 
 import asyncio
 import logging
+import sys
 import time
 from collections import deque, defaultdict
+from pathlib import Path
 from typing import Optional, Any, List, Dict, Tuple
+
+# [CRITICAL] Ensure local LightZero is used
+from ensure_local_lightzero import ensure_local_lightzero
+ensure_local_lightzero()
 
 import numpy as np
 import torch
@@ -27,7 +33,7 @@ from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from vllm import AsyncLLMEngine, SamplingParams
 
-# Import from LightZero
+# Import from local LightZero
 from lzero.worker.muzero_segment_collector import MuZeroSegmentCollector as OriginalCollector
 from lzero.mcts.utils import prepare_observation
 from game_segment_priorzero import GameSegment
@@ -73,7 +79,7 @@ def extract_raw_obs_text(obs_dict: Dict[str, Any]) -> str:
 # PriorZero Collector Class
 # ==============================================================================
 
-@SERIAL_COLLECTOR_REGISTRY.register('priorzero_segment')
+@SERIAL_COLLECTOR_REGISTRY.register('priorzero_segment', force_overwrite=True)
 class PriorZeroCollector(OriginalCollector):
     """
     [PRIORZERO-MODIFIED]
@@ -100,10 +106,13 @@ class PriorZeroCollector(OriginalCollector):
             policy_config: Policy configuration (contains llm_policy_cfg)
             **kwargs: Additional arguments for parent class
         """
+        # [FIX] Set policy_config in kwargs before calling super().__init__
+        # because parent class needs it
+        kwargs['policy_config'] = policy_config
         super().__init__(**kwargs)
 
         self.vllm_engine = vllm_engine
-        self.policy_config = policy_config
+        # self.policy_config already set by parent class from kwargs
         self.llm_policy_cfg = policy_config.llm_policy_cfg
 
         # [PRIORZERO-NEW] History buffer for each environment
@@ -201,14 +210,17 @@ class PriorZeroCollector(OriginalCollector):
                 llm_outputs = [None] * len(prompts)
 
                 try:
-                    async for result in asyncio.wait_for(
-                        results_generator,
-                        timeout=timeout
-                    ):
+                    # [FIX] Use async-timeout or wrap the entire iteration, not the generator itself
+                    # results_generator is already an async iterator, iterate it directly
+                    async for result in results_generator:
                         # Parse request_id to get original index
                         # Format: "collect_{train_iter}_{env_idx}"
                         original_index = int(result.request_id.split('_')[-1])
                         llm_outputs[original_index] = result
+
+                        # Check timeout manually if needed
+                        if time.time() - start_time > timeout:
+                            raise asyncio.TimeoutError(f"LLM generation timeout after {timeout}s")
 
                 except asyncio.TimeoutError:
                     self._logger.warning(f"⚠ LLM generation timeout after {timeout}s (attempt {attempt+1}/{max_retries})")

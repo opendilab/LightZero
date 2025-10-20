@@ -13,11 +13,11 @@ Date: 2025-01-20
 from typing import Optional
 
 from ding.worker.collector.base_serial_evaluator import SERIAL_EVALUATOR_REGISTRY
-from lzero.worker.evaluator import MuZeroEvaluator as OriginalEvaluator
+from lzero.worker.muzero_evaluator import MuZeroEvaluator as OriginalEvaluator
 from vllm import AsyncLLMEngine
 
 
-@SERIAL_EVALUATOR_REGISTRY.register('priorzero')
+@SERIAL_EVALUATOR_REGISTRY.register('priorzero', force_overwrite=True)
 class PriorZeroEvaluator(OriginalEvaluator):
     """
     [PRIORZERO-MODIFIED]

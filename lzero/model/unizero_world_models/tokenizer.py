@@ -80,7 +80,8 @@ class Tokenizer(nn.Module):
             encoder: nn.Module,
             decoder: nn.Module,
             with_lpips: bool = False,
-            obs_type: str = 'image'
+            obs_type: str = 'image',
+            encoder_option: str = "legacy",
     ) -> None:
         """
         Overview:
@@ -95,6 +96,7 @@ class Tokenizer(nn.Module):
         self.encoder = encoder
         self.decoder_network = decoder
         self.obs_type = obs_type
+        self.encoder_option = encoder_option
         self.lpips: Optional[nn.Module] = None
         if with_lpips:
             # Lazily import LPIPS as it's an optional dependency.

@@ -18,7 +18,13 @@ Date: 2025-01-20
 
 import copy
 import re
+import sys
+from pathlib import Path
 from typing import List, Dict, Any, Tuple, Union, Optional
+
+# [CRITICAL] Ensure local LightZero is used
+from ensure_local_lightzero import ensure_local_lightzero
+ensure_local_lightzero()
 
 import numpy as np
 import torch
@@ -28,11 +34,13 @@ from ding.model import model_wrap
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import get_peft_model, LoraConfig, TaskType
 
-# Import from LightZero
+# Import from local LightZero
 from lzero.policy.unizero import UniZeroPolicy as OriginalUniZeroPolicy
 from lzero.policy import phi_transform, InverseScalarTransform, to_torch_float_tensor, mz_network_output_unpack
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.entry.utils import initialize_zeros_batch
+# Import UniZeroModel to ensure it's registered in MODEL_REGISTRY
+import lzero.model.unizero_model  # noqa: F401
 
 
 # ==============================================================================
@@ -199,7 +207,7 @@ def build_llm_prompt(
 # PriorZero Policy Class
 # ==============================================================================
 
-@POLICY_REGISTRY.register('priorzero')
+@POLICY_REGISTRY.register('priorzero', force_overwrite=True)
 class PriorZeroPolicy(OriginalUniZeroPolicy):
     """
     [PRIORZERO-MODIFIED]
@@ -242,34 +250,39 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
     )
 
     def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None):
-        super().__init__(cfg, model, enable_field)
-
-        # [PRIORZERO-NEW] LLM-related attributes
+        # [PRIORZERO-NEW] Initialize LLM-related attributes BEFORE super().__init__
+        # because super().__init__ will call _init_learn which needs these attributes
         self.llm_policy_model = None
         self.llm_tokenizer = None
         self._optimizer_llm = None
         self._lr_scheduler_llm = None
-        self.llm_policy_cfg = self._cfg.llm_policy_cfg
+        self.llm_policy_cfg = cfg.llm_policy_cfg  # Set from cfg, not self._cfg (not set yet)
 
         # Action mapping (will be set from config)
         self.action_map = None  # str -> int
         self.action_inv_map = None  # int -> str
 
+        # Call parent init (this will trigger _init_learn, _init_collect, _init_eval)
+        super().__init__(cfg, model, enable_field)
+
     def _init_learn(self) -> None:
         """
         [PRIORZERO-MODIFIED]
         Initialize both UniZero world model and LLM policy model with their optimizers.
+        Align with UniZero implementation - use logging instead of self._logger.
         """
+        import logging
+
         # ======================================================================
         # 1. Initialize UniZero World Model (from parent class)
         # ======================================================================
         super()._init_learn()
-        self._logger.info("✓ UniZero World Model and optimizer initialized")
+        logging.info("✓ UniZero World Model and optimizer initialized")
 
         # ======================================================================
         # 2. [PRIORZERO-NEW] Initialize LLM Policy Model
         # ======================================================================
-        self._logger.info(f"Loading LLM from: {self.llm_policy_cfg.pretrain_llm_path}")
+        logging.info(f"Loading LLM from: {self.llm_policy_cfg.pretrain_llm_path}")
 
         # Load tokenizer
         self.llm_tokenizer = AutoTokenizer.from_pretrained(
@@ -290,7 +303,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         # Apply LoRA if enabled
         if self.llm_policy_cfg.use_lora:
-            self._logger.info("Applying LoRA for parameter-efficient fine-tuning")
+            logging.info("Applying LoRA for parameter-efficient fine-tuning")
             lora_config = LoraConfig(
                 task_type=TaskType.CAUSAL_LM,
                 r=self.llm_policy_cfg.lora_r,
@@ -321,9 +334,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             eta_min=self.llm_policy_cfg.llm_learning_rate * 0.1
         )
 
-        self._logger.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
-        self._logger.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
-        self._logger.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
+        logging.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
+        logging.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
+        logging.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
 
         # ======================================================================
         # 4. [PRIORZERO-NEW] Load Action Mappings
@@ -331,9 +344,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         if hasattr(self._cfg, 'action_map') and self._cfg.action_map is not None:
             self.action_map = self._cfg.action_map
             self.action_inv_map = {v: k for k, v in self.action_map.items()}
-            self._logger.info(f"✓ Action mappings loaded ({len(self.action_map)} actions)")
+            logging.info(f"✓ Action mappings loaded ({len(self.action_map)} actions)")
         else:
-            self._logger.warning("⚠ Action mappings not found in config. Will use index-based actions.")
+            logging.warning("⚠ Action mappings not found in config. Will use index-based actions.")
             # Fallback: create dummy mappings
             action_space_size = self._cfg.model.action_space_size
             self.action_inv_map = {i: f"action_{i}" for i in range(action_space_size)}
@@ -676,6 +689,40 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'llm_lr': self._optimizer_llm.param_groups[0]['lr'],
         }
 
+        # ==============================================================================
+        # [PRIORZERO-NEW] WandB Logging (if enabled)
+        # ==============================================================================
+        if self._cfg.get('use_wandb', False):
+            try:
+                import wandb
+                if wandb.run is not None:
+                    # Log all metrics to WandB with hierarchical naming
+                    wandb.log({
+                        # World Model Metrics
+                        'train/wm/total_loss': log_dict['wm_total_loss'],
+                        'train/wm/value_loss': log_dict['wm_value_loss'],
+                        'train/wm/policy_loss': log_dict['wm_policy_loss'],
+                        'train/wm/reward_loss': log_dict['wm_reward_loss'],
+                        'train/wm/grad_norm': log_dict['wm_grad_norm'],
+                        'train/wm/learning_rate': log_dict['wm_lr'],
+
+                        # LLM Policy Metrics
+                        'train/llm/sft_loss': log_dict['llm_sft_loss'],
+                        'train/llm/rft_loss': log_dict['llm_rft_loss'],
+                        'train/llm/total_loss': log_dict['llm_total_loss'],
+                        'train/llm/grad_norm': log_dict['llm_grad_norm'],
+                        'train/llm/learning_rate': log_dict['llm_lr'],
+                        'train/llm/num_sft_samples': log_dict['num_sft_samples'],
+                        'train/llm/num_rft_samples': log_dict['num_rft_samples'],
+
+                        # Combined Metrics
+                        'train/total_loss': log_dict['total_loss'],
+                    }, step=self._train_iteration)
+            except Exception as e:
+                # Don't fail training if wandb logging fails
+                import logging
+                logging.warning(f"WandB logging failed: {e}")
+
         return log_dict
 
     def _forward_collect(
@@ -721,7 +768,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         if llm_prior_outputs is None:
             # If no LLM prior available, fall back to standard UniZero behavior
-            self._logger.debug("No LLM priors provided, using standard UniZero MCTS")
+            logging.debug("No LLM priors provided, using standard UniZero MCTS")
             return super()._forward_collect(
                 data, action_mask, temperature, to_play, epsilon,
                 ready_env_id=ready_env_id, **kwargs
@@ -773,44 +820,45 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             # ======================================================================
             # This is the key part where LLM priors guide the search
 
-            # Prepare action masks
-            action_mask_np = np.array(action_mask, dtype=np.float32)
+            # [FIX] Align with UniZero: construct legal_actions from action_mask
+            active_collect_env_num = len(ready_env_id)
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1]
+                            for j in range(active_collect_env_num)]
 
             # Get timestep if available
             timestep = kwargs.get('timestep', None)
 
-            # Run MCTS
-            policy_logits_for_mcts = policy_priors.cpu().numpy()
-            latent_state_roots_np = latent_state_roots.cpu().numpy()
-            reward_roots_np = reward_roots.cpu().numpy()
-            pred_values_np = pred_values.cpu().numpy()
+            # [FIX] Align with UniZero: transform values and prepare data
+            pred_values_np = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            latent_state_roots_np = latent_state_roots.detach().cpu().numpy()
+            # reward_roots_np = reward_roots.detach().cpu().numpy()
+            policy_logits_for_mcts = policy_priors.detach().cpu().numpy().tolist()
 
-            # Create MCTS roots with LLM priors
-            roots = MCTSCtree.roots(
-                latent_state_roots_np.shape[0],
-                self._cfg.model.action_space_size,
-            )
+            # [FIX] Align with UniZero: Create MCTS roots with legal_actions (not action_space_size)
+            roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
 
-            # Prepare root nodes
+            # [FIX] Align with UniZero: noises based on number of valid actions per environment
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] *
-                                    self._cfg.model.action_space_size).astype(np.float32)
-                for _ in range(latent_state_roots_np.shape[0])
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                    ).astype(np.float32).tolist()
+                for j in range(active_collect_env_num)
             ]
 
+            # [FIX] Align with UniZero: prepare roots (note reward_roots_np, not list(pred_values_np))
             roots.prepare(
                 self._cfg.root_noise_weight,
                 noises,
-                list(pred_values_np),
-                policy_logits_for_mcts.tolist(),
-                to_play if to_play is not None else [-1] * latent_state_roots_np.shape[0],
+                reward_roots,
+                # reward_roots_np,
+                policy_logits_for_mcts,
+                to_play if to_play is not None else [-1] * active_collect_env_num,
             )
 
             # Run MCTS search
             MCTSCtree(self._cfg).search(
                 roots,
                 self._collect_model,
-                latent_state_roots,
+                latent_state_roots_np,
                 reward_roots,
                 to_play if to_play is not None else [-1] * latent_state_roots_np.shape[0],
             )
@@ -891,12 +939,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # Load LLM model and optimizer
         if 'llm_model' in state_dict:
             self.llm_policy_model.load_state_dict(state_dict['llm_model'])
-            self._logger.info("✓ LLM model state loaded")
+            logging.info("✓ LLM model state loaded")
 
         if 'optimizer_llm' in state_dict:
             self._optimizer_llm.load_state_dict(state_dict['optimizer_llm'])
-            self._logger.info("✓ LLM optimizer state loaded")
+            logging.info("✓ LLM optimizer state loaded")
 
         if 'lr_scheduler_llm' in state_dict and self._lr_scheduler_llm is not None:
             self._lr_scheduler_llm.load_state_dict(state_dict['lr_scheduler_llm'])
-            self._logger.info("✓ LLM scheduler state loaded")
+            logging.info("✓ LLM scheduler state loaded")

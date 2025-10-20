@@ -87,10 +87,14 @@ def get_priorzero_config(
     wm_model_name = 'BAAI/bge-base-en-v1.5'  # Sentence transformer for text encoding
 
     # LLM policy model
-    llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
+    # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
+    llm_model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # Smaller model for faster iteration
 
     # Get action mappings
     action_map, action_inv_map = get_jericho_action_mapping(env_id)
+
+    # Convert action_inv_map to use string keys for EasyDict compatibility
+    action_inv_map_str = {str(k): v for k, v in action_inv_map.items()}
 
     # ==============================================================================
     # 2. Environment Configuration
@@ -104,12 +108,16 @@ def get_priorzero_config(
         observation_shape=768,  # BGE embedding dimension
         action_space_size=action_space_size,
 
-        # Jericho-specific
+        # [FIX] Jericho environment expects these at top level
         env_id=env_id,
-        jericho_setting=dict(
-            game_path=f"./z-machine-games-master/jericho-game-suite/{env_id}",
-            tokenizer_path=wm_model_name,
-        ),
+        game_path=f"/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+        tokenizer_path=wm_model_name,
+        env_type="jericho",
+        max_action_num=200,
+        max_seq_len=512,
+        save_replay=False,
+        save_replay_path="",
+        collect_policy_mode="default",
 
         # Parallelization
         collector_env_num=4,
@@ -127,6 +135,12 @@ def get_priorzero_config(
     # 3. UniZero World Model Configuration
     # ==============================================================================
     world_model_config = dict(
+        # [CRITICAL] DI-engine requires 'type' field to identify model class
+        type='UniZeroModel',
+
+        # [FIX] EasyDict.pop() doesn't handle default values properly, must include import_names
+        import_names=[],  # Empty list since UniZeroModel is already registered
+
         # Model type
         model_type='mlp',  # For vector observations (text embeddings)
         continuous_action_space=False,
@@ -135,11 +149,13 @@ def get_priorzero_config(
         observation_shape=768,
         action_space_size=action_space_size,
 
+        # [FIX] Encoder settings must be at top level for UniZeroModel.__init__
+        encoder_option=wm_encoder_option,
+        encoder_url=wm_model_name,
+
         # World model architecture
         world_model_cfg=dict(
-            # Encoder settings
-            encoder_option=wm_encoder_option,
-            encoder_url=wm_model_name,
+            # Obs type
             obs_type="text",  # Important: text-based observations
 
             # Transformer settings
@@ -193,11 +209,24 @@ def get_priorzero_config(
             decode_loss_mode=None,  # 'after_backbone', 'before_backbone', or None
             gamma=1.0,  # Discount factor
             dormant_threshold=0.025,
+
+            task_embed_option=None,
+            use_task_embed=False,
+            use_normal_head=True,
+            use_softmoe_head=False,
+            use_moe_head=False,
+            num_experts_in_moe_head=4,
+            moe_in_transformer=False,
+            multiplication_moe_in_transformer=False,
+            n_shared_experts=1,
+            num_experts_per_tok=1,
+            num_experts_of_moe_in_transformer=8,
+            game_segment_length=200,
         ),
 
         # Distributional RL
         categorical_distribution=True,
-        reward_support_range=(-10., 11., 1.),  # (min, max, step) for reward support
+        reward_support_range=(-50., 51., 1.),  # (min, max, step) for reward support
         value_support_range=(-50., 51., 1.),   # (min, max, step) for value support
 
         # Self-supervised learning
@@ -258,9 +287,10 @@ def get_priorzero_config(
         # [PRIORZERO-NEW] LLM policy config
         llm_policy_cfg=llm_policy_config,
 
-        # [PRIORZERO-NEW] Action mappings
-        action_map=action_map,
-        action_inv_map=action_inv_map,
+        # [PRIORZERO-NEW] Action mappings (use original dict, not EasyDict)
+        # These will be set directly on policy instance, not through EasyDict
+        _action_map=action_map,  # Prefix with _ to avoid EasyDict conversion
+        _action_inv_map=action_inv_map,
 
         # MCTS settings
         num_simulations=25,
@@ -355,6 +385,13 @@ def get_priorzero_config(
     )
 
     # ==============================================================================
+    # 6.5 Remove problematic nested dicts before EasyDict conversion
+    # ==============================================================================
+    # Store action mappings separately to avoid EasyDict issues with integer keys
+    _temp_action_map = action_map
+    _temp_action_inv_map = action_inv_map
+
+    # ==============================================================================
     # 7. Main Configuration Assembly
     # ==============================================================================
     priorzero_config = dict(
@@ -376,7 +413,7 @@ def get_priorzero_config(
             import_names=["zoo.jericho.envs.jericho_env"],
         ),
         env_manager=dict(
-            type="base"
+            type="base"  # [FIX] Use 'base' for jericho to avoid daemon process issues
         ),
         policy=dict(
             type="priorzero",
@@ -391,7 +428,7 @@ def get_priorzero_config(
             import_names=["zoo.jericho.priorzero.priorzero_evaluator"],
         ),
         replay_buffer=dict(
-            type='game',
+            type='game_buffer_muzero',
             import_names=['lzero.mcts.buffer.game_buffer_muzero'],
         ),
     )
@@ -399,11 +436,21 @@ def get_priorzero_config(
     # ==============================================================================
     # 9. Convert to EasyDict for convenient access
     # ==============================================================================
+    # IMPORTANT: Remove _action_map and _action_inv_map from policy_config before EasyDict
+    # to avoid integer key issues
+    policy_config_copy = {k: v for k, v in policy_config.items() if not k.startswith('_')}
+    priorzero_config['policy'] = policy_config_copy
+
     main_config = EasyDict(priorzero_config)
     create_config = EasyDict(create_config)
 
     # Set experiment path
     main_config.exp_name = f"data_priorzero/{main_config.exp_name}"
+
+    # [IMPORTANT] Set action mappings as regular attributes (not through EasyDict)
+    # Use object.__setattr__ to bypass EasyDict's __setattr__ which tries to convert dicts
+    object.__setattr__(main_config.policy, 'action_map', _temp_action_map)
+    object.__setattr__(main_config.policy, 'action_inv_map', _temp_action_inv_map)
 
     return main_config, create_config
 
