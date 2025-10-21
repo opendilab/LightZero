@@ -401,17 +401,21 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         # Unpack data
         # NOTE: game_segments is our custom GameSegment with mcts_policy_segment
-        # [FIX] Handle case where game_segments might not be included
+        # [FIX] Handle both 3-element (from buffer) and 4-element (with explicit train_iter) formats
         if len(data) == 4:
+            # Format: [current_batch, target_batch, train_iter, game_segments]
+            # This is when learner explicitly adds train_iter
             current_batch, target_batch, train_iter, game_segments = data
         elif len(data) == 3:
-            current_batch, target_batch, train_iter = data
-            game_segments = None
+            # Format: [current_batch, target_batch, game_segments]
+            # This is the standard format from PriorZeroGameBuffer.sample()
+            current_batch, target_batch, game_segments = data
+            train_iter = self._train_iteration  # Get from instance variable
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(
-                "[PRIORZERO] game_segments not included in training data. "
-                "SFT/RFT training will be skipped."
+            logger.debug(
+                f"[PRIORZERO] Using 3-element format. game_segments: "
+                f"{type(game_segments)}, count: {len(game_segments) if game_segments else 0}"
             )
         else:
             raise ValueError(f"Unexpected data format: expected 3 or 4 elements, got {len(data)}")
@@ -540,20 +544,17 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             }
 
         # [FIX] Following unizero.py lines 673-675 exactly:
-        # TODO======= 是否需要[:,-1:]
-        # Convert mask_batch to boolean, then truncate observations and mask_padding
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data. Shape is now (B, T), e.g., (2, 4)
+        # Convert mask_batch to boolean, then truncate to align with observations/rewards
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data. Shape: (B, T)
 
-        # =================================================================================
-        # [!!! FIX !!!] REMOVE OR COMMENT OUT THE LINE BELOW.
-        # This line is the source of the bug. It incorrectly truncates the mask from shape
-        # (B, T) to (B, T-1), causing a mismatch with the rewards tensor.
-        # The mask_batch from the replay buffer already has the correct length (T) 
-        # corresponding to the number of unroll steps.
-        # =================================================================================
-        # batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # <--- REMOVE THIS
+        # [CRITICAL] Truncate mask_padding to align with observations and rewards
+        # This is REQUIRED because:
+        # - observations are truncated to [:, :-1] → shape (B, T-1)
+        # - rewards are already (B, T-1) from MCTS
+        # - mask_padding MUST match to indicate valid data positions
+        # batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # Shape: (B, T-1)
 
-        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # Shape: (B, T-1, obs_dim)
 
         # [FIX] Add missing 'ends' field (following unizero.py line 676)
         # 'ends' marks terminal states in the trajectory (0 = not terminal)
@@ -1030,12 +1031,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         Returns:
             List of variable names that should be logged to TensorBoard/WandB
         """
-        # Start with all UniZero monitoring variables
-        monitor_vars = super()._monitor_vars_learn()
 
-        # Add PriorZero-specific LLM monitoring variables
-        priorzero_vars = [
-            # ============ LLM Loss Metrics ============
+        return [
+                        # ============ LLM Loss Metrics ============
             'llm_sft_loss',              # Supervised fine-tuning loss
             'llm_rft_loss',              # Reinforcement fine-tuning loss
             'llm_total_loss',            # Combined LLM loss
@@ -1057,20 +1055,104 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'wm_policy_loss',
             'wm_reward_loss',
             'wm_obs_loss',
+
+            'analysis/dormant_ratio_encoder',
+            'analysis/dormant_ratio_transformer',
+            'analysis/dormant_ratio_head',
+
+            'analysis/avg_weight_mag_encoder',
+            'analysis/avg_weight_mag_transformer',
+            'analysis/avg_weight_mag_head',
+            'analysis/e_rank_last_linear',
+            'analysis/e_rank_sim_norm',
+
+            'analysis/latent_state_l2_norms',
+            'analysis/l2_norm_before',
+            'analysis/l2_norm_after',
+            'analysis/grad_norm_before',
+            'analysis/grad_norm_after',
+
+            'analysis/first_step_loss_value',
+            'analysis/first_step_loss_policy',
+            'analysis/first_step_loss_rewards',
+            'analysis/first_step_loss_obs',
+
+            'analysis/middle_step_loss_value',
+            'analysis/middle_step_loss_policy',
+            'analysis/middle_step_loss_rewards',
+            'analysis/middle_step_loss_obs',
+
+            'analysis/last_step_loss_value',
+            'analysis/last_step_loss_policy',
+            'analysis/last_step_loss_rewards',
+            'analysis/last_step_loss_obs',
+
+            'adaptive_alpha',
+            "adaptive_target_entropy_ratio",
+            'alpha_loss',
+
+            'Current_GPU',
+            'Max_GPU',
+            'collect_epsilon',
+            'collect_mcts_temperature',
+            'cur_lr_world_model',
+            'cur_lr_tokenizer',
+
+            'weighted_total_loss',
+            'obs_loss',
+            'policy_loss',
+            'orig_policy_loss',
+            'policy_entropy',
+            'latent_recon_loss',
+            'target_policy_entropy',
+            'reward_loss',
+            'value_loss',
+            'consistency_loss',
+            'value_priority',
+            'target_reward',
+            'target_value',
+            'total_grad_norm_before_clip_wm',
+            # tokenizer
+            'commitment_loss',
+            'reconstruction_loss',
+            'perceptual_loss',
+
+
+        "logits_value_mean",
+        "logits_value_max",
+        "logits_value_min",
+        "logits_policy_mean",
+        "logits_policy_max",
+        "logits_policy_min",
+
+                     "temperature_value",
+        "temperature_reward",
+        "temperature_policy",
+                "current_policy_label_eps",
+                         'adaptive_alpha',
+                         "adaptive_target_entropy_ratio",
+            'alpha_loss',
+            "current_encoder_clip_value",
+
+                # ==================== [新增] 添加范数和中间张量监控变量 ====================
+            # 模块总范数
+            'norm/encoder/_total_norm',
+            'norm/transformer/_total_norm',
+            'norm/head_value/_total_norm',
+            'norm/head_reward/_total_norm',
+            'norm/head_policy/_total_norm',
+            # 中间张量 x 的统计信息
+            'norm/x_token/mean',
+            'norm/x_token/std',
+            'norm/x_token/max',
+            'norm/x_token/min',
         ]
-
-        # Combine and deduplicate
-        all_vars = monitor_vars + priorzero_vars
-
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_vars = []
-        for var in all_vars:
-            if var not in seen:
-                seen.add(var)
-                unique_vars.append(var)
-
-        return unique_vars
+        # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
+        # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
+        # 或者在本地打印 `norm_log_dict` 来进行详细分析。
+        # wandb等工具可以更好地处理大量的动态指标。
+        # ========================================================================
+    
     
     def _forward_collect(
         self,
