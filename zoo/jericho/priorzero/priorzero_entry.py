@@ -20,7 +20,9 @@ import sys
 from functools import partial
 from pathlib import Path
 from typing import Tuple, Optional
-
+# from lzero.entry.utils import log_buffer_memory_usage
+# from lzero.policy import visit_count_temperature
+# from ding.rl_utils import get_epsilon_greedy_fn
 
 # ==============================================================================
 # [CRITICAL] Ensure local LightZero is used for PriorZero-specific adaptations
@@ -197,10 +199,11 @@ async def train_priorzero(
     )
     logger.info("✓ BaseLearner created")
 
-    # Create replay buffer (align with UniZero - use GameBuffer from policy type)
-    from lzero.mcts import UniZeroGameBuffer
-    replay_buffer = UniZeroGameBuffer(cfg.policy)
-    logger.info("✓ Replay buffer created")
+    # [PRIORZERO-MODIFIED] Create PriorZero-specific replay buffer
+    # This buffer returns game_segments for LLM training (SFT/RFT)
+    from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
+    replay_buffer = PriorZeroGameBufferOptimized(cfg.policy)
+    logger.info("✓ PriorZero replay buffer created (with game_segments support)")
 
     # Create collector
     collector = PriorZeroCollector(
@@ -262,14 +265,36 @@ async def train_priorzero(
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
     batch_size = cfg.policy.batch_size
     best_eval_reward = -float('inf')
+    policy_config = cfg.policy
 
     try:
         while True:
-            # ============================================================
-            # Set temperature for visit count distributions (align with train_unizero_segment.py line 136-144)
-            # ============================================================
+            # # Log buffer memory usage
+            # log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
+
+            # # Set temperature for visit count distributions
+            # collect_kwargs = {
+            #     'temperature': visit_count_temperature(
+            #         policy_config.manual_temperature_decay,
+            #         policy_config.fixed_temperature_value,
+            #         policy_config.threshold_training_steps_for_final_temperature,
+            #         trained_steps=learner.train_iter
+            #     ),
+            #     'epsilon': 0.0  # Default epsilon value
+            # }
+
+            # # Configure epsilon for epsilon-greedy exploration
+            # if policy_config.eps.eps_greedy_exploration_in_collect:
+            #     epsilon_greedy_fn = get_epsilon_greedy_fn(
+            #         start=policy_config.eps.start,
+            #         end=policy_config.eps.end,
+            #         decay=policy_config.eps.decay,
+            #         type_=policy_config.eps.type
+            #     )
+            #     collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
+
             collect_kwargs = {
-                'temperature': 1.0,  # Can use visit_count_temperature if needed
+                'temperature': 0.25,
                 'epsilon': 0.0  # Default epsilon value
             }
 
@@ -296,9 +321,6 @@ async def train_priorzero(
             # Collect Data (align with train_unizero_segment.py line 165)
             # ============================================================
             logger.info(f"\n[Iter {learner.train_iter}] Collecting data...")
-
-            # [FIX] Clear KV cache BEFORE collection to prevent index overflow during MCTS
-            policy.recompute_pos_emb_diff_and_clear_cache()
 
             new_data = await collector.collect(
                 train_iter=learner.train_iter,
@@ -359,12 +381,17 @@ async def train_priorzero(
                             logger.info(f"  ✓ Buffer reanalyze count: {buffer_reanalyze_count}")
 
                     # Sample batch (align with train_unizero_segment.py line 212)
+                    # [PRIORZERO-KEY] PriorZeroGameBuffer returns [current_batch, target_batch, game_segments]
                     train_data = replay_buffer.sample(batch_size, policy)
 
-                    # Append train_iter (align with train_unizero_segment.py line 216)
-                    train_data.append(learner.train_iter)
+                    # [PRIORZERO-KEY] Insert train_iter at index 2 (before game_segments)
+                    # Policy expects: (current_batch, target_batch, train_iter, game_segments)
+                    # Buffer returns: [current_batch, target_batch, game_segments]
+                    # After insert(2, train_iter): [current_batch, target_batch, train_iter, game_segments]
+                    train_data.insert(2, learner.train_iter)
 
                     # Train (align with train_unizero_segment.py line 217)
+                    # Policy will receive: (current_batch, target_batch, train_iter, game_segments)
                     log_vars = learner.train(train_data, collector.envstep)
 
                     # Update priority if enabled (align with train_unizero_segment.py line 219-220)
@@ -374,6 +401,9 @@ async def train_priorzero(
             # Increment epoch counter (align with train_unizero_segment.py line 222)
             train_epoch += 1
             # Note: KV cache is cleared BEFORE collection (see line 298), not after epoch
+
+            # [FIX] Clear KV cache BEFORE collection to prevent index overflow during MCTS
+            policy.recompute_pos_emb_diff_and_clear_cache()
 
             # ============================================================
             # Check stopping criteria (align with train_unizero_segment.py line 226-227)
@@ -425,6 +455,8 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug logging (obs, action, LLM output)')
 
     args = parser.parse_args()
+
+    # args.quick_test = True # ONLY FOR DEBUG
 
     # Get configuration
     if args.quick_test:

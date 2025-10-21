@@ -19,6 +19,7 @@ Date: 2025-01-20
 import copy
 import re
 import sys
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Union, Optional
 
@@ -393,6 +394,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         Returns:
             log_dict: Dictionary of training metrics
         """
+        import logging
+
         self._learn_model.train()
         self.llm_policy_model.train()
 
@@ -537,9 +540,20 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             }
 
         # [FIX] Following unizero.py lines 673-675 exactly:
+        # TODO======= 是否需要[:,-1:]
         # Convert mask_batch to boolean, then truncate observations and mask_padding
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
-        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data. Shape is now (B, T), e.g., (2, 4)
+
+        # =================================================================================
+        # [!!! FIX !!!] REMOVE OR COMMENT OUT THE LINE BELOW.
+        # This line is the source of the bug. It incorrectly truncates the mask from shape
+        # (B, T) to (B, T-1), causing a mismatch with the rewards tensor.
+        # The mask_batch from the replay buffer already has the correct length (T) 
+        # corresponding to the number of unroll steps.
+        # =================================================================================
+        # batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # <--- REMOVE THIS
+
+
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
 
         # [FIX] Add missing 'ends' field (following unizero.py line 676)
@@ -572,6 +586,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
         num_sft_samples = 0
         num_rft_samples = 0
+
+        game_segments = None
 
         # [FIX] Only perform LLM training if game_segments available
         if game_segments is not None:
@@ -824,10 +840,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
 
         # Compute target policy entropy (for analysis)
-        valid_target_policy = target_policy[:, :-1][mask_batch[:, :-1] == 1.0]
-        target_policy_entropy = -torch.sum(
-            valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
-        ).mean()
+        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+        average_target_policy_entropy = target_policy_entropy.mean()
 
         # Build comprehensive log dict (aligned with UniZero)
         log_dict = {
@@ -841,7 +856,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'perceptual_loss': perceptual_loss.item() if torch.is_tensor(perceptual_loss) else perceptual_loss,
             'orig_policy_loss': orig_policy_loss.item() if torch.is_tensor(orig_policy_loss) else orig_policy_loss,
             'policy_entropy': policy_entropy.item() if torch.is_tensor(policy_entropy) else policy_entropy,
-            'target_policy_entropy': target_policy_entropy.item(),
+            'target_policy_entropy': average_target_policy_entropy.item(),
+
 
             # ============ Step-wise Losses ============
             'analysis/first_step_loss_value': first_step_losses.get('loss_value', torch.tensor(0.0)).item() if isinstance(first_step_losses.get('loss_value'), torch.Tensor) else 0.0,

@@ -499,42 +499,66 @@ def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0,
     - Debugging
     - CI/CD pipelines
     - Local development without powerful GPUs
+
+    IMPORTANT: All sequence-length related parameters must be consistent:
+    - num_unroll_steps: Number of timesteps in training unroll
+    - max_blocks: Should equal num_unroll_steps
+    - max_tokens: Should equal num_unroll_steps * tokens_per_block (= num_unroll_steps * 2)
+    - infer_context_length: Context length for inference
+    - context_length: Should equal infer_context_length * tokens_per_block (= infer_context_length * 2)
     """
     main_config, create_config = get_priorzero_config(env_id, seed, debug_mode=debug_mode)
+
+    # ==============================================================================
+    # [CRITICAL FIX] Define num_unroll_steps FIRST to ensure consistency
+    # ==============================================================================
+    quick_test_num_unroll_steps = 10  # Core parameter that determines sequence length
+    quick_test_infer_context_length = 4  # Inference context length
+    tokens_per_block = 2  # obs + action (fixed in UniZero architecture)
 
     # Reduce computational requirements
     main_config.env.collector_env_num = 2
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
 
-    # main_config.policy.num_simulations = 10
-    # main_config.policy.batch_size = 8
-    # main_config.policy.game_segment_length = 50
-    # main_config.policy.num_segments = 2
-    # main_config.policy.replay_buffer_size = 1000
-
-    # main_config.policy.model.world_model_cfg.num_layers = 2
-
-    main_config.policy.num_simulations = 2
-    main_config.policy.batch_size = 2
-    main_config.policy.game_segment_length = 20
-    main_config.policy.num_segments = 2
+    # ==============================================================================
+    # Policy-level configurations
+    # ==============================================================================
+    main_config.policy.num_simulations = 5
+    main_config.policy.batch_size = 20
+    main_config.policy.game_segment_length = 20  # Can be larger than num_unroll_steps
+    main_config.policy.num_segments = 2  # Must equal collector_env_num
     main_config.policy.replay_buffer_size = 1000
 
+    # [CRITICAL] Set policy-level num_unroll_steps to match world model
+    main_config.policy.num_unroll_steps = quick_test_num_unroll_steps
+
+    # ==============================================================================
+    # World model configurations - ALL must be consistent with num_unroll_steps
+    # ==============================================================================
     main_config.policy.model.world_model_cfg.num_layers = 1
+    main_config.policy.model.world_model_cfg.num_heads = 2
+
     # Update env_num to match the reduced collector/evaluator counts
     main_config.policy.model.world_model_cfg.env_num = max(
         main_config.env.collector_env_num,
         main_config.env.evaluator_env_num
     )
-    main_config.policy.model.world_model_cfg.num_heads = 2
-    # [FIX] Set infer_context_length to match reduced num_unroll_steps
-    main_config.policy.model.world_model_cfg.infer_context_length = 2  # Reduced from 4
-    main_config.policy.model.world_model_cfg.context_length = 4  # 2 * infer_context_length
-    main_config.policy.model.world_model_cfg.num_unroll_steps = 3
-    main_config.policy.model.world_model_cfg.max_blocks = 3
-    main_config.policy.model.world_model_cfg.max_tokens = 6  # 2 * max_blocks
 
+    # [CRITICAL] Sequence length parameters - must all be consistent
+    main_config.policy.model.world_model_cfg.num_unroll_steps = quick_test_num_unroll_steps
+    main_config.policy.model.world_model_cfg.max_blocks = quick_test_num_unroll_steps
+    main_config.policy.model.world_model_cfg.max_tokens = quick_test_num_unroll_steps * tokens_per_block  # 3 * 2 = 6
+
+    main_config.policy.model.world_model_cfg.infer_context_length = quick_test_infer_context_length
+    main_config.policy.model.world_model_cfg.context_length = quick_test_infer_context_length * tokens_per_block  # 2 * 2 = 4
+
+    # Verify tokens_per_block is set correctly (should already be 2 from base config)
+    main_config.policy.model.world_model_cfg.tokens_per_block = tokens_per_block
+
+    # ==============================================================================
+    # LLM policy configurations
+    # ==============================================================================
     main_config.policy.llm_policy_cfg.prompt_max_len = 1024
     main_config.policy.llm_policy_cfg.generate_max_len = 128
     main_config.policy.llm_policy_cfg.history_length = 3
