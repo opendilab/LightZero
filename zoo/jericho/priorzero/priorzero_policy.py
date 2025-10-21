@@ -586,8 +586,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
         num_sft_samples = 0
         num_rft_samples = 0
-
-        game_segments = None
+        
+        # TODO: 
+        # game_segments = None
 
         # [FIX] Only perform LLM training if game_segments available
         if game_segments is not None:

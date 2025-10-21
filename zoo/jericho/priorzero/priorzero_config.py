@@ -308,6 +308,22 @@ def get_priorzero_config(
         _action_map=action_map,  # Prefix with _ to avoid EasyDict conversion
         _action_inv_map=action_inv_map,
 
+        # ==============================================================================
+        # [ASYNC-NEW] Async Training Configuration
+        # ==============================================================================
+        # off_policy_degree controls the degree of asynchrony between collect and train:
+        # - 0: Fully synchronous (serial) mode - collect -> train -> eval
+        # - 1-10: Low async - train can lag behind collect by a few batches
+        # - 10-50: Medium async - train can lag more, higher throughput
+        # - >50: High async - maximum throughput, highest off-policy bias
+        #
+        # Special value -1: Auto-tune based on buffer size and batch size
+        off_policy_degree=0,  # Default to synchronous mode for stability
+        # off_policy_degree=5,
+
+        # Whether to enable async evaluation (runs eval in background)
+        enable_async_eval=False,
+
         # MCTS settings
         num_simulations=25,
         collect_num_simulations=25,

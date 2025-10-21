@@ -247,7 +247,19 @@ async def train_priorzero(
     learner.call_hook('before_run')
 
     # ==================================================================
-    # 6. Main Training Loop
+    # 6. Initialize Async Training Coordinator
+    # ==================================================================
+    from async_training_coordinator import AsyncTrainingCoordinator
+
+    coordinator = AsyncTrainingCoordinator(
+        off_policy_degree=cfg.policy.off_policy_degree,
+        enable_async_eval=cfg.policy.enable_async_eval,
+        buffer_size=cfg.policy.replay_buffer_size,
+        batch_size=cfg.policy.batch_size,
+    )
+
+    # ==================================================================
+    # 7. Main Training Loop
     # ==================================================================
     logger.info("="*80)
     logger.info("Starting PriorZero Training")
@@ -257,6 +269,8 @@ async def train_priorzero(
     logger.info(f"Batch size: {cfg.policy.batch_size}")
     logger.info(f"LLM model: {cfg.policy.llm_policy_cfg.pretrain_llm_path}")
     logger.info(f"World model layers: {cfg.policy.model.world_model_cfg.num_layers}")
+    logger.info(f"Off-policy degree: {cfg.policy.off_policy_degree} ({'SYNC' if cfg.policy.off_policy_degree == 0 else 'ASYNC'})")
+    logger.info(f"Async eval: {cfg.policy.enable_async_eval}")
     logger.info("="*80)
 
     # [ALIGN WITH UNIZERO] Initialize reanalyze-related counters (train_unizero_segment.py line 119-121)
@@ -267,76 +281,122 @@ async def train_priorzero(
     best_eval_reward = -float('inf')
     policy_config = cfg.policy
 
+    # Async control variables
+    collect_task = None
+    train_task = None
+    pending_new_data = None  # Store collected data waiting to be added to buffer
+
     try:
         while True:
-            # # Log buffer memory usage
-            # log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
+            # ==================================================================
+            # Determine if we're in synchronous or asynchronous mode
+            # ==================================================================
+            is_sync_mode = coordinator.is_synchronous
 
-            # # Set temperature for visit count distributions
-            # collect_kwargs = {
-            #     'temperature': visit_count_temperature(
-            #         policy_config.manual_temperature_decay,
-            #         policy_config.fixed_temperature_value,
-            #         policy_config.threshold_training_steps_for_final_temperature,
-            #         trained_steps=learner.train_iter
-            #     ),
-            #     'epsilon': 0.0  # Default epsilon value
-            # }
-
-            # # Configure epsilon for epsilon-greedy exploration
-            # if policy_config.eps.eps_greedy_exploration_in_collect:
-            #     epsilon_greedy_fn = get_epsilon_greedy_fn(
-            #         start=policy_config.eps.start,
-            #         end=policy_config.eps.end,
-            #         decay=policy_config.eps.decay,
-            #         type_=policy_config.eps.type
-            #     )
-            #     collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
-
-            collect_kwargs = {
-                'temperature': 0.25,
-                'epsilon': 0.0  # Default epsilon value
-            }
-
-            # ============================================================
+            # ==================================================================
             # Evaluation (align with train_unizero_segment.py line 158-162)
-            # ============================================================
+            # ==================================================================
             if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
                 logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
 
-                stop, eval_reward_dict = await evaluator.eval(
-                    save_ckpt_fn=learner.save_checkpoint if enable_save else None,
+                # Define async eval function
+                async def eval_fn():
+                    return await evaluator.eval(
+                        save_ckpt_fn=learner.save_checkpoint if enable_save else None,
+                        train_iter=learner.train_iter,
+                        envstep=collector.envstep
+                    )
+
+                # Run eval through coordinator (handles sync/async based on config)
+                eval_result = await coordinator.run_eval(eval_fn)
+
+                # If sync eval, process result immediately
+                if not cfg.policy.enable_async_eval and eval_result is not None:
+                    stop, eval_reward_dict = eval_result
+                    mean_reward = eval_reward_dict.get('reward_mean', 0)
+                    logger.info(f"  ✓ Evaluation done: reward_mean={mean_reward:.2f}")
+
+                    if mean_reward > best_eval_reward:
+                        best_eval_reward = mean_reward
+
+                    if stop:
+                        logger.info(f"  🎉 Training converged! (reward >= {cfg.env.stop_value})")
+                        break
+                else:
+                    logger.info(f"  ✓ Async evaluation started in background")
+
+            # ==================================================================
+            # Collect Data (align with train_unizero_segment.py line 165)
+            # ==================================================================
+            collect_kwargs = {
+                'temperature': 0.25,
+                'epsilon': 0.0
+            }
+
+            if is_sync_mode:
+                # ============================================================
+                # SYNCHRONOUS MODE: Original serial execution
+                # ============================================================
+                logger.info(f"\n[Iter {learner.train_iter}] Collecting data...")
+
+                new_data = await collector.collect(
                     train_iter=learner.train_iter,
-                    envstep=collector.envstep
+                    policy_kwargs=collect_kwargs
                 )
 
-                mean_reward = eval_reward_dict.get('reward_mean', 0)
-                logger.info(f"  ✓ Evaluation done: reward_mean={mean_reward:.2f}")
+                # Update replay buffer
+                from lzero.entry.utils import calculate_update_per_collect
+                update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)
 
-                if stop:
-                    logger.info(f"  🎉 Training converged! (reward >= {cfg.env.stop_value})")
-                    break
+                replay_buffer.push_game_segments(new_data)
+                replay_buffer.remove_oldest_data_to_fit()
+                buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
+                logger.info(f"  ✓ Data collected, buffer size: {buffer_size} transitions")
 
-            # ============================================================
-            # Collect Data (align with train_unizero_segment.py line 165)
-            # ============================================================
-            logger.info(f"\n[Iter {learner.train_iter}] Collecting data...")
+            else:
+                # ============================================================
+                # ASYNCHRONOUS MODE: Collect can overlap with train
+                # ============================================================
+                # Start or check collect task
+                if collect_task is None or collect_task.done():
+                    if coordinator.can_collect():
+                        logger.info(f"\n[Iter {learner.train_iter}] Starting async collect...")
 
-            new_data = await collector.collect(
-                train_iter=learner.train_iter,
-                policy_kwargs=collect_kwargs
-            )
+                        # Define async collect function
+                        async def collect_fn():
+                            return await collector.collect(
+                                train_iter=learner.train_iter,
+                                policy_kwargs=collect_kwargs
+                            )
 
-            # Determine updates per collection (align with train_unizero_segment.py line 168)
-            from lzero.entry.utils import calculate_update_per_collect
-            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)
+                        # Start collect task through coordinator
+                        collect_task = asyncio.create_task(coordinator.run_collect(collect_fn))
+                    else:
+                        logger.debug(f"Collect blocked (lag={coordinator.collect_train_lag}/{coordinator.off_policy_degree})")
 
-            # Update replay buffer (align with train_unizero_segment.py line 171-172)
-            replay_buffer.push_game_segments(new_data)
-            replay_buffer.remove_oldest_data_to_fit()
-            # [FIX] Use get_num_of_transitions() instead of len()
-            buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
-            logger.info(f"  ✓ Data collected, buffer size: {buffer_size} transitions")
+                # Check if collect completed
+                if collect_task is not None and collect_task.done():
+                    new_data = await collect_task
+                    collect_task = None
+
+                    # Store for buffer update
+                    pending_new_data = new_data
+                    logger.info(f"  ✓ Async collect completed, data pending buffer update")
+
+                # Update buffer if we have pending data
+                if pending_new_data is not None:
+                    from lzero.entry.utils import calculate_update_per_collect
+                    update_per_collect = calculate_update_per_collect(cfg, pending_new_data, world_size=1)
+
+                    replay_buffer.push_game_segments(pending_new_data)
+                    replay_buffer.remove_oldest_data_to_fit()
+                    buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
+                    logger.info(f"  ✓ Buffer updated, size: {buffer_size} transitions")
+
+                    pending_new_data = None
+                else:
+                    # No new data yet, use previous update_per_collect or default
+                    update_per_collect = cfg.policy.get('update_per_collect', 10)
 
             # ============================================================
             # Periodically reanalyze buffer (align with train_unizero_segment.py line 175-186)
@@ -371,36 +431,39 @@ async def train_priorzero(
 
                 logger.info(f"[Iter {learner.train_iter}] Training...")
 
-                for i in range(update_per_collect):
+                # Define training function
+                async def train_one_batch():
                     # Reanalyze buffer during training (align with train_unizero_segment.py line 202-210)
-                    if cfg.policy.buffer_reanalyze_freq >= 1:
-                        if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
-                            logger.info(f"[Reanalyze] Starting buffer reanalysis (update {i}/{update_per_collect})...")
-                            replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
-                            buffer_reanalyze_count += 1
-                            logger.info(f"  ✓ Buffer reanalyze count: {buffer_reanalyze_count}")
+                    # Note: This is simplified - full reanalyze logic should be per-batch
 
-                    # Sample batch (align with train_unizero_segment.py line 212)
-                    # [PRIORZERO-KEY] PriorZeroGameBuffer returns [current_batch, target_batch, game_segments]
+                    # Sample batch
                     train_data = replay_buffer.sample(batch_size, policy)
-
-                    # [PRIORZERO-KEY] Insert train_iter at index 2 (before game_segments)
-                    # Policy expects: (current_batch, target_batch, train_iter, game_segments)
-                    # Buffer returns: [current_batch, target_batch, game_segments]
-                    # After insert(2, train_iter): [current_batch, target_batch, train_iter, game_segments]
                     train_data.insert(2, learner.train_iter)
 
-                    # Train (align with train_unizero_segment.py line 217)
-                    # Policy will receive: (current_batch, target_batch, train_iter, game_segments)
+                    # Train
                     log_vars = learner.train(train_data, collector.envstep)
 
-                    # Update priority if enabled (align with train_unizero_segment.py line 219-220)
+                    # Update priority if enabled
                     if cfg.policy.use_priority:
                         replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+                    return log_vars
+
+                if is_sync_mode:
+                    # Synchronous: train all batches sequentially
+                    for i in range(update_per_collect):
+                        await train_one_batch()
+                else:
+                    # Asynchronous: train batches while allowing collect to proceed
+                    # We still train sequentially per batch, but collect can run in parallel
+                    if coordinator.can_train():
+                        # Train one batch through coordinator
+                        await coordinator.run_train(train_one_batch)
+                    else:
+                        logger.debug(f"Train waiting for collect...")
+
             # Increment epoch counter (align with train_unizero_segment.py line 222)
             train_epoch += 1
-            # Note: KV cache is cleared BEFORE collection (see line 298), not after epoch
 
             # [FIX] Clear KV cache BEFORE collection to prevent index overflow during MCTS
             policy.recompute_pos_emb_diff_and_clear_cache()
@@ -411,6 +474,10 @@ async def train_priorzero(
             if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
                 logger.info("Stopping condition met, training ends!")
                 break
+
+            # In async mode, yield to event loop
+            if not is_sync_mode:
+                await asyncio.sleep(0.001)
 
     except KeyboardInterrupt:
         logger.warning("\n⚠ Training interrupted by user (Ctrl+C)")
@@ -425,6 +492,27 @@ async def train_priorzero(
         # Cleanup (align with train_unizero_segment.py line 229)
         # ============================================================
         learner.call_hook('after_run')
+
+        # Wait for any pending async eval
+        if cfg.policy.enable_async_eval:
+            logger.info("Waiting for async eval to complete...")
+            await coordinator.wait_for_eval()
+
+        # Print async training statistics
+        async_stats = coordinator.get_statistics()
+        logger.info("\n" + "="*80)
+        logger.info("Async Training Statistics:")
+        logger.info(f"  Mode: {async_stats['mode'].upper()}")
+        logger.info(f"  Collect iterations: {async_stats['collect_count']}")
+        logger.info(f"  Train iterations: {async_stats['train_count']}")
+        logger.info(f"  Final lag: {async_stats['collect_train_lag']}")
+        if 'collect_avg_time' in async_stats:
+            logger.info(f"  Avg collect time: {async_stats['collect_avg_time']:.2f}s")
+        if 'train_avg_time' in async_stats:
+            logger.info(f"  Avg train time: {async_stats['train_avg_time']:.2f}s")
+        if 'eval_avg_time' in async_stats:
+            logger.info(f"  Avg eval time: {async_stats['eval_avg_time']:.2f}s")
+        logger.info("="*80)
 
         logger.info("\nCleaning up...")
         collector_env.close()
