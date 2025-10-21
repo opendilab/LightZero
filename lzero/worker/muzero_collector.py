@@ -690,7 +690,11 @@ class MuZeroCollector(ISerialCollector):
 
                     # print(game_segments[env_id].reward_segment)
                     # reset the finished env and init game_segments
-                    if n_episode > self._env_num:
+                    # FIX: Changed condition from n_episode > self._env_num to n_episode >= self._env_num
+                    # to handle the case when n_episode == self._env_num (e.g. both are 4)
+                    # Without this fix, when an env completes its episode, it gets removed from ready_env_id
+                    # but never gets re-added, causing collector to wait indefinitely for all envs to be ready
+                    if n_episode >= self._env_num:
                         # Get current ready env obs.
                         init_obs = self._env.ready_obs
                         retry_waiting_time = 0.001
@@ -749,7 +753,10 @@ class MuZeroCollector(ISerialCollector):
                     # Env reset is done by env_manager automatically
                     self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                     self._reset_stat(env_id)
-                    ready_env_id.remove(env_id)
+                    # FIX: Only remove env_id from ready_env_id if n_episode < self._env_num
+                    # When n_episode >= self._env_num, the env gets re-added above, so we should not remove it
+                    if n_episode < self._env_num:
+                        ready_env_id.remove(env_id)
 
             if collected_episode >= n_episode:
                 # [data, meta_data]

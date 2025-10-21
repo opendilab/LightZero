@@ -35,7 +35,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     
     
     # key exploration related config
-    eps_greedy_exploration_in_collect = True
+    # eps_greedy_exploration_in_collect = True
+    eps_greedy_exploration_in_collect = False
+
     input_type = 'obs'  # options=['obs', 'latent_state', 'obs_latent_state']
     target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentum'
     
@@ -118,7 +120,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             learning_rate=3e-3,
             weight_decay=1e-4,
             batch_size=batch_size, 
-            update_per_collect=200,
+            # update_per_collect=200,
+            update_per_collect=120, # 4*300=1200
             rnd_buffer_size=int(1e6),
             input_norm=True,
             input_norm_clamp_max=5,
@@ -174,7 +177,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             target_update_theta_for_intrinsic_reward=0.005,
             eps=dict(
                     eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-                    decay=int(2e5),
+                    # decay=int(2e5),
+                    decay=int(1e4), # iteration
                 ),
             update_per_collect=int(collector_env_num*max_steps*replay_ratio*accumulation_steps ),  # Important for DDP
             action_type="varied_action_space",
