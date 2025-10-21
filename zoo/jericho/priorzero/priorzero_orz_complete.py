@@ -297,41 +297,82 @@ async def train_priorzero_orz_complete(
     cfg = compile_config(cfg, seed=seed, auto=True, create_cfg=create_cfg)
 
     # ==================================================================
-    # 2. Create vLLM Engine (optional)
+    # 2. Create vLLM Engine (optional) - Based on priorzero_entry.py
     # ==================================================================
     vllm_engine = None
 
     if hybrid_cfg.use_vllm and VLLM_AVAILABLE:
-        logger.info("Creating vLLM engine for LLM policy...")
+        logger.info("Creating vLLM engine...")
 
+        # [ROBUST FIX] Handle shared GPU environment
+        # Solution: Use alternative initialization method with fallback
         tensor_parallel = cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size
+        distributed_backend = "ray" if tensor_parallel > 1 else None
+
+        # [ROBUST FIX] Lower GPU memory utilization in shared environment
         gpu_mem_util = cfg.policy.llm_policy_cfg.gpu_memory_utilization
-
-        # Use conservative settings
         if gpu_mem_util > 0.85:
-            gpu_mem_util = 0.7
+            gpu_mem_util = 0.75  # More conservative
+            logger.info(f"✓ Adjusted GPU memory utilization to {gpu_mem_util} for stability")
 
-        # Force V0 engine
-        os.environ['VLLM_USE_V1'] = '0'
+        # [ROBUST FIX] Use vLLM V0 engine for stability (as in priorzero_entry.py)
+        use_v1_env = os.environ.get('VLLM_USE_V1', None)
+        if use_v1_env is None:
+            # Only set if not already set by user
+            os.environ['VLLM_USE_V1'] = '0'
+            logger.info("✓ Using vLLM V0 engine for stability")
+
         # Fix tokenizers parallelism warning
         os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
         try:
+            from vllm.engine.arg_utils import AsyncEngineArgs
+
             engine_args = AsyncEngineArgs(
                 model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
                 tensor_parallel_size=tensor_parallel,
                 gpu_memory_utilization=gpu_mem_util,
+                distributed_executor_backend=distributed_backend,
                 trust_remote_code=True,
                 enable_prefix_caching=False,
                 enforce_eager=False,
             )
             vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
-            logger.info(f"✓ vLLM Engine created")
-        except Exception as e:
-            logger.error(f"❌ Failed to create vLLM engine: {e}")
-            if hybrid_cfg.vllm_required:
-                raise
-            logger.info("Continuing without vLLM (LLM prior will be disabled)")
+            logger.info(f"✓ vLLM Engine created (backend: {distributed_backend or 'default'})")
+
+        except (ValueError, RuntimeError) as e:
+            if "VLLM_USE_V1" in str(e) or "memory profiling" in str(e):
+                # Fallback: Try without V1 env var or with eager mode
+                logger.warning(f"⚠️  Initial vLLM initialization failed: {e}")
+                logger.info("Retrying with alternative configuration...")
+
+                if 'VLLM_USE_V1' in os.environ:
+                    del os.environ['VLLM_USE_V1']
+
+                try:
+                    engine_args = AsyncEngineArgs(
+                        model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
+                        tensor_parallel_size=tensor_parallel,
+                        gpu_memory_utilization=gpu_mem_util * 0.9,  # Even more conservative
+                        distributed_executor_backend=distributed_backend,
+                        trust_remote_code=True,
+                        enable_prefix_caching=False,
+                        enforce_eager=True,  # Force eager mode as fallback
+                    )
+                    vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
+                    logger.info(f"✓ vLLM Engine created with fallback configuration")
+                except Exception as e2:
+                    logger.error(f"❌ Failed to create vLLM engine with fallback: {e2}")
+                    if hybrid_cfg.vllm_required:
+                        raise
+                    logger.warning("Continuing without vLLM (LLM prior will be disabled)")
+            else:
+                logger.error(f"❌ Failed to create vLLM engine: {e}")
+                import traceback
+                logger.error(f"Full traceback:\n{traceback.format_exc()}")
+                if hybrid_cfg.vllm_required:
+                    raise
+                logger.warning("Continuing without vLLM (LLM prior will be disabled)")
     else:
         logger.info("vLLM disabled or not available - continuing without LLM inference")
 

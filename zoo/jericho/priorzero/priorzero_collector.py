@@ -164,6 +164,11 @@ class PriorZeroCollector(OriginalCollector):
         Returns:
             llm_outputs: List of vLLM output objects
         """
+        # [FIX] Check if vLLM engine is available
+        if self.vllm_engine is None:
+            self._logger.info("INFO: vLLM engine not available, skipping LLM prior")
+            return [None] * len(states)
+
         from priorzero_policy import build_llm_prompt
 
         # Build prompts

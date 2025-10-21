@@ -17,7 +17,7 @@ ERROR: AttributeError: 'NoneType' object has no attribute 'generate'
 
 **修复**:
 ```python
-# 1. vLLM 变为可选
+# priorzero_orz_complete.py: vLLM 变为可选
 vllm_engine = None  # 默认 None
 if hybrid_cfg.use_vllm and VLLM_AVAILABLE:
     # 尝试创建
@@ -30,12 +30,25 @@ if hybrid_cfg.use_vllm and VLLM_AVAILABLE:
         else:
             logger.info("Continuing without vLLM")
 
-# 2. Collector 正确处理 None
+# priorzero_collector.py: _async_get_llm_prior() 添加 None 检查
+async def _async_get_llm_prior(self, ...):
+    # [FIX] Check if vLLM engine is available
+    if self.vllm_engine is None:
+        self._logger.info("INFO: vLLM engine not available, skipping LLM prior")
+        return [None] * len(states)
+    # ... 继续正常逻辑
+
+# Collector 正确处理 None
 collector = PriorZeroCollector(
     ...,
     vllm_engine=vllm_engine,  # May be None - collector will handle it
 )
 ```
+
+**文件修改**:
+- `priorzero_orz_complete.py:228-263` - vLLM 创建错误处理
+- `priorzero_collector.py:167-170` - 添加 None 检查
+
 
 ### 2. ✅ asyncio 作用域问题
 
