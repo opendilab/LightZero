@@ -1593,8 +1593,10 @@ class WorldModel(nn.Module):
                     if recur_cache_index is not None:
                         matched_value = self.shared_pool_recur_infer[recur_cache_index]
 
+                    # TODO
                     if recur_cache_index is None:
                         print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
+                        # print(f"[CACHE MISS] {cache_key}")
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists

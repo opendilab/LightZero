@@ -553,7 +553,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # =================================================================================
         # batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # <--- REMOVE THIS
 
-
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
 
         # [FIX] Add missing 'ends' field (following unizero.py line 676)
@@ -598,24 +597,81 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             rft_prompts = []
             rft_rewards = []
 
-            for segment in game_segments:
-                segment_length = len(segment.obs_segment)
+            # [DEBUG] Log segment information
+            if self._cfg.get('debug_segment_processing', False):
+                logging.info(f"[LLM Training] Processing {len(game_segments)} game segments")
 
-                for i in range(segment_length):
-                    # Skip if no MCTS policy available
-                    if segment.mcts_policy_segment[i] is None:
+            for seg_idx, segment in enumerate(game_segments):
+                # [FIX] Use action_segment length, not obs_segment
+                # obs_segment includes frame_stack + unroll_steps, while
+                # mcts_policy_segment only has entries for actual actions taken
+                segment_length = len(segment.action_segment)
+
+                # [FIX] Ensure mcts_policy_segment has the same length
+                # It might be a list or numpy array depending on whether game_segment_to_array() was called
+                mcts_policy_length = len(segment.mcts_policy_segment) if hasattr(segment, 'mcts_policy_segment') else 0
+
+                # [DEBUG] Log segment lengths for debugging
+                if self._cfg.get('debug_segment_processing', False):
+                    obs_len = len(segment.obs_segment) if hasattr(segment, 'obs_segment') else 0
+                    raw_obs_len = len(segment.raw_obs_segment) if hasattr(segment, 'raw_obs_segment') else 0
+                    logging.info(
+                        f"[Segment {seg_idx}] action_len={segment_length}, "
+                        f"mcts_policy_len={mcts_policy_length}, obs_len={obs_len}, raw_obs_len={raw_obs_len}"
+                    )
+
+                # [SAFETY] Use the minimum of the two lengths to avoid IndexError
+                max_index = min(segment_length, mcts_policy_length)
+
+                if max_index == 0:
+                    if self._cfg.get('debug_segment_processing', False):
+                        logging.warning(f"[Segment {seg_idx}] Empty segment, skipping")
+                    continue  # Skip empty segments
+
+                for i in range(max_index):
+                    # [FIX] Safe access to mcts_policy_segment with bounds check
+                    try:
+                        mcts_policy = segment.mcts_policy_segment[i]
+                    except (IndexError, KeyError, TypeError) as e:
+                        # Log detailed error information for debugging
+                        if self._cfg.get('debug_segment_processing', False):
+                            logging.error(
+                                f"[Segment {seg_idx}, Index {i}] Failed to access mcts_policy_segment: {e}\n"
+                                f"  segment_length={segment_length}, mcts_policy_length={mcts_policy_length}\n"
+                                f"  mcts_policy_segment type: {type(segment.mcts_policy_segment)}"
+                            )
                         continue
 
-                    # Get raw observation text (assume it's stored in obs_segment)
-                    # NOTE: For text environments, obs_segment should contain text
-                    raw_obs_text = str(segment.obs_segment[i])
+                    # Skip if no MCTS policy available
+                    if mcts_policy is None:
+                        continue
+
+                    # [FIX] Use raw_obs_segment for text observations
+                    # PriorZero's GameSegment stores raw text in raw_obs_segment
+                    raw_obs_text = None
+                    if hasattr(segment, 'raw_obs_segment') and i < len(segment.raw_obs_segment):
+                        raw_obs_text = segment.raw_obs_segment[i]
+                    elif i < len(segment.obs_segment):
+                        # Fallback to obs_segment if raw_obs_segment not available
+                        raw_obs_text = str(segment.obs_segment[i])
+
+                    # Skip if raw_obs_text is None
+                    if raw_obs_text is None:
+                        continue
 
                     # Build history context
                     history = []
                     for j in range(max(0, i - self.llm_policy_cfg.history_length), i):
-                        if j < len(segment.obs_segment):
+                        # [FIX] Use raw_obs_segment for history as well
+                        obs_text = None
+                        if hasattr(segment, 'raw_obs_segment') and j < len(segment.raw_obs_segment):
+                            obs_text = segment.raw_obs_segment[j]
+                        elif j < len(segment.obs_segment):
+                            obs_text = str(segment.obs_segment[j])
+
+                        if obs_text is not None and j < len(segment.action_segment):
                             history.append((
-                                str(segment.obs_segment[j]),
+                                obs_text,
                                 self.action_inv_map.get(segment.action_segment[j], f"action_{segment.action_segment[j]}"),
                                 float(segment.reward_segment[j]) if j < len(segment.reward_segment) else 0.0
                             ))
@@ -638,7 +694,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     # SFT: Supervised Fine-Tuning with MCTS Policy
                     # ============================================================
                     if self.llm_policy_cfg.sft_target == 'mcts_policy':
-                        mcts_policy_vec = segment.mcts_policy_segment[i]
+                        # [FIX] Use the mcts_policy we already safely retrieved above
+                        # Don't access segment.mcts_policy_segment[i] again to avoid IndexError
+                        mcts_policy_vec = mcts_policy
 
                         # Convert MCTS policy to ranked action text
                         target_text = format_mcts_policy_to_text(
@@ -921,8 +979,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'llm_sft_loss': llm_sft_loss.item(),
             'llm_rft_loss': llm_rft_loss.item(),
             'llm_total_loss': llm_loss.item(),
-            'num_sft_samples': num_sft_samples,
-            'num_rft_samples': num_rft_samples,
+            'num_sft_samples': float(num_sft_samples),
+            'num_rft_samples': float(num_rft_samples),
             'total_loss': total_loss.item(),
         }
 
@@ -949,8 +1007,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                         'train/llm/total_loss': log_dict['llm_total_loss'],
                         'train/llm/grad_norm': log_dict['llm_grad_norm'],
                         'train/llm/learning_rate': log_dict['llm_lr'],
-                        'train/llm/num_sft_samples': log_dict['num_sft_samples'],
-                        'train/llm/num_rft_samples': log_dict['num_rft_samples'],
+                        'train/llm/num_sft_samples': float(log_dict['num_sft_samples']),
+                        'train/llm/num_rft_samples': float(log_dict['num_rft_samples']),
 
                         # Combined Metrics
                         'train/total_loss': log_dict['total_loss'],
@@ -962,6 +1020,58 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         return log_dict
 
+    def _monitor_vars_learn(self) -> List[str]:
+        """
+        [PRIORZERO-MODIFIED]
+        Register variables to be monitored in learn mode for TensorBoard logging.
+
+        This extends UniZero's monitoring with PriorZero-specific LLM metrics.
+
+        Returns:
+            List of variable names that should be logged to TensorBoard/WandB
+        """
+        # Start with all UniZero monitoring variables
+        monitor_vars = super()._monitor_vars_learn()
+
+        # Add PriorZero-specific LLM monitoring variables
+        priorzero_vars = [
+            # ============ LLM Loss Metrics ============
+            'llm_sft_loss',              # Supervised fine-tuning loss
+            'llm_rft_loss',              # Reinforcement fine-tuning loss
+            'llm_total_loss',            # Combined LLM loss
+            'llm_grad_norm',             # LLM gradient norm
+            'llm_lr',                    # LLM learning rate
+
+            # ============ LLM Training Statistics ============
+            'num_sft_samples',           # Number of SFT samples in batch
+            'num_rft_samples',           # Number of RFT samples in batch
+
+            # ============ Combined Metrics ============
+            'total_loss',                # Total loss (WM + LLM)
+            'wm_total_loss',             # World model total loss
+            'wm_grad_norm',              # World model gradient norm
+            'wm_lr',                     # World model learning rate
+
+            # ============ World Model Component Losses ============
+            'wm_value_loss',
+            'wm_policy_loss',
+            'wm_reward_loss',
+            'wm_obs_loss',
+        ]
+
+        # Combine and deduplicate
+        all_vars = monitor_vars + priorzero_vars
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_vars = []
+        for var in all_vars:
+            if var not in seen:
+                seen.add(var)
+                unique_vars.append(var)
+
+        return unique_vars
+    
     def _forward_collect(
         self,
         data: torch.Tensor,
