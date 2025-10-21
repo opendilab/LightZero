@@ -1,0 +1,141 @@
+================================================================================
+PRIORZERO QUICK TEST CONFIGURATION - BEFORE vs AFTER FIX
+================================================================================
+
+Problem: Attention mask dimension mismatch
+Error: "The size of tensor a (6) must match the size of tensor b (20)"
+
+--------------------------------------------------------------------------------
+ROOT CAUSE ANALYSIS
+--------------------------------------------------------------------------------
+
+BEFORE FIX:
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Configuration Layer                    Value      Sequence Length       │
+├─────────────────────────────────────────────────────────────────────────┤
+│ policy.num_unroll_steps               10         10 × 2 = 20 tokens ❌  │
+│                                                   (inherited, not set)   │
+│                                                                          │
+│ world_model_cfg.num_unroll_steps      3          3 × 2 = 6 tokens  ❌  │
+│ world_model_cfg.max_blocks            3                                 │
+│ world_model_cfg.max_tokens            6                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+       ↓                                      ↓
+  INCONSISTENT!                     MISMATCH DETECTED
+       ↓                                      ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Runtime Behavior                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 1. Data sampler uses policy.num_unroll_steps = 10                       │
+│    → Samples 10 timesteps from replay buffer                            │
+│                                                                          │
+│ 2. World model creates attention mask using max_tokens = 6              │
+│    → Creates mask with shape [6, 6]                                     │
+│                                                                          │
+│ 3. Model forward pass processes 10 timesteps = 20 tokens                │
+│    → Creates attention scores with shape [batch, heads, 20, 20]        │
+│                                                                          │
+│ 4. Apply mask to attention scores                                       │
+│    → RuntimeError: Cannot broadcast [6,6] mask to [20,20] attention! ❌ │
+└─────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+
+AFTER FIX:
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Configuration Layer                    Value      Sequence Length       │
+├─────────────────────────────────────────────────────────────────────────┤
+│ quick_test_num_unroll_steps           3          (source of truth)      │
+│ tokens_per_block                      2          (fixed constant)       │
+│                                                                          │
+│ policy.num_unroll_steps               3 ✅       3 × 2 = 6 tokens  ✅  │
+│                                                   (explicitly set)       │
+│                                                                          │
+│ world_model_cfg.num_unroll_steps      3 ✅       3 × 2 = 6 tokens  ✅  │
+│ world_model_cfg.max_blocks            3 ✅                              │
+│ world_model_cfg.max_tokens            6 ✅                              │
+│ world_model_cfg.tokens_per_block      2 ✅                              │
+│ world_model_cfg.infer_context_length  2 ✅       2 × 2 = 4 tokens  ✅  │
+│ world_model_cfg.context_length        4 ✅                              │
+└─────────────────────────────────────────────────────────────────────────┘
+       ↓                                      ↓
+    CONSISTENT!                      ALL PARAMETERS ALIGNED
+       ↓                                      ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Runtime Behavior                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 1. Data sampler uses policy.num_unroll_steps = 3                        │
+│    → Samples 3 timesteps from replay buffer                             │
+│                                                                          │
+│ 2. World model creates attention mask using max_tokens = 6              │
+│    → Creates mask with shape [6, 6]                                     │
+│                                                                          │
+│ 3. Model forward pass processes 3 timesteps = 6 tokens                  │
+│    → Creates attention scores with shape [batch, heads, 6, 6]          │
+│                                                                          │
+│ 4. Apply mask to attention scores                                       │
+│    → Success! [6,6] mask matches [6,6] attention scores ✅              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+KEY CHANGES IN get_priorzero_config_for_quick_test()
+================================================================================
+
+BEFORE:                                   AFTER:
+────────────────────────────────────────────────────────────────────────────
+def get_priorzero_config_for_quick_test   def get_priorzero_config_for_quick_test
+    (...):                                    (...):
+
+    main_config, create_config = ...          main_config, create_config = ...
+
+                                              # Define source of truth
+                                              quick_test_num_unroll_steps = 3
+                                              quick_test_infer_context_length = 2
+                                              tokens_per_block = 2
+
+    # Policy configs                          # Policy configs
+    main_config.policy.batch_size = 2         main_config.policy.batch_size = 2
+    ❌ # num_unroll_steps NOT SET!            ✅ main_config.policy.num_unroll_steps = 3
+
+    # World model configs                     # World model configs
+    main_config.policy.model                  main_config.policy.model
+        .world_model_cfg                          .world_model_cfg
+        .num_unroll_steps = 3                     .num_unroll_steps = 3
+    main_config.policy.model                  main_config.policy.model
+        .world_model_cfg                          .world_model_cfg
+        .max_blocks = 3                           .max_blocks = 3
+    main_config.policy.model                  main_config.policy.model
+        .world_model_cfg                          .world_model_cfg
+        .max_tokens = 6                           .max_tokens = 6
+                                              main_config.policy.model
+                                                  .world_model_cfg
+                                                  .tokens_per_block = 2
+                                              main_config.policy.model
+                                                  .world_model_cfg
+                                                  .infer_context_length = 2
+                                              main_config.policy.model
+                                                  .world_model_cfg
+                                                  .context_length = 4
+
+================================================================================
+VERIFICATION
+================================================================================
+
+Run: python verify_config_consistency.py
+
+Expected Output:
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ✓ PASS: policy.num_unroll_steps == wm.num_unroll_steps                  │
+│         (3 == 3)                                                         │
+│ ✓ PASS: wm.max_blocks == wm.num_unroll_steps                            │
+│         (3 == 3)                                                         │
+│ ✓ PASS: wm.max_tokens == wm.num_unroll_steps * wm.tokens_per_block      │
+│         (6 == 3 * 2 = 6)                                                 │
+│ ✓ PASS: wm.context_length == wm.infer_context_length * tokens_per_block │
+│         (4 == 2 * 2 = 4)                                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Attention mask will be created for 6 tokens (shape: [6, 6])
+This should match the sequence length being processed. ✅
+
+================================================================================

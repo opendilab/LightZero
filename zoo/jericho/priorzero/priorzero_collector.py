@@ -234,9 +234,6 @@ class PriorZeroCollector(OriginalCollector):
                 llm_outputs = [None] * len(prompts)
 
                 try:
-                    # [FIX] Merge results from all generators
-                    import asyncio
-
                     # Collect all results concurrently
                     async def collect_from_generator(idx, gen):
                         """Collect final result from a generator"""
