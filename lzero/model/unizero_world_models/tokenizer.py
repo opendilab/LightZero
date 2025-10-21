@@ -146,6 +146,11 @@ class Tokenizer(nn.Module):
             x = x.contiguous().view(-1, original_shape[-1])  # Shape: (B*T, E)
         # Note: 2D (B, E) and 4D (B, C, H, W) inputs are processed directly without reshaping.
 
+        # [DEBUG] Log shape before encoder
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[TOKENIZER_DEBUG] Before encoder: original_shape={original_shape}, x.shape={x.shape}, encoder_type={type(encoder_module).__name__}")
+
         # Step 3: Pass the processed tensor through the encoder.
         obs_embeddings = encoder_module(x)
         if len(obs_embeddings.shape) != 2:

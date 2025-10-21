@@ -454,6 +454,47 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         # Prepare batch for world model
         # NOTE: This follows the exact format required by UniZero world model
+        # [FIX] Convert obs_batch_ori to tensor if needed
+        if not isinstance(obs_batch_ori, torch.Tensor):
+            # [DEBUG] Check obs_batch_ori shape
+            import logging
+            logger = logging.getLogger(__name__)
+            if isinstance(obs_batch_ori, np.ndarray):
+                logger.info(f"[DEBUG] obs_batch_ori type: numpy, shape: {obs_batch_ori.shape}, dtype: {obs_batch_ori.dtype}")
+
+                # [FIX] Reshape if observations are flattened (2D instead of 3D)
+                # Expected: [batch_size, num_unroll_steps+1, obs_dim] (buffer includes next_obs)
+                # Got: [batch_size, (num_unroll_steps+1) * obs_dim]
+                if len(obs_batch_ori.shape) == 2:
+                    # Infer num_unroll_steps and obs_dim
+                    # For text: obs_dim should be max_seq_len (e.g., 512)
+                    obs_dim = 512  # Standard max_seq_len for BERT
+                    total_size = obs_batch_ori.shape[1]
+                    if total_size % obs_dim == 0:
+                        inferred_steps = total_size // obs_dim
+                        # Simply reshape to [batch_size, inferred_steps, obs_dim]
+                        # The truncation to match action_batch will happen later (like unizero.py line 675)
+                        obs_batch_ori = obs_batch_ori.reshape(batch_size, inferred_steps, obs_dim)
+                        logger.info(f"[RESHAPE] Reshaped obs_batch_ori from (batch_size, {total_size}) to {obs_batch_ori.shape}")
+                    else:
+                        logger.warning(f"[RESHAPE_ERROR] Cannot reshape: total_size ({total_size}) not divisible by obs_dim ({obs_dim})")
+
+                # Check if it's an object array (inhomogeneous shapes)
+                if obs_batch_ori.dtype == np.object_:
+                    logger.warning(f"[SHAPE_ISSUE] obs_batch_ori is object array - inhomogeneous shapes!")
+                    logger.warning(f"[SHAPE_ISSUE] First element shape: {obs_batch_ori[0].shape if len(obs_batch_ori) > 0 else 'N/A'}")
+                    if len(obs_batch_ori) > 1:
+                        logger.warning(f"[SHAPE_ISSUE] Second element shape: {obs_batch_ori[1].shape}")
+                    # Try to handle inhomogeneous array by padding/truncating
+                    # For now, just raise a descriptive error
+                    raise ValueError(
+                        f"obs_batch_ori has inhomogeneous shapes. "
+                        f"First element shape: {obs_batch_ori[0].shape}, "
+                        f"Cannot directly convert to tensor. "
+                        f"This suggests the replay buffer is storing observations with different sequence lengths."
+                    )
+            obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device)
+
         # [FIX] Convert action_batch to tensor and handle shape correctly
         if not isinstance(action_batch, torch.Tensor):
             action_batch = torch.from_numpy(action_batch).to(self._cfg.device)
@@ -483,7 +524,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 'actions': actions_processed,
                 'timestep': timestep_processed,
                 'rewards': target_reward_categorical[:, :-1],
-                'mask_padding': (mask_batch == 1.0)[:, :-1],
                 'target_value': target_value_categorical[:, :-1],
                 'target_policy': target_policy[:, :-1],
             }
@@ -492,10 +532,27 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 'observations': obs_batch_ori,
                 'actions': actions_processed,
                 'rewards': target_reward_categorical[:, :-1],
-                'mask_padding': (mask_batch == 1.0)[:, :-1],
                 'target_value': target_value_categorical[:, :-1],
                 'target_policy': target_policy[:, :-1],
             }
+
+        # [FIX] Following unizero.py lines 673-675 exactly:
+        # Convert mask_batch to boolean, then truncate observations and mask_padding
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
+        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+
+        # [FIX] Add missing 'ends' field (following unizero.py line 676)
+        # 'ends' marks terminal states in the trajectory (0 = not terminal)
+        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device)
+
+        # [FIX] Add 'scalar_target_value' field for priority calculation (following unizero.py line 681)
+        batch_for_gpt['scalar_target_value'] = target_value
+
+        # [FIX] Log shapes for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[BATCH_SHAPES] obs: {batch_for_gpt['observations'].shape}, actions: {batch_for_gpt['actions'].shape}, rewards: {batch_for_gpt['rewards'].shape}, mask_padding: {batch_for_gpt['mask_padding'].shape}")
 
         # Compute world model loss
         wm_losses = self._learn_model.world_model.compute_loss(

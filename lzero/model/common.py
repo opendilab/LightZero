@@ -470,7 +470,6 @@ class QwenNetwork(nn.Module):
     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
         return self.encode(x, no_grad=no_grad)
 
-
 class HFLanguageRepresentationNetwork(nn.Module):
     def __init__(self,
                 model_path: str = 'google-bert/bert-base-uncased',
@@ -489,11 +488,9 @@ class HFLanguageRepresentationNetwork(nn.Module):
         super().__init__()
         from transformers import AutoModel, AutoTokenizer
 
-        # [FIX] Load tokenizer for ALL ranks, not just non-zero ranks
         if tokenizer is not None:
             self.tokenizer = tokenizer
         else:
-            # Load tokenizer with same distributed logic as model
             if get_rank() == 0:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
             if get_world_size() > 1:
@@ -501,12 +498,9 @@ class HFLanguageRepresentationNetwork(nn.Module):
             if get_rank() != 0:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
-        # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
         if get_rank() == 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
-
         if get_world_size() > 1:
-            # Wait for rank 0 to finish loading the model.
             torch.distributed.barrier()
         if get_rank() != 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
@@ -514,7 +508,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
 
-        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":
@@ -533,25 +526,139 @@ class HFLanguageRepresentationNetwork(nn.Module):
         Returns:
             - (:obj:`torch.Tensor`): The final language embedding of shape (B, embedding_size).
         """
-
+        # Ensure the input tensor is of type long.
+        x = x.long()
+        
         # Construct the attention mask to exclude padding tokens.
-        attention_mask = x != self.tokenizer.pad_token_id
+        attention_mask = (x != self.tokenizer.pad_token_id).long()
+        
+        # ==================== 修复开始 ====================
+        # 1. 显式地创建 token_type_ids
+        # 对于单句输入，token_type_ids 是一个与 input_ids 形状相同的全零张量。
+        token_type_ids = torch.zeros_like(x, device=x.device)
+
+        # 2. 移除危险的内部状态修改
+        # 下面的代码块是导致错误的根源，必须删除。
+        # if hasattr(self.pretrained_model, 'embeddings') and hasattr(self.pretrained_model.embeddings, 'token_type_ids'):
+        #     self.pretrained_model.embeddings.token_type_ids = None
+        # ==================== 修复结束 ====================
 
         if no_grad:
             with torch.no_grad():
-                x = x.long()  # Ensure the input tensor is of type long.
-                outputs = self.pretrained_model(x, attention_mask=attention_mask)
-                # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+                # 3. 在模型调用时传入 token_type_ids
+                outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
                 cls_embedding = outputs.last_hidden_state[:, 0, :]
         else:
-            x = x.long()
-            outputs = self.pretrained_model(x, attention_mask=attention_mask)
+            # 3. 在模型调用时传入 token_type_ids
+            outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
 
         cls_embedding = self.embed_proj_head(cls_embedding)
         cls_embedding = self.norm(cls_embedding)
         
         return cls_embedding
+
+# class HFLanguageRepresentationNetwork(nn.Module):
+#     def __init__(self,
+#                 model_path: str = 'google-bert/bert-base-uncased',
+#                 embedding_size: int = 768,
+#                 group_size: int = 8,
+#                 final_norm_option_in_encoder: str = "layernorm",
+#                 tokenizer=None):
+#         """
+#         Arguments:
+#             - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
+#             - embedding_size (int): The dimension of the output embeddings. Default is 768.
+#             - group_size (int): The group size for SimNorm when using normalization.
+#             - final_norm_option_in_encoder (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "layernorm".
+#             - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
+#         """
+#         super().__init__()
+#         from transformers import AutoModel, AutoTokenizer
+
+#         # [FIX] Load tokenizer for ALL ranks, not just non-zero ranks
+#         if tokenizer is not None:
+#             self.tokenizer = tokenizer
+#         else:
+#             # Load tokenizer with same distributed logic as model
+#             if get_rank() == 0:
+#                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+#             if get_world_size() > 1:
+#                 torch.distributed.barrier()
+#             if get_rank() != 0:
+#                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+#         # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
+#         if get_rank() == 0:
+#             self.pretrained_model = AutoModel.from_pretrained(model_path)
+
+#         if get_world_size() > 1:
+#             # Wait for rank 0 to finish loading the model.
+#             torch.distributed.barrier()
+#         if get_rank() != 0:
+#             self.pretrained_model = AutoModel.from_pretrained(model_path)
+
+#         self.embedding_size = embedding_size
+#         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
+
+#         # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+#         if final_norm_option_in_encoder.lower() == "simnorm":
+#             self.norm = SimNorm(simnorm_dim=group_size)
+#         elif final_norm_option_in_encoder.lower() == "layernorm":
+#             self.norm = nn.LayerNorm(embedding_size)
+#         else:
+#             raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
+#                                       f"Choose 'simnorm' or 'layernorm'.")
+
+#     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+#         """
+#         Overview:
+#             Computes language representation from input token IDs.
+#         Arguments:
+#             - x (:obj:`torch.Tensor`): Input token sequence of shape (B, seq_len).
+#             - no_grad (:obj:`bool`): If True, run the transformer model in `torch.no_grad()` context.
+#         Returns:
+#             - (:obj:`torch.Tensor`): The final language embedding of shape (B, embedding_size).
+#         """
+
+#         # Construct the attention mask to exclude padding tokens.
+#         attention_mask = x != self.tokenizer.pad_token_id
+
+#         # [FIX] Clear buffered token_type_ids to prevent shape mismatch errors
+#         # BERT models cache token_type_ids for efficiency, but this causes issues
+#         # when batch sizes or sequence lengths vary across different forward passes.
+#         # We delete the buffer entirely and let BERT recreate it with the correct shape.
+#         if hasattr(self.pretrained_model, 'embeddings') and hasattr(self.pretrained_model.embeddings, 'token_type_ids'):
+#             # Check if token_type_ids exists and has wrong shape
+#             if self.pretrained_model.embeddings.token_type_ids is not None:
+#                 expected_seq_len = x.shape[1]
+#                 current_seq_len = self.pretrained_model.embeddings.token_type_ids.shape[1]
+#                 # Only delete if the cached buffer has wrong shape
+#                 if current_seq_len != expected_seq_len:
+#                     # Delete the registered buffer and let BERT recreate it
+#                     delattr(self.pretrained_model.embeddings, 'token_type_ids')
+#                     # Re-register with correct shape
+#                     self.pretrained_model.embeddings.register_buffer(
+#                         "token_type_ids",
+#                         torch.zeros((1, expected_seq_len), dtype=torch.long, device=x.device),
+#                         persistent=False
+#                     )
+
+#         if no_grad:
+#             with torch.no_grad():
+#                 x = x.long()  # Ensure the input tensor is of type long.
+#                 outputs = self.pretrained_model(x, attention_mask=attention_mask)
+#                 # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+#                 cls_embedding = outputs.last_hidden_state[:, 0, :]
+#         else:
+#             x = x.long()
+#             outputs = self.pretrained_model(x, attention_mask=attention_mask)
+#             cls_embedding = outputs.last_hidden_state[:, 0, :]
+
+#         cls_embedding = self.embed_proj_head(cls_embedding)
+#         cls_embedding = self.norm(cls_embedding)
+        
+#         return cls_embedding
 
 
 class RepresentationNetworkUniZero(nn.Module):

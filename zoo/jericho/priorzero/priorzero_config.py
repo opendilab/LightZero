@@ -210,7 +210,9 @@ def get_priorzero_config(
             # Analysis flags
             analysis_sim_norm=False,
             analysis_dormant_ratio_weight_rank=False,
-
+            # use_priority=False,
+            use_priority=True,
+            
             # Position encoding
             rotary_emb=False,  # Whether to use RoPE
             rope_theta=10000,
@@ -515,7 +517,7 @@ def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0,
 
     main_config.policy.num_simulations = 2
     main_config.policy.batch_size = 2
-    main_config.policy.game_segment_length = 50
+    main_config.policy.game_segment_length = 20
     main_config.policy.num_segments = 2
     main_config.policy.replay_buffer_size = 1000
 
@@ -525,11 +527,13 @@ def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0,
         main_config.env.collector_env_num,
         main_config.env.evaluator_env_num
     )
-    main_config.policy.model.world_model_cfg.num_heads = 4
-    main_config.policy.model.world_model_cfg.context_length = 3
-    main_config.policy.model.world_model_cfg.num_unroll_steps = 5
-    main_config.policy.model.world_model_cfg.max_blocks = 5
-    main_config.policy.model.world_model_cfg.max_blocks = 10
+    main_config.policy.model.world_model_cfg.num_heads = 2
+    # [FIX] Set infer_context_length to match reduced num_unroll_steps
+    main_config.policy.model.world_model_cfg.infer_context_length = 2  # Reduced from 4
+    main_config.policy.model.world_model_cfg.context_length = 4  # 2 * infer_context_length
+    main_config.policy.model.world_model_cfg.num_unroll_steps = 3
+    main_config.policy.model.world_model_cfg.max_blocks = 3
+    main_config.policy.model.world_model_cfg.max_tokens = 6  # 2 * max_blocks
 
     main_config.policy.llm_policy_cfg.prompt_max_len = 1024
     main_config.policy.llm_policy_cfg.generate_max_len = 128

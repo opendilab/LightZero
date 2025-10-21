@@ -705,14 +705,16 @@ class WorldModel(nn.Module):
                     f"Returning dummy outputs with correct shapes."
                 )
                 # Return outputs with shape [batch, 1, ...] to allow squeeze(1) to work
+                # Important: logits_value and logits_rewards need support_size dimension
                 batch_size = obs_embeddings.shape[0]
+                support_size = self.config.support_size
                 return WorldModelOutput(
                     torch.zeros(batch_size, 1, self.config.embed_dim, device=self.device),
                     torch.zeros(batch_size, 1, self.num_observations_tokens, device=self.device),
-                    torch.zeros(batch_size, 1, device=self.device),
-                    None,
-                    torch.zeros(batch_size, 1, self.config.action_space_size, device=self.device),
-                    torch.zeros(batch_size, 1, device=self.device),
+                    torch.zeros(batch_size, 1, support_size, device=self.device),  # logits_rewards
+                    None,  # logits_ends
+                    torch.zeros(batch_size, 1, self.config.action_space_size, device=self.device),  # logits_policy
+                    torch.zeros(batch_size, 1, support_size, device=self.device),  # logits_value
                 )
 
             if not self.config.rotary_emb:
@@ -1650,11 +1652,19 @@ class WorldModel(nn.Module):
         if self.analysis_dormant_ratio_weight_rank:
             # --- Dormant Ratio Calculation ---
             # Calculate the dormant ratio of the encoder to monitor neuron activity.
-            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W)
+            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W) for images or (B, T, E) for text
             # Reshape observations to create a single large batch for the encoder.
-            # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
-            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
-            
+
+            # [FIX] Handle both image and text observations
+            if len(shape) == 5:  # Image: (B, T, C, H, W)
+                # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
+                inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+            elif len(shape) == 3:  # Text: (B, T, E)
+                # E.g., (2, 11, 512) -> (22, 512)
+                inputs = batch['observations'].contiguous().view(-1, shape[-1])
+            else:  # Fall back to original behavior for 2D or 4D
+                inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+
             dormant_ratio_encoder_dict = calculate_dormant_ratio(
                 self.tokenizer.encoder, inputs.detach(), dormant_threshold=self.dormant_threshold
             )
@@ -1732,7 +1742,10 @@ class WorldModel(nn.Module):
                     step_counter=global_step
                 )
 
-        if self.config.use_priority:
+        # [FIX] Add default value for use_priority if not present in config
+        use_priority = getattr(self.config, 'use_priority', False)
+
+        if use_priority:
             # ==================== START MODIFICATION 5 ====================
             # Calculate value_priority, similar to MuZero.
             with torch.no_grad():
