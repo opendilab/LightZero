@@ -157,7 +157,13 @@ async def train_priorzero(
     # 4. Create Environments
     # ==================================================================
     logger.info("Creating environments...")
+    logger.info(f"[DEBUG] Config values: collector_env_num={cfg.env.collector_env_num}, "
+                f"evaluator_env_num={cfg.env.evaluator_env_num}, "
+                f"n_evaluator_episode={cfg.env.n_evaluator_episode}")
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
+    logger.info(f"[DEBUG] get_vec_env_setting returned: "
+                f"collector envs={len(collector_env_cfg)}, "
+                f"evaluator envs={len(evaluator_env_cfg)}")
     collector_env = create_env_manager(
         cfg.env.manager,
         [partial(env_fn, cfg=c) for c in collector_env_cfg]
@@ -172,6 +178,8 @@ async def train_priorzero(
     evaluator_env.seed(seed, dynamic_seed=False)
     set_pkg_seed(seed, use_cuda=True)
     logger.info(f"✓ Environments created and seeded (seed={seed})")
+    logger.info(f"[DEBUG] Actual env counts: collector={collector_env.env_num}, "
+                f"evaluator={evaluator_env.env_num}")
 
     # ==================================================================
     # 5. Create Policy, Buffer, and Components
@@ -227,6 +235,7 @@ async def train_priorzero(
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         vllm_engine=vllm_engine,
+        policy_config=cfg.policy,
     )
     logger.info("✓ Evaluator created")
 
@@ -297,11 +306,13 @@ async def train_priorzero(
             # Evaluation (align with train_unizero_segment.py line 158-162)
             # ==================================================================
             if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter == 0 r evaluator.should_eval(learner.train_iter):
+            
                 logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
 
                 # Define async eval function
                 async def eval_fn():
-                    return await evaluator.eval(
+                    return evaluator.eval(
                         save_ckpt_fn=learner.save_checkpoint if enable_save else None,
                         train_iter=learner.train_iter,
                         envstep=collector.envstep

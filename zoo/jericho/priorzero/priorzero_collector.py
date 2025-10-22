@@ -53,13 +53,21 @@ def extract_raw_obs_text(obs_dict: Dict[str, Any]) -> str:
     Returns:
         text_obs: Text observation string
     """
-    # Try to get 'raw_obs' field first (Jericho-style)
+    # [PRIORZERO-FIX] Try to get 'raw_obs_text' field first (Jericho env adds this)
+    if 'raw_obs_text' in obs_dict:
+        return str(obs_dict['raw_obs_text'])
+
+    # Try to get 'raw_obs' field (alternative naming)
     if 'raw_obs' in obs_dict:
         return str(obs_dict['raw_obs'])
 
     # Try to get 'text' field
     if 'text' in obs_dict:
         return str(obs_dict['text'])
+
+    # Try to get 'observation_str' field (Jericho env provides this in save_replay mode)
+    if 'observation_str' in obs_dict:
+        return str(obs_dict['observation_str'])
 
     # Try to get 'observation' and check if it's text
     if 'observation' in obs_dict:
@@ -574,13 +582,17 @@ class PriorZeroCollector(OriginalCollector):
                         )
 
                     # Append transition to game segment
+                    # [PRIORZERO-FIX] Extract and pass raw_obs_text to GameSegment
+                    raw_obs_text_for_segment = extract_raw_obs_text(obs_new)
+
                     game_segments[env_id].append(
                         actions[env_id],
                         to_ndarray(obs_new['observation']),
                         reward,
                         self.action_mask_dict[env_id],
                         self.to_play_dict[env_id],
-                        timestep=to_ndarray(obs_new.get('timestep', -1))
+                        timestep=to_ndarray(obs_new.get('timestep', -1)),
+                        raw_obs_text=raw_obs_text_for_segment
                     )
 
                     # ===========================================================

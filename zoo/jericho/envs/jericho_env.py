@@ -134,6 +134,9 @@ class JerichoEnv(BaseEnv):
             - (:obj:`Dict[str, Any]`): A dictionary containing the observation, attention mask (if applicable),
               and action mask. For unizero, an additional "to_play" key is provided.
         """
+        # [PRIORZERO-NEW] Store raw observation text before processing
+        raw_obs_text = obs  # Save original text BEFORE any modification
+
         if self._action_list is None:
             self._action_list = self._env.get_valid_actions()
 
@@ -183,14 +186,16 @@ class JerichoEnv(BaseEnv):
                     'action_mask': action_mask,
                     'to_play': -1,
                     'timestep': self._timestep,
-                    'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                    'valid_actions': available_actions,  # [PRIORZERO] Add valid actions list
+                    'raw_obs_text': raw_obs_text  # [PRIORZERO-NEW] Add raw text
                 }
 
             else:
                 return {
                     'observation': full_obs,
                     'action_mask': action_mask,
-                    'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                    'valid_actions': available_actions,  # [PRIORZERO] Add valid actions list
+                    'raw_obs_text': raw_obs_text  # [PRIORZERO-NEW] Add raw text
                 }
         else:
             if self.for_unizero:
@@ -202,7 +207,8 @@ class JerichoEnv(BaseEnv):
                         'action_mask': action_mask,
                         'to_play': -1,
                         'timestep': self._timestep,
-                        'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                        'valid_actions': available_actions,  # [PRIORZERO] Add valid actions list
+                        'raw_obs_text': raw_obs_text  # [PRIORZERO-NEW] Add raw text
                     }
                 else:
                     return {
@@ -211,14 +217,16 @@ class JerichoEnv(BaseEnv):
                         'action_mask': action_mask,
                         'to_play': -1,
                         'timestep': self._timestep,
-                        'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                        'valid_actions': available_actions,  # [PRIORZERO] Add valid actions list
+                        'raw_obs_text': raw_obs_text  # [PRIORZERO-NEW] Add raw text
                     }
             else:
                 return {
                     'observation': full_obs,
                     'obs_attn_mask': obs_attn_mask,
                     'action_mask': action_mask,
-                    'valid_actions': available_actions  # [PRIORZERO] Add valid actions list
+                    'valid_actions': available_actions,  # [PRIORZERO] Add valid actions list
+                    'raw_obs_text': raw_obs_text  # [PRIORZERO-NEW] Add raw text
                 }
 
     def reset(self, return_str: bool = False) -> Dict[str, Any]:
@@ -233,6 +241,7 @@ class JerichoEnv(BaseEnv):
             - (:obj:`Dict[str, Any]`): The processed observation from the environment reset.
         """
         initial_observation, info = self._env.reset()
+
         self.finished = False
         self._init_flag = True
         self._action_list = None

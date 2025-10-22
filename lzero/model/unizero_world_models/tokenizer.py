@@ -149,7 +149,7 @@ class Tokenizer(nn.Module):
         # [DEBUG] Log shape before encoder
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"[TOKENIZER_DEBUG] Before encoder: original_shape={original_shape}, x.shape={x.shape}, encoder_type={type(encoder_module).__name__}")
+        # logger.info(f"[TOKENIZER_DEBUG] Before encoder: original_shape={original_shape}, x.shape={x.shape}, encoder_type={type(encoder_module).__name__}")
 
         # Step 3: Pass the processed tensor through the encoder.
         obs_embeddings = encoder_module(x)

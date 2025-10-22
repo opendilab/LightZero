@@ -113,7 +113,7 @@ def get_priorzero_config(
         max_steps=max_steps,
 
         # Observation and action space
-        observation_shape=768,  # BGE embedding dimension
+        observation_shape=512,  # BGE embedding dimension
         action_space_size=action_space_size,
 
         # [FIX] Jericho environment expects these at top level
@@ -154,7 +154,7 @@ def get_priorzero_config(
         continuous_action_space=False,
 
         # Observation and action
-        observation_shape=768,
+        observation_shape=512,
         action_space_size=action_space_size,
 
         # [FIX] Encoder settings must be at top level for UniZeroModel.__init__
@@ -171,9 +171,10 @@ def get_priorzero_config(
             action_space_size=action_space_size,
 
             # Transformer settings
-            num_layers=4,  # Reduced for faster training
+            # num_layers=4,  # Reduced for faster training
+            num_layers=2,  # Reduced for faster training # TODO
             num_heads=8,
-            embed_dim=768,
+            embed_dim=512,
 
             # Context and unroll
             # Note: Each timestep contains 2 tokens: observation and action
@@ -237,7 +238,8 @@ def get_priorzero_config(
             n_shared_experts=1,
             num_experts_per_tok=1,
             num_experts_of_moe_in_transformer=8,
-            game_segment_length=200,
+            # game_segment_length=200,
+            game_segment_length=50,
         ),
 
         # Distributional RL
@@ -274,6 +276,12 @@ def get_priorzero_config(
         llm_loss_weight=0.5,   # Weight of SFT loss in total loss
         rft_loss_weight=0.3,   # Weight of RFT loss in total loss
 
+        # [PRIORZERO-OOM-FIX] Gradient accumulation for memory efficiency
+        # Process LLM training in smaller micro-batches to avoid OOM
+        llm_micro_batch_size=4,  # Small batch size per forward pass (reduce if still OOM)
+        llm_gradient_accumulation_steps=8,  # Accumulate gradients over 8 steps (effective batch = 4*8=32)
+        # Note: Effective batch size = llm_micro_batch_size * llm_gradient_accumulation_steps
+
         # Generation
         prompt_max_len=2048,
         generate_max_len=256,  # Max tokens for LLM output
@@ -285,6 +293,7 @@ def get_priorzero_config(
         # Training strategy
         sft_target='mcts_policy',  # 'mcts_policy' or 'oracle_policy'
         enable_rft=enable_rft,     # Whether to enable RFT with env rewards
+        # enable_rft=False,     # Whether to enable RFT with env rewards # TODO
 
         # vLLM settings
         vllm_tensor_parallel_size=1,
@@ -296,6 +305,10 @@ def get_priorzero_config(
     # ==============================================================================
     policy_config = dict(
         type='priorzero',
+
+        # Environment settings (must match env config)
+        collector_env_num=env_config['collector_env_num'],
+        evaluator_env_num=env_config['evaluator_env_num'],
 
         # Model config (world model)
         model=world_model_config,
@@ -370,7 +383,8 @@ def get_priorzero_config(
         replay_ratio=0.25,
 
         # Replay buffer
-        replay_buffer_size=int(1e4),
+        # replay_buffer_size=int(1e4),
+        replay_buffer_size=int(1e5),
         use_priority=True,  # Prioritized experience replay
         priority_prob_alpha=0.6,
         priority_prob_beta=0.4,
@@ -380,8 +394,8 @@ def get_priorzero_config(
 
         # Game segments
         # game_segment_length=200,
-        game_segment_length=20,
-        num_segments=4,  # Must equal collector_env_num
+        game_segment_length=50,
+        num_segments=env_config['collector_env_num'],  # Must equal collector_env_num
 
         # Misc
         ignore_done=False,
@@ -541,7 +555,8 @@ def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0,
     # Policy-level configurations
     # ==============================================================================
     main_config.policy.num_simulations = 5
-    main_config.policy.batch_size = 20
+    # main_config.policy.batch_size = 20
+    main_config.policy.batch_size = 2
     main_config.policy.game_segment_length = 20  # Can be larger than num_unroll_steps
     main_config.policy.num_segments = 2  # Must equal collector_env_num
     main_config.policy.replay_buffer_size = 1000
@@ -578,6 +593,9 @@ def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0,
     main_config.policy.llm_policy_cfg.prompt_max_len = 1024
     main_config.policy.llm_policy_cfg.generate_max_len = 128
     main_config.policy.llm_policy_cfg.history_length = 3
+    # [PRIORZERO-OOM-FIX] Reduce micro-batch size for quick test to avoid OOM
+    main_config.policy.llm_policy_cfg.llm_micro_batch_size = 2
+    main_config.policy.llm_policy_cfg.llm_gradient_accumulation_steps = 4
 
     main_config.exp_name = f"{main_config.exp_name}_debug"
 

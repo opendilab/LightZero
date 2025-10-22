@@ -97,6 +97,11 @@ class GameSegment(OriginalGameSegment):
         raw_obs_text = kwargs.pop('raw_obs_text', None)
         llm_prior_text = kwargs.pop('llm_prior_text', None)
 
+        # [DEBUG] Log first few appends to see what's being passed
+        if len(self.raw_obs_segment) < 3:
+            print(f"[SEGMENT_DEBUG] append() called: kwargs keys = {list(kwargs.keys())}")
+            print(f"[SEGMENT_DEBUG] raw_obs_text = {raw_obs_text[:50] if raw_obs_text else 'None'}...")
+
         # Call parent append with remaining kwargs
         super().append(action, obs, reward, action_mask, to_play, **kwargs)
 
@@ -133,6 +138,12 @@ class GameSegment(OriginalGameSegment):
             *args: Additional positional arguments (for compatibility)
             **kwargs: Additional keyword arguments (improved_policy, etc.)
         """
+        # [FIX] Handle NaN values
+        import numpy as np
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            # Use 0.0 as default for NaN values
+            value = 0.0
+
         # Call parent method to store standard statistics
         super().store_search_stats(root_visit_dist, value, *args, **kwargs)
 

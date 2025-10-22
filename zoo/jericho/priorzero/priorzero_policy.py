@@ -547,14 +547,25 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # Convert mask_batch to boolean, then truncate to align with observations/rewards
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data. Shape: (B, T)
 
-        # [CRITICAL] Truncate mask_padding to align with observations and rewards
-        # This is REQUIRED because:
-        # - observations are truncated to [:, :-1] → shape (B, T-1)
-        # - rewards are already (B, T-1) from MCTS
-        # - mask_padding MUST match to indicate valid data positions
-        # batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # Shape: (B, T-1)
+        # [DEBUG] Log shapes before truncation
+        logger.info(f"[SHAPE_DEBUG] Before truncation: obs={batch_for_gpt['observations'].shape}, "
+                   f"mask_padding={batch_for_gpt['mask_padding'].shape}, "
+                   f"actions={batch_for_gpt['actions'].shape}")
 
+        # [CRITICAL] Truncate observations to align with rewards/actions
+        # - observations from buffer include next_obs → shape (B, T+1, obs_dim)
+        # - mask_padding is already (B, T) from buffer - DO NOT truncate again!
+        # - After target processing: rewards[:, :-1] → (B, T-1)
+        # - So only observations need truncation
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # Shape: (B, T-1, obs_dim)
+
+        # [FIX] Check if mask_padding needs truncation based on actual shape
+        if batch_for_gpt['mask_padding'].shape[1] > batch_for_gpt['observations'].shape[1]:
+            logger.warning(f"[SHAPE_FIX] Truncating mask_padding from {batch_for_gpt['mask_padding'].shape} to match obs")
+            batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+
+        logger.info(f"[SHAPE_DEBUG] After truncation: obs={batch_for_gpt['observations'].shape}, "
+                   f"mask_padding={batch_for_gpt['mask_padding'].shape}")
 
         # [FIX] Add missing 'ends' field (following unizero.py line 676)
         # 'ends' marks terminal states in the trajectory (0 = not terminal)
@@ -587,11 +598,22 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         num_sft_samples = 0
         num_rft_samples = 0
         
-        # TODO: 
-        # game_segments = None
-
         # [FIX] Only perform LLM training if game_segments available
-        if game_segments is not None:
+        # [DEBUG] Always log game_segments status
+        logger = logging.getLogger(__name__)
+        logger.info(f"[LLM Training] game_segments type: {type(game_segments)}, "
+                    f"is None: {game_segments is None}, "
+                    f"len: {len(game_segments) if game_segments is not None else 'N/A'}")
+
+        # [DEBUG] Check first segment's data
+        if game_segments is not None and len(game_segments) > 0:
+            seg0 = game_segments[0]
+            logger.info(f"[LLM Training] First segment stats: "
+                       f"mcts_policies={len(seg0.mcts_policy_segment) if hasattr(seg0, 'mcts_policy_segment') else 0}, "
+                       f"raw_obs={len([x for x in (seg0.raw_obs_segment if hasattr(seg0, 'raw_obs_segment') else []) if x is not None])}/{len(seg0.raw_obs_segment) if hasattr(seg0, 'raw_obs_segment') else 0}, "
+                       f"actions={len(seg0.action_segment) if hasattr(seg0, 'action_segment') else 0}")
+
+        if game_segments is not None and len(game_segments) > 0:
             # Collect training data from game segments
             sft_prompts = []
             sft_targets = []
@@ -599,8 +621,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             rft_rewards = []
 
             # [DEBUG] Log segment information
-            if self._cfg.get('debug_segment_processing', False):
-                logging.info(f"[LLM Training] Processing {len(game_segments)} game segments")
+            logger.info(f"[LLM Training] Processing {len(game_segments)} game segments")
 
             for seg_idx, segment in enumerate(game_segments):
                 # [FIX] Use action_segment length, not obs_segment
@@ -716,122 +737,180 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     if self.llm_policy_cfg.enable_rft and i < len(segment.reward_segment):
                         env_reward = float(segment.reward_segment[i])
 
+                        # TODO
                         # Only use transitions with non-zero reward for RFT
-                        if abs(env_reward) > 1e-6:
+                        if abs(env_reward) > 1e-9:
                             rft_prompts.append(prompt)
                             rft_rewards.append(env_reward)
                             num_rft_samples += 1
 
         # ============================================================
-        # Train LLM with SFT
+        # Train LLM with SFT (with gradient accumulation for memory efficiency)
         # ============================================================
+        # num_sft_samples=0 # TODO
         if num_sft_samples > 0:
+            # [PRIORZERO-OOM-FIX] Use micro-batching with gradient accumulation
+            micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
+            num_micro_batches = (num_sft_samples + micro_batch_size - 1) // micro_batch_size
+            accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
+
             # Prepare full texts (prompt + target + eos)
             full_texts = [
                 p + t + self.llm_tokenizer.eos_token
                 for p, t in zip(sft_prompts, sft_targets)
             ]
 
-            # Tokenize
-            inputs = self.llm_tokenizer(
-                full_texts,
-                padding=True,
-                truncation=True,
-                max_length=self.llm_policy_cfg.prompt_max_len,
-                return_tensors="pt"
-            ).to(self._cfg.device)
+            # Process in micro-batches
+            accumulated_sft_loss = 0.0
+            for micro_batch_idx in range(num_micro_batches):
+                start_idx = micro_batch_idx * micro_batch_size
+                end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_sft_samples)
 
-            # Create labels (mask prompt tokens to only compute loss on target)
-            labels = inputs.input_ids.clone()
-            labels[labels == self.llm_tokenizer.pad_token_id] = -100
+                # Get micro-batch
+                micro_batch_texts = full_texts[start_idx:end_idx]
+                micro_batch_prompts = sft_prompts[start_idx:end_idx]
 
-            # Mask prompt tokens
-            for i in range(len(sft_prompts)):
-                prompt_tokens = self.llm_tokenizer.encode(sft_prompts[i], add_special_tokens=False)
-                prompt_len = len(prompt_tokens)
-                labels[i, :prompt_len] = -100
+                # Tokenize micro-batch
+                inputs = self.llm_tokenizer(
+                    micro_batch_texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.llm_policy_cfg.prompt_max_len,
+                    return_tensors="pt"
+                ).to(self._cfg.device)
 
-            # Forward pass
-            llm_outputs = self.llm_policy_model(
-                input_ids=inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                labels=labels
-            )
-            llm_sft_loss = llm_outputs.loss
+                # Create labels (mask prompt tokens to only compute loss on target)
+                labels = inputs.input_ids.clone()
+                labels[labels == self.llm_tokenizer.pad_token_id] = -100
+
+                # Mask prompt tokens
+                for i, prompt in enumerate(micro_batch_prompts):
+                    prompt_tokens = self.llm_tokenizer.encode(prompt, add_special_tokens=False)
+                    prompt_len = len(prompt_tokens)
+                    labels[i, :prompt_len] = -100
+
+                # Forward pass
+                llm_outputs = self.llm_policy_model(
+                    input_ids=inputs.input_ids,
+                    attention_mask=inputs.attention_mask,
+                    labels=labels
+                )
+
+                # Scale loss by number of accumulation steps (for correct gradient magnitude)
+                micro_batch_loss = llm_outputs.loss / accumulation_steps
+                accumulated_sft_loss += micro_batch_loss.item()
+
+                # Backward pass (accumulate gradients)
+                micro_batch_loss.backward()
+
+                # Free memory
+                del inputs, labels, llm_outputs
+                torch.cuda.empty_cache()
+
+            # Average loss for logging
+            llm_sft_loss = torch.tensor(accumulated_sft_loss, device=self._cfg.device)
 
         # ============================================================
-        # Train LLM with RFT (Policy Gradient)
+        # Train LLM with RFT (Policy Gradient with gradient accumulation)
         # ============================================================
         if num_rft_samples > 0 and self.llm_policy_cfg.enable_rft:
-            # Tokenize prompts
-            inputs = self.llm_tokenizer(
-                rft_prompts,
-                padding=True,
-                truncation=True,
-                max_length=self.llm_policy_cfg.prompt_max_len,
-                return_tensors="pt"
-            ).to(self._cfg.device)
+            # [PRIORZERO-OOM-FIX] Use micro-batching with gradient accumulation
+            micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
+            num_micro_batches = (num_rft_samples + micro_batch_size - 1) // micro_batch_size
+            accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
 
-            # Forward pass to get logits
-            with torch.no_grad():
+            # Process in micro-batches
+            accumulated_rft_loss = 0.0
+            for micro_batch_idx in range(num_micro_batches):
+                start_idx = micro_batch_idx * micro_batch_size
+                end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_rft_samples)
+
+                # Get micro-batch
+                micro_batch_prompts = rft_prompts[start_idx:end_idx]
+                micro_batch_rewards = rft_rewards[start_idx:end_idx]
+
+                # Tokenize prompts
+                inputs = self.llm_tokenizer(
+                    micro_batch_prompts,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.llm_policy_cfg.prompt_max_len,
+                    return_tensors="pt"
+                ).to(self._cfg.device)
+
+                # [FIX] Forward pass WITH gradient tracking (remove no_grad)
                 outputs = self.llm_policy_model(
                     input_ids=inputs.input_ids,
                     attention_mask=inputs.attention_mask
                 )
 
-            # Compute policy gradient loss (REINFORCE)
-            # Loss = -reward * log_prob(action)
-            logits = outputs.logits
-            log_probs = F.log_softmax(logits, dim=-1)
+                # Compute policy gradient loss (REINFORCE)
+                # Loss = -reward * log_prob(action)
+                logits = outputs.logits
+                log_probs = F.log_softmax(logits, dim=-1)
 
-            # Get log probability of actual tokens
-            shifted_log_probs = log_probs[:, :-1, :].contiguous()
-            shifted_labels = inputs.input_ids[:, 1:].contiguous()
+                # Get log probability of actual tokens
+                shifted_log_probs = log_probs[:, :-1, :].contiguous()
+                shifted_labels = inputs.input_ids[:, 1:].contiguous()
 
-            # Gather log probs of actual tokens
-            token_log_probs = shifted_log_probs.gather(
-                dim=-1,
-                index=shifted_labels.unsqueeze(-1)
-            ).squeeze(-1)
+                # Gather log probs of actual tokens
+                token_log_probs = shifted_log_probs.gather(
+                    dim=-1,
+                    index=shifted_labels.unsqueeze(-1)
+                ).squeeze(-1)
 
-            # Mask padding tokens
-            mask = (shifted_labels != self.llm_tokenizer.pad_token_id).float()
-            token_log_probs = token_log_probs * mask
+                # Mask padding tokens
+                mask = (shifted_labels != self.llm_tokenizer.pad_token_id).float()
+                token_log_probs = token_log_probs * mask
 
-            # Sum log probs per sequence
-            sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
+                # Sum log probs per sequence
+                sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
 
-            # Compute REINFORCE loss
-            rewards_tensor = torch.tensor(
-                rft_rewards,
-                device=self._cfg.device,
-                dtype=torch.float32
-            )
+                # Compute REINFORCE loss for micro-batch
+                rewards_tensor = torch.tensor(
+                    micro_batch_rewards,
+                    device=self._cfg.device,
+                    dtype=torch.float32
+                )
 
-            # Normalize rewards (important for stable training)
-            rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
+                # Normalize rewards within micro-batch (important for stable training)
+                if len(micro_batch_rewards) > 1:
+                    rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
 
-            llm_rft_loss = -(rewards_tensor * sequence_log_probs).mean()
+                micro_batch_rft_loss = -(rewards_tensor * sequence_log_probs).mean() / accumulation_steps
+                accumulated_rft_loss += micro_batch_rft_loss.item()
+
+                # Backward pass (accumulate gradients)
+                micro_batch_rft_loss.backward()
+
+                # Free memory
+                del inputs, outputs, logits, log_probs, rewards_tensor
+                torch.cuda.empty_cache()
+
+            # Average loss for logging
+            llm_rft_loss = torch.tensor(accumulated_rft_loss, device=self._cfg.device)
 
         # ==============================================================================
         # Part 3: Joint Optimization
         # ==============================================================================
 
-        # Combine losses
+        # [PRIORZERO-OOM-FIX] Note: LLM gradients already accumulated via micro-batching above
+        # Only need to compute world model gradients here
+
+        # Combine losses (for logging only - LLM loss already backpropagated)
         llm_loss = (
             self.llm_policy_cfg.llm_loss_weight * llm_sft_loss +
             self.llm_policy_cfg.rft_loss_weight * llm_rft_loss
         )
-        total_loss = wm_total_loss + llm_loss
+        total_loss = wm_total_loss + llm_loss  # For logging
 
-        # Zero gradients
+        # Zero world model gradients only (LLM gradients already accumulated)
         self._optimizer_world_model.zero_grad()
-        self._optimizer_llm.zero_grad()
 
-        # Backward pass
-        total_loss.backward()
+        # Backward pass for world model only
+        wm_total_loss.backward()
 
-        # Gradient clipping
+        # Gradient clipping for both models
         wm_grad_norm = torch.nn.utils.clip_grad_norm_(
             self._learn_model.world_model.parameters(),
             self._cfg.grad_clip_value
@@ -841,9 +920,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             self._cfg.grad_clip_value
         )
 
-        # Optimizer step
+        # Optimizer step for both models
         self._optimizer_world_model.step()
-        self._optimizer_llm.step()
+        self._optimizer_llm.step()  # Apply accumulated LLM gradients
+
+        # Zero LLM gradients after step (ready for next iteration)
+        self._optimizer_llm.zero_grad()
 
         # Learning rate scheduler step (optional)
         if self._lr_scheduler_llm is not None:

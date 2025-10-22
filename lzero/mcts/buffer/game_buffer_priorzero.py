@@ -122,38 +122,37 @@ class PriorZeroGameBuffer(UniZeroGameBuffer):
         train_data = [current_batch, target_batch, game_segments]
         return train_data
 
-    def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+    def _sample_orig_data(self, batch_size: int) -> Tuple[Any]:
         """
         [PRIORZERO-MODIFIED]
-        Override to save game_segment_list for later use.
+        Override to cache game_segments during sampling.
 
-        This is called by sample() and we use it to capture the game_segments
-        that correspond to the sampled transitions.
+        This avoids double sampling by caching the result for sample() to use.
         """
         # Call parent implementation
-        result = super()._make_batch(batch_size, reanalyze_ratio)
+        result = super()._sample_orig_data(batch_size)
 
-        # Extract game_segment_list from the sampling process
-        # NOTE: _sample_orig_data returns (game_segment_list, pos_list, index_list, weights_list, make_time_list)
-        # We need to re-sample to get game_segment_list (this is inefficient but necessary without modifying parent)
-
-        # [EFFICIENT FIX] Instead of re-sampling, we hook into the parent's _sample_orig_data call
-        # The parent already called _sample_orig_data in _make_batch, we just need to save it
-        # Unfortunately, the parent doesn't expose it, so we need to call it again OR modify parent
-
-        # [ROBUST SOLUTION] Call _sample_orig_data again with same logic
-        # This is slightly inefficient (double sampling) but guarantees correctness
-        if self.sample_type == 'transition':
-            orig_data = self._sample_orig_data(batch_size)
-        elif self.sample_type == 'episode':
-            orig_data = self._sample_orig_data_episode(batch_size)
-
-        game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
-
-        # [PRIORZERO-NEW] Save game_segment_list for sample() to return
-        # We only store references, not deep copies, so memory overhead is minimal
+        # Cache the game_segment_list (first element of result tuple)
+        game_segment_list = result[0]
         self._last_sampled_game_segments = game_segment_list
-        self._last_sampled_batch_indices = batch_index_list
+        self._last_sampled_batch_indices = result[2]  # batch_index_list
+
+        return result
+
+    def _sample_orig_data_episode(self, batch_size: int) -> Tuple[Any]:
+        """
+        [PRIORZERO-MODIFIED]
+        Override to cache game_segments during episode sampling.
+
+        This avoids double sampling by caching the result for sample() to use.
+        """
+        # Call parent implementation
+        result = super()._sample_orig_data_episode(batch_size)
+
+        # Cache the game_segment_list (first element of result tuple)
+        game_segment_list = result[0]
+        self._last_sampled_game_segments = game_segment_list
+        self._last_sampled_batch_indices = result[2]  # batch_index_list
 
         return result
 
