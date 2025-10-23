@@ -73,7 +73,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
         env=dict(
             stop_value=int(1e6),
             max_steps=max_steps,
-            observation_shape=512,
+            observation_shape=768,  # BGE-base-en-v1.5 embedding dimension
             max_action_num=action_space_size,
             tokenizer_path=model_name,
             max_seq_len=512,
@@ -93,7 +93,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                 ),
             ),
             model=dict(
-                observation_shape=512,
+                observation_shape=768,  # BGE-base-en-v1.5 embedding dimension
                 action_space_size=action_space_size,
                 encoder_option=encoder_option,
                 encoder_url=model_name,

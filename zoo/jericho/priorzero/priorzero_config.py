@@ -304,6 +304,13 @@ def get_priorzero_config(
     # 5. Policy Configuration (Combines World Model + LLM)
     # ==============================================================================
     policy_config = dict(
+        learn=dict(
+                learner=dict(
+                    hook=dict(
+                        save_ckpt_after_iter=1000000, # To save memory, set a large value. If intermediate checkpoints are needed, reduce this value.
+                    ),
+                ),
+        ),
         type='priorzero',
 
         # Environment settings (must match env config)
