@@ -35,9 +35,8 @@ tictactoe_muzero_config = dict(
             reward_head_hidden_channels=[8],
             value_head_hidden_channels=[8],
             policy_head_hidden_channels=[8],
-            support_scale=10,
-            reward_support_size=21,
-            value_support_size=21,
+            reward_support_range=(-10., 11., 1.),
+            value_support_range=(-10., 11., 1.),
             norm_type='BN', 
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.

@@ -10,9 +10,7 @@ num_simulations = 400
 update_per_collect = 200
 batch_size = 512
 max_env_step = int(1e6)
-# mcts_ctree = True
-mcts_ctree = False
-
+mcts_ctree = True
 
 # TODO: for debug
 # collector_env_num = 2

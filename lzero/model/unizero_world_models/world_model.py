@@ -9,12 +9,28 @@ from einops import rearrange
 from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
 
 from lzero.model.common import SimNorm
-from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
+from lzero.model.utils import calculate_dormant_ratio, compute_average_weight_magnitude, compute_effective_rank
 from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
+from collections import OrderedDict 
+logging.getLogger().setLevel(logging.DEBUG)
+
+from collections import OrderedDict, defaultdict
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from sklearn.manifold import TSNE
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import os
+import datetime
+import torch
+import torch.nn as nn
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -45,6 +61,7 @@ class WorldModel(nn.Module):
 
         self.transformer = Transformer(self.config)
         self.task_num = 1
+        self.env_num = self.config.env_num
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
         else:
@@ -70,7 +87,10 @@ class WorldModel(nn.Module):
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
-
+        if self.task_embed_option == "concat_task_embed":
+            self.obs_per_embdding_dim = self.config.embed_dim - self.task_embed_dim
+        else:
+            self.obs_per_embdding_dim = self.config.embed_dim
         self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
@@ -84,16 +104,13 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
-        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm')
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(
-            self.all_but_last_latent_state_pattern,
-            self.config.embed_dim,
-            self._get_final_norm(self.final_norm_option_in_obs_head)  # 使用指定的归一化方法
-        )
+        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
+                                                    self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
+                                                   )
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
             self.bound_type = self.config.bound_type
@@ -102,7 +119,6 @@ class WorldModel(nn.Module):
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
-        # 对于 head 部分，查找所有以 "head_" 开头的子模块
         self.head_dict = {}
         for name, module in self.named_children():
             if name.startswith("head_"):
@@ -111,11 +127,32 @@ class WorldModel(nn.Module):
             self.head_dict = nn.ModuleDict(self.head_dict)
 
         # Apply weight initialization, the order is important
-        self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+
+        # Build the set of modules to skip during re-initialization.
+        # This is compatible with cases where self.tokenizer.encoder does not have 'pretrained_model',
+        # or self.tokenizer does not have 'decoder_network'.
+        # NOTE: This step is crucial — without skipping, pretrained modules (e.g., encoder/decoder) would be unintentionally re-initialized
+        skip_modules = set()
+        if hasattr(self.tokenizer.encoder, 'pretrained_model'):
+            skip_modules.update(self.tokenizer.encoder.pretrained_model.modules())
+        if hasattr(self.tokenizer, 'decoder_network') and self.tokenizer.decoder_network is not None:
+            skip_modules.update(self.tokenizer.decoder_network.modules())
+
+        def custom_init(module):
+            # If the current module is part of the skip list, return without reinitializing
+            if module in skip_modules:
+                return
+            # Otherwise, apply the specified initialization method
+            init_weights(module, norm_type=self.config.norm_type)
+
+        # Recursively apply `custom_init` to all submodules of the model
+        self.apply(custom_init)
+
         self._initialize_last_layer()
 
-        # Cache structures
-        self._initialize_cache_structures()
+        # # Cache structures
+        # self._initialize_cache_structures()
 
         # Projection input dimension
         self._initialize_projection_input_dim()
@@ -129,18 +166,25 @@ class WorldModel(nn.Module):
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
+        # 先设置为game_segment_length，以保持self.shared_pool_init_infer都是有效的kv
+         # TODO: 非常重要，应该改为和segment_length一样
+        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
         # If needed, recurrent_infer should store the results of the one MCTS search.
         self.num_simulations = getattr(self.config, 'num_simulations', 50)
-        self.shared_pool_size = int(self.num_simulations*self.env_num)
-        self.shared_pool_recur_infer = [None] * self.shared_pool_size
+
+
+        self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
+        self.shared_pool_recur_infer = [None] * self.shared_pool_size_recur
         self.shared_pool_index = 0
 
+        # Cache structures
+        self._initialize_cache_structures()
+        
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
-        # self.shared_pool_size_init = int(2*self.env_num)
-        self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -151,10 +195,141 @@ class WorldModel(nn.Module):
 
         self.reanalyze_phase = False
 
+    def _initialize_cache_structures(self) -> None:
+        """Initialize cache structures for past keys and values."""
+        from collections import defaultdict
+
+        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
+        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
+
+        self.past_kv_cache_recurrent_infer = {}
+        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
+        # 辅助数据结构，用于反向查找：pool_index -> key
+        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
+
+        self.keys_values_wm_list = []
+        self.keys_values_wm_size_list = []
+        
+    def _analyze_latent_representation(
+            self, 
+            latent_states: torch.Tensor, 
+            timesteps: torch.Tensor, 
+            game_states: torch.Tensor, 
+            predicted_values: torch.Tensor,
+            predicted_rewards: torch.Tensor,
+            step_counter: int
+        ):
+            """
+            分析并记录 latent states 的统计信息和t-SNE可视化。
+            【新功能】：在t-SNE图上显示对应的游戏图像，并标注预测的Value和Reward。
+            【已修改】：如果保存路径已存在同名文件，则在文件名后附加时间戳。
+            
+            Args:
+                latent_states (torch.Tensor): Encoder的输出, shape (B*L, 1, E)
+                timesteps (torch.Tensor): 对应的时间步, shape (B, L)
+                game_states (torch.Tensor): 原始的游戏观测, shape (B, L, C, H, W)
+                predicted_values (torch.Tensor): 预测的标量Value, shape (B*L,)
+                predicted_rewards (torch.Tensor): 预测的标量Reward, shape (B*L,)
+                step_counter (int): 全局训练步数
+            """
+            # ... (统计分析部分保持不变) ...
+            # (确保 latent_states 和 game_states 的形状为 (N, ...))
+            if latent_states.dim() > 2:
+                latent_states = latent_states.reshape(-1, latent_states.shape[-1])
+            num_c, num_h, num_w = game_states.shape[-3:]
+            game_states = game_states.reshape(-1, num_c, num_h, num_w)
+
+            with torch.no_grad():
+                l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
+                mean = latent_states.mean()
+                std = latent_states.std()
+                print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
+
+            # 带图像和V/R值的 t-SNE 可视化
+            if step_counter >= 0:
+            # if step_counter > 0 and step_counter % 200 == 0:
+
+                print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
+
+                # 将数据转换到CPU
+                latents_np = latent_states.detach().cpu().numpy()
+                images_np = game_states.detach().cpu().numpy()
+                values_np = predicted_values.detach().cpu().numpy()
+                rewards_np = predicted_rewards.detach().cpu().numpy()
+
+                tsne = TSNE(n_components=2, perplexity=30, n_iter=300, random_state=42)
+                tsne_results = tsne.fit_transform(latents_np)
+
+                # --- 绘制带图像和标注的散点图 ---
+
+                # 减少图像数量以保持清晰
+                num_points_to_plot = min(len(latents_np), 70) # 减少到70个点
+                indices = np.random.choice(len(latents_np), num_points_to_plot, replace=False)
+
+                fig, ax = plt.subplots(figsize=(20, 18)) # 增大画布尺寸
+
+                # 先画出所有点的散点图作为背景
+                ax.scatter(tsne_results[:, 0], tsne_results[:, 1], c=values_np, cmap='viridis', alpha=0.3, s=10)
+
+                for i in indices:
+                    x, y = tsne_results[i]
+                    img = images_np[i].transpose(1, 2, 0)
+                    img = np.clip(img, 0, 1)
+
+                    # 放置图像
+                    im = OffsetImage(img, zoom=0.7) # 稍微放大图像
+                    ab = AnnotationBbox(im, (x, y), frameon=True, pad=0.0, bboxprops=dict(edgecolor='none'))
+                    ax.add_artist(ab)
+
+                    # 在图像下方添加文字标注
+                    text_label = f"V:{values_np[i]:.1f} R:{rewards_np[i]:.1f}"
+                    ax.text(x, y - 1.0, text_label, ha='center', va='top', fontsize=8, color='red',
+                            bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.5))
+
+                ax.update_datalim(tsne_results)
+                ax.autoscale()
+
+                ax.set_title(f't-SNE of Latent States (Value as Color) at Step {step_counter}', fontsize=16)
+                ax.set_xlabel('t-SNE dimension 1', fontsize=12)
+                ax.set_ylabel('t-SNE dimension 2', fontsize=12)
+
+                # 添加colorbar来解释背景点的颜色
+                norm = plt.Normalize(values_np.min(), values_np.max())
+                sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
+                sm.set_array([])
+                fig.colorbar(sm, ax=ax, label='Predicted Value')
+
+                # --- 修改部分：检查文件是否存在，如果存在则添加时间戳 ---
+                # 1. 构建基础路径
+                # base_save_path = (
+                #     f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
+                #     f'tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
+                # )
+                base_save_path = (
+                    f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
+                    f'tsne_with_vr_{self.config.optim_type}_step_{step_counter}.png'
+                )
+
+                # 2. 检查文件是否存在，并确定最终保存路径
+                if os.path.exists(base_save_path):
+                    # 如果文件已存在，则生成时间戳并附加到文件名
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    path_root, path_ext = os.path.splitext(base_save_path)
+                    save_path = f"{path_root}_{timestamp}{path_ext}"
+                    print(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
+                else:
+                    # 如果文件不存在，则使用原始路径
+                    save_path = base_save_path
+
+                # 3. 保存图像
+                plt.savefig(save_path)
+                plt.close(fig) # 明确关闭图形对象
+                print(f"t-SNE plot with V/R annotations saved to {save_path}")
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
-        根据指定的归一化选项返回相应的归一化模块。
+        Return the corresponding normalization module based on the specified normalization option.
         """
         if norm_option == 'LayerNorm':
             return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
@@ -268,7 +443,7 @@ class WorldModel(nn.Module):
             dst_layer._v_cache._size = src_layer._v_cache._size
         
         index = self.shared_pool_index
-        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
+        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size_recur
         
         return index
 
@@ -307,7 +482,9 @@ class WorldModel(nn.Module):
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
         modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
+            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
             nn.GELU(approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim)
         ]
@@ -354,14 +531,7 @@ class WorldModel(nn.Module):
                             nn.init.zeros_(layer.bias)
                         break
 
-    def _initialize_cache_structures(self) -> None:
-        """Initialize cache structures for past keys and values."""
-        from collections import defaultdict
-        self.past_kv_cache_recurrent_infer = defaultdict(dict)
-        self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
 
-        self.keys_values_wm_list = []
-        self.keys_values_wm_size_list = []
 
     def _initialize_projection_input_dim(self) -> None:
         """Initialize the projection input dimension based on the number of observation tokens."""
@@ -1231,14 +1401,54 @@ class WorldModel(nn.Module):
                         self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length - 3
                         self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length - 3
 
+            # ORIGNAL
+            # if is_init_infer:
+            #     # Store the latest key-value cache for initial inference
+            #     cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+            #     self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+            # else:
+            #     # Store the latest key-value cache for recurrent inference
+            #     cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+            #     self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+
+
             if is_init_infer:
-                # Store the latest key-value cache for initial inference
+                # TODO
+                # ==================== 主动淘汰修复逻辑 ====================
+                # 1. 获取即将被覆写的物理索引
+                index_to_write = self.shared_pool_index_init_envs[i]
+                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
+                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                if old_key_to_evict is not None:
+                    # 确保要删除的键确实存在，避免意外错误
+                    if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
+                        del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
+
+                # 现在可以安全地写入新数据了
                 cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+
+                # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
                 self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+                self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
             else:
-                # Store the latest key-value cache for recurrent inference
+                # ==================== RECURRENT INFER FIX ====================
+                # 1. 获取即将被覆写的物理索引
+                index_to_write = self.shared_pool_index
+                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
+                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                if old_key_to_evict is not None:
+                    if old_key_to_evict in self.past_kv_cache_recurrent_infer:
+                        del self.past_kv_cache_recurrent_infer[old_key_to_evict]
+
+                # 4. 现在可以安全地写入新数据了
                 cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+
+                # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
                 self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
+
 
 
     #@profile
@@ -1275,8 +1485,20 @@ class WorldModel(nn.Module):
                     matched_value = None
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
+                # if matched_value is None:
+                #     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+
+                # ==================== TODO ====================
+                # 步骤 2: 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
                 if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    # 2.1 安全地从字典中获取索引，它可能返回 None
+                    recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    # 2.2 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
+                    if recur_cache_index is not None:
+                        matched_value = self.shared_pool_recur_infer[recur_cache_index]
+
+                    if recur_cache_index is None:
+                        print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
@@ -1325,33 +1547,42 @@ class WorldModel(nn.Module):
         # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
 
-        # ========= logging for analysis =========
+        # ======================== Logging for Analysis ========================
+        # This block calculates various metrics for model analysis if the corresponding config flag is enabled.
+        # These metrics help in debugging and understanding model behavior during training.
         if self.analysis_dormant_ratio_weight_rank:
-            # Calculate dormant ratio of the encoder
-            shape = batch['observations'].shape  # (..., C, H, W)
-            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
-            dormant_ratio_encoder_dict = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
-                                                      dormant_threshold=self.dormant_threshold)
-            # print(dormant_ratio_encoder_dict)
+            # --- Dormant Ratio Calculation ---
+            # Calculate the dormant ratio of the encoder to monitor neuron activity.
+            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W)
+            # Reshape observations to create a single large batch for the encoder.
+            # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
+            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+            
+            dormant_ratio_encoder_dict = calculate_dormant_ratio(
+                self.tokenizer.encoder, inputs.detach(), dormant_threshold=self.dormant_threshold
+            )
             dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
 
-            # 计算全局平均权重绝对值
+            # --- Average Weight Magnitude Calculation ---
+            # Calculate the global average absolute weight magnitude for different model components.
+            # This is a useful metric for monitoring training stability.
             avg_weight_mag_encoder = compute_average_weight_magnitude(self.tokenizer.encoder)
-            # print("Average Weight Magnitude of encoder:", avg_weight_mag_encoder)
-            # 计算全局平均权重绝对值
             avg_weight_mag_transformer = compute_average_weight_magnitude(self.transformer)
-            # print("Average Weight Magnitude of transformer:", avg_weight_mag_transformer)
-            # print(f"self.head_dict:{self.head_dict}")
             avg_weight_mag_head = compute_average_weight_magnitude(self.head_dict)
-            # print("Average Weight Magnitude of head:", avg_weight_mag_head)
 
-            # 计算 effective rank，对于 representation 层，注意：
-            # representation 层在 model.named_modules() 的名称为 "representation"
-            # print(f"self.tokenizer.encoder:{self.tokenizer.encoder}")
-            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder, inputs, representation_layer_name="last_linear")
-            # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
-            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder, inputs, representation_layer_name="sim_norm")
-            # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
+            # --- Effective Rank Calculation ---
+            # Calculate the effective rank of representations from specific layers in the encoder.
+            # This metric helps analyze the dimensionality and information content of the learned features.
+            # The 'representation_layer_name' argument specifies the target layer within the model's named modules.
+            
+            # Effective rank for the final linear layer of the encoder.
+            e_rank_last_linear = compute_effective_rank(
+                self.tokenizer.encoder, inputs, representation_layer_name="last_linear"
+            )
+            # Effective rank for the SimNorm layer of the encoder.
+            e_rank_sim_norm = compute_effective_rank(
+                self.tokenizer.encoder, inputs, representation_layer_name="sim_norm"
+            )
 
 
             self.past_kv_cache_recurrent_infer.clear()
@@ -1367,6 +1598,65 @@ class WorldModel(nn.Module):
 
         # Calculate the L2 norm of the latent state roots
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
+
+        # Action tokens
+        if self.continuous_action_space:
+            act_tokens = batch['actions']
+        else:
+            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+
+        # Forward pass to obtain predictions for observations, rewards, and policies
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
+        
+        # [新增] 从模型输出中获取中间张量 x，并分离计算图
+        intermediate_tensor_x = outputs.output_sequence.detach()
+
+        global_step = kwargs.get('global_step', 0)
+        # if global_step >= 0 and global_step % 10000 == 0: # 20k
+        if global_step > 0 and global_step % 100000000000 == 0: # 20k # TODO
+
+            with torch.no_grad():
+                # 将logits转换为标量值
+                # 注意：outputs的形状是(B, L, E)，我们需要reshape
+                batch_size, seq_len = batch['actions'].shape[0], batch['actions'].shape[1]
+
+                pred_val_logits = outputs.logits_value.view(batch_size * seq_len, -1)
+                pred_rew_logits = outputs.logits_rewards.view(batch_size * seq_len, -1)
+
+                scalar_values = inverse_scalar_transform_handle(pred_val_logits).squeeze(-1)
+                scalar_rewards = inverse_scalar_transform_handle(pred_rew_logits).squeeze(-1)
+
+                self._analyze_latent_representation(
+                    latent_states=obs_embeddings,
+                    timesteps=batch['timestep'],
+                    game_states=batch['observations'],
+                    predicted_values=scalar_values, # 传入预测的Value
+                    predicted_rewards=scalar_rewards, # 传入预测的Reward
+                    step_counter=global_step
+                )
+
+        if self.config.use_priority:
+            # ==================== START MODIFICATION 5 ====================
+            # Calculate value_priority, similar to MuZero.
+            with torch.no_grad():
+                # 1. Get the predicted value logits for the first step of the sequence (t=0).
+                # The shape is (B, support_size).
+                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+
+                # 2. Convert the categorical prediction to a scalar value.
+                # The shape becomes (B, 1).
+                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+
+                # 3. Get the target scalar value for the first step from the batch.
+                # The shape is (B, num_unroll_steps), so we take the first column.
+                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+
+                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
+                # This is the priority. We use reduction='none' to get per-sample priorities.
+                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
+            # ===================== END MODIFICATION 5 =====================
+        else:
+            value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
@@ -1404,14 +1694,29 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'text':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=torch.float32)
+            decode_loss_mode = self.config.decode_loss_mode 
 
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
+            # Reconstruction loss for predicting the next latent (via backbone)
+            # input -> encoder -> backbone(unizero) -> decoder -> latent_recon_loss
+            if decode_loss_mode == "after_backbone":
+                next_latent_state = outputs.logits_observations[:, :-1, :]
+                next_target_ids = batch['observations'][:, 1:, :] 
+                
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=next_latent_state,
+                    target_ids=next_target_ids,
+                ).loss
 
-            # # Calculate reconstruction loss
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
-            #                                                        reconstructed_images)
-            latent_recon_loss = self.latent_recon_loss
+            #Reconstruction loss for predicting the current latent (without using the backbone)
+            # input -> encoder -> decoder -> latent_recon_loss
+            elif decode_loss_mode == "before_backbone":
+                latent_recon_loss = self.tokenizer.decode_to_reconstruction_outputs(
+                    embeddings=obs_embeddings,
+                    target_ids=batch['observations'],
+                ).loss
+
+            else:
+                latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
@@ -1433,19 +1738,10 @@ class WorldModel(nn.Module):
             latent_recon_loss = self.latent_recon_loss
             perceptual_loss = self.perceptual_loss
 
-        # Action tokens
-        if self.continuous_action_space:
-            act_tokens = batch['actions']
-        else:
-            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
-
-        # Forward pass to obtain predictions for observations, rewards, and policies
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
-
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the world model
-            dormant_ratio_world_model = cal_dormant_ratio(self, {
+            dormant_ratio_world_model = calculate_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           dormant_threshold=self.dormant_threshold)
             dormant_ratio_transformer = dormant_ratio_world_model['transformer']
@@ -1543,9 +1839,6 @@ class WorldModel(nn.Module):
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
 
-        if batch['mask_padding'].sum() == 0:
-            assert False, "mask_padding is all zeros"
-
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
         middle_step_losses = {}
@@ -1584,7 +1877,6 @@ class WorldModel(nn.Module):
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
-
         # Calculate overall discounted loss
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ batch['mask_padding'][:,1:].sum()
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
@@ -1592,6 +1884,10 @@ class WorldModel(nn.Module):
         discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
+
+        # 为了让外部的训练循环能够获取encoder的输出，我们将其加入返回字典
+        # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
+        detached_obs_embeddings = obs_embeddings.detach()
 
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
@@ -1621,6 +1917,10 @@ class WorldModel(nn.Module):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
+                
+                value_priority=value_priority,
+                intermediate_tensor_x=intermediate_tensor_x,
+                obs_embeddings=detached_obs_embeddings, # <-- 新增
             )
         else:
             return LossWithIntermediateLosses(
@@ -1647,8 +1947,13 @@ class WorldModel(nn.Module):
                 e_rank_last_linear = e_rank_last_linear,
                 e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
+
+                value_priority=value_priority,
+                intermediate_tensor_x=intermediate_tensor_x,
+                obs_embeddings=detached_obs_embeddings, # <-- 新增
             )
 
+    
     # TODO: test correctness
     def _calculate_policy_loss_cont_simple(self, outputs, batch: dict):
         """
