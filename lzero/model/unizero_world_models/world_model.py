@@ -1905,6 +1905,15 @@ class WorldModel(nn.Module):
             # assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
             # for name, param in self.tokenizer.encoder.named_parameters():
             #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
+        elif self.predict_latent_loss_type == 'cos_sim':
+            # --- 修复后的代码 (推荐方案) ---
+            # 使用余弦相似度损失 (Cosine Similarity Loss)
+            # F.cosine_similarity 计算的是相似度，范围是 [-1, 1]。我们希望最大化它，
+            # 所以最小化 1 - similarity。
+            # reduction='none' 使得我们可以像原来一样处理mask
+            print("predict_latent_loss_type == 'cos_sim'")
+            cosine_sim_loss = 1 - F.cosine_similarity(logits_observations, labels_observations, dim=-1)
+            loss_obs = cosine_sim_loss
 
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)

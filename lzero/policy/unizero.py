@@ -885,7 +885,12 @@ class UniZeroPolicy(MuZeroPolicy):
             weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
             # 重新构建总损失 (不使用 losses.loss_total)
             # 确保这里的权重与 LossWithIntermediateLosses 类中的计算方式一致
-            self.obs_loss_weight = 10
+            # self.obs_loss_weight = 10
+            # self.value_loss_weight = 0.5
+            # self.reward_loss_weight = 1.
+            # self.policy_loss_weight = 1.
+            # self.ends_loss_weight = 0.
+            self.obs_loss_weight = 2 # TODO ===============
             self.value_loss_weight = 0.5
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.

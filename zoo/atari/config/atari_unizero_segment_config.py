@@ -12,6 +12,13 @@ def main(env_id, seed):
     num_segments = 8
 
     game_segment_length = 20
+    num_unroll_steps = 10
+    infer_context_length = 4
+
+    game_segment_length = 50 # TODO
+    num_unroll_steps = 16
+    infer_context_length = 8
+
     # game_segment_length = 400 # TODO
 
     evaluator_env_num = 3
@@ -24,10 +31,9 @@ def main(env_id, seed):
     # batch_size = 64
     batch_size = 256
     num_layers = 2
-    replay_ratio = 0.1
-    # replay_ratio = 0.25
-    num_unroll_steps = 10
-    infer_context_length = 4
+    # replay_ratio = 0.1
+    replay_ratio = 0.25
+
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/50
@@ -74,6 +80,7 @@ def main(env_id, seed):
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
+                # reward_support_range=(-50., 51., 1.),
                 value_support_range=(-300., 301., 1.),
                 norm_type=norm_type,
                 num_res_blocks=1,
@@ -81,13 +88,14 @@ def main(env_id, seed):
                 # num_res_blocks=2,
                 # num_channels=128,
                 world_model_cfg=dict(
-                    use_new_cache_manager=True,
-                    # use_new_cache_manager=False,
+                    # use_new_cache_manager=True,
+                    use_new_cache_manager=False,
 
                     norm_type=norm_type,
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
+                    # predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
+                    predict_latent_loss_type='cos_sim', # TODO: only for latent state layer_norm
                     
                     # final_norm_option_in_obs_head='SimNorm',
                     # final_norm_option_in_encoder='SimNorm',
@@ -229,7 +237,9 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1023/{env_id[:-14]}/{env_id[:-14]}_uz_kvcachemanager_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1023/{env_id[:-14]}/{env_id[:-14]}_uz_cossimloss_nokvcachemanager_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_refactor1023/{env_id[:-14]}/{env_id[:-14]}_uz_kvcachemanager_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_st_refactor1023/{env_id[:-14]}/{env_id[:-14]}_uz_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
@@ -258,7 +268,7 @@ if __name__ == "__main__":
     # args.env = 'AlienNoFrameskip-v4'
 
     # 下面是atari8以外的2个代表环境
-    # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
     # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # 下面是已经表现不错的
@@ -272,7 +282,7 @@ if __name__ == "__main__":
     tmux new -s uz-st-refactor-boxing
 
     conda activate /mnt/nfs/zhangjinouwen/puyuan/conda_envs/lz
-    export CUDA_VISIBLE_DEVICES=3
+    export CUDA_VISIBLE_DEVICES=5
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/202510/20251023_uz_st_pong_kvcachemanager-yes.log
     """
