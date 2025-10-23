@@ -298,6 +298,10 @@ class UniZeroPolicy(MuZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
+        # ==================== [新增] 范数监控频率 ====================
+        # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+        monitor_norm_freq=5000,
+        # ============================================================
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -442,6 +446,49 @@ class UniZeroPolicy(MuZeroPolicy):
             norm_metrics[f'norm/{group_name}/_total_norm'] = total_group_norm
 
         return norm_metrics
+
+    def _monitor_gradient_norms(self) -> Dict[str, float]:
+        """
+        Overview:
+            计算并返回模型关键组件的梯度范数。
+            此函数应在梯度计算完成后、参数更新之前调用。
+        Returns:
+            - grad_metrics (:obj:`Dict[str, float]`): 包含所有梯度范数指标的字典，用于日志记录。
+        """
+        world_model = self._learn_model.world_model
+        grad_metrics = {}
+
+        # 定义要监控的模块组
+        module_groups = {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'head_value': world_model.head_value,
+            'head_reward': world_model.head_rewards,
+            'head_policy': world_model.head_policy,
+        }
+
+        for group_name, group_module in module_groups.items():
+            total_grad_norm_sq = 0.0
+            num_params_with_grad = 0
+
+            for param_name, param in group_module.named_parameters():
+                if param.requires_grad and param.grad is not None:
+                    # 计算单层参数的梯度L2范数
+                    grad_norm = param.grad.data.norm(2).item()
+                    # 替换点号，使其在TensorBoard中正确显示为层级
+                    log_name = f'grad/{group_name}/{param_name.replace(".", "/")}'
+                    grad_metrics[log_name] = grad_norm
+                    total_grad_norm_sq += grad_norm ** 2
+                    num_params_with_grad += 1
+
+            # 计算整个模块的总梯度范数
+            if num_params_with_grad > 0:
+                total_group_grad_norm = np.sqrt(total_grad_norm_sq)
+                grad_metrics[f'grad/{group_name}/_total_norm'] = total_group_grad_norm
+            else:
+                grad_metrics[f'grad/{group_name}/_total_norm'] = 0.0
+
+        return grad_metrics
     # =================================================================
 
     def _init_learn(self) -> None:
@@ -693,7 +740,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # ==================== [修改] 集成范数监控逻辑 ====================
         norm_log_dict = {}
         # 检查是否达到监控频率
-        if self._cfg.monitor_norm_freq > 0 and train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0):
+        if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
             with torch.no_grad():
                 # 1. 监控模型参数范数
                 param_norm_metrics = self._monitor_model_norms()
@@ -711,6 +758,41 @@ class UniZeroPolicy(MuZeroPolicy):
                     norm_log_dict['norm/x_token/std'] = token_norms.std().item()
                     norm_log_dict['norm/x_token/max'] = token_norms.max().item()
                     norm_log_dict['norm/x_token/min'] = token_norms.min().item()
+
+                # 3. 监控 logits 的详细统计 (Value, Policy, Reward)
+                logits_value = losses.intermediate_losses.get('logits_value')
+                if logits_value is not None:
+                    norm_log_dict['logits/value/mean'] = logits_value.mean().item()
+                    norm_log_dict['logits/value/std'] = logits_value.std().item()
+                    norm_log_dict['logits/value/max'] = logits_value.max().item()
+                    norm_log_dict['logits/value/min'] = logits_value.min().item()
+                    norm_log_dict['logits/value/abs_max'] = logits_value.abs().max().item()
+
+                logits_policy = losses.intermediate_losses.get('logits_policy')
+                if logits_policy is not None:
+                    norm_log_dict['logits/policy/mean'] = logits_policy.mean().item()
+                    norm_log_dict['logits/policy/std'] = logits_policy.std().item()
+                    norm_log_dict['logits/policy/max'] = logits_policy.max().item()
+                    norm_log_dict['logits/policy/min'] = logits_policy.min().item()
+                    norm_log_dict['logits/policy/abs_max'] = logits_policy.abs().max().item()
+
+                logits_reward = losses.intermediate_losses.get('logits_reward')
+                if logits_reward is not None:
+                    norm_log_dict['logits/reward/mean'] = logits_reward.mean().item()
+                    norm_log_dict['logits/reward/std'] = logits_reward.std().item()
+                    norm_log_dict['logits/reward/max'] = logits_reward.max().item()
+                    norm_log_dict['logits/reward/min'] = logits_reward.min().item()
+                    norm_log_dict['logits/reward/abs_max'] = logits_reward.abs().max().item()
+
+                # 4. 监控 obs_embeddings (Encoder输出) 的统计
+                obs_embeddings = losses.intermediate_losses.get('obs_embeddings')
+                if obs_embeddings is not None:
+                    # 计算每个 embedding 的 L2 范数
+                    emb_norms = obs_embeddings.norm(p=2, dim=-1)
+                    norm_log_dict['embeddings/obs/norm_mean'] = emb_norms.mean().item()
+                    norm_log_dict['embeddings/obs/norm_std'] = emb_norms.std().item()
+                    norm_log_dict['embeddings/obs/norm_max'] = emb_norms.max().item()
+                    norm_log_dict['embeddings/obs/norm_min'] = emb_norms.min().item()
         # =================================================================
 
         # ==================== START MODIFICATION 2 ====================
@@ -856,13 +938,20 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:
+            # ==================== [新增] 监控梯度范数 ====================
+            # 在梯度裁剪之前监控梯度范数，用于诊断梯度爆炸/消失问题
+            if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
+                grad_norm_metrics = self._monitor_gradient_norms()
+                norm_log_dict.update(grad_norm_metrics)
+            # =================================================================
+
             # Analyze gradient norms if simulation normalization analysis is enabled
             if self._cfg.analysis_sim_norm:
                 # Clear previous analysis results to prevent memory overflow
                 del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
                 self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
                 self._target_model.encoder_hook.clear_data()
-            
+
             # Clip gradients to prevent exploding gradients
             total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
                 self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
@@ -966,7 +1055,12 @@ class UniZeroPolicy(MuZeroPolicy):
 
         "current_policy_label_eps":current_policy_label_eps,
         }
-        
+
+        # ==================== [修改] 将范数监控结果合并到日志中 ====================
+        if norm_log_dict:
+            return_log_dict.update(norm_log_dict)
+        # =======================================================================
+
         # ==================== START: 添加新日志项 ====================
         if self.use_adaptive_entropy_weight:
             return_log_dict['adaptive_alpha'] = current_alpha.item()
@@ -1444,103 +1538,141 @@ class UniZeroPolicy(MuZeroPolicy):
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        return [
+        base_vars = [
+            # ==================== Analysis Metrics ====================
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_transformer',
             'analysis/dormant_ratio_head',
-
             'analysis/avg_weight_mag_encoder',
             'analysis/avg_weight_mag_transformer',
             'analysis/avg_weight_mag_head',
             'analysis/e_rank_last_linear',
             'analysis/e_rank_sim_norm',
-
             'analysis/latent_state_l2_norms',
+            'analysis/latent_action_l2_norms',
             'analysis/l2_norm_before',
             'analysis/l2_norm_after',
             'analysis/grad_norm_before',
             'analysis/grad_norm_after',
 
+            # ==================== Step-wise Loss Analysis ====================
             'analysis/first_step_loss_value',
             'analysis/first_step_loss_policy',
             'analysis/first_step_loss_rewards',
             'analysis/first_step_loss_obs',
-
             'analysis/middle_step_loss_value',
             'analysis/middle_step_loss_policy',
             'analysis/middle_step_loss_rewards',
             'analysis/middle_step_loss_obs',
-
             'analysis/last_step_loss_value',
             'analysis/last_step_loss_policy',
             'analysis/last_step_loss_rewards',
             'analysis/last_step_loss_obs',
 
-            'adaptive_alpha',
-            "adaptive_target_entropy_ratio",
-            'alpha_loss',
-
+            # ==================== System Metrics ====================
             'Current_GPU',
             'Max_GPU',
             'collect_epsilon',
             'collect_mcts_temperature',
             'cur_lr_world_model',
-            'cur_lr_tokenizer',
 
+            # ==================== Core Losses ====================
             'weighted_total_loss',
             'obs_loss',
             'policy_loss',
             'orig_policy_loss',
             'policy_entropy',
             'latent_recon_loss',
+            'perceptual_loss',
             'target_policy_entropy',
             'reward_loss',
             'value_loss',
-            'consistency_loss',
             'value_priority',
             'target_reward',
             'target_value',
+            'transformed_target_reward',
+            'transformed_target_value',
+
+            # ==================== Gradient Norms ====================
             'total_grad_norm_before_clip_wm',
-            # tokenizer
-            'commitment_loss',
-            'reconstruction_loss',
-            'perceptual_loss',
 
+            # ==================== Logits Statistics ====================
+            'logits_value_mean',
+            'logits_value_max',
+            'logits_value_min',
+            'logits_policy_mean',
+            'logits_policy_max',
+            'logits_policy_min',
 
-        "logits_value_mean",
-        "logits_value_max",
-        "logits_value_min",
-        "logits_policy_mean",
-        "logits_policy_max",
-        "logits_policy_min",
+            # ==================== Temperature Parameters ====================
+            'temperature_value',
+            'temperature_reward',
+            'temperature_policy',
 
-                     "temperature_value",
-        "temperature_reward",
-        "temperature_policy",
-                "current_policy_label_eps",
-                         'adaptive_alpha',
-                         "adaptive_target_entropy_ratio",
+            # ==================== Training Configuration ====================
+            'current_policy_label_eps',
+            'adaptive_alpha',
+            'adaptive_target_entropy_ratio',
             'alpha_loss',
-            "current_encoder_clip_value",
+            'current_encoder_clip_value',
+        ]
 
-                # ==================== [新增] 添加范数和中间张量监控变量 ====================
-            # 模块总范数
+        # ==================== [新增] 范数和中间张量监控变量 ====================
+        norm_vars = [
+            # 模块总范数 (参数范数)
             'norm/encoder/_total_norm',
             'norm/transformer/_total_norm',
             'norm/head_value/_total_norm',
             'norm/head_reward/_total_norm',
             'norm/head_policy/_total_norm',
-            # 中间张量 x 的统计信息
+
+            # 模块总范数 (梯度范数)
+            'grad/encoder/_total_norm',
+            'grad/transformer/_total_norm',
+            'grad/head_value/_total_norm',
+            'grad/head_reward/_total_norm',
+            'grad/head_policy/_total_norm',
+
+            # 中间张量 x (Transformer输出) 的统计信息
             'norm/x_token/mean',
             'norm/x_token/std',
             'norm/x_token/max',
             'norm/x_token/min',
+
+            # Logits 的详细统计 (Value)
+            'logits/value/mean',
+            'logits/value/std',
+            'logits/value/max',
+            'logits/value/min',
+            'logits/value/abs_max',
+
+            # Logits 的详细统计 (Policy)
+            'logits/policy/mean',
+            'logits/policy/std',
+            'logits/policy/max',
+            'logits/policy/min',
+            'logits/policy/abs_max',
+
+            # Logits 的详细统计 (Reward)
+            'logits/reward/mean',
+            'logits/reward/std',
+            'logits/reward/max',
+            'logits/reward/min',
+            'logits/reward/abs_max',
+
+            # Embeddings 的统计信息
+            'embeddings/obs/norm_mean',
+            'embeddings/obs/norm_std',
+            'embeddings/obs/norm_max',
+            'embeddings/obs/norm_min',
         ]
         # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
         # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
         # 或者在本地打印 `norm_log_dict` 来进行详细分析。
         # wandb等工具可以更好地处理大量的动态指标。
         # ========================================================================
+
+        return base_vars + norm_vars
     
 
     def _state_dict_learn(self) -> Dict[str, Any]:

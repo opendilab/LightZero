@@ -497,6 +497,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
+        # ==================== [新增] 范数监控频率 ====================
+        # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+        monitor_norm_freq=5000,
+        # ============================================================
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -601,6 +605,112 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         # NOTE: This specifies the default multi-task model.
         return 'UniZeroMTModel', ['lzero.model.unizero_model_multitask']
+
+    # ==================== [新增] 模型范数监控函数 ====================
+    def _monitor_model_norms(self) -> Dict[str, float]:
+        """
+        Overview:
+            计算并返回模型关键组件（Encoder, Transformer, Heads）的参数矩阵范数。
+            此函数应在 torch.no_grad() 环境下调用，以提高效率。
+        Returns:
+            - norm_metrics (:obj:`Dict[str, float]`): 包含所有范数指标的字典，用于日志记录。
+        """
+        world_model = self._learn_model.world_model
+        norm_metrics = {}
+
+        # 定义要监控的模块组
+        module_groups = {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'head_value': world_model.head_values,  # Note: multi-task uses head_values (plural)
+            'head_reward': world_model.head_rewards,
+            'head_policy': world_model.head_policies,  # Note: multi-task uses head_policies (plural)
+        }
+
+        for group_name, group_module in module_groups.items():
+            # Handle ModuleList (for multi-task heads)
+            if isinstance(group_module, torch.nn.ModuleList):
+                for task_idx, task_module in enumerate(group_module):
+                    total_norm_sq = 0.0
+                    for param_name, param in task_module.named_parameters():
+                        if param.requires_grad:
+                            param_norm = param.data.norm(2).item()
+                            log_name = f'norm/{group_name}_task{task_idx}/{param_name.replace(".", "/")}'
+                            norm_metrics[log_name] = param_norm
+                            total_norm_sq += param_norm ** 2
+                    total_group_norm = np.sqrt(total_norm_sq)
+                    norm_metrics[f'norm/{group_name}_task{task_idx}/_total_norm'] = total_group_norm
+            else:
+                # Handle single module
+                total_norm_sq = 0.0
+                for param_name, param in group_module.named_parameters():
+                    if param.requires_grad:
+                        param_norm = param.data.norm(2).item()
+                        log_name = f'norm/{group_name}/{param_name.replace(".", "/")}'
+                        norm_metrics[log_name] = param_norm
+                        total_norm_sq += param_norm ** 2
+                total_group_norm = np.sqrt(total_norm_sq)
+                norm_metrics[f'norm/{group_name}/_total_norm'] = total_group_norm
+
+        return norm_metrics
+
+    def _monitor_gradient_norms(self) -> Dict[str, float]:
+        """
+        Overview:
+            计算并返回模型关键组件的梯度范数。
+            此函数应在梯度计算完成后、参数更新之前调用。
+        Returns:
+            - grad_metrics (:obj:`Dict[str, float]`): 包含所有梯度范数指标的字典，用于日志记录。
+        """
+        world_model = self._learn_model.world_model
+        grad_metrics = {}
+
+        # 定义要监控的模块组
+        module_groups = {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'head_value': world_model.head_values,
+            'head_reward': world_model.head_rewards,
+            'head_policy': world_model.head_policies,
+        }
+
+        for group_name, group_module in module_groups.items():
+            # Handle ModuleList (for multi-task heads)
+            if isinstance(group_module, torch.nn.ModuleList):
+                for task_idx, task_module in enumerate(group_module):
+                    total_grad_norm_sq = 0.0
+                    num_params_with_grad = 0
+                    for param_name, param in task_module.named_parameters():
+                        if param.requires_grad and param.grad is not None:
+                            grad_norm = param.grad.data.norm(2).item()
+                            log_name = f'grad/{group_name}_task{task_idx}/{param_name.replace(".", "/")}'
+                            grad_metrics[log_name] = grad_norm
+                            total_grad_norm_sq += grad_norm ** 2
+                            num_params_with_grad += 1
+                    if num_params_with_grad > 0:
+                        total_group_grad_norm = np.sqrt(total_grad_norm_sq)
+                        grad_metrics[f'grad/{group_name}_task{task_idx}/_total_norm'] = total_group_grad_norm
+                    else:
+                        grad_metrics[f'grad/{group_name}_task{task_idx}/_total_norm'] = 0.0
+            else:
+                # Handle single module
+                total_grad_norm_sq = 0.0
+                num_params_with_grad = 0
+                for param_name, param in group_module.named_parameters():
+                    if param.requires_grad and param.grad is not None:
+                        grad_norm = param.grad.data.norm(2).item()
+                        log_name = f'grad/{group_name}/{param_name.replace(".", "/")}'
+                        grad_metrics[log_name] = grad_norm
+                        total_grad_norm_sq += grad_norm ** 2
+                        num_params_with_grad += 1
+                if num_params_with_grad > 0:
+                    total_group_grad_norm = np.sqrt(total_grad_norm_sq)
+                    grad_metrics[f'grad/{group_name}/_total_norm'] = total_group_grad_norm
+                else:
+                    grad_metrics[f'grad/{group_name}/_total_norm'] = 0.0
+
+        return grad_metrics
+    # =================================================================
 
     def _init_learn(self) -> None:
         """
@@ -1146,6 +1256,64 @@ class UniZeroMTPolicy(UniZeroPolicy):
             e_rank_sim_norm_multi_task.append(e_rank_sim_norm)
 
 
+        # ==================== [新增] 集成范数监控逻辑 ====================
+        norm_log_dict = {}
+        # 检查是否达到监控频率
+        if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
+            with torch.no_grad():
+                # 1. 监控模型参数范数
+                param_norm_metrics = self._monitor_model_norms()
+                norm_log_dict.update(param_norm_metrics)
+
+                # 2. 监控中间张量 x (Transformer的输出)
+                intermediate_x = losses.intermediate_losses.get('intermediate_tensor_x')
+                if intermediate_x is not None:
+                    # x 的形状为 (B, T, E)
+                    # 计算每个 token 的 L2 范数
+                    token_norms = intermediate_x.norm(p=2, dim=-1)
+
+                    # 记录这些范数的统计数据
+                    norm_log_dict['norm/x_token/mean'] = token_norms.mean().item()
+                    norm_log_dict['norm/x_token/std'] = token_norms.std().item()
+                    norm_log_dict['norm/x_token/max'] = token_norms.max().item()
+                    norm_log_dict['norm/x_token/min'] = token_norms.min().item()
+
+                # 3. 监控 logits 的详细统计 (Value, Policy, Reward)
+                logits_value = losses.intermediate_losses.get('logits_value')
+                if logits_value is not None:
+                    norm_log_dict['logits/value/mean'] = logits_value.mean().item()
+                    norm_log_dict['logits/value/std'] = logits_value.std().item()
+                    norm_log_dict['logits/value/max'] = logits_value.max().item()
+                    norm_log_dict['logits/value/min'] = logits_value.min().item()
+                    norm_log_dict['logits/value/abs_max'] = logits_value.abs().max().item()
+
+                logits_policy = losses.intermediate_losses.get('logits_policy')
+                if logits_policy is not None:
+                    norm_log_dict['logits/policy/mean'] = logits_policy.mean().item()
+                    norm_log_dict['logits/policy/std'] = logits_policy.std().item()
+                    norm_log_dict['logits/policy/max'] = logits_policy.max().item()
+                    norm_log_dict['logits/policy/min'] = logits_policy.min().item()
+                    norm_log_dict['logits/policy/abs_max'] = logits_policy.abs().max().item()
+
+                logits_reward = losses.intermediate_losses.get('logits_reward')
+                if logits_reward is not None:
+                    norm_log_dict['logits/reward/mean'] = logits_reward.mean().item()
+                    norm_log_dict['logits/reward/std'] = logits_reward.std().item()
+                    norm_log_dict['logits/reward/max'] = logits_reward.max().item()
+                    norm_log_dict['logits/reward/min'] = logits_reward.min().item()
+                    norm_log_dict['logits/reward/abs_max'] = logits_reward.abs().max().item()
+
+                # 4. 监控 obs_embeddings (Encoder输出) 的统计
+                obs_embeddings = losses.intermediate_losses.get('obs_embeddings')
+                if obs_embeddings is not None:
+                    # 计算每个 embedding 的 L2 范数
+                    emb_norms = obs_embeddings.norm(p=2, dim=-1)
+                    norm_log_dict['embeddings/obs/norm_mean'] = emb_norms.mean().item()
+                    norm_log_dict['embeddings/obs/norm_std'] = emb_norms.std().item()
+                    norm_log_dict['embeddings/obs/norm_max'] = emb_norms.max().item()
+                    norm_log_dict['embeddings/obs/norm_min'] = emb_norms.min().item()
+        # =================================================================
+
         # Core learn model update step.
         self._optimizer_world_model.zero_grad()
 
@@ -1234,6 +1402,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
         #     if param.requires_grad:
         #         print(name, param.grad.norm())
+
+        # ==================== [新增] 监控梯度范数 ====================
+        # 在梯度裁剪之前监控梯度范数，用于诊断梯度爆炸/消失问题
+        if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
+            grad_norm_metrics = self._monitor_gradient_norms()
+            norm_log_dict.update(grad_norm_metrics)
+        # =================================================================
 
         if self._cfg.analysis_sim_norm:
             del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
@@ -1336,6 +1511,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # Merge the dictionaries.
             return_log_dict.update(plasticity_loss_dicts)
 
+        # ==================== [修改] 将范数监控结果合并到日志中 ====================
+        if norm_log_dict:
+            return_log_dict.update(norm_log_dict)
+        # =======================================================================
+
         # Return the final loss dictionary.
         return return_log_dict
 
@@ -1409,7 +1589,54 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'final_alpha_loss',
         ]
 
-        
+        # ==================== [新增] 范数和中间张量监控变量 ====================
+        # 这些变量对所有任务是共享的（不是per-task的）
+        norm_vars = [
+            # 模块总范数 (参数范数) - 共享模块
+            'norm/encoder/_total_norm',
+            'norm/transformer/_total_norm',
+
+            # 模块总范数 (梯度范数) - 共享模块
+            'grad/encoder/_total_norm',
+            'grad/transformer/_total_norm',
+
+            # 中间张量 x (Transformer输出) 的统计信息
+            'norm/x_token/mean',
+            'norm/x_token/std',
+            'norm/x_token/max',
+            'norm/x_token/min',
+
+            # Logits 的详细统计 (Value)
+            'logits/value/mean',
+            'logits/value/std',
+            'logits/value/max',
+            'logits/value/min',
+            'logits/value/abs_max',
+
+            # Logits 的详细统计 (Policy)
+            'logits/policy/mean',
+            'logits/policy/std',
+            'logits/policy/max',
+            'logits/policy/min',
+            'logits/policy/abs_max',
+
+            # Logits 的详细统计 (Reward)
+            'logits/reward/mean',
+            'logits/reward/std',
+            'logits/reward/max',
+            'logits/reward/min',
+            'logits/reward/abs_max',
+
+            # Embeddings 的统计信息
+            'embeddings/obs/norm_mean',
+            'embeddings/obs/norm_std',
+            'embeddings/obs/norm_max',
+            'embeddings/obs/norm_min',
+        ]
+        monitored_vars.extend(norm_vars)
+        # ========================================================================
+
+
 
         # Task-specific variables to be monitored.
         task_specific_vars = [
