@@ -385,3 +385,48 @@ class KeysValues:
             # Decrement the size pointer for both K and V caches.
             kv_cache._k_cache._size = max(0, kv_cache._k_cache._size - register_token_num)
             kv_cache._v_cache._size = max(0, kv_cache._v_cache._size - register_token_num)
+
+    def clone(self) -> "KeysValues":
+        """
+        Overview:
+            Creates a deep copy of this KeysValues object.
+
+            This method is critical for preventing cache corruption. When a cached KeysValues object
+            is retrieved and used in transformer forward passes, the transformer modifies it in-place.
+            Without cloning, this would pollute the original cache, causing incorrect predictions.
+
+        Returns:
+            - cloned_kv (:obj:`KeysValues`): A new KeysValues object with copied data.
+        """
+        if not self._keys_values:
+            # Handle empty case
+            raise ValueError("Cannot clone an empty KeysValues object")
+
+        # Get parameters from the first layer's cache
+        first_kv_cache = self._keys_values[0]
+        num_samples, num_heads, _, head_dim = first_kv_cache.shape
+        max_tokens = first_kv_cache._k_cache._max_tokens
+        embed_dim = num_heads * head_dim
+        num_layers = len(self._keys_values)
+        device = first_kv_cache._k_cache._device
+
+        # Create a new KeysValues object with the same structure
+        cloned_kv = KeysValues(
+            num_samples=num_samples,
+            num_heads=num_heads,
+            max_tokens=max_tokens,
+            embed_dim=embed_dim,
+            num_layers=num_layers,
+            device=device
+        )
+
+        # Deep copy each layer's cache data
+        for src_layer, dst_layer in zip(self._keys_values, cloned_kv._keys_values):
+            # Copy the key and value cache tensors using torch.copy_() for efficient data transfer
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            # Copy the size information
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+
+        return cloned_kv

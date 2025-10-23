@@ -199,55 +199,17 @@ class WorldModel(nn.Module):
         """Initialize cache structures for past keys and values."""
         from collections import defaultdict
 
-        # ==================== Phase 1: Parallel KV Cache Systems ====================
-        # Check if we should use the new KV cache manager
-        self.use_new_cache_manager = getattr(self.config, 'use_new_cache_manager', False)
+        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
+        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
 
-        if self.use_new_cache_manager:
-            # Use new unified KV cache manager
-            from .kv_cache_manager import KVCacheManager
-            self.kv_cache_manager = KVCacheManager(
-                config=self.config,
-                env_num=self.env_num,
-                enable_stats=True,
-                # log_frequency=1000 # 您可以在这里覆盖默认值
-                clear_recur_log_freq=1000, # MCTS循环清理日志，每1000次打印一次
-                clear_all_log_freq=100      # episode重置清理日志，每100次打印一次
-            )
-            # Keep backward compatibility references
-            self.keys_values_wm_list = self.kv_cache_manager.keys_values_wm_list
-            self.keys_values_wm_size_list = self.kv_cache_manager.keys_values_wm_size_list
+        self.past_kv_cache_recurrent_infer = {}
+        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
+        # 辅助数据结构，用于反向查找：pool_index -> key
+        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
 
-            # ==================== BUG FIX: Complete Refactoring ====================
-            # DO NOT initialize old system attributes when using new cache manager.
-            # Any code that depends on these old attributes must be refactored to use
-            # kv_cache_manager instead.
-            #
-            # Old attributes that are NO LONGER available in new system:
-            # - self.past_kv_cache_recurrent_infer
-            # - self.pool_idx_to_key_map_recur_infer
-            # - self.past_kv_cache_init_infer_envs
-            # - self.pool_idx_to_key_map_init_envs
-            #
-            # Migration guide:
-            # - For accessing init cache: use kv_cache_manager.get_init_cache(env_id, key)
-            # - For accessing recur cache: use kv_cache_manager.get_recur_cache(key)
-            # - For hierarchical lookup: use kv_cache_manager.hierarchical_get(env_id, key)
-            # ======================================================================
-
-            logging.info("✓ Using NEW KVCacheManager for cache management")
-        else:
-            # Use old cache system (original implementation)
-            self.past_kv_cache_recurrent_infer = {}
-            self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
-            self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
-            # 辅助数据结构，用于反向查找：pool_index -> key
-            self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
-
-            self.keys_values_wm_list = []
-            self.keys_values_wm_size_list = []
-            logging.info("Using OLD cache system (original implementation)")
-        # =============================================================================
+        self.keys_values_wm_list = []
+        self.keys_values_wm_size_list = []
         
     def _analyze_latent_representation(
             self, 
@@ -1057,34 +1019,19 @@ class WorldModel(nn.Module):
                         # Compute hash value using latent state for a single environment
                         cache_key = hash_state(state_single_env.view(-1).cpu().numpy())  # last_obs_embeddings[i] is torch.Tensor
 
-                        # ==================== Phase 1.6: Storage Layer Integration ====================
                         # Retrieve cached value
-                        if self.use_new_cache_manager:
-                            # NEW SYSTEM: Use KVCacheManager
-                            matched_value = self.kv_cache_manager.get_init_cache(env_id=i, cache_key=cache_key)
+                        cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+                        if cache_index is not None:
+                            matched_value = self.shared_pool_init_infer[i][cache_index]
                         else:
-                            # OLD SYSTEM: Use legacy cache dictionaries
-                            cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
-                            if cache_index is not None:
-                                matched_value = self.shared_pool_init_infer[i][cache_index]
-                            else:
-                                matched_value = None
-                        # =============================================================================
+                            matched_value = None
 
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
-                            # ==================== BUG FIX: Cache Corruption Prevention ====================
-                            # Perform a deep copy because the transformer's forward pass modifies matched_value in-place.
-                            if self.use_new_cache_manager:
-                                # NEW SYSTEM: Use KeysValues.clone() for deep copy
-                                cached_copy = matched_value.clone()
-                                self.keys_values_wm_list.append(cached_copy)
-                            else:
-                                # OLD SYSTEM: Use custom_copy_kv_cache_to_shared_wm
-                                self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
-                            # =============================================================================
+                            # NOTE: deepcopy is needed because forward modifies matched_value in place
+                            self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -1175,15 +1122,7 @@ class WorldModel(nn.Module):
         """
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, start_pos)
-
-        # ==================== BUG FIX: Clear Cache Using Correct API ====================
-        if self.use_new_cache_manager:
-            # NEW SYSTEM: Clear recurrent cache using KVCacheManager
-            self.kv_cache_manager.clear_recur_cache()
-        else:
-            # OLD SYSTEM: Clear using legacy attribute
-            self.past_kv_cache_recurrent_infer.clear()
-        # =============================================================================
+        self.past_kv_cache_recurrent_infer.clear()
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
@@ -1473,61 +1412,42 @@ class WorldModel(nn.Module):
             #     self.past_kv_cache_recurrent_infer[cache_key] = cache_index
 
 
-            # ==================== Phase 1.5: Storage Layer Integration ====================
-            if self.use_new_cache_manager:
-                # NEW SYSTEM: Use KVCacheManager for cache storage
-                if is_init_infer:
-                    # Store to per-environment init cache pool
-                    # Note: KVCacheManager automatically handles eviction logic (FIFO/LRU)
-                    self.kv_cache_manager.set_init_cache(
-                        env_id=i,
-                        cache_key=cache_key,
-                        kv_cache=self.keys_values_wm_single_env
-                    )
-                else:
-                    # Store to global recurrent cache pool
-                    self.kv_cache_manager.set_recur_cache(
-                        cache_key=cache_key,
-                        kv_cache=self.keys_values_wm_single_env
-                    )
+            if is_init_infer:
+                # TODO
+                # ==================== 主动淘汰修复逻辑 ====================
+                # 1. 获取即将被覆写的物理索引
+                index_to_write = self.shared_pool_index_init_envs[i]
+                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
+                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                if old_key_to_evict is not None:
+                    # 确保要删除的键确实存在，避免意外错误
+                    if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
+                        del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
+
+                # 现在可以安全地写入新数据了
+                cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+
+                # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
+                self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+                self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
             else:
-                # OLD SYSTEM: Use legacy cache with manual eviction
-                if is_init_infer:
-                    # ==================== 主动淘汰修复逻辑 ====================
-                    # 1. 获取即将被覆写的物理索引
-                    index_to_write = self.shared_pool_index_init_envs[i]
-                    # 2. 使用辅助列表查找该索引上存储的旧的 key
-                    old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
-                    # 3. 如果存在旧 key，就从主 cache map 中删除它
-                    if old_key_to_evict is not None:
-                        # 确保要删除的键确实存在，避免意外错误
-                        if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
-                            del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
+                # ==================== RECURRENT INFER FIX ====================
+                # 1. 获取即将被覆写的物理索引
+                index_to_write = self.shared_pool_index
+                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
+                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                if old_key_to_evict is not None:
+                    if old_key_to_evict in self.past_kv_cache_recurrent_infer:
+                        del self.past_kv_cache_recurrent_infer[old_key_to_evict]
 
-                    # 现在可以安全地写入新数据了
-                    cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+                # 4. 现在可以安全地写入新数据了
+                cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
 
-                    # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
-                    self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
-                    self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
-                else:
-                    # ==================== RECURRENT INFER FIX ====================
-                    # 1. 获取即将被覆写的物理索引
-                    index_to_write = self.shared_pool_index
-                    # 2. 使用辅助列表查找该索引上存储的旧的 key
-                    old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
-                    # 3. 如果存在旧 key，就从主 cache map 中删除它
-                    if old_key_to_evict is not None:
-                        if old_key_to_evict in self.past_kv_cache_recurrent_infer:
-                            del self.past_kv_cache_recurrent_infer[old_key_to_evict]
-
-                    # 4. 现在可以安全地写入新数据了
-                    cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
-
-                    # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
-                    self.past_kv_cache_recurrent_infer[cache_key] = cache_index
-                    self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
-            # =============================================================================
+                # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
+                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
 
 
 
@@ -1557,50 +1477,34 @@ class WorldModel(nn.Module):
                 # TODO: check if this is correct
                 matched_value = None
             else:
-                # ==================== Phase 1.6: Storage Layer Integration (Refactored) ====================
-                if self.use_new_cache_manager:
-                    # NEW SYSTEM: Use KVCacheManager's hierarchical_get for unified lookup
-                    matched_value = self.kv_cache_manager.hierarchical_get(env_id=index, cache_key=cache_key)
-
-                    # Log cache miss (统计由 KVCacheManager 自动处理)
-                    if matched_value is None:
-                        logging.debug(f"[NEW CACHE MISS] Not found for key={cache_key} in both init and recurrent cache.")
+                # Try to retrieve the cached value from past_kv_cache_init_infer_envs
+                cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
+                if cache_index is not None:
+                    matched_value = self.shared_pool_init_infer[index][cache_index]
                 else:
-                    # OLD SYSTEM: Use legacy cache dictionaries and pools
-                    # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-                    cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
-                    if cache_index is not None:
-                        matched_value = self.shared_pool_init_infer[index][cache_index]
-                    else:
-                        matched_value = None
+                    matched_value = None
 
-                    # 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
-                    if matched_value is None:
-                        # 安全地从字典中获取索引，它可能返回 None
-                        recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
-                        # 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
-                        if recur_cache_index is not None:
-                            matched_value = self.shared_pool_recur_infer[recur_cache_index]
+                # If not found, try to retrieve from past_kv_cache_recurrent_infer
+                # if matched_value is None:
+                #     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
 
-                        if recur_cache_index is None:
-                            logging.debug(f"[OLD CACHE MISS] Not found for key={cache_key} in recurrent infer. Generating new cache.")
-                # =============================================================================
+                # ==================== TODO ====================
+                # 步骤 2: 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
+                if matched_value is None:
+                    # 2.1 安全地从字典中获取索引，它可能返回 None
+                    recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    # 2.2 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
+                    if recur_cache_index is not None:
+                        matched_value = self.shared_pool_recur_infer[recur_cache_index]
+
+                    if recur_cache_index is None:
+                        print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
-                # ==================== BUG FIX: Cache Corruption Prevention ====================
-                # Perform a deep copy because the transformer's forward pass modifies matched_value in-place.
-                # Without cloning, the original cache in init_pool or recur_pool would be polluted,
-                # causing incorrect predictions in subsequent queries.
-                if self.use_new_cache_manager:
-                    # NEW SYSTEM: Use KeysValues.clone() for deep copy
-                    cached_copy = matched_value.clone()
-                    self.keys_values_wm_list.append(cached_copy)
-                else:
-                    # OLD SYSTEM: Use custom_copy_kv_cache_to_shared_wm
-                    self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
-                # =============================================================================
+                # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
+                self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset
@@ -1680,12 +1584,8 @@ class WorldModel(nn.Module):
                 self.tokenizer.encoder, inputs, representation_layer_name="sim_norm"
             )
 
-            # ==================== BUG FIX: Clear Cache Using Correct API ====================
-            if self.use_new_cache_manager:
-                self.kv_cache_manager.clear_recur_cache()
-            else:
-                self.past_kv_cache_recurrent_infer.clear()
-            # =============================================================================
+
+            self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
@@ -1847,12 +1747,7 @@ class WorldModel(nn.Module):
             dormant_ratio_transformer = dormant_ratio_world_model['transformer']
             dormant_ratio_head = dormant_ratio_world_model['head']
 
-            # ==================== BUG FIX: Clear Cache Using Correct API ====================
-            if self.use_new_cache_manager:
-                self.kv_cache_manager.clear_recur_cache()
-            else:
-                self.past_kv_cache_recurrent_infer.clear()
-            # =============================================================================
+            self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
@@ -2287,23 +2182,11 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
-        if self.use_new_cache_manager:
-            # Use new KV cache manager's clear method
-            self.kv_cache_manager.clear_all()
-            print(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
-
-            # Optionally print stats before clearing
-            if hasattr(self.kv_cache_manager, 'get_stats_summary'):
-                stats = self.kv_cache_manager.get_stats_summary()
-                if stats.get('stats_enabled'):
-                    logging.debug(f'Cache stats before clear: {stats}')
-        else:
-            # Use old cache clearing logic
-            for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
-                kv_cache_dict_env.clear()
-            self.past_kv_cache_recurrent_infer.clear()
-            self.keys_values_wm_list.clear()
-            print(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
+        for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
+            kv_cache_dict_env.clear()
+        self.past_kv_cache_recurrent_infer.clear()
+        self.keys_values_wm_list.clear()
+        print(f'Cleared {self.__class__.__name__} past_kv_cache.')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

@@ -1422,11 +1422,19 @@ class UniZeroPolicy(MuZeroPolicy):
             if current_steps is None:
                 world_model = self._collect_model.world_model
                 for eid in env_ids_to_reset:
+                    # ==================== BUG FIX: Refactored Cache Clearing ====================
                     # Clear the specific environment's initial inference cache.
-                    if eid < len(world_model.past_kv_cache_init_infer_envs):
-                        world_model.past_kv_cache_init_infer_envs[eid].clear()
-
-                    print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end.')
+                    if hasattr(world_model, 'use_new_cache_manager') and world_model.use_new_cache_manager:
+                        # NEW SYSTEM: Use KVCacheManager to clear per-environment cache
+                        if eid < world_model.env_num:
+                            world_model.kv_cache_manager.init_pools[eid].clear()
+                            print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (NEW system).')
+                    else:
+                        # OLD SYSTEM: Use legacy cache dictionary
+                        if eid < len(world_model.past_kv_cache_init_infer_envs):
+                            world_model.past_kv_cache_init_infer_envs[eid].clear()
+                            print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                    # =============================================================================
 
         # ======== TODO: 20251015 ========
         # Determine the clear interval based on the environment's sample type
@@ -1439,10 +1447,10 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
-            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-                kv_cache_dict_env.clear()
-            world_model.past_kv_cache_recurrent_infer.clear()
-            world_model.keys_values_wm_list.clear()
+            # ==================== Phase 1.5: Use unified clear_caches() method ====================
+            # This automatically handles both old and new cache systems
+            world_model.clear_caches()
+            # ======================================================================================
 
             # Free up GPU memory
             torch.cuda.empty_cache()
@@ -1495,14 +1503,25 @@ class UniZeroPolicy(MuZeroPolicy):
             if current_steps is None:
                 world_model = self._eval_model.world_model
                 for eid in env_ids_to_reset:
+                    # ==================== BUG FIX: Refactored Cache Clearing ====================
                     # Clear the specific environment's initial inference cache.
-                    if eid < len(world_model.past_kv_cache_init_infer_envs):
-                        world_model.past_kv_cache_init_infer_envs[eid].clear()
-
-                    print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end.')
+                    if hasattr(world_model, 'use_new_cache_manager') and world_model.use_new_cache_manager:
+                        # NEW SYSTEM: Use KVCacheManager to clear per-environment cache
+                        if eid < world_model.env_num:
+                            world_model.kv_cache_manager.init_pools[eid].clear()
+                            print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (NEW system).')
+                    else:
+                        # OLD SYSTEM: Use legacy cache dictionary
+                        if eid < len(world_model.past_kv_cache_init_infer_envs):
+                            world_model.past_kv_cache_init_infer_envs[eid].clear()
+                            print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                    # =============================================================================
 
                 # The recurrent cache is global.
-                world_model.past_kv_cache_recurrent_infer.clear()
+                # ==================== Phase 1.5: Use unified clear_caches() method ====================
+                # This automatically handles both old and new cache systems
+                world_model.clear_caches()
+                # ======================================================================================
 
                 if hasattr(world_model, 'keys_values_wm_list'):
                     world_model.keys_values_wm_list.clear()
@@ -1521,10 +1540,10 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
-            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-                kv_cache_dict_env.clear()
-            world_model.past_kv_cache_recurrent_infer.clear()
-            world_model.keys_values_wm_list.clear()
+            # ==================== Phase 1.5: Use unified clear_caches() method ====================
+            # This automatically handles both old and new cache systems
+            world_model.clear_caches()
+            # ======================================================================================
 
             # Free up GPU memory
             torch.cuda.empty_cache()
