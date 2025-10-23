@@ -136,6 +136,9 @@ def train_unizero(
     else:
         world_size = 1
         rank = 0
+    # TODO: for visualize
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # import sys; sys.exit(0)
 
     while True:
         # Log memory usage of the replay buffer
