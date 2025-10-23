@@ -250,7 +250,7 @@ class KVCachePool:
             # Don't reset stats on clear, user can call stats.reset() explicitly
             pass
 
-        logger.info(f"[{self.name}] Cleared all cache entries")
+        # logger.info(f"[{self.name}] Cleared all cache entries")
 
     def __len__(self) -> int:
         """Return the number of cached entries."""

@@ -210,7 +210,6 @@ class WorldModel(nn.Module):
                 config=self.config,
                 env_num=self.env_num,
                 enable_stats=True,
-                # log_frequency=1000 # 您可以在这里覆盖默认值
                 clear_recur_log_freq=1000, # MCTS循环清理日志，每1000次打印一次
                 clear_all_log_freq=100      # episode重置清理日志，每100次打印一次
             )
