@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
     # 测试的atari8中的4个base环境
     # args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
-    # args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
     # args.env = 'HeroNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     # args.env = 'AlienNoFrameskip-v4'
 
     # 下面是atari8以外的2个代表环境
-    args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
     # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # 下面是已经表现不错的
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     tmux new -s uz-st-refactor-boxing
 
     conda activate /mnt/nfs/zhangjinouwen/puyuan/conda_envs/lz
-    export CUDA_VISIBLE_DEVICES=5
+    export CUDA_VISIBLE_DEVICES=6
     cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
     python /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_segment_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/202510/20251023_uz_st_pong_kvcachemanager-yes.log
     """
