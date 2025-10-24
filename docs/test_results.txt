@@ -1,0 +1,61 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.14, pytest-8.4.2, pluggy-1.6.0 -- /opt/conda/bin/python
+cachedir: .pytest_cache
+hypothesis profile 'default' -> database=DirectoryBasedExampleDatabase(PosixPath('/mnt/nfs/zhangjinouwen/puyuan/LightZero/.hypothesis/examples'))
+rootdir: /mnt/nfs/zhangjinouwen/puyuan/LightZero
+configfile: pytest.ini
+plugins: hypothesis-6.103.0, anyio-4.11.0
+collecting ... collected 35 items
+
+tests/test_kv_cache_manager.py::TestCacheStats::test_initialization PASSED [  2%]
+tests/test_kv_cache_manager.py::TestCacheStats::test_hit_rate_calculation PASSED [  5%]
+tests/test_kv_cache_manager.py::TestCacheStats::test_hit_rate_zero_queries PASSED [  8%]
+tests/test_kv_cache_manager.py::TestCacheStats::test_reset PASSED        [ 11%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_initialization PASSED [ 14%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_invalid_pool_size PASSED [ 17%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_simple_set_and_get PASSED [ 20%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_cache_miss PASSED  [ 22%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_cache_update PASSED [ 25%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_fifo_eviction PASSED [ 28%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_lru_eviction PASSED [ 31%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_statistics_collection PASSED [ 34%]
+tests/test_kv_cache_manager.py::TestKVCachePool::test_clear PASSED       [ 37%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_initialization PASSED [ 40%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_init_cache_operations PASSED [ 42%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_invalid_env_id PASSED [ 45%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_recur_cache_operations PASSED [ 48%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_wm_cache_operations PASSED [ 51%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_clear_all PASSED [ 54%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_clear_specific_caches PASSED [ 57%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_stats_collection PASSED [ 60%]
+tests/test_kv_cache_manager.py::TestKVCacheManager::test_stats_reset PASSED [ 62%]
+tests/test_kv_cache_manager.py::TestIntegration::test_realistic_workflow PASSED [ 65%]
+tests/test_kv_cache_manager.py::TestIntegration::test_cache_overflow_behavior PASSED [ 68%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_basic_set_and_get_with_real_kv PASSED [ 71%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_cache_key_generation_consistency PASSED [ 74%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_multi_environment_isolation PASSED [ 77%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_cache_fallback_pattern PASSED [ 80%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_cache_eviction_with_real_data PASSED [ 82%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_statistics_tracking PASSED [ 85%]
+tests/test_world_model_kv_integration.py::TestKVCacheManagerWithRealKeysValues::test_clear_operations PASSED [ 88%]
+tests/test_world_model_kv_integration.py::TestCacheCopySemantics::test_reference_vs_copy PASSED [ 91%]
+tests/test_world_model_kv_integration.py::TestCacheCopySemantics::test_update_existing_entry PASSED [ 94%]
+tests/test_world_model_kv_integration.py::TestRealisticWorkflow::test_imagine_function_workflow PASSED [ 97%]
+tests/test_world_model_kv_integration.py::TestRealisticWorkflow::test_mcts_search_workflow PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../../../opt/conda/lib/python3.10/site-packages/_pytest/config/__init__.py:1474
+  /opt/conda/lib/python3.10/site-packages/_pytest/config/__init__.py:1474: PytestConfigWarning: Unknown config option: timeout
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+../../../../../opt/conda/lib/python3.10/site-packages/treevalue/tree/integration/torch.py:21
+  /opt/conda/lib/python3.10/site-packages/treevalue/tree/integration/torch.py:21: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    register_for_torch(TreeValue)
+
+../../../../../opt/conda/lib/python3.10/site-packages/treevalue/tree/integration/torch.py:22
+  /opt/conda/lib/python3.10/site-packages/treevalue/tree/integration/torch.py:22: FutureWarning: `torch.utils._pytree._register_pytree_node` is deprecated. Please use `torch.utils._pytree.register_pytree_node` instead.
+    register_for_torch(FastTreeValue)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 35 passed, 3 warnings in 3.71s ========================
