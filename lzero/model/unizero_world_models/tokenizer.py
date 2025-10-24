@@ -80,7 +80,8 @@ class Tokenizer(nn.Module):
             encoder: nn.Module,
             decoder: nn.Module,
             with_lpips: bool = False,
-            obs_type: str = 'image'
+            obs_type: str = 'image',
+            encoder_option: str = "legacy",
     ) -> None:
         """
         Overview:
@@ -95,6 +96,7 @@ class Tokenizer(nn.Module):
         self.encoder = encoder
         self.decoder_network = decoder
         self.obs_type = obs_type
+        self.encoder_option = encoder_option
         self.lpips: Optional[nn.Module] = None
         if with_lpips:
             # Lazily import LPIPS as it's an optional dependency.
@@ -143,6 +145,11 @@ class Tokenizer(nn.Module):
             # Flatten the batch and time dimensions to create a batch of vectors.
             x = x.contiguous().view(-1, original_shape[-1])  # Shape: (B*T, E)
         # Note: 2D (B, E) and 4D (B, C, H, W) inputs are processed directly without reshaping.
+
+        # [DEBUG] Log shape before encoder
+        import logging
+        logger = logging.getLogger(__name__)
+        # logger.info(f"[TOKENIZER_DEBUG] Before encoder: original_shape={original_shape}, x.shape={x.shape}, encoder_type={type(encoder_module).__name__}")
 
         # Step 3: Pass the processed tensor through the encoder.
         obs_embeddings = encoder_module(x)

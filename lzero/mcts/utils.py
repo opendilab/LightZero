@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List
 
 import numpy as np
 from graphviz import Digraph
@@ -77,10 +77,10 @@ def get_augmented_data(board_size, play_data):
             )
     return extend_data
 
-
-def prepare_observation(observation_list, model_type='conv'):
+def prepare_observation(observation_list: List[Any], model_type: str = 'conv') -> np.ndarray:
     """
-    Prepare the observations to satisfy the input format of the model.
+    Prepare the observations to satisfy the input format of the model. This function is robust against
+    inhomogeneous shapes and mixed types (np.ndarray and list) in the input list.
 
     For model_type='conv':
         [B, S, C, W, H] -> [B, S x C, W, H]
@@ -91,33 +91,201 @@ def prepare_observation(observation_list, model_type='conv'):
         where B is batch size, S is stack num, O is obs shape.
 
     Arguments:
-        - observation_list (List): list of observations.
+        - observation_list (List): A list of observations, which can be a mix of np.ndarray and lists.
         - model_type (str): type of the model. (default is 'conv')
 
     Returns:
-        - np.ndarray: Reshaped array of observations.
+        - np.ndarray: A single, reshaped NumPy array of observations.
     """
-    assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
-    observation_array = np.array(observation_list)
+    assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp' or their context variants"
+
+    if not observation_list:
+        # Handle empty list case
+        return np.array([])
+
+    # ==================== START OF ROBUST FIX ====================
+    try:
+        # First, try the fast path assuming the data is clean.
+        observation_array = np.array(observation_list)
+    except (ValueError, TypeError):
+        # If np.array() fails, it's likely due to inhomogeneous shapes or mixed types.
+        # We now enter the robust slow path to clean the data.
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 1. Find a valid np.ndarray in the list to use as a template for shape and dtype.
+        template_obs = None
+        for obs in observation_list:
+            if isinstance(obs, np.ndarray):
+                template_obs = obs
+                break
+        
+        if template_obs is None:
+            # This is a critical error: the list contains no np.ndarray to infer shape from.
+            # It might be all lists, or something else entirely. We try to convert the first element.
+            try:
+                template_obs = np.array(observation_list[0])
+                logger.warning(f"No np.ndarray found in observation_list. Using the first element as template. Shape: {template_obs.shape}")
+            except Exception as e:
+                 raise ValueError(f"Could not create a template observation. The observation list contains no np.ndarray "
+                                  f"and the first element could not be converted. First element type: {type(observation_list[0])}. Error: {e}")
+
+        target_shape = template_obs.shape
+        target_dtype = template_obs.dtype
+        target_size = template_obs.size
+        
+        processed_obs_list = []
+        for i, obs in enumerate(observation_list):
+            # 2. Convert every element to a np.ndarray.
+            if not isinstance(obs, np.ndarray):
+                try:
+                    obs = np.array(obs, dtype=target_dtype)
+                except (ValueError, TypeError):
+                    logger.error(f"Failed to convert element at index {i} to a numpy array. Element: {obs}")
+                    # As a last resort, create a zero array with the target shape.
+                    obs = np.zeros(target_shape, dtype=target_dtype)
+
+            # 3. Ensure every np.ndarray has the target shape.
+            if obs.shape != target_shape:
+                logger.warning(
+                    f"[OBSERVATION_SHAPE_MISMATCH] Standardizing observation at index {i}. "
+                    f"Expected shape {target_shape}, but got {obs.shape}. Padding/truncating."
+                )
+                obs_flat = obs.flatten()
+                if obs_flat.size < target_size:
+                    # Pad with zeros
+                    padded = np.zeros(target_size, dtype=target_dtype)
+                    padded[:obs_flat.size] = obs_flat
+                    obs = padded.reshape(target_shape)
+                else:
+                    # Truncate
+                    obs = obs_flat[:target_size].reshape(target_shape)
+            
+            processed_obs_list.append(obs)
+
+        # 4. Now, np.array() on the cleaned list should succeed.
+        observation_array = np.array(processed_obs_list)
+    # ===================== END OF ROBUST FIX =====================
+
     batch_size = observation_array.shape[0]
 
     if model_type in ['conv', 'conv_context']:
+        # This part handles stacking frames for CNNs.
         if observation_array.ndim == 3:
-            # Add a channel dimension if it's missing
+            # Case: [B, W, H] -> [B, 1, W, H] (Add a channel dimension)
             observation_array = observation_array[..., np.newaxis]
-        elif observation_array.ndim == 5:
-            # Reshape to [B, S*C, W, H]
+        
+        if observation_array.ndim == 5:
+            # Case: [B, S, C, W, H] -> [B, S*C, W, H] (Stack frames and channels)
             _, stack_num, channels, width, height = observation_array.shape
             observation_array = observation_array.reshape(batch_size, stack_num * channels, width, height)
 
     elif model_type in ['mlp', 'mlp_context']:
-        if observation_array.ndim == 3:
-            # Flatten the last two dimensions
+        # This part handles flattening features for MLPs.
+        if observation_array.ndim > 2:
+            # Case: [B, S, O] or [B, S, W, H, C] etc. -> [B, S*O] (Flatten all but batch dim)
             observation_array = observation_array.reshape(batch_size, -1)
-        else:
-            raise ValueError("For 'mlp' model_type, the observation must have 3 dimensions [B, S, O]")
+        # If ndim is 2 ([B, O]), it's already in the correct format.
 
     return observation_array
+
+
+# def prepare_observation(observation_list, model_type='conv'):
+#     """
+#     Prepare the observations to satisfy the input format of the model.
+
+#     For model_type='conv':
+#         [B, S, C, W, H] -> [B, S x C, W, H]
+#         where B is batch size, S is stack num, W is width, H is height, and C is the number of channels.
+
+#     For model_type='mlp':
+#         [B, S, O] -> [B, S x O]
+#         where B is batch size, S is stack num, O is obs shape.
+
+#     Arguments:
+#         - observation_list (List): list of observations.
+#         - model_type (str): type of the model. (default is 'conv')
+
+#     Returns:
+#         - np.ndarray: Reshaped array of observations.
+#     """
+#     assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
+
+#     # [FIX] Handle inhomogeneous shapes in observation_list
+#     # For text-based environments (e.g., Jericho), observations may have varying shapes
+#     try:
+#         observation_array = np.array(observation_list)
+#     except ValueError as e:
+#         # If shapes are inhomogeneous, check if we can handle it
+#         if "inhomogeneous" in str(e) or "sequence" in str(e):
+#             # For MLP models with text observations, pad/truncate to consistent shape
+#             if model_type in ['mlp', 'mlp_context']:
+#                 import logging
+#                 logger = logging.getLogger(__name__)
+
+#                 # Find the target shape (use the first element as reference)
+#                 if len(observation_list) > 0:
+#                     first_obs = observation_list[0]
+#                     if isinstance(first_obs, np.ndarray):
+#                         target_shape = first_obs.shape
+
+#                         # Check if all observations can be reshaped to target_shape
+#                         processed_obs = []
+#                         for obs in observation_list:
+#                             if isinstance(obs, np.ndarray):
+#                                 if obs.shape == target_shape:
+#                                     processed_obs.append(obs)
+#                                 elif obs.size == np.prod(target_shape):
+#                                     # Can reshape to target shape
+#                                     processed_obs.append(obs.reshape(target_shape))
+#                                 else:
+#                                     # Pad or truncate
+#                                     logger.warning(
+#                                         f"[OBSERVATION_SHAPE_MISMATCH] Expected {target_shape}, "
+#                                         f"got {obs.shape}. Padding/truncating."
+#                                     )
+#                                     obs_flat = obs.flatten()
+#                                     target_size = np.prod(target_shape)
+#                                     if obs_flat.size < target_size:
+#                                         # Pad with zeros
+#                                         padded = np.zeros(target_size)
+#                                         padded[:obs_flat.size] = obs_flat
+#                                         processed_obs.append(padded.reshape(target_shape))
+#                                     else:
+#                                         # Truncate
+#                                         processed_obs.append(obs_flat[:target_size].reshape(target_shape))
+#                             else:
+#                                 processed_obs.append(first_obs)  # Fallback
+
+#                         observation_array = np.array(processed_obs)
+#                     else:
+#                         raise ValueError(f"Cannot process non-ndarray observations: {type(first_obs)}")
+#                 else:
+#                     raise ValueError("observation_list is empty")
+#             else:
+#                 raise e
+#         else:
+#             raise e
+
+#     batch_size = observation_array.shape[0]
+
+#     if model_type in ['conv', 'conv_context']:
+#         if observation_array.ndim == 3:
+#             # Add a channel dimension if it's missing
+#             observation_array = observation_array[..., np.newaxis]
+#         elif observation_array.ndim == 5:
+#             # Reshape to [B, S*C, W, H]
+#             _, stack_num, channels, width, height = observation_array.shape
+#             observation_array = observation_array.reshape(batch_size, stack_num * channels, width, height)
+
+#     elif model_type in ['mlp', 'mlp_context']:
+#         if observation_array.ndim == 3:
+#             # Flatten the last two dimensions
+#             observation_array = observation_array.reshape(batch_size, -1)
+#         else:
+#             raise ValueError("For 'mlp' model_type, the observation must have 3 dimensions [B, S, O]")
+
+#     return observation_array
 
 
 def obtain_tree_topology(root, to_play=-1):

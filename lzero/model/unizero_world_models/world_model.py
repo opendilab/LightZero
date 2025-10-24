@@ -692,7 +692,31 @@ class WorldModel(nn.Module):
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
             num_steps = obs_embeddings.size(1)
-            
+
+            # [FIX] Check for edge case where num_steps is 0
+            if num_steps == 0:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"[ZERO_STEPS_ERROR] obs_embeddings has size(1)=0. "
+                    f"Shape: {obs_embeddings.shape}, is_init_infer: {is_init_infer}, "
+                    f"kvcache_independent: {kvcache_independent}. "
+                    f"This usually indicates an issue in the KV cache or latent state extraction. "
+                    f"Returning dummy outputs with correct shapes."
+                )
+                # Return outputs with shape [batch, 1, ...] to allow squeeze(1) to work
+                # Important: logits_value and logits_rewards need support_size dimension
+                batch_size = obs_embeddings.shape[0]
+                support_size = self.config.support_size
+                return WorldModelOutput(
+                    torch.zeros(batch_size, 1, self.config.embed_dim, device=self.device),
+                    torch.zeros(batch_size, 1, self.num_observations_tokens, device=self.device),
+                    torch.zeros(batch_size, 1, support_size, device=self.device),  # logits_rewards
+                    None,  # logits_ends
+                    torch.zeros(batch_size, 1, self.config.action_space_size, device=self.device),  # logits_policy
+                    torch.zeros(batch_size, 1, support_size, device=self.device),  # logits_value
+                )
+
             if not self.config.rotary_emb:
                 # Add traditional position embeddings if not using rotary embeddings.
                 sequences = self._add_position_embeddings(
@@ -748,6 +772,17 @@ class WorldModel(nn.Module):
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
+                # [FIX] Clamp action tokens to valid range to prevent CUDA assertion
+                # Action tokens must be in range [0, action_space_size-1]
+                if act_tokens.max() >= self.config.action_space_size or act_tokens.min() < 0:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"[ACTION_TOKEN_CLAMP] Invalid action tokens detected: "
+                        f"min={act_tokens.min().item()}, max={act_tokens.max().item()}, "
+                        f"action_space_size={self.config.action_space_size}. Clamping to valid range."
+                    )
+                    act_tokens = torch.clamp(act_tokens, 0, self.config.action_space_size - 1)
             # Convert action tokens to embeddings using the action embedding table.
             act_embeddings = self.act_embedding_table(act_tokens)
             if not self.config.rotary_emb:
@@ -831,15 +866,37 @@ class WorldModel(nn.Module):
         """
         if kvcache_independent:
             steps_indices = prev_steps + torch.arange(num_steps, device=embeddings.device)
+            # [FIX] Clamp indices to prevent index overflow
+            steps_indices = torch.clamp(steps_indices, 0, self.config.max_tokens - 1)
             position_embeddings = self.pos_emb(steps_indices).view(-1, num_steps, embeddings.shape[-1])
             return embeddings + position_embeddings
         else:
             if is_init_infer:
-                return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
+                # [FIX] Clamp indices to prevent index overflow
+                indices = prev_steps + torch.arange(num_steps, device=self.device)
+                indices = torch.clamp(indices, 0, self.config.max_tokens - 1)
+                return embeddings + self.pos_emb(indices)
             else:
-                valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
-                position_embeddings = self.pos_emb(
-                    valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                # [FIX] Clamp BEFORE creating tensor to prevent CUDA assertion
+                # Issue: keys_values_wm_size_list_current may contain values >= max_tokens
+                # which causes CUDA index assertion failure when creating the tensor
+                clamped_context_lengths = [
+                    min(max(0, length), self.config.max_tokens - 1)
+                    for length in self.keys_values_wm_size_list_current
+                ]
+                # [DEBUG] Log if clamping occurred
+                if any(length != orig for length, orig in zip(clamped_context_lengths, self.keys_values_wm_size_list_current)):
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"[KV_CACHE_CLAMP] Context lengths clamped from {self.keys_values_wm_size_list_current} "
+                        f"to {clamped_context_lengths} (max_tokens={self.config.max_tokens})"
+                    )
+                valid_context_lengths = torch.tensor(clamped_context_lengths, device=self.device)
+                # [FIX] Clamp indices to prevent index overflow
+                indices = valid_context_lengths + torch.arange(num_steps, device=self.device)
+                indices = torch.clamp(indices, 0, self.config.max_tokens - 1)
+                position_embeddings = self.pos_emb(indices).unsqueeze(1)
                 return embeddings + position_embeddings
 
     #@profile
@@ -879,7 +936,10 @@ class WorldModel(nn.Module):
 
         return_result = obs_act_embeddings
         if not self.config.rotary_emb:
-            return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
+            # [FIX] Clamp indices to prevent index overflow
+            indices = prev_steps + torch.arange(num_steps, device=self.device)
+            indices = torch.clamp(indices, 0, self.config.max_tokens - 1)
+            return_result += self.pos_emb(indices)
         return return_result, num_steps
 
     #@profile
@@ -912,7 +972,10 @@ class WorldModel(nn.Module):
             
         return_result = obs_act_embeddings
         if not self.config.rotary_emb:
-            return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
+            # [FIX] Clamp indices to prevent index overflow
+            indices = prev_steps + torch.arange(num_steps, device=self.device)
+            indices = torch.clamp(indices, 0, self.config.max_tokens - 1)
+            return_result += self.pos_emb(indices)
         return return_result, num_steps
 
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos: int = 0):
@@ -985,8 +1048,18 @@ class WorldModel(nn.Module):
         Returns:
             - torch.FloatTensor: The outputs from the world model.
         """
+        # [FIX] Initialize outputs_wm to avoid UnboundLocalError if neither branch is taken
+        outputs_wm = None
+
         n, num_observations_tokens, _ = last_obs_embeddings.shape
-        if n <= self.env_num and current_obs_embeddings is not None:
+
+        # [FIX] Handle the case when batch_action is None (initial inference without action)
+        # In this case, we should just process the observations for initial latent state
+        if batch_action is None and current_obs_embeddings is None:
+            # Initial observation encoding without action, just return forward pass
+            # This happens at the very first step when collecting initial observations
+            outputs_wm = self.forward({'obs_embeddings': last_obs_embeddings}, start_pos=start_pos)
+        elif n <= self.env_num and current_obs_embeddings is not None:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
                  # Determine whether it is the first step in an episode.
@@ -1106,6 +1179,14 @@ class WorldModel(nn.Module):
             # outputs_wm.logits_value.shape (B, H, 101) = (B*H, 101)
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
+        else:
+            # [FIX] Handle unexpected case where neither branch is taken
+            raise ValueError(
+                f"Unexpected state in wm_forward_for_initial_infererence: "
+                f"n={n}, env_num={self.env_num}, "
+                f"batch_action={'None' if batch_action is None else 'provided'}, "
+                f"current_obs_embeddings={'None' if current_obs_embeddings is None else 'provided'}"
+            )
 
         return outputs_wm
 
@@ -1174,6 +1255,12 @@ class WorldModel(nn.Module):
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
         self.keys_values_wm_size_list_current = self.keys_values_wm_size_list
 
+        # [FIX] Clamp BEFORE using in forward pass to prevent index overflow
+        self.keys_values_wm_size_list_current = [
+            min(i, self.config.max_tokens - 1)
+            for i in self.keys_values_wm_size_list_current
+        ]
+
         for k in range(2):
             # action_token obs_token
             if k == 0:
@@ -1191,7 +1278,13 @@ class WorldModel(nn.Module):
                 search_depth=search_depth # List containing depth of latent states in the search tree. 
             )
 
-            self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
+            # [FIX] Clamp KV cache size to prevent exceeding max_tokens
+            # This prevents CUDA assertion errors in position embedding access
+            # During MCTS simulation, KV cache can accumulate beyond max_tokens
+            self.keys_values_wm_size_list_current = [
+                min(i + 1, self.config.max_tokens - 1)
+                for i in self.keys_values_wm_size_list_current
+            ]
 
             if k == 0:
                 reward = outputs_wm.logits_rewards  # (B,)
@@ -1316,10 +1409,13 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
                     # Update size of self.keys_values_wm_single_env
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = \
-                        self.keys_values_wm_size_list_current[i]
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = \
-                        self.keys_values_wm_size_list_current[i]
+                    # [FIX] Clamp size to prevent exceeding max_tokens
+                    safe_cache_size = min(
+                        max(0, self.keys_values_wm_size_list_current[i]),
+                        self.config.max_tokens - 1
+                    )
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = safe_cache_size
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = safe_cache_size
 
                     # ============ NOTE: Very Important ============
                     if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length - 1:
@@ -1497,15 +1593,20 @@ class WorldModel(nn.Module):
                     if recur_cache_index is not None:
                         matched_value = self.shared_pool_recur_infer[recur_cache_index]
 
+                    # TODO
                     if recur_cache_index is None:
                         print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
+                        # print(f"[CACHE MISS] {cache_key}")
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
                 self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
-                self.keys_values_wm_size_list.append(matched_value.size)
+                # [FIX] Clamp size to prevent exceeding max_tokens
+                # matched_value.size may exceed max_tokens during long MCTS simulations
+                safe_size = min(matched_value.size, self.config.max_tokens - 1)
+                self.keys_values_wm_size_list.append(safe_size)
             else:
                 # If no matching cache is found, generate a new one using zero reset
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
@@ -1536,6 +1637,7 @@ class WorldModel(nn.Module):
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
         start_pos = batch['timestep']
+        
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
@@ -1553,11 +1655,19 @@ class WorldModel(nn.Module):
         if self.analysis_dormant_ratio_weight_rank:
             # --- Dormant Ratio Calculation ---
             # Calculate the dormant ratio of the encoder to monitor neuron activity.
-            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W)
+            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W) for images or (B, T, E) for text
             # Reshape observations to create a single large batch for the encoder.
-            # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
-            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
-            
+
+            # [FIX] Handle both image and text observations
+            if len(shape) == 5:  # Image: (B, T, C, H, W)
+                # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
+                inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+            elif len(shape) == 3:  # Text: (B, T, E)
+                # E.g., (2, 11, 512) -> (22, 512)
+                inputs = batch['observations'].contiguous().view(-1, shape[-1])
+            else:  # Fall back to original behavior for 2D or 4D
+                inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+
             dormant_ratio_encoder_dict = calculate_dormant_ratio(
                 self.tokenizer.encoder, inputs.detach(), dormant_threshold=self.dormant_threshold
             )
@@ -1635,7 +1745,10 @@ class WorldModel(nn.Module):
                     step_counter=global_step
                 )
 
-        if self.config.use_priority:
+        # [FIX] Add default value for use_priority if not present in config
+        use_priority = getattr(self.config, 'use_priority', False)
+
+        if use_priority:
             # ==================== START MODIFICATION 5 ====================
             # Calculate value_priority, similar to MuZero.
             with torch.no_grad():

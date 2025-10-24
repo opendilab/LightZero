@@ -80,8 +80,20 @@ class InverseScalarTransform:
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
+            # [FIX] Handle edge case where logits might be 1D (batch_size=1 and squeezed)
+            # Ensure logits is at least 2D for softmax operation
+            if logits.dim() == 1:
+                logits = logits.unsqueeze(0)  # [support_size] -> [1, support_size]
+                was_1d = True
+            else:
+                was_1d = False
+
             value_probs = torch.softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
+
+            # If input was 1D, squeeze back to maintain shape consistency
+            if was_1d:
+                value = value.squeeze(0)  # [1, 1] -> [1]
         else:
             value = logits
         tmp = ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon))

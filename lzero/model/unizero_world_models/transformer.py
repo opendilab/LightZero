@@ -798,8 +798,12 @@ class SelfAttention(nn.Module):
                 # Ensure mask dimensions match the potentially smaller KV cache length
                 new_L = kv_cache.shape[2]
                 mask = mask[..., :new_L]
+        try:
+            att = att.masked_fill(mask == 0, float('-inf'))
+        except Exception as e:
+            print(e)
+            import ipdb;ipdb.set_trace()
 
-        att = att.masked_fill(mask == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
 
