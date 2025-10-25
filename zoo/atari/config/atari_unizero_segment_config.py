@@ -89,6 +89,9 @@ def main(env_id, seed):
                 num_res_blocks=2,
                 num_channels=128,
                 world_model_cfg=dict(
+                    latent_recon_loss_weight=1,
+                    perceptual_loss_weight=1,
+
                     # use_new_cache_manager=True,
                     use_new_cache_manager=False,
 
@@ -240,7 +243,9 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1024/{env_id[3:-3]}/{env_id[3:-3]}_uz_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-07-lr1e-3-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1024/{env_id[3:-3]}/{env_id[3:-3]}_uz_recon-perc-w1_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-07-lr1e-3-encoder-clip30-10-100k_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_refactor1024/{env_id[3:-3]}/{env_id[3:-3]}_uz_recon-perc-w1_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-07-lr1e-3-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_st_refactor1024/{env_id[3:-3]}/{env_id[3:-3]}_uz_cossimloss_nokvcachemanager_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
@@ -265,7 +270,7 @@ if __name__ == "__main__":
 
     # 测试的atari8中的4个base环境
     # args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
-    args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    # args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # args.env = 'ALE/Pong-v5' # 记忆规划型环境 稀疏奖励
 
@@ -293,7 +298,7 @@ if __name__ == "__main__":
     """
     tmux new -s uz-st-refactor-boxing
 
-    export CUDA_VISIBLE_DEVICES=1
+    export CUDA_VISIBLE_DEVICES=0
     cd /mnt/shared-storage-user/puyuan/code_20250828/LightZero/
     /mnt/shared-storage-user/puyuan/lz/bin/python /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_segment_config.py
 

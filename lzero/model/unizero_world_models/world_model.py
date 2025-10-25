@@ -1759,7 +1759,7 @@ class WorldModel(nn.Module):
 
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
             #  ========== for visualization ==========
             # Uncomment the lines below for visual analysis
@@ -1772,11 +1772,12 @@ class WorldModel(nn.Module):
             #  ========== for visualization ==========
 
             # ========== Calculate reconstruction loss and perceptual loss ============
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
             
-            latent_recon_loss = self.latent_recon_loss
-            perceptual_loss = self.perceptual_loss
+            # TODO:
+            # latent_recon_loss = self.latent_recon_loss
+            # perceptual_loss = self.perceptual_loss
 
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
