@@ -1911,7 +1911,7 @@ class WorldModel(nn.Module):
             # F.cosine_similarity 计算的是相似度，范围是 [-1, 1]。我们希望最大化它，
             # 所以最小化 1 - similarity。
             # reduction='none' 使得我们可以像原来一样处理mask
-            print("predict_latent_loss_type == 'cos_sim'")
+            # print("predict_latent_loss_type == 'cos_sim'")
             cosine_sim_loss = 1 - F.cosine_similarity(logits_observations, labels_observations, dim=-1)
             loss_obs = cosine_sim_loss
 
@@ -2034,6 +2034,16 @@ class WorldModel(nn.Module):
                 value_priority=value_priority,
                 intermediate_tensor_x=intermediate_tensor_x,
                 obs_embeddings=detached_obs_embeddings, # <-- 新增
+
+                # logits_value_mean=outputs.logits_value.mean(),
+                # logits_value_max=outputs.logits_value.max(),
+                # logits_value_min=outputs.logits_value.min(),
+                # logits_policy_mean=outputs.logits_policy.mean(),
+                # logits_policy_max=outputs.logits_policy.max(),
+                # logits_policy_min=outputs.logits_policy.min(),
+                logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+                logits_reward=outputs.logits_rewards.detach(),
+                logits_policy=outputs.logits_policy.detach(),
             )
         else:
             return LossWithIntermediateLosses(
@@ -2064,6 +2074,16 @@ class WorldModel(nn.Module):
                 value_priority=value_priority,
                 intermediate_tensor_x=intermediate_tensor_x,
                 obs_embeddings=detached_obs_embeddings, # <-- 新增
+
+                # logits_value_mean=outputs.logits_value.mean(),
+                # logits_value_max=outputs.logits_value.max(),
+                # logits_value_min=outputs.logits_value.min(),
+                # logits_policy_mean=outputs.logits_policy.mean(),
+                # logits_policy_max=outputs.logits_policy.max(),
+                # logits_policy_min=outputs.logits_policy.min(),
+                logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+                logits_reward=outputs.logits_rewards.detach(),
+                logits_policy=outputs.logits_policy.detach(),
             )
 
     

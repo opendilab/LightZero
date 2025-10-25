@@ -833,15 +833,16 @@ class UniZeroPolicy(MuZeroPolicy):
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
         latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
-        logits_value_mean=self.intermediate_losses['logits_value_mean']
-        logits_value_max=self.intermediate_losses['logits_value_max']
-        logits_value_min=self.intermediate_losses['logits_value_min']
-        logits_policy_mean=self.intermediate_losses['logits_policy_mean']
-        logits_policy_max=self.intermediate_losses['logits_policy_max']
-        logits_policy_min=self.intermediate_losses['logits_policy_min']
-        temperature_value=self.intermediate_losses['temperature_value']
-        temperature_reward=self.intermediate_losses['temperature_reward']
-        temperature_policy=self.intermediate_losses['temperature_policy']
+
+        # logits_value_mean=self.intermediate_losses['logits_value_mean']
+        # logits_value_max=self.intermediate_losses['logits_value_max']
+        # logits_value_min=self.intermediate_losses['logits_value_min']
+        # logits_policy_mean=self.intermediate_losses['logits_policy_mean']
+        # logits_policy_max=self.intermediate_losses['logits_policy_max']
+        # logits_policy_min=self.intermediate_losses['logits_policy_min']
+        # temperature_value=self.intermediate_losses['temperature_value']
+        # temperature_reward=self.intermediate_losses['temperature_reward']
+        # temperature_policy=self.intermediate_losses['temperature_policy']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -875,7 +876,9 @@ class UniZeroPolicy(MuZeroPolicy):
             # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
             with torch.no_grad():
                 # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
-                self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+                # self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+                self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
+
 
             # --- 使用当前更新后的 alpha (截断梯度流) ---
             current_alpha = self.log_alpha.exp().detach()
@@ -1047,12 +1050,13 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
-                    "logits_value_mean":logits_value_mean,
-        "logits_value_max":logits_value_max,
-        "logits_value_min":logits_value_min,
-        "logits_policy_mean":logits_policy_mean,
-        "logits_policy_max":logits_policy_max,
-        "logits_policy_min":logits_policy_min,
+        
+        # "logits_value_mean":logits_value_mean,
+        # "logits_value_max":logits_value_max,
+        # "logits_value_min":logits_value_min,
+        # "logits_policy_mean":logits_policy_mean,
+        # "logits_policy_max":logits_policy_max,
+        # "logits_policy_min":logits_policy_min,
 
              "temperature_value":temperature_value,
         "temperature_reward":temperature_reward,
@@ -1621,12 +1625,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'total_grad_norm_before_clip_wm',
 
             # ==================== Logits Statistics ====================
-            'logits_value_mean',
-            'logits_value_max',
-            'logits_value_min',
-            'logits_policy_mean',
-            'logits_policy_max',
-            'logits_policy_min',
+            # 'logits_value_mean',
+            # 'logits_value_max',
+            # 'logits_value_min',
+            # 'logits_policy_mean',
+            # 'logits_policy_max',
+            # 'logits_policy_min',
 
             # ==================== Temperature Parameters ====================
             'temperature_value',

@@ -622,9 +622,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         module_groups = {
             'encoder': world_model.tokenizer.encoder,
             'transformer': world_model.transformer,
-            'head_value': world_model.head_values,  # Note: multi-task uses head_values (plural)
-            'head_reward': world_model.head_rewards,
-            'head_policy': world_model.head_policies,  # Note: multi-task uses head_policies (plural)
+            'head_value': world_model.head_value_multi_task,  # Note: multi-task uses head_value (plural)
+            'head_reward': world_model.head_rewards_multi_task,
+            'head_policy': world_model.head_policy_multi_task,  # Note: multi-task uses head_policies (plural)
         }
 
         for group_name, group_module in module_groups.items():
@@ -669,9 +669,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         module_groups = {
             'encoder': world_model.tokenizer.encoder,
             'transformer': world_model.transformer,
-            'head_value': world_model.head_values,
-            'head_reward': world_model.head_rewards,
-            'head_policy': world_model.head_policies,
+            'head_value': world_model.head_value_multi_task,
+            'head_reward': world_model.head_rewards_multi_task,
+            'head_policy': world_model.head_policy_multi_task,
         }
 
         for group_name, group_module in module_groups.items():
@@ -1169,7 +1169,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
                 with torch.no_grad():
                     # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
-                    self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+                    # self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+                    self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
+
 
                 # --- 使用当前更新后的 alpha (截断梯度流) ---
                 current_alpha = self.log_alpha.exp().detach()

@@ -1,5 +1,5 @@
 DI-engine>=0.5.3
-gymnasium[atari]==0.28.0
+# gymnasium[atari]==0.28.0
 numpy>=1.24.1,<2
 pympler
 minigrid

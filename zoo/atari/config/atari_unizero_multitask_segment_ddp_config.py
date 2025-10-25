@@ -93,6 +93,7 @@ def create_config(
     """
     return EasyDict(dict(
         env=dict(
+            frame_skip=1, # TODO
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
@@ -162,8 +163,8 @@ def create_config(
                     # use_priority=False, # TODO=====
                     priority_prob_alpha=1,
                     priority_prob_beta=1,
-                    # encoder_type='vit',
-                    encoder_type='resnet',
+                    encoder_type='vit',
+                    # encoder_type='resnet',
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
@@ -195,7 +196,8 @@ def create_config(
             # use_adaptive_entropy_weight=False,
 
             # (float) 自适应alpha优化器的学习率
-            adaptive_entropy_alpha_lr=1e-4,
+            # adaptive_entropy_alpha_lr=1e-4,
+            adaptive_entropy_alpha_lr=1e-3,
             target_entropy_start_ratio =0.98,
             # target_entropy_end_ratio =0.9, # TODO=====
             # target_entropy_end_ratio =0.7,
@@ -289,7 +291,7 @@ def generate_configs(
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
     # benchmark_tag = "data_unizero_mt_refactor1010_debug"  # e.g., unizero_atari_mt_20250612
-    benchmark_tag = "data_unizero_mt_refactor1012"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "data_unizero_mt_refactor1024"  # e.g., unizero_atari_mt_20250612
 
     # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
     # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
@@ -297,7 +299,10 @@ def generate_configs(
     # model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
     # model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-100k-098-07_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
-    model_tag = f"resnet_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    
+    # model_tag = f"resnet_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    
     # model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-150k-098-05_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
 
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
@@ -309,7 +314,10 @@ def generate_configs(
             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
         )
         config.policy.task_id = task_id
-        config.exp_name = exp_name_prefix + f"{env_id.split('NoFrameskip')[0]}_seed{seed}"
+        # --- MODIFIED LINE ---
+        # Correctly extract the game name from 'ALE/GameName-v5' format.
+        game_name = env_id.split('/')[1].split('-')[0]
+        config.exp_name = exp_name_prefix + f"{game_name}_seed{seed}"
         configs.append([task_id, [config, create_env_manager()]])
     return configs
 
@@ -348,6 +356,8 @@ if __name__ == "__main__":
         export CUDA_VISIBLE_DEVICES=4,5,6,7
 
         cd /path/to/your/project/
+        /mnt/shared-storage-user/puyuan/lz/bin/python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code_20250828/LightZero/log/20251024_vit_nlayer4_alpha-100k-098-05.log
+
         python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251012_resnet_nlayer4_alpha-100k-098-05.log
             /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
     """
@@ -370,22 +380,23 @@ if __name__ == "__main__":
     max_env_step = int(5e6) # TODO
     reanalyze_ratio = 0.0
 
+    # --- MODIFIED SECTION: Standardized env_id_list formats ---
     if num_games == 3:
-        env_id_list = ['PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4']
+        env_id_list = ['ALE/Pong-v5', 'ALE/MsPacman-v5', 'ALE/Seaquest-v5']
     elif num_games == 8:
         env_id_list = [
-            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
-            'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+            'ALE/Pong-v5', 'ALE/MsPacman-v5', 'ALE/Seaquest-v5', 'ALE/Boxing-v5',
+            'ALE/Alien-v5', 'ALE/ChopperCommand-v5', 'ALE/Hero-v5', 'ALE/RoadRunner-v5',
         ]
     elif num_games == 26:
         env_id_list = [
-            'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
-            'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
-            'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
-            'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
-            'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
-            'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
-            'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+            'ALE/Pong-v5', 'ALE/MsPacman-v5', 'ALE/Seaquest-v5', 'ALE/Boxing-v5',
+            'ALE/Alien-v5', 'ALE/ChopperCommand-v5', 'ALE/Hero-v5', 'ALE/RoadRunner-v5',
+            'ALE/Amidar-v5', 'ALE/Assault-v5', 'ALE/Asterix-v5', 'ALE/BankHeist-v5',
+            'ALE/BattleZone-v5', 'ALE/CrazyClimber-v5', 'ALE/DemonAttack-v5', 'ALE/Freeway-v5',
+            'ALE/Frostbite-v5', 'ALE/Gopher-v5', 'ALE/Jamesbond-v5', 'ALE/Kangaroo-v5',
+            'ALE/Krull-v5', 'ALE/KungFuMaster-v5', 'ALE/PrivateEye-v5', 'ALE/UpNDown-v5',
+            'ALE/Qbert-v5', 'ALE/Breakout-v5',
         ]
     else:
         raise ValueError(f"Unsupported number of environments: {num_games}")

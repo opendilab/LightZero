@@ -2,7 +2,10 @@ import copy
 from ditk import logging
 from typing import List
 
-import gym 
+import gym
+# import gymnasium as gym
+import ale_py
+
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
@@ -51,7 +54,7 @@ class AtariEnvLightZero(BaseEnv):
         replay_path=None,
         # (bool) If set to True, the game screen is converted to grayscale, reducing the complexity of the observation space.
         gray_scale=True,
-        # (int) Specifies the number of consecutive frames to stack after collecting environment data. 
+        # (int) Specifies the number of consecutive frames to stack after collecting environment data.
         # The stacking process is applied within the collector and evaluator modules.
         frame_stack_num=1,
         # (int) The number of frames to skip between each action. Higher values result in faster simulation.
@@ -122,13 +125,15 @@ class AtariEnvLightZero(BaseEnv):
                 self.cfg.observation_shape[1],
                 self.cfg.observation_shape[2]
             )
+            
+            self._action_space = self._env.action_space
 
             self._observation_space = gym.spaces.Dict({
                 'observation': gym.spaces.Box(
                     low=0, high=1, shape=observation_space_before_stack, dtype=np.float32
                 ),
                 'action_mask': gym.spaces.Box(
-                    low=0, high=1, shape=(self._env.env.action_space.n,), dtype=np.int8
+                    low=0, high=1, shape=(self._action_space.n,), dtype=np.int8
                 ),
                 'to_play': gym.spaces.Box(
                     low=-1, high=2, shape=(), dtype=np.int8
@@ -137,19 +142,29 @@ class AtariEnvLightZero(BaseEnv):
                     low=0, high=self.cfg.collect_max_episode_steps, shape=(), dtype=np.int32
                 ),
             })
+            
+            # ==================================================================
+            # ==                         FINAL FIX                            ==
+            # ==================================================================
+            # Access `reward_range` directly on the wrapped environment object.
+            # The gym wrapper system will correctly delegate this call to the
+            # underlying gymnasium environment's property.
+            # self._reward_space = gym.spaces.Box(
+            #     low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
+            # )
 
-            self._action_space = self._env.env.action_space
+            # TODO
             self._reward_space = gym.spaces.Box(
-                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
+                low=-9999, high=999, shape=(1,), dtype=np.float32
             )
 
             self._init_flag = True
 
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.env.seed(self._seed + np_seed)
+            self._env.seed(self._seed + np_seed)
         elif hasattr(self, '_seed'):
-            self._env.env.seed(self._seed)
+            self._env.seed(self._seed)
 
         result = self._env.reset()
         if isinstance(result, tuple):
@@ -205,7 +220,7 @@ class AtariEnvLightZero(BaseEnv):
 
         return {'observation': observation, 'action_mask': action_mask, 'to_play': np.array(-1), 'timestep': np.array(self._timestep)}
 
-        
+
     @property
     def legal_actions(self):
         return np.arange(self._action_space.n)
