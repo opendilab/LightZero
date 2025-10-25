@@ -1758,26 +1758,27 @@ class WorldModel(nn.Module):
             value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
-            # Reconstruct observations from latent state representations
-            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            if self.config.latent_recon_loss_weight > 0:
 
-            #  ========== for visualization ==========
-            # Uncomment the lines below for visual analysis
-            # original_images, reconstructed_images = batch['observations'], reconstructed_images
-            # target_policy = batch['target_policy']
-            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            #  ========== for visualization ==========
+                # Reconstruct observations from latent state representations
+                reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
-            # ========== Calculate reconstruction loss and perceptual loss ============
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            
-            # TODO:
-            # latent_recon_loss = self.latent_recon_loss
-            # perceptual_loss = self.perceptual_loss
+                #  ========== for visualization ==========
+                # Uncomment the lines below for visual analysis
+                # original_images, reconstructed_images = batch['observations'], reconstructed_images
+                # target_policy = batch['target_policy']
+                # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
+                #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
+                # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
+                #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
+                #  ========== for visualization ==========
+                # ========== Calculate reconstruction loss and perceptual loss ============
+                latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+                perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            else:
+                # TODO:
+                latent_recon_loss = self.latent_recon_loss
+                perceptual_loss = self.perceptual_loss
 
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,

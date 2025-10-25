@@ -23,16 +23,22 @@ def main(env_id, seed):
 
     evaluator_env_num = 3
     num_simulations = 50
-    # max_env_step = int(4e5)
-    max_env_step = int(10e6) # TODO
-    # max_env_step = int(1e6) # TODO pong
+
+    if env_id == 'ALE/Pong-v5':
+        max_env_step = int(5e5) # TODO pong
+    else:
+        # max_env_step = int(4e5)
+        max_env_step = int(10e6) # TODO
 
     # batch_size = 2 # only for debug
-    # batch_size = 64
-    batch_size = 256
+
+    batch_size = 64 # for decode-loss
+    replay_ratio = 0.25
+
+    # batch_size = 256
+    # replay_ratio = 0.1
+
     num_layers = 2
-    replay_ratio = 0.1
-    # replay_ratio = 0.25
 
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
@@ -91,6 +97,11 @@ def main(env_id, seed):
                 world_model_cfg=dict(
                     latent_recon_loss_weight=1,
                     perceptual_loss_weight=1,
+                    # latent_recon_loss_weight=0.1,
+                    # perceptual_loss_weight=0.1,
+
+                    # latent_recon_loss_weight=0,
+                    # perceptual_loss_weight=0,
 
                     # use_new_cache_manager=True,
                     use_new_cache_manager=False,
@@ -278,13 +289,15 @@ if __name__ == "__main__":
 
 
     # args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
+    args.env = 'ALE/Seaquest-v5' # 记忆规划型环境 稀疏奖励
+
     # args.env = 'HeroNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # args.env = 'AlienNoFrameskip-v4'
 
     # 下面是atari8以外的2个代表环境
     # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
-    args.env = 'ALE/Qbert-v5' # 记忆规划型环境 稀疏奖励
+    # args.env = 'ALE/Qbert-v5' # 记忆规划型环境 稀疏奖励
 
     # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
