@@ -111,7 +111,7 @@ def train_alphazero(
         )
 
         # Evaluate policy performance
-        if evaluator.should_eval(learner.train_iter) and learner.train_iter > 0:
+        if evaluator.should_eval(learner.train_iter) or learner.train_iter == 0:
             stop, reward = evaluator.eval(
                 learner.save_checkpoint,
                 learner.train_iter,
