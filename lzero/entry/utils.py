@@ -137,7 +137,7 @@ def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], b
     else:
         raise TypeError(f"observation_shape must be int, list, or tuple, but got {type(observation_shape).__name__}")
 
-    return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == 0 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
+    return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == -1 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
 
 def random_collect(
         policy_cfg: 'EasyDict',  # noqa
