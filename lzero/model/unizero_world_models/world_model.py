@@ -1475,19 +1475,27 @@ class WorldModel(nn.Module):
             # ==================== Phase 1.5: Storage Layer Integration ====================
             if self.use_new_cache_manager:
                 # NEW SYSTEM: Use KVCacheManager for cache storage
+                # ==================== BUG FIX: Deep Copy Before Storage ====================
+                # CRITICAL: Must clone before storing to prevent cache corruption.
+                # self.keys_values_wm_single_env is a shared object that gets modified.
+                # Without cloning, all cache entries would point to the same object,
+                # causing incorrect KV retrieval and training divergence.
+                kv_cache_to_store = self.keys_values_wm_single_env.clone()
+                # =============================================================================
+
                 if is_init_infer:
                     # Store to per-environment init cache pool
                     # Note: KVCacheManager automatically handles eviction logic (FIFO/LRU)
                     self.kv_cache_manager.set_init_cache(
                         env_id=i,
                         cache_key=cache_key,
-                        kv_cache=self.keys_values_wm_single_env
+                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
                     )
                 else:
                     # Store to global recurrent cache pool
                     self.kv_cache_manager.set_recur_cache(
                         cache_key=cache_key,
-                        kv_cache=self.keys_values_wm_single_env
+                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
                     )
             else:
                 # OLD SYSTEM: Use legacy cache with manual eviction
