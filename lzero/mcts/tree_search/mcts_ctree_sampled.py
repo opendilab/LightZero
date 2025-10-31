@@ -83,7 +83,7 @@ class SampledUniZeroMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], timestep: Union[int, List[Any]]
+            List[Any]], timestep: Union[int, List[Any]], task_id=None
     ) -> None:
         """
         Overview:
@@ -142,6 +142,7 @@ class SampledUniZeroMCTSCtree(object):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+
                 if self._cfg.model.continuous_action_space is True:
                     # continuous action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device)
@@ -159,9 +160,15 @@ class SampledUniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
+                                # search_depth is used for rope in UniZero
+                search_depth = results.get_search_len()
                 # for Sampled UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index,
-                                                           latent_state_index_in_search_path, timestep)
+                if task_id is not None:
+                    # multi task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                else:
+                    # single task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -169,6 +176,7 @@ class SampledUniZeroMCTSCtree(object):
                 network_output.reward = to_detach_cpu_numpy(self.reward_inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
+                # print("network_output.latent_state.shape:", network_output.latent_state.shape)
 
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()

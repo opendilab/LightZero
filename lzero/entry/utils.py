@@ -1,113 +1,539 @@
-import os
-from typing import Optional, Callable, Union, List, Tuple
+# -*- coding: utf-8 -*-
+"""
+Optimized and refactored utility code for reinforcement learning models,
+focusing on clarity, professionalism, efficiency, and extensibility.
+"""
 
+# ==============================================================================
+# Imports
+# ==============================================================================
+from __future__ import annotations
+
+import logging
+import math
+import os
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import psutil
 import torch
 import torch.distributed as dist
+import torch.nn as nn
+import torch.nn.functional as F
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
-import torch
-import torch.distributed as dist
 
-def is_ddp_enabled():
+# ==============================================================================
+# Placeholder Types for External Dependencies
+#
+# To ensure type hints work without having the full definitions of these complex
+# external classes, we define them as `Any`.
+# ==============================================================================
+EasyDict = Any
+Policy = Any
+RandomPolicy = Any
+ISerialCollector = Any
+BaseEnvManager = Any
+IBuffer = Any
+GameBuffer = Any
+
+
+# ==============================================================================
+# Mathematical & Tensor Utilities
+# ==============================================================================
+
+def symlog(x: torch.Tensor) -> torch.Tensor:
     """
-    Check if Distributed Data Parallel (DDP) is enabled by verifying if
-    PyTorch's distributed package is available and initialized.
+    Overview:
+        Applies the symlog transformation to a tensor, which is useful for
+        normalizing target values with large magnitude differences.
+        The transformation is defined as: symlog(x) = sign(x) * log(|x| + 1).
+
+    Arguments:
+        - x (:obj:`torch.Tensor`): The input tensor.
+
+    Returns:
+        - torch.Tensor: The tensor after applying the symlog transformation.
+    """
+    return torch.sign(x) * torch.log(torch.abs(x) + 1)
+
+
+def inv_symlog(x: torch.Tensor) -> torch.Tensor:
+    """
+    Overview:
+        Applies the inverse of the symlog transformation to a tensor, restoring
+        the original scale of the values.
+        The transformation is defined as: inv_symlog(x) = sign(x) * (exp(|x|) - 1).
+
+    Arguments:
+        - x (:obj:`torch.Tensor`): The input tensor in symlog space.
+
+    Returns:
+        - torch.Tensor: The tensor restored to its original scale.
+    """
+    return torch.sign(x) * (torch.exp(torch.abs(x)) - 1)
+
+
+def initialize_zeros_batch(
+    observation_shape: Union[int, List[int], Tuple[int, ...]],
+    batch_size: int,
+    device: str
+) -> torch.Tensor:
+    """
+    Overview:
+        Initializes a zeros tensor for a batch of observations based on the
+        provided shape. This is commonly used to prepare initial input for models
+        like UniZero.
+
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int, ...]]`): The shape of a single observation.
+        - batch_size (:obj:`int`): The number of observations in the batch.
+        - device (:obj:`str`): The device to store the tensor on (e.g., 'cpu', 'cuda').
+
+    Returns:
+        - torch.Tensor: A zeros tensor with the shape [batch_size, *observation_shape].
+    """
+    if isinstance(observation_shape, (list, tuple)):
+        shape = (batch_size, *observation_shape)
+    elif isinstance(observation_shape, int):
+        shape = (batch_size, observation_shape)
+    else:
+        raise TypeError(
+            f"observation_shape must be an int, list, or tuple, but got {type(observation_shape).__name__}"
+        )
+    return torch.zeros(shape, device=device)
+
+
+# ==============================================================================
+# LoRA (Low-Rank Adaptation) Utilities
+# ==============================================================================
+
+# A compiled regex pattern to efficiently detect LoRA-related parameters.
+# It matches parameter names ending with:
+# - .lora_A or .lora_B (for LoRA weights)
+# - .adapter_scales.{digit}.logit (for learnable scale parameters)
+_LORA_PAT = re.compile(r"\.(?:lora_[AB]|adapter_scales\.\d+\.logit)$")
+
+
+def _is_lora_param(name: str) -> bool:
+    """A helper function to check if a parameter name matches the LoRA pattern."""
+    return bool(_LORA_PAT.search(name))
+
+
+def freeze_non_lora_parameters(
+    module: nn.Module,
+    freeze: bool = True,
+    *,
+    verbose: bool = False,
+) -> Tuple[int, int]:
+    """
+    Overview:
+        Freezes or un-freezes all parameters in a module that are not identified
+        as LoRA-related parameters. This is useful for curriculum learning stages
+        where the backbone model is frozen and only LoRA adapters are trained.
+
+    Arguments:
+        - module (:obj:`nn.Module`): The PyTorch module to process (e.g., a transformer).
+        - freeze (:obj:`bool`): If True, sets `requires_grad=False` for non-LoRA parameters.
+                                If False, sets `requires_grad=True` for non-LoRA parameters.
+        - verbose (:obj:`bool`): If True, prints a summary of trainable and frozen parameters.
+
+    Returns:
+        - Tuple[int, int]: A tuple containing the number of frozen parameters and trainable parameters.
+    """
+    n_frozen = 0
+    n_trainable = 0
+
+    for name, param in module.named_parameters():
+        if _is_lora_param(name):
+            # LoRA-related parameters should always be trainable.
+            param.requires_grad = True
+            n_trainable += 1
+        else:
+            # All other parameters are frozen or unfrozen based on the `freeze` flag.
+            param.requires_grad = not freeze
+            if param.requires_grad:
+                n_trainable += 1
+            else:
+                n_frozen += 1
+
+    if verbose:
+        total = n_frozen + n_trainable
+        # Ensure total is not zero to avoid division by zero error.
+        percentage_trainable = (n_trainable / total * 100) if total > 0 else 0
+        print(
+            f"[freeze_non_lora] Trainable: {n_trainable}/{total} ({percentage_trainable:.1f}%), "
+            f"Frozen: {n_frozen}"
+        )
+    return n_frozen, n_trainable
+
+
+# ==============================================================================
+# Task & Curriculum Learning Utilities
+# ==============================================================================
+
+def compute_task_weights(
+    task_returns: Dict[str, float],
+    option: str = "symlog",
+    epsilon: float = 1e-6,
+    temperature: float = 1.0,
+    use_softmax: bool = False,
+    reverse: bool = False,
+    clip_min: float = 1e-2,
+    clip_max: float = 1.0,
+) -> Dict[str, float]:
+    """
+    Overview:
+        Calculates sampling weights for different tasks based on their returns (e.g., rewards or losses).
+        This function supports various normalization methods, softmax-based distribution,
+        proportional/inverse weighting, and weight clipping.
+
+    Arguments:
+        - task_returns (:obj:`Dict[str, float]`): A dictionary mapping task IDs to their return values.
+        - option (:obj:`str`): Normalization method. One of ["symlog", "max-min", "run-max-min", "rank", "none"].
+        - epsilon (:obj:`float`): A small value to prevent division by zero.
+        - temperature (:obj:`float`): A temperature parameter to control the sharpness of the weight distribution.
+        - use_softmax (:obj:`bool`): If True, use softmax to compute weights; otherwise, use direct normalization.
+        - reverse (:obj:`bool`): If True, weights are inversely proportional to returns; otherwise, directly proportional.
+        - clip_min (:obj:`float`): The minimum value to clip the final weights to.
+        - clip_max (:obj:`float`): The maximum value to clip the final weights to.
+
+    Returns:
+        - Dict[str, float]: A dictionary mapping task IDs to their computed weights.
+    """
+    if not task_returns:
+        return {}
+
+    task_ids = list(task_returns.keys())
+    returns_tensor = torch.tensor(list(task_returns.values()), dtype=torch.float32)
+
+    # Step 1: Normalize the returns based on the chosen option.
+    scaled_returns: torch.Tensor
+    if option == "symlog":
+        scaled_returns = symlog(returns_tensor)
+    elif option == "max-min":
+        min_val, max_val = returns_tensor.min(), returns_tensor.max()
+        scaled_returns = (returns_tensor - min_val) / (max_val - min_val + epsilon)
+    elif option == "run-max-min":
+        # Use function attributes to maintain state across calls, avoiding global variables.
+        compute_task_weights.RUNNING_MAX = max(compute_task_weights.RUNNING_MAX, returns_tensor.max().item())
+        compute_task_weights.RUNNING_MIN = min(compute_task_weights.RUNNING_MIN, returns_tensor.min().item())
+        scaled_returns = (returns_tensor - compute_task_weights.RUNNING_MIN) / \
+                         (compute_task_weights.RUNNING_MAX - compute_task_weights.RUNNING_MIN + epsilon)
+    elif option == "rank":
+        sorted_indices = torch.argsort(returns_tensor)
+        ranks = torch.empty_like(returns_tensor)
+        # Ranks are from 1 to N.
+        ranks[sorted_indices] = torch.arange(1, len(returns_tensor) + 1, dtype=torch.float32)
+        scaled_returns = ranks
+    elif option == "none":
+        scaled_returns = returns_tensor
+    else:
+        raise ValueError(f"Unsupported normalization option: {option}")
+
+    # Step 2: Determine if weights should be proportional or inversely proportional to returns.
+    if reverse:
+        # Inverse proportion: smaller return -> higher weight.
+        raw_weights = 1.0 / (scaled_returns + epsilon)
+    else:
+        # Direct proportion: higher return -> higher weight.
+        raw_weights = scaled_returns
+
+    # Step 3: Calculate final weights using either softmax or direct normalization.
+    final_weights: np.ndarray
+    safe_temperature = max(temperature, epsilon)
+    if use_softmax:
+        # Softmax provides a smooth distribution, often used with inverse weights.
+        # A higher beta (lower temperature) makes the distribution sharper.
+        beta = 1.0 / safe_temperature
+        # The sign depends on whether we want to favor high or low raw_weights.
+        # If reverse=True, raw_weights are high for low returns. We want to sample these more.
+        # Softmax(logits) gives higher probability to higher logits.
+        # So, logits should be proportional to the desired sampling probability.
+        logits = raw_weights if reverse else -raw_weights
+        final_weights = F.softmax(logits * beta, dim=0).numpy()
+    else:
+        # Direct normalization with temperature scaling.
+        scaled_weights = raw_weights**(1 / safe_temperature)
+        total_weight = scaled_weights.sum()
+        normalized_weights = scaled_weights / (total_weight + epsilon)
+        final_weights = normalized_weights.numpy()
+
+    # Step 4: Clip weights to the desired range and create the result dictionary.
+    weights_dict = {
+        task_id: np.clip(weight, clip_min, clip_max)
+        for task_id, weight in zip(task_ids, final_weights)
+    }
+
+    return weights_dict
+
+# Initialize state for the 'run-max-min' option as function attributes.
+compute_task_weights.RUNNING_MAX = -float('inf')
+compute_task_weights.RUNNING_MIN = float('inf')
+
+
+class TemperatureScheduler:
+    """
+    Overview:
+        A scheduler to gradually adjust a temperature value over a specified number
+        of training steps. This can be used for exploration or weighting schemes.
+
+    Arguments:
+        - initial_temp (:obj:`float`): The starting temperature.
+        - final_temp (:obj:`float`): The target temperature to be reached after `threshold_steps`.
+        - threshold_steps (:obj:`int`): The number of steps over which the temperature will anneal.
+        - mode (:obj:`str`): The annealing mode, either 'linear' or 'exponential'.
+    """
+
+    def __init__(self, initial_temp: float, final_temp: float, threshold_steps: int, mode: str = 'linear'):
+        if mode not in ['linear', 'exponential']:
+            raise ValueError("Mode must be 'linear' or 'exponential'.")
+        self.initial_temp = initial_temp
+        self.final_temp = final_temp
+        self.threshold_steps = max(1, threshold_steps)  # Avoid division by zero
+        self.mode = mode
+
+    def get_temperature(self, current_step: int) -> float:
+        """
+        Overview:
+            Calculates the temperature for the given training step.
+
+        Arguments:
+            - current_step (:obj:`int`): The current training step.
+
+        Returns:
+            - float: The calculated temperature for the current step.
+        """
+        if current_step >= self.threshold_steps:
+            return self.final_temp
+
+        progress = current_step / self.threshold_steps
+
+        if self.mode == 'linear':
+            return self.initial_temp - (self.initial_temp - self.final_temp) * progress
+        else:  # 'exponential'
+            # Exponential decay from initial_temp to final_temp
+            # T(t) = T_initial * (T_final / T_initial)^(t / N)
+            if self.initial_temp <= 0:
+                 raise ValueError("Initial temperature must be positive for exponential decay.")
+            scale = self.final_temp / self.initial_temp
+            return self.initial_temp * (scale**progress)
+
+
+def tasks_per_stage(unsolved: int, remain_lora: int) -> int:
+    """
+    Overview:
+        Calculates the number of tasks to assign per LoRA adapter stage.
+        It's the ceiling of the division of unsolved tasks by remaining adapters.
+
+    Arguments:
+        - unsolved (:obj:`int`): The number of tasks yet to be solved.
+        - remain_lora (:obj:`int`): The number of available LoRA adapters.
+
+    Returns:
+        - int: The number of tasks to be handled in the current stage, at least 1.
+    """
+    return max(1, math.ceil(unsolved / max(remain_lora, 1)))
+
+
+def compute_unizero_mt_normalized_stats(
+    eval_returns: Dict[int, float],
+    human_scores: Dict[int, float],
+    random_scores: Dict[int, float]
+) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Overview:
+        Calculates the Human-Normalized Mean and Median for a set of evaluation returns.
+        If no valid returns are provided, it returns (None, None).
+
+    Arguments:
+        - eval_returns (:obj:`Dict[int, float]`): A dictionary of evaluation returns per task ID.
+        - human_scores (:obj:`Dict[int, float]`): A dictionary of human expert scores per task ID.
+        - random_scores (:obj:`Dict[int, float]`): A dictionary of random policy scores per task ID.
+
+    Returns:
+        - Tuple[Optional[float], Optional[float]]: A tuple containing the human-normalized mean and median.
+    """
+    normalized = []
+    for tid, ret in eval_returns.items():
+        if ret is None or tid not in human_scores or tid not in random_scores:
+            continue
+        denom = human_scores[tid] - random_scores[tid]
+        if denom == 0:
+            continue
+        normalized.append((ret - random_scores[tid]) / denom)
+
+    if not normalized:
+        return None, None
+
+    arr = np.asarray(normalized, dtype=np.float32)
+    return float(arr.mean()), float(np.median(arr))
+
+
+def allocate_batch_size(
+    cfgs: List[EasyDict],
+    game_buffers: List[GameBuffer],
+    alpha: float = 1.0,
+    clip_scale: int = 1
+) -> List[int]:
+    """
+    Overview:
+        Allocates batch sizes for different tasks inversely proportional to the
+        number of collected episodes for each task. It also dynamically clips
+        the batch size range to improve training stability.
+
+    Arguments:
+        - cfgs (:obj:`List[EasyDict]`): A list of configuration objects for each task.
+        - game_buffers (:obj:`List[GameBuffer]`): A list of replay buffer instances for each task.
+        - alpha (:obj:`float`): A hyperparameter to control the degree of inverse proportionality.
+        - clip_scale (:obj:`int`): A scaling factor to determine the min/max batch size clip range.
+
+    Returns:
+        - List[int]: A list of allocated batch sizes for each task.
+    """
+    # This function assumes a DDP environment.
+    if not dist.is_available() or not dist.is_initialized():
+        # Fallback for non-DDP environment if needed, though the logic is DDP-centric.
+        logging.warning("allocate_batch_size is designed for DDP and may not work as expected.")
+        world_size = 1
+        rank = 0
+    else:
+        world_size = dist.get_world_size()
+        rank = dist.get_rank()
+
+    # Extract the number of collected episodes from each local buffer.
+    local_episodes = [buffer.num_of_collected_episodes for buffer in game_buffers]
+
+    # Gather episode counts from all ranks.
+    all_task_episodes_list = [None for _ in range(world_size)]
+    dist.all_gather_object(all_task_episodes_list, local_episodes)
+
+    # Flatten the list of lists into a single list of episode counts for all tasks.
+    all_task_episodes = [ep for sublist in all_task_episodes_list for ep in sublist]
+
+    if rank == 0:
+        logging.info(f'All task collected episodes: {all_task_episodes}')
+
+    # Calculate weights inversely proportional to episode counts.
+    # Add 1 to avoid division by zero for new tasks.
+    inv_episodes = np.array([1.0 / (episodes + 1) for episodes in all_task_episodes])
+    inv_sum = np.sum(inv_episodes)
+
+    # Total batch size is assumed to be consistent across configs.
+    total_batch_size = cfgs[0].policy.total_batch_size
+
+    # Define dynamic clipping range for batch sizes.
+    avg_batch_size = total_batch_size / len(all_task_episodes)
+    min_batch_size = avg_batch_size / clip_scale
+    max_batch_size = avg_batch_size * clip_scale
+
+    # Calculate batch sizes based on weights, apply alpha for smoothing.
+    task_weights = (inv_episodes / inv_sum)**alpha
+    batch_sizes = total_batch_size * task_weights
+
+    # Clip and convert to integers.
+    batch_sizes = np.clip(batch_sizes, min_batch_size, max_batch_size)
+    batch_sizes = [int(size) for size in batch_sizes]
+
+    return batch_sizes
+
+
+# ==============================================================================
+# Distributed Data Parallel (DDP) Utilities
+# ==============================================================================
+
+def is_ddp_enabled() -> bool:
+    """
+    Overview:
+        Checks if the environment is set up for Distributed Data Parallel (DDP) training.
+
+    Returns:
+        - bool: True if `torch.distributed` is available and initialized, False otherwise.
     """
     return dist.is_available() and dist.is_initialized()
 
-def ddp_synchronize():
+
+def ddp_synchronize() -> None:
     """
-    Perform a barrier synchronization across all processes in DDP mode.
-    Ensures all processes reach this point before continuing.
+    Overview:
+        Performs a barrier synchronization across all processes in a DDP group.
+        This ensures that all processes reach this point before any of them proceed.
     """
     if is_ddp_enabled():
         dist.barrier()
 
+
 def ddp_all_reduce_sum(tensor: torch.Tensor) -> torch.Tensor:
     """
-    Perform an all-reduce operation (sum) on the given tensor across
-    all processes in DDP mode. Returns the reduced tensor.
+    Overview:
+        Performs an all-reduce operation (sum) on a given tensor across all
+        processes in the DDP group.
 
     Arguments:
-        - tensor (:obj:`torch.Tensor`): The input tensor to be reduced.
+        - tensor (:obj:`torch.Tensor`): The tensor to be reduced.
 
     Returns:
-        - torch.Tensor: The reduced tensor, summed across all processes.
+        - torch.Tensor: The reduced tensor, with values summed across all processes.
     """
     if is_ddp_enabled():
         dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
     return tensor
 
-def calculate_update_per_collect(cfg: 'EasyDict', new_data: List[List[torch.Tensor]], world_size: int = 1) -> int:
-    """
-    Calculate the number of updates to perform per data collection in a
-    Distributed Data Parallel (DDP) setting. This ensures that all GPUs
-    compute the same `update_per_collect` value, synchronized across processes.
 
-    Arguments:
-        - cfg: Configuration object containing policy settings.
-        - new_data (List[List[torch.Tensor]]): The newly collected data segments.
-        - world_size (int): The total number of processes.
+# ==============================================================================
+# Reinforcement Learning Workflow Utilities
+# ==============================================================================
 
-    Returns:
-        - int: The number of updates to perform per collection.
-    """
-    # Retrieve the update_per_collect setting from the configuration
-    update_per_collect = cfg.policy.update_per_collect
-
-    if update_per_collect is None:
-        # If update_per_collect is not explicitly set, calculate it based on
-        # the number of collected transitions and the replay ratio.
-
-        # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
-        # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
-        collected_transitions_num = sum(
-            min(len(game_segment), cfg.policy.game_segment_length)
-            for game_segment in new_data[0]
-        )
-
-        if torch.cuda.is_available() and world_size > 1:
-            # Convert the collected transitions count to a GPU tensor for DDP operations.
-            collected_transitions_tensor = torch.tensor(
-                collected_transitions_num, dtype=torch.int64, device='cuda'
-            )
-
-            # Synchronize the collected transitions count across all GPUs using all-reduce.
-            total_collected_transitions = ddp_all_reduce_sum(
-                collected_transitions_tensor
-            ).item()
-
-            # Calculate update_per_collect based on the total synchronized transitions count.
-            update_per_collect = int(total_collected_transitions * cfg.policy.replay_ratio)
-
-            # Ensure the computed update_per_collect is positive.
-            assert update_per_collect > 0, "update_per_collect must be positive"
-        else:
-            # If not using DDP, calculate update_per_collect directly from the local count.
-            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
-
-    return update_per_collect
-
-def initialize_zeros_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str) -> torch.Tensor:
+def calculate_update_per_collect(
+    cfg: EasyDict,
+    new_data: List[List[torch.Tensor]],
+    world_size: int = 1
+) -> int:
     """
     Overview:
-        Initialize a zeros tensor for batch observations based on the shape. This function is used to initialize the UniZero model input.
-    Arguments:
-        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
-        - batch_size (:obj:`int`): The batch size.
-        - device (:obj:`str`): The device to store the tensor.
-    Returns:
-        - zeros (:obj:`torch.Tensor`): The zeros tensor.
-    """
-    if isinstance(observation_shape, (list, tuple)):
-        shape = [batch_size, *observation_shape]
-    elif isinstance(observation_shape, int):
-        shape = [batch_size, observation_shape]
-    else:
-        raise TypeError(f"observation_shape must be either an int, a list, or a tuple, but got {type(observation_shape).__name__}")
+        Calculates the number of training updates to perform per data collection cycle.
+        In a DDP setting, it synchronizes transition counts across all GPUs to ensure
+        a consistent `update_per_collect` value.
 
-    return torch.zeros(shape).to(device)
+    Arguments:
+        - cfg (:obj:`EasyDict`): The configuration object containing policy settings.
+                                 It's expected to have `cfg.policy.update_per_collect`,
+                                 `cfg.policy.replay_ratio`, etc.
+        - new_data (:obj:`List[List[torch.Tensor]]`): The newly collected data segments.
+        - world_size (:obj:`int`): The total number of DDP processes.
+
+    Returns:
+        - int: The number of updates to perform.
+    """
+    update_per_collect = cfg.policy.get('update_per_collect')
+
+    if update_per_collect is not None:
+        return update_per_collect
+
+    # If not explicitly set, calculate based on replay ratio.
+    # Note: A game segment's length can be less than `game_segment_length` if it's the
+    # final segment of an episode.
+    collected_transitions_num = sum(
+        min(len(game_segment), cfg.policy.game_segment_length)
+        for game_segment in new_data[0]
+    )
+
+    if torch.cuda.is_available() and world_size > 1:
+        # In DDP, synchronize the transition count across all GPUs.
+        collected_transitions_tensor = torch.tensor(
+            collected_transitions_num, dtype=torch.int64, device='cuda'
+        )
+        total_collected_transitions = ddp_all_reduce_sum(
+            collected_transitions_tensor
+        ).item()
+        updates = int(total_collected_transitions * cfg.policy.replay_ratio)
+    else:
+        # In a single-process setup.
+        updates = int(collected_transitions_num * cfg.policy.replay_ratio)
+
+    return max(1, updates) # Ensure at least one update.
+
 
 def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str, pad_token_id: int = 0) -> torch.Tensor:
     """
@@ -140,110 +566,251 @@ def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], b
     return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == -1 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
 
 def random_collect(
-        policy_cfg: 'EasyDict',  # noqa
-        policy: 'Policy',  # noqa
-        RandomPolicy: 'Policy',  # noqa
-        collector: 'ISerialCollector',  # noqa
-        collector_env: 'BaseEnvManager',  # noqa
-        replay_buffer: 'IBuffer',  # noqa
-        postprocess_data_fn: Optional[Callable] = None
-) -> None:  # noqa
-    assert policy_cfg.random_collect_episode_num > 0
+    policy_cfg: EasyDict,
+    policy: Policy,
+    RandomPolicy: Callable,
+    collector: ISerialCollector,
+    collector_env: BaseEnvManager,
+    replay_buffer: IBuffer,
+    postprocess_data_fn: Optional[Callable] = None
+) -> None:
+    """
+    Overview:
+        Performs an initial data collection phase using a random policy to populate
+        the replay buffer before training begins.
+
+    Arguments:
+        - policy_cfg (:obj:`EasyDict`): Configuration for the policy.
+        - policy (:obj:`Policy`): The main training policy instance.
+        - RandomPolicy (:obj:`Callable`): A constructor or class for creating a random policy.
+        - collector (:obj:`ISerialCollector`): The data collector instance.
+        - collector_env (:obj:`BaseEnvManager`): The environment manager.
+        - replay_buffer (:obj:`IBuffer`): The replay buffer to store collected data.
+        - postprocess_data_fn (:obj:`Optional[Callable]`): An optional function to process data after collection.
+    """
+    random_collect_episode_num = policy_cfg.get('random_collect_episode_num', 0)
+    if random_collect_episode_num <= 0:
+        return
 
     random_policy = RandomPolicy(cfg=policy_cfg, action_space=collector_env.env_ref.action_space)
-    # set the policy to random policy
     collector.reset_policy(random_policy.collect_mode)
 
-    # set temperature for visit count distributions according to the train_iter,
-    # please refer to Appendix D in MuZero paper for details.
-    collect_kwargs = {'temperature': 1, 'epsilon': 0.0}
+    # Use neutral MCTS parameters for random collection.
+    collect_kwargs = {'temperature': 1.0, 'epsilon': 0.0}
 
-    # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0,
-                                 policy_kwargs=collect_kwargs)
+    new_data = collector.collect(
+        n_episode=random_collect_episode_num,
+        train_iter=0,
+        policy_kwargs=collect_kwargs
+    )
 
-    if postprocess_data_fn is not None:
+    if postprocess_data_fn:
         new_data = postprocess_data_fn(new_data)
 
-    # save returned new_data collected by the collector
     replay_buffer.push_game_segments(new_data)
-    # remove the oldest data if the replay buffer is full.
     replay_buffer.remove_oldest_data_to_fit()
 
-    # restore the policy
+    # Restore the original policy to the collector.
     collector.reset_policy(policy.collect_mode)
 
 
-def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
+# ==============================================================================
+# Logging Utilities
+# ==============================================================================
+
+def log_module_trainable_status(
+    module: nn.Module,
+    module_name: str,
+    logger: logging.Logger
+) -> None:
     """
     Overview:
-        Log the memory usage of the buffer and the current process to TensorBoard.
+        Logs the detailed trainable/frozen status of all parameters within a given module.
+
+    Arguments:
+        - module (:obj:`nn.Module`): The module to inspect (e.g., a ViT Encoder).
+        - module_name (:obj:`str`): The name of the module for logging purposes.
+        - logger (:obj:`logging.Logger`): The logger instance to use for output.
+    """
+    logger.info(f"--- Parameter Status Details for Module: '{module_name}' ---")
+
+    total_params = 0
+    trainable_params = 0
+
+    param_list = list(module.named_parameters())
+    if not param_list:
+        logger.info("  - No parameters found in this module.")
+        return
+
+    for name, param in param_list:
+        total_params += param.numel()
+        status = "Trainable" if param.requires_grad else "Frozen"
+        logger.info(f"  - {name:<60} | Shape: {str(param.shape):<25} | Status: {status}")
+        if param.requires_grad:
+            trainable_params += param.numel()
+
+    logger.info(f"--- Summary for Module: '{module_name}' ---")
+    logger.info(f"  - Total Parameters: {total_params:,}")
+    logger.info(f"  - Trainable Parameters: {trainable_params:,}")
+    if total_params > 0:
+        percentage = 100 * trainable_params / total_params
+        logger.info(f"  - Trainable Percentage: {percentage:.4f}%")
+    logger.info("-" * (len(module_name) + 40))
+
+
+def log_param_statistics(model: nn.Module, logger: logging.Logger) -> None:
+    """
+    Overview:
+        Logs a concise summary of the number and size of trainable versus total
+        parameters in a model.
+
+    Arguments:
+        - model (:obj:`nn.Module`): The model to analyze.
+        - logger (:obj:`logging.Logger`): The logger instance for output.
+    """
+    n_tensors_total = sum(1 for _ in model.parameters())
+    n_tensors_train = sum(1 for p in model.parameters() if p.requires_grad)
+
+    n_elems_total = sum(p.numel() for p in model.parameters())
+    n_elems_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    logger.info(
+        f'Trainable Parameters: '
+        f'{n_tensors_train}/{n_tensors_total} tensors | '
+        f'{n_elems_train:,}/{n_elems_total:,} elements '
+        f'({n_elems_train/1e6:.2f}M / {n_elems_total/1e6:.2f}M)'
+    )
+
+
+def log_buffer_memory_usage(
+    train_iter: int,
+    buffer: GameBuffer,
+    writer: SummaryWriter,
+    task_id: int = 0
+) -> None:
+    """
+    Overview:
+        Logs the memory usage of the replay buffer and the current process to TensorBoard.
+
     Arguments:
         - train_iter (:obj:`int`): The current training iteration.
-        - buffer (:obj:`GameBuffer`): The game buffer.
+        - buffer (:obj:`GameBuffer`): The replay buffer instance.
+        - writer (:obj:`SummaryWriter`): The TensorBoard writer.
+        - task_id (:obj:`int`): An optional ID to distinguish logs for different tasks.
+    """
+    # In DDP, only the main process should write to TensorBoard.
+    if writer is None:
+        return
+
+    prefix = f"Buffer/Task_{task_id}"
+    writer.add_scalar(f'{prefix}/num_collected_episodes', buffer.num_of_collected_episodes, train_iter)
+    writer.add_scalar(f'{prefix}/num_game_segments', len(buffer.game_segment_buffer), train_iter)
+    writer.add_scalar(f'{prefix}/num_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
+
+    # Calculate and log memory usage of the main buffer component.
+    buffer_memory_bytes = asizeof(buffer.game_segment_buffer)
+    buffer_memory_mb = buffer_memory_bytes / (1024 * 1024)
+    writer.add_scalar(f'{prefix}/memory_usage_mb/game_segment_buffer', buffer_memory_mb, train_iter)
+
+    # Get and log total memory usage of the current process.
+    process = psutil.Process(os.getpid())
+    process_memory_bytes = process.memory_info().rss
+    process_memory_mb = process_memory_bytes / (1024 * 1024)
+    writer.add_scalar(f'{prefix}/memory_usage_mb/process', process_memory_mb, train_iter)
+
+
+def log_buffer_run_time(train_iter: int, buffer: GameBuffer, writer: SummaryWriter) -> None:
+    """
+    Overview:
+        Logs average runtime metrics related to buffer operations (e.g., sampling, search)
+        to TensorBoard.
+
+    Arguments:
+        - train_iter (:obj:`int`): The current training iteration.
+        - buffer (:obj:`GameBuffer`): The buffer instance containing runtime metrics.
         - writer (:obj:`SummaryWriter`): The TensorBoard writer.
     """
-    # "writer is None" means we are in a slave process in the DDP setup.
-    if writer is not None:
-        writer.add_scalar('Buffer/num_of_all_collected_episodes', buffer.num_of_collected_episodes, train_iter)
-        writer.add_scalar('Buffer/num_of_game_segments', len(buffer.game_segment_buffer), train_iter)
-        writer.add_scalar('Buffer/num_of_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
+    if writer is None or buffer.sample_times == 0:
+        return
 
-        game_segment_buffer = buffer.game_segment_buffer
+    sample_times = buffer.sample_times
+    writer.add_scalar('Buffer/avg_reanalyze_time_ms', (buffer.compute_target_re_time / sample_times) * 1000, train_iter)
+    writer.add_scalar('Buffer/avg_origin_search_time_ms', (buffer.origin_search_time / sample_times) * 1000, train_iter)
+    writer.add_scalar('Buffer/avg_reuse_search_time_ms', (buffer.reuse_search_time / sample_times) * 1000, train_iter)
+    writer.add_scalar('Buffer/avg_active_root_num', buffer.active_root_num / sample_times, train_iter)
 
-        # Calculate the amount of memory occupied by self.game_segment_buffer (in bytes).
-        buffer_memory_usage = asizeof(game_segment_buffer)
-
-        # Convert buffer_memory_usage to megabytes (MB).
-        buffer_memory_usage_mb = buffer_memory_usage / (1024 * 1024)
-
-        # Record the memory usage of self.game_segment_buffer to TensorBoard.
-        writer.add_scalar('Buffer/memory_usage/game_segment_buffer', buffer_memory_usage_mb, train_iter)
-
-        # Get the amount of memory currently used by the process (in bytes).
-        process = psutil.Process(os.getpid())
-        process_memory_usage = process.memory_info().rss
-
-        # Convert process_memory_usage to megabytes (MB).
-        process_memory_usage_mb = process_memory_usage / (1024 * 1024)
-
-        # Record the memory usage of the process to TensorBoard.
-        writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
+    # Reset metrics after logging to prepare for the next interval.
+    buffer.reset_runtime_metrics()
 
 
-def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
-    """
-    Overview:
-        Log the average runtime metrics of the buffer to TensorBoard.
-    Arguments:
-        - train_iter (:obj:`int`): The current training iteration.
-        - buffer (:obj:`GameBuffer`): The game buffer containing runtime metrics.
-        - writer (:obj:`SummaryWriter`): The TensorBoard writer for logging metrics.
+# ==============================================================================
+# Example Usage
+# ==============================================================================
+if __name__ == '__main__':
+    # Configure a basic logger to see output from functions with `verbose=True`
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-    .. note::
-        "writer is None" indicates that the function is being called in a slave process in the DDP setup.
-    """
-    if writer is not None:
-        sample_times = buffer.sample_times
+    print("\n--- Example for `compute_task_weights` ---")
+    task_rewards_list = [
+        {"task1": 10, "task2": 100, "task3": 1000, "task4": 500, "task5": 300},
+        {"task1": 1, "task2": 10, "task3": 100, "task4": 1000, "task5": 10000},
+        {"task1": 0.1, "task2": 0.5, "task3": 0.9, "task4": 5, "task5": 10},
+    ]
 
-        if sample_times == 0:
-            return
+    for i, task_rewards in enumerate(task_rewards_list, start=1):
+        print(f"\n--- Case {i} ---")
+        print(f"Original Rewards: {task_rewards}")
 
-        # Calculate and log average reanalyze time.
-        average_reanalyze_time = buffer.compute_target_re_time / sample_times
-        writer.add_scalar('Buffer/average_reanalyze_time', average_reanalyze_time, train_iter)
+        # Example 1: Using 'none' normalization (proportional to raw values)
+        weights_none = compute_task_weights(task_rewards, option="none", use_softmax=False)
+        print(f"Weights (proportional to raw values): {weights_none}")
 
-        # Calculate and log average origin search time.
-        average_origin_search_time = buffer.origin_search_time / sample_times
-        writer.add_scalar('Buffer/average_origin_search_time', average_origin_search_time, train_iter)
+        # Example 2: Using 'symlog' normalization
+        weights_symlog = compute_task_weights(task_rewards, option="symlog", use_softmax=False)
+        print(f"Weights (with symlog normalization): {weights_symlog}")
 
-        # Calculate and log average reuse search time.
-        average_reuse_search_time = buffer.reuse_search_time / sample_times
-        writer.add_scalar('Buffer/average_reuse_search_time', average_reuse_search_time, train_iter)
+        # Example 3: Using 'rank' normalization and softmax with inverse proportion
+        weights_rank_softmax = compute_task_weights(task_rewards, option="rank", use_softmax=True, reverse=True)
+        print(f"Weights (inverse rank with softmax): {weights_rank_softmax}")
 
-        # Calculate and log average active root number.
-        average_active_root_num = buffer.active_root_num / sample_times
-        writer.add_scalar('Buffer/average_active_root_num', average_active_root_num, train_iter)
+    print("\n--- Example for `freeze_non_lora` ---")
 
-        # Reset the time records in the buffer.
-        buffer.reset_runtime_metrics()
+    # ==========================================================================
+    # FIX: The nn.Parameter must be wrapped in an nn.Module subclass to be
+    #      placed inside an nn.ModuleDict.
+    # ==========================================================================
+    class AdapterScale(nn.Module):
+        """A simple nn.Module wrapper for a single learnable parameter."""
+        def __init__(self):
+            super().__init__()
+            self.logit = nn.Parameter(torch.randn(1))
+
+    # Create a dummy model to demonstrate freezing
+    class DummyModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = nn.Linear(10, 10)
+            self.layer1 = nn.Linear(10, 10)
+            # Simulate LoRA parameters with correct naming
+            self.layer1.lora_A = nn.Parameter(torch.randn(10, 2))
+            self.layer1.lora_B = nn.Parameter(torch.randn(2, 10))
+            
+            # Correctly structure the adapter_scales using the wrapper module.
+            # This ensures that the value associated with key '0' is a valid nn.Module.
+            self.adapter_scales = nn.ModuleDict({
+                '0': AdapterScale()
+            })
+
+    model = DummyModel()
+    print("Initial parameter status:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nFreezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=True, verbose=True)
+    print("\nParameter status after freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nUn-freezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=False, verbose=True)
+    print("\nParameter status after un-freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
