@@ -74,8 +74,8 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         {
             'params': list(head_params.values()),
             'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
-            'weight_decay': 0.0  # 通常Heads的权重不做衰减
-            # 'weight_decay': weight_decay
+            # 'weight_decay': 0.0  # 通常Heads的权重不做衰减
+            'weight_decay': weight_decay
 
         }
     ]
@@ -879,7 +879,6 @@ class UniZeroPolicy(MuZeroPolicy):
                 # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
                 # self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
                 self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
-
 
             # --- 使用当前更新后的 alpha (截断梯度流) ---
             current_alpha = self.log_alpha.exp().detach()
