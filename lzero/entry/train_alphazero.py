@@ -68,6 +68,7 @@ def train_alphazero(
     # load pretrained model
     if model_path is not None:
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
+        print('load model from: %s' % model_path)
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
@@ -91,6 +92,14 @@ def train_alphazero(
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
     )
+
+    # TODO: for debug
+    # stop, reward = evaluator.eval(
+    #             learner.save_checkpoint,
+    #             learner.train_iter,
+    #             collector.envstep,
+    #         )
+    # import sys; sys.exit(0)
 
     # ==============================================================
     # Main loop
@@ -123,6 +132,12 @@ def train_alphazero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         new_data = sum(new_data, [])
+        
+        if policy_config.simulation_env_id == 'seller':
+            for i in range(len(new_data)):
+                new_data[i]['obs']['observation'] = str(new_data[i]['obs']['observation']) 
+                new_data[i]['next_obs']['observation'] = str(new_data[i]['next_obs']['observation']) 
+
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             collected_transitions_num = len(new_data)
