@@ -14,6 +14,8 @@ from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 from ding.envs import BaseEnv, BaseEnvTimestep
 from jericho import FrotzEnv
 
+import re
+
 
 @ENV_REGISTRY.register('jericho')
 class JerichoEnv(BaseEnv):
@@ -120,75 +122,186 @@ class JerichoEnv(BaseEnv):
         self.reward_space: gym.spaces.Box = gym.spaces.Box(
             low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
 
+    # def prepare_obs(self, obs: str, return_str: bool = False) -> Dict[str, Any]:
+    #     """
+    #     Overview:
+    #         Prepare the observation for the agent, including tokenization and the creation of an action mask.
+
+    #     Arguments:
+    #         - obs (:obj:`str`): The raw observation text.
+    #         - return_str (:obj:`bool`, optional): If True, the observation is returned as a raw string (defaults to False).
+
+    #     Returns:
+    #         - (:obj:`Dict[str, Any]`): A dictionary containing the observation, attention mask (if applicable),
+    #           and action mask. For unizero, an additional "to_play" key is provided.
+    #     """
+    #     if self._action_list is None:
+    #         self._action_list = self._env.get_valid_actions()
+
+    #     # Filter available actions based on whether stuck actions are removed.
+    #     if self.remove_stuck_actions:
+    #         available_actions: List[str] = [a for a in self._action_list if a not in self.blocked_actions]
+    #         if len(available_actions) < 1 and len(self._action_list) > 0:
+    #             # Fallback to the first action if all actions are blocked.
+    #             available_actions = [self._action_list[0]]
+    #         self._action_list = available_actions
+    #     else:
+    #         available_actions = self._action_list
+
+    #     # Include player location and inventory in the observation if enabled.
+    #     if self.add_location_and_inventory:
+    #         player_location = self._env.get_player_location()
+    #         inventory = self._env.get_inventory()
+    #         full_obs: str = f"Location: {player_location}\nInventory: {inventory}{obs}\nValid actions: {available_actions}"
+    #     else:
+    #         full_obs = f"{obs}\nValid actions: {available_actions}"
+        
+    #     full_obs_str = copy.deepcopy(full_obs)
+        
+    #     # Tokenize observation if required.
+    #     if not return_str:
+    #         tokenized_output = JerichoEnv.tokenizer(
+    #             [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
+    #         obs_attn_mask = tokenized_output['attention_mask']
+    #         full_obs = np.array(tokenized_output['input_ids'][0], dtype=np.int32)
+    #     # Create action mask based on the number of available actions.
+    #     if len(available_actions) == 0:
+    #         # Avoid an all-zero action mask that can cause segmentation faults.
+    #         action_mask = [1] + [0] * (self.max_action_num - 1)
+    #     elif 0 < len(available_actions) <= self.max_action_num:
+    #         action_mask = [1] * len(available_actions) + [0] * (self.max_action_num - len(available_actions))
+    #     elif len(available_actions) == self.max_action_num:
+    #         action_mask = [1] * len(available_actions)
+    #     else:
+    #         action_mask = [1] * self.max_action_num
+
+    #     action_mask = np.array(action_mask, dtype=np.int8)
+
+    #     if return_str:
+    #         if self.for_unizero:
+    #             return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+
+    #         else:
+    #             return {'observation': full_obs, 'action_mask': action_mask}
+    #     else:
+    #         if self.for_unizero:
+    #             if self.save_replay:
+    #                 return {'observation': full_obs, 'observation_str': full_obs_str,'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+    #             else:
+    #                 return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+    #         else:
+    #             return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
+
+
+    def _clean_jericho_object_str(self, obj_str: str) -> str:
+        """
+        一个高效且鲁棒的辅助函数，用于从 Jericho 的原始对象字符串中提取干净的名称。
+        
+        例如:
+        - 输入: "Obj42: Upstairs hallway Parent0 Sibling0..."
+        - 输出: "Upstairs hallway"
+        - 输入: "some other string" (不匹配模式)
+        - 输出: "some other string" (原样返回)
+        """
+        if not isinstance(obj_str, str):
+            return str(obj_str)  # 如果输入不是字符串，则返回其字符串表示形式
+
+        # 使用正则表达式匹配 "ObjXX: " 和 " Parent" 之间的内容。
+        # - `r'...'`: 原始字符串，避免反斜杠问题。
+        # - `Obj\d+:`: 匹配 "Obj" 后跟一个或多个数字和冒号。
+        # - `\s*`: 匹配零个或多个空白字符。
+        # - `(.*?)`: 非贪婪捕获组。这是核心，它会捕获两个模式之间的所有字符。
+        # - `\s*Parent`: 匹配 "Parent" 之前可能存在的空白。
+        match = re.search(r'Obj\d+:\s*(.*?)\s*Parent', obj_str)
+        
+        if match:
+            # group(1) 返回第一个捕获组的内容，.strip() 去除前后多余的空格。
+            return match.group(1).strip()
+        
+        # 如果正则表达式不匹配，说明字符串格式不符合预期，
+        # 作为鲁棒性保障，我们原样返回它。
+        return obj_str
+
+
     def prepare_obs(self, obs: str, return_str: bool = False) -> Dict[str, Any]:
-        """
-        Overview:
-            Prepare the observation for the agent, including tokenization and the creation of an action mask.
+            """
+            [已修复] 准备观测数据，现在会返回一个包含独立 'location' 和 'inventory' 键的字典。
+            """
+            if self._action_list is None:
+                self._action_list = self._env.get_valid_actions()
 
-        Arguments:
-            - obs (:obj:`str`): The raw observation text.
-            - return_str (:obj:`bool`, optional): If True, the observation is returned as a raw string (defaults to False).
-
-        Returns:
-            - (:obj:`Dict[str, Any]`): A dictionary containing the observation, attention mask (if applicable),
-              and action mask. For unizero, an additional "to_play" key is provided.
-        """
-        if self._action_list is None:
-            self._action_list = self._env.get_valid_actions()
-
-        # Filter available actions based on whether stuck actions are removed.
-        if self.remove_stuck_actions:
-            available_actions: List[str] = [a for a in self._action_list if a not in self.blocked_actions]
-            if len(available_actions) < 1 and len(self._action_list) > 0:
-                # Fallback to the first action if all actions are blocked.
-                available_actions = [self._action_list[0]]
-            self._action_list = available_actions
-        else:
-            available_actions = self._action_list
-
-        # Include player location and inventory in the observation if enabled.
-        if self.add_location_and_inventory:
-            player_location = self._env.get_player_location()
-            inventory = self._env.get_inventory()
-            full_obs: str = f"Location: {player_location}\nInventory: {inventory}{obs}\nValid actions: {available_actions}"
-        else:
-            full_obs = f"{obs}\nValid actions: {available_actions}"
-        
-        full_obs_str = copy.deepcopy(full_obs)
-        
-        # Tokenize observation if required.
-        if not return_str:
-            tokenized_output = JerichoEnv.tokenizer(
-                [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
-            obs_attn_mask = tokenized_output['attention_mask']
-            full_obs = np.array(tokenized_output['input_ids'][0], dtype=np.int32)
-        # Create action mask based on the number of available actions.
-        if len(available_actions) == 0:
-            # Avoid an all-zero action mask that can cause segmentation faults.
-            action_mask = [1] + [0] * (self.max_action_num - 1)
-        elif 0 < len(available_actions) <= self.max_action_num:
-            action_mask = [1] * len(available_actions) + [0] * (self.max_action_num - len(available_actions))
-        elif len(available_actions) == self.max_action_num:
-            action_mask = [1] * len(available_actions)
-        else:
-            action_mask = [1] * self.max_action_num
-
-        action_mask = np.array(action_mask, dtype=np.int8)
-
-        if return_str:
-            if self.for_unizero:
-                return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
-
+            if self.remove_stuck_actions:
+                available_actions: List[str] = [a for a in self._action_list if a not in self.blocked_actions]
+                if not available_actions and self._action_list:
+                    available_actions = [self._action_list[0]]
+                self._action_list = available_actions
             else:
-                return {'observation': full_obs, 'action_mask': action_mask}
-        else:
-            if self.for_unizero:
-                if self.save_replay:
-                    return {'observation': full_obs, 'observation_str': full_obs_str,'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+                available_actions = self._action_list
+
+            # 初始化返回的字典
+            result_obs = {}
+
+            # 构造观测字符串
+            if self.add_location_and_inventory:
+                # 1. 获取原始的 ZObject 对象和列表
+                raw_player_location = self._env.get_player_location()
+                raw_inventory = self._env.get_inventory()
+
+                # 2. 直接从对象属性获取干净的名称
+                #    这种方法高效、直接且不会因字符串格式变化而失效。
+
+                # 处理地点：检查对象是否存在，然后获取其 .name 属性
+                player_location = raw_player_location.name if hasattr(raw_player_location, 'name') else "N/A"
+                
+                # 处理库存：遍历列表，对每个 ZObject 获取其 .name 属性
+                if raw_inventory and isinstance(raw_inventory, list):
+                    # 使用列表推导式和 hasattr 安全地提取每个物品的名称
+                    inventory = [item.name for item in raw_inventory if hasattr(item, 'name')]
                 else:
-                    return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
+                    # 如果库存为空或不是列表，则返回一个空列表
+                    inventory = []
+
+                # 3. 将清理后的结构化信息添加到返回字典中
+                result_obs['location'] = player_location
+                # 如果库存为空列表，f-string会将其显示为 '[]'，如果需要显示 'empty'，可以加一步判断
+                result_obs['inventory'] = inventory if inventory else "empty"
+
+                # 4. 构造最终的观测字符串
+                #    f-string 会自动处理列表，输出如：Inventory: ['piece of white paper']
+                #    这比 "Inventory: [piece of white paper]" 稍微更规范一些。
+                full_obs_str = f"Location: {result_obs['location']}\nInventory: {result_obs['inventory']}\n{obs}\nValid actions: {available_actions}"
+
             else:
-                return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
+                # 即使不添加，也提供默认值以避免KeyError
+                result_obs['location'] = "N/A"
+                result_obs['inventory'] = "N/A"
+                full_obs_str = f"{obs}\nValid actions: {available_actions}"
+            
+            result_obs['observation'] = full_obs_str
+
+            # 处理 tokenization
+            if not return_str:
+                tokenized_output = JerichoEnv.tokenizer(
+                    [full_obs_str], truncation=True, padding="max_length", max_length=self.max_seq_len)
+                result_obs['observation'] = np.array(tokenized_output['input_ids'][0], dtype=np.int32)
+                result_obs['obs_attn_mask'] = tokenized_output['attention_mask']
+                if self.save_replay:
+                    result_obs['observation_str'] = full_obs_str
+
+            # 创建 action_mask
+            if not available_actions:
+                action_mask = [1] + [0] * (self.max_action_num - 1)
+            else:
+                num_actions = len(available_actions)
+                action_mask = [1] * min(num_actions, self.max_action_num) + [0] * (self.max_action_num - min(num_actions, self.max_action_num))
+            
+            result_obs['action_mask'] = np.array(action_mask, dtype=np.int8)
+
+            if self.for_unizero:
+                result_obs['to_play'] = -1
+                result_obs['timestep'] = self._timestep
+            
+            return result_obs
 
     def reset(self, return_str: bool = False) -> Dict[str, Any]:
         """
@@ -202,6 +315,8 @@ class JerichoEnv(BaseEnv):
             - (:obj:`Dict[str, Any]`): The processed observation from the environment reset.
         """
         initial_observation, info = self._env.reset()
+
+
         self.finished = False
         self._init_flag = True
         self._action_list = None
@@ -304,6 +419,7 @@ class JerichoEnv(BaseEnv):
         previous_obs: Optional[str] = self.last_observation if (self.remove_stuck_actions and self.last_observation is not None) else None
 
         observation, reward, done, info = self._env.step(action_str)
+
 
         self._timestep += 1
         if not self.for_unizero:
