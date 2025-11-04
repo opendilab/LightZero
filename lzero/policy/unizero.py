@@ -74,8 +74,8 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         {
             'params': list(head_params.values()),
             'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
-            'weight_decay': 0.0  # 通常Heads的权重不做衰减
-            # 'weight_decay': weight_decay
+            # 'weight_decay': 0.0  # 通常Heads的权重不做衰减
+            'weight_decay': weight_decay
 
         }
     ]
@@ -840,9 +840,10 @@ class UniZeroPolicy(MuZeroPolicy):
         # logits_policy_mean=self.intermediate_losses['logits_policy_mean']
         # logits_policy_max=self.intermediate_losses['logits_policy_max']
         # logits_policy_min=self.intermediate_losses['logits_policy_min']
-        # temperature_value=self.intermediate_losses['temperature_value']
-        # temperature_reward=self.intermediate_losses['temperature_reward']
-        # temperature_policy=self.intermediate_losses['temperature_policy']
+
+        temperature_value=self.intermediate_losses['temperature_value']
+        temperature_reward=self.intermediate_losses['temperature_reward']
+        temperature_policy=self.intermediate_losses['temperature_policy']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -879,7 +880,6 @@ class UniZeroPolicy(MuZeroPolicy):
                 # self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
                 self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
 
-
             # --- 使用当前更新后的 alpha (截断梯度流) ---
             current_alpha = self.log_alpha.exp().detach()
 
@@ -898,13 +898,30 @@ class UniZeroPolicy(MuZeroPolicy):
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
             self.ends_loss_weight = 0.
-            total_loss = (
-                self.reward_loss_weight * reward_loss +
-                self.value_loss_weight * value_loss +
-                self.policy_loss_weight * weighted_policy_loss +
-                self.obs_loss_weight  * obs_loss # 假设 ssl_loss_weight 是 obs_loss 的权重
-                # ... 如果还有其他损失项，也加进来 ...
-            )
+
+            self.latent_recon_loss_weight = self._cfg.model.world_model_cfg.latent_recon_loss_weight # 默认使用固定值
+            self.perceptual_loss_weight = self._cfg.model.world_model_cfg.perceptual_loss_weight # 默认使用固定值
+
+            if self.latent_recon_loss_weight>0:
+                total_loss = (
+                    self.reward_loss_weight * reward_loss +
+                    self.value_loss_weight * value_loss +
+                    self.policy_loss_weight * weighted_policy_loss +
+                    self.obs_loss_weight  * obs_loss +   # 假设 ssl_loss_weight 是 obs_loss 的权重
+                    self.latent_recon_loss_weight * latent_recon_loss+
+                    self.perceptual_loss_weight*perceptual_loss
+                    # ... 如果还有其他损失项，也加进来 ...
+                )
+            else:
+
+                total_loss = (
+                    self.reward_loss_weight * reward_loss +
+                    self.value_loss_weight * value_loss +
+                    self.policy_loss_weight * weighted_policy_loss +
+                    self.obs_loss_weight  * obs_loss  # 假设 ssl_loss_weight 是 obs_loss 的权重
+
+                    # ... 如果还有其他损失项，也加进来 ...
+                )
             weighted_total_loss = (weights * total_loss).mean()
         # ===================== END: 目标熵正则化更新逻辑 =====================
 

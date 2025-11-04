@@ -247,7 +247,77 @@ class WorldModel(nn.Module):
             self.keys_values_wm_size_list = []
             logging.info("Using OLD cache system (original implementation)")
         # =============================================================================
+
+    def _inspect_and_log_head_params(self, head_name: str, head_module: nn.Module, status: str):
+        """
+        检查并记录指定Head模块的参数统计信息。
         
+        Args:
+            head_name (str): 要检查的Head的名称 (例如, "Value Head")。
+            head_module (nn.Module): Head的实际nn.Sequential模块。
+            status (str): 描述当前状态的字符串 (例如, "Before Re-init")。
+        """
+        logging.info(f"--- 检查 {head_name} 参数 ({status}) ---")
+        with torch.no_grad():
+            for param_name, param in head_module.named_parameters():
+                if param.numel() > 0:
+                    stats = {
+                        "mean": param.mean().item(),
+                        "std": param.std().item(),
+                        "abs_mean": param.abs().mean().item(),
+                        "max": param.max().item(),
+                        "min": param.min().item(),
+                    }
+                    logging.info(
+                        f"  -> {param_name:<20} | "
+                        f"Mean: {stats['mean']:.4f}, Std: {stats['std']:.4f}, "
+                        f"AbsMean: {stats['abs_mean']:.4f}, "
+                        f"Max: {stats['max']:.4f}, Min: {stats['min']:.4f}"
+                    )
+        logging.info("-" * (23 + len(head_name) + len(status)))
+
+    def reinit_prediction_heads(self, heads_to_reinit: List[str] = ['value', 'reward']) -> None:
+        """
+        重新初始化指定的预测头（例如Value Head和Reward Head）的参数。
+        在重新初始化前后，会记录参数的统计信息以供分析。
+        
+        Args:
+            heads_to_reinit (List[str]): 一个包含要重新初始化的头的名称的列表。
+                                        默认为 ['value', 'reward']。
+        """
+        logging.info(f"开始重新初始化预测头: {heads_to_reinit}")
+
+        head_map = {
+            'value': self.head_value,
+            'reward': self.head_rewards,
+            'policy': self.head_policy,
+        }
+
+        def _init_weights_for_head(module):
+            # TODO
+            init_weights(module, norm_type=self.config.norm_type, liner_weight_zero=True)
+
+        for head_name in heads_to_reinit:
+            if head_name in head_map and hasattr(head_map[head_name], 'head_module'):
+                head_instance = head_map[head_name]
+                capitalized_name = head_name.capitalize() + " Head"
+
+                # 1. 重新初始化前检查参数
+                self._inspect_and_log_head_params(capitalized_name, head_instance.head_module, "Before Re-init")
+
+                # 2. 应用重新初始化
+                logging.info(f"正在重新初始化 {capitalized_name}...")
+                head_instance.head_module.apply(_init_weights_for_head)
+
+                # 3. 重新初始化后再次检查参数
+                self._inspect_and_log_head_params(capitalized_name, head_instance.head_module, "After Re-init")
+
+                logging.info(f"{capitalized_name} 参数已成功重新初始化。")
+            else:
+                logging.warning(f"未能找到名为 '{head_name}' 的预测头或其 'head_module'。跳过。")
+
+        logging.info("所有指定的预测头重新初始化完成。")
+
     def _analyze_latent_representation(
             self, 
             latent_states: torch.Tensor, 
@@ -1475,19 +1545,27 @@ class WorldModel(nn.Module):
             # ==================== Phase 1.5: Storage Layer Integration ====================
             if self.use_new_cache_manager:
                 # NEW SYSTEM: Use KVCacheManager for cache storage
+                # ==================== BUG FIX: Deep Copy Before Storage ====================
+                # CRITICAL: Must clone before storing to prevent cache corruption.
+                # self.keys_values_wm_single_env is a shared object that gets modified.
+                # Without cloning, all cache entries would point to the same object,
+                # causing incorrect KV retrieval and training divergence.
+                kv_cache_to_store = self.keys_values_wm_single_env.clone()
+                # =============================================================================
+
                 if is_init_infer:
                     # Store to per-environment init cache pool
                     # Note: KVCacheManager automatically handles eviction logic (FIFO/LRU)
                     self.kv_cache_manager.set_init_cache(
                         env_id=i,
                         cache_key=cache_key,
-                        kv_cache=self.keys_values_wm_single_env
+                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
                     )
                 else:
                     # Store to global recurrent cache pool
                     self.kv_cache_manager.set_recur_cache(
                         cache_key=cache_key,
-                        kv_cache=self.keys_values_wm_single_env
+                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
                     )
             else:
                 # OLD SYSTEM: Use legacy cache with manual eviction
@@ -1758,25 +1836,27 @@ class WorldModel(nn.Module):
             value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            if self.config.latent_recon_loss_weight > 0:
 
-            #  ========== for visualization ==========
-            # Uncomment the lines below for visual analysis
-            # original_images, reconstructed_images = batch['observations'], reconstructed_images
-            # target_policy = batch['target_policy']
-            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            #  ========== for visualization ==========
+                # Reconstruct observations from latent state representations
+                reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
-            # ========== Calculate reconstruction loss and perceptual loss ============
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            
-            latent_recon_loss = self.latent_recon_loss
-            perceptual_loss = self.perceptual_loss
+                #  ========== for visualization ==========
+                # Uncomment the lines below for visual analysis
+                # original_images, reconstructed_images = batch['observations'], reconstructed_images
+                # target_policy = batch['target_policy']
+                # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
+                #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
+                # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
+                #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
+                #  ========== for visualization ==========
+                # ========== Calculate reconstruction loss and perceptual loss ============
+                latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+                perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            else:
+                # TODO:
+                latent_recon_loss = self.latent_recon_loss
+                perceptual_loss = self.perceptual_loss
 
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,

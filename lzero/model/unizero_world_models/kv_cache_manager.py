@@ -153,11 +153,19 @@ class KVCachePool:
         Returns:
             The pool index where the cache was stored
         """
+        # ==================== BUG FIX: Defensive Deep Copy ====================
+        # CRITICAL: Always clone the input to prevent cache corruption.
+        # This provides an additional layer of protection in case the caller
+        # forgets to clone. The clone operation ensures that the stored cache
+        # is independent from the caller's object, preventing unintended mutations.
+        kv_cache_copy = kv_cache.clone()
+        # =======================================================================
+
         # Check if key already exists
         if cache_key in self._key_to_index:
             # Update existing entry
             pool_index = self._key_to_index[cache_key]
-            self._pool[pool_index] = kv_cache
+            self._pool[pool_index] = kv_cache_copy  # Store cloned copy
 
             if self.eviction_strategy == EvictionStrategy.LRU:
                 self._access_order.move_to_end(cache_key)
@@ -173,8 +181,8 @@ class KVCachePool:
         if old_key is not None:
             self._evict(old_key, pool_index)
 
-        # Store new entry
-        self._pool[pool_index] = kv_cache
+        # Store new entry (already cloned above)
+        self._pool[pool_index] = kv_cache_copy
         self._key_to_index[cache_key] = pool_index
         self._index_to_key[pool_index] = cache_key
 
