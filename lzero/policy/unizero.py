@@ -528,7 +528,9 @@ class UniZeroPolicy(MuZeroPolicy):
             # self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
             total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
             # final_lr = self._cfg.get('final_learning_rate', 0.0)
-            final_lr = self._cfg.get('final_learning_rate', 1e-6)
+            # final_lr = self._cfg.get('final_learning_rate', 1e-6)
+            final_lr = self._cfg.get('final_learning_rate', 4e-5)
+
 
             self.lr_scheduler = CosineAnnealingLR(
                 self._optimizer_world_model, 

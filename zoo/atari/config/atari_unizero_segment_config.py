@@ -166,7 +166,9 @@ def main(env_id, seed):
             learning_rate=0.0001,
 
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
-            model_path=None,
+            model_path=None, # TODO
+            # model_path="/mnt/shared-storage-user/puyuan/code_20250828/LightZero/data_unizero_st_refactor1024/Qbert/Qbert_uz_300k-reset-head_head-wd_recon-perc-w05_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-06-clipmin5e-3-lr1e-3-encoder-clip30-10-100k_brf2e-10-rbs160-rp0.75_nlayer2_numsegments-8_gsl50_rr0.25_Htrain16-Hinfer8_bs64_seed0/ckpt/ckpt_best.pth.tar",
+
 
             # (bool) 是否启用自适应策略熵权重 (alpha)
             use_adaptive_entropy_weight=True,
@@ -193,10 +195,14 @@ def main(env_id, seed):
             # (float) 退火的起始 clip 值 (训练初期，较宽松)。
             encoder_clip_start_value=30.0,
             # (float) 退火的结束 clip 值 (训练后期，较严格)。
-            encoder_clip_end_value=10.0,
+            # encoder_clip_end_value=10.0,
+            # # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+            # # encoder_clip_anneal_steps=400000,  # 例如，在400k次迭代后达到最终值
+            # encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+
+            encoder_clip_end_value=2.0,
             # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
-            # encoder_clip_anneal_steps=400000,  # 例如，在400k次迭代后达到最终值
-            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
+            encoder_clip_anneal_steps=400000,  # 例如，在400k次迭代后达到最终值
 
             # ==================== START: label smooth ====================
             policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
@@ -229,7 +235,12 @@ def main(env_id, seed):
             train_start_after_envsteps=0, # only for debug
             # train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
-            grad_clip_value=5,
+            # grad_clip_value=5,
+
+            grad_clip_value=0.5,
+            cos_lr_scheduler=True,
+            inal_learning_rate=4e-5, # dreamerv3
+
             replay_buffer_size=int(5e5),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
@@ -262,7 +273,13 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1024/{env_id[3:-3]}/{env_id[3:-3]}_uz_300k-reset-head_head-wd_recon-perc-w05_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-06-clipmin5e-3-lr1e-3-encoder-clip30-10-100k_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_cos4e-5_gcv05_encoder-400k-2_250k-reset-head_head-wd_recon-perc-w05_cossimloss_nokvcachemanager_targetentropy-alpha-100k-098-06-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_250k-reset-head_head-wd_recon-perc-w05_cossimloss_nokvcachemanager_targetentropy-alpha-100k-098-06-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_from-300k-iter-ckpt_10k-300k-reset-head_head-wd_recon-perc-w05_cossimloss_nokvcachemanager_targetentropy-alpha-100k-098-06-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_from-300k-iter-ckpt_300k-reset-head_head-wd_recon-perc-w05_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-06-clipmin5e-3-lr1e-3-encoder-clip30-10-100k_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_st_refactor1024/{env_id[3:-3]}/{env_id[3:-3]}_uz_head-wd_recon-perc-w1_cossimloss_nokvcachemanager_ch128-res2_aug_targetentropy-alpha-100k-098-06-clipmin1e-4-lr1e-3-encoder-clip30-10-100k_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
@@ -326,7 +343,9 @@ if __name__ == "__main__":
 
     export CUDA_VISIBLE_DEVICES=0
     cd /mnt/shared-storage-user/puyuan/code_20250828/LightZero/
-    /mnt/shared-storage-user/puyuan/lz/bin/python /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_segment_config.py
+    /mnt/shared-storage-user/puyuan/lz/bin/python /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_segment_config.py 2>&1 | tee /mnt/shared-storage-user/puyuan/code_20250828/LightZero/log/202511/20251105_uz_st_qbert_nokvcachemanager_from-0_250k-reset_cos4e-5_gcv05_encoder-400k-2.log
+
+    /mnt/shared-storage-user/puyuan/lz/bin/python /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_segment_config.py 2>&1 | tee /mnt/shared-storage-user/puyuan/code_20250828/LightZero/log/202511/20251105_uz_st_qbert_nokvcachemanager_10k-300k-reset.log
 
     # conda activate /mnt/nfs/zhangjinouwen/puyuan/conda_envs/lz
     # cd /mnt/nfs/zhangjinouwen/puyuan/LightZero
