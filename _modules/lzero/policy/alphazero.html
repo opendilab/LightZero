@@ -357,8 +357,15 @@
                                                                   <span class="n">init_state</span><span class="o">=</span><span class="n">init_state</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span>
                                                                   <span class="n">katago_policy_init</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                                                                   <span class="n">katago_game_state</span><span class="o">=</span><span class="n">katago_game_state</span><span class="p">[</span><span class="n">env_id</span><span class="p">]))</span>
-            <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span><span class="p">,</span> <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts</span><span class="o">.</span><span class="n">get_next_action</span><span class="p">(</span><span class="n">state_config_for_simulation_env_reset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy_value_fn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">collect_mcts_temperature</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-
+            <span class="c1"># Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts</span><span class="o">.</span><span class="n">get_next_action</span><span class="p">(</span><span class="n">state_config_for_simulation_env_reset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy_value_fn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">collect_mcts_temperature</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="c1"># ctree implementation returns: action, mcts_probs, root</span>
+                <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span><span class="p">,</span> <span class="n">root</span> <span class="o">=</span> <span class="n">result</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># ptree implementation returns: action, mcts_probs</span>
+                <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">result</span>
+                
             <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
                 <span class="s1">&#39;probs&#39;</span><span class="p">:</span> <span class="n">mcts_probs</span><span class="p">,</span>
@@ -420,9 +427,16 @@
                                                                   <span class="n">init_state</span><span class="o">=</span><span class="n">init_state</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span>
                                                                   <span class="n">katago_policy_init</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                                                                   <span class="n">katago_game_state</span><span class="o">=</span><span class="n">katago_game_state</span><span class="p">[</span><span class="n">env_id</span><span class="p">]))</span>
-            <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span><span class="p">,</span> <span class="n">root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_mcts</span><span class="o">.</span><span class="n">get_next_action</span><span class="p">(</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_mcts</span><span class="o">.</span><span class="n">get_next_action</span><span class="p">(</span>
                 <span class="n">state_config_for_simulation_env_reset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy_value_fn</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="kc">False</span>
             <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="c1"># ctree implementation returns: action, mcts_probs, root</span>
+                <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span><span class="p">,</span> <span class="n">root</span> <span class="o">=</span> <span class="n">result</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># ptree implementation returns: action, mcts_probs</span>
+                <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">result</span>
+                
             <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
                 <span class="s1">&#39;probs&#39;</span><span class="p">:</span> <span class="n">mcts_probs</span><span class="p">,</span>
