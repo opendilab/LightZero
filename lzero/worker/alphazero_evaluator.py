@@ -208,16 +208,26 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             with self._timer:
                 while not eval_monitor.is_finished():
                     obs = self._env.ready_obs
+                    
+                    # ==============================================================
+                    # policy forward
+                    # ==============================================================
                     policy_output = self._policy.forward(obs)
                     actions = {env_id: output['action'] for env_id, output in policy_output.items()}
+                    
+                    # ==============================================================
+                    # Interact with env.
+                    # ==============================================================
                     timesteps = self._env.step(actions)
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
 
                     for env_id, t in timesteps.items():
                         if t.info.get('abnormal', False):
+                            # If there is an abnormal timestep, reset all the related variables(including this env).
                             self._policy.reset([env_id])
                             continue
                         if t.done:
+                            # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
                             saved_info = {'eval_episode_return': t.info['eval_episode_return']}
@@ -244,11 +254,12 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                 'avg_envstep_per_episode': envstep_count / n_episode,
                 'evaluate_time': duration,
                 'avg_envstep_per_sec': envstep_count / duration,
-                'avg_time_per_episode': n_episode / duration,  # This seems inverted, should be duration / n_episode
+                'avg_time_per_episode': n_episode / duration,
                 'reward_mean': np.mean(episode_return),
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
                 'reward_min': np.min(episode_return),
+                # 'each_reward': episode_return,
             }
             episode_info_from_monitor = eval_monitor.get_episode_info()
             if episode_info_from_monitor is not None:
@@ -258,7 +269,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             
             # Log to TensorBoard
             for k, v in info.items():
-                if k in ['train_iter', 'ckpt_name']:
+                if k in ['train_iter', 'ckpt_name', 'each_reward']:
                     continue
                 if not np.isscalar(v):
                     continue
@@ -277,7 +288,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                 self._logger.info(
                     "[LightZero serial pipeline] " +
                     "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
-                    ", so your AlphaZero agent is converged."
+                    ", so your AlphaZero agent is converged, you can refer to " +
+                    "'log/evaluator/evaluator_logger.txt' for details."
                 )
             
             # The final information to be returned and broadcasted
