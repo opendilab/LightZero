@@ -59,7 +59,7 @@ except ImportError:
 
 # Try to import ORZ
 ORZ_AVAILABLE = False
-ORZ_PATH = Path("/mnt/nfs/zhangjinouwen/puyuan/Open-Reasoner-Zero")
+ORZ_PATH = Path("/mnt/afs/wanzunian/niuyazhe/puyuan/Open-Reasoner-Zero")
 
 try:
     if ORZ_PATH.exists() and str(ORZ_PATH) not in sys.path:
