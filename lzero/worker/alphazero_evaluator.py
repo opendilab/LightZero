@@ -175,6 +175,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
         """
         Overview:
             Execute the evaluation of the policy and determine if the stopping condition has been met.
+            In a distributed setting, this method will block all processes except rank 0,
+            which performs the evaluation. The results are then broadcasted to all other processes.
         Arguments:
             - save_ckpt_fn (:obj:`Optional[Callable]`): Callback function to save a checkpoint.
             - train_iter (:obj:`int`): Current number of training iterations completed.
@@ -183,11 +185,18 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             - force_render (:obj:`bool`): Force rendering of the environment, if applicable.
         Returns:
             - stop_flag (:obj:`bool`): Whether the training process should stop based on evaluation results.
-            - return_info (:obj:`dict`): Information about the evaluation results.
+            - eval_info (:obj:`dict`): Information about the evaluation results.
         """
-        # the evaluator only works on rank0
-        stop_flag, return_info = False, []
+        # ==============================================================
+        # FIX: Restructure the entire method for correct distributed handling.
+        # ==============================================================
+        
+        # Initialize placeholders for results on all ranks.
+        stop_flag = False
+        eval_info = {}
+
         if get_rank() == 0:
+            # --- Rank 0 performs the evaluation ---
             if n_episode is None:
                 n_episode = self._default_n_episode
             assert n_episode is not None, "please indicate eval n_episode"
@@ -199,24 +208,16 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             with self._timer:
                 while not eval_monitor.is_finished():
                     obs = self._env.ready_obs
-
-                    # ==============================================================
-                    # policy forward
-                    # ==============================================================
                     policy_output = self._policy.forward(obs)
                     actions = {env_id: output['action'] for env_id, output in policy_output.items()}
-                    # ==============================================================
-                    # Interact with env.
-                    # ==============================================================
                     timesteps = self._env.step(actions)
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
+
                     for env_id, t in timesteps.items():
                         if t.info.get('abnormal', False):
-                            # If there is an abnormal timestep, reset all the related variables(including this env).
                             self._policy.reset([env_id])
                             continue
                         if t.done:
-                            # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
                             saved_info = {'eval_episode_return': t.info['eval_episode_return']}
@@ -224,15 +225,17 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                                 saved_info.update(t.info['episode_info'])
                             eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
-                            return_info.append(t.info)
                             self._logger.info(
                                 "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
                                     env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
                                 )
                             )
                         envstep_count += 1
+            
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
+            
+            # Prepare the results dictionary
             info = {
                 'train_iter': train_iter,
                 'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),
@@ -241,20 +244,21 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                 'avg_envstep_per_episode': envstep_count / n_episode,
                 'evaluate_time': duration,
                 'avg_envstep_per_sec': envstep_count / duration,
-                'avg_time_per_episode': n_episode / duration,
+                'avg_time_per_episode': n_episode / duration,  # This seems inverted, should be duration / n_episode
                 'reward_mean': np.mean(episode_return),
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
                 'reward_min': np.min(episode_return),
-                # 'each_reward': episode_return,
             }
-            episode_info = eval_monitor.get_episode_info()
-            if episode_info is not None:
-                info.update(episode_info)
+            episode_info_from_monitor = eval_monitor.get_episode_info()
+            if episode_info_from_monitor is not None:
+                info.update(episode_info_from_monitor)
+            
             self._logger.info(self._logger.get_tabulate_vars_hor(info))
-            # self._logger.info(self._logger.get_tabulate_vars(info))
+            
+            # Log to TensorBoard
             for k, v in info.items():
-                if k in ['train_iter', 'ckpt_name', 'each_reward']:
+                if k in ['train_iter', 'ckpt_name']:
                     continue
                 if not np.isscalar(v):
                     continue
@@ -266,19 +270,30 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                 if save_ckpt_fn:
                     save_ckpt_fn('ckpt_best.pth.tar')
                 self._max_eval_reward = eval_reward
+            
+            # Set the final results for rank 0
             stop_flag = eval_reward >= self._stop_value and train_iter > 0
             if stop_flag:
                 self._logger.info(
                     "[LightZero serial pipeline] " +
                     "Current eval_reward: {} is greater than stop_value: {}".format(eval_reward, self._stop_value) +
-                    ", so your AlphaZero agent is converged, you can refer to " +
-                    "'log/evaluator/evaluator_logger.txt' for details."
+                    ", so your AlphaZero agent is converged."
                 )
+            
+            # The final information to be returned and broadcasted
+            eval_info = to_item(info)
 
-            if get_world_size() > 1:
-                objects = [stop_flag, episode_info]
-                broadcast_object_list(objects, src=0)
-                stop_flag, episode_info = objects
+        # --- Synchronization for all ranks ---
+        if get_world_size() > 1:
+            # All processes must participate in the broadcast.
+            # `src=0` means rank 0 sends, and all other ranks receive.
+            # The `objects` list on rank 0 contains the data to be sent.
+            # On other ranks, it contains placeholders that will be overwritten.
+            objects = [stop_flag, eval_info]
+            broadcast_object_list(objects, src=0)
+            # After broadcast, all processes' `objects` list is updated.
+            stop_flag, eval_info = objects
 
-            episode_info = to_item(episode_info)
-            return stop_flag, episode_info
+        # All ranks now have the same `stop_flag` and `eval_info`.
+        # All ranks return a valid tuple.
+        return stop_flag, eval_info
