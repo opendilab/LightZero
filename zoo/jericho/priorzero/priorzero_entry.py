@@ -574,6 +574,144 @@ def main():
     ))
 
 
+# ==============================================================================
+# [ORZ-EVAL] 独立评估模块使用案例
+# ==============================================================================
+#
+# 为了在 PriorZero 训练完成后进行独立评估，可以使用 orz-eval 模块。
+# ORZ Evaluator 支持多种数据集和灵活的配置选项。
+#
+# 📝 使用案例：
+#
+# ============================================================================
+# 案例 1: 简洁用法（推荐）
+# ============================================================================
+#
+# import asyncio
+# import sys
+# from pathlib import Path
+#
+# # 确保可以导入 orz-eval 模块
+# orz_eval_path = Path(__file__).parent / "orz-eval"
+# sys.path.insert(0, str(orz_eval_path))
+#
+# from eval_orz import Evaluator
+#
+# async def evaluate_priorzero_model():
+#     """评估训练完成的 PriorZero 模型"""
+#
+#     # 指定模型路径（训练后的检查点）
+#     model_path = "path/to/priorzero/checkpoint/iter45/policy"
+#
+#     # 创建评估器
+#     evaluator = Evaluator(
+#         model_path=model_path,
+#         eval_prompt_data=[
+#             "orz-eval/data/eval_data/eval_jericho_dataset_his10_4games_1.8k_20251013_instruct.json",
+#             "orz-eval/data/eval_data/math500.json",
+#             "orz-eval/data/eval_data/aime2024.json",
+#             "orz-eval/data/eval_data/gpqa_diamond.json",
+#         ]
+#     )
+#
+#     try:
+#         # 运行评估
+#         results = await evaluator.eval()
+#
+#         # 打印结果
+#         print("\n" + "="*60)
+#         print("PriorZero Model Evaluation Results")
+#         print("="*60)
+#         for key, value in results.items():
+#             print(f"  {key}: {value:.4f}")
+#         print("="*60 + "\n")
+#
+#     finally:
+#         # 清理资源
+#         evaluator.cleanup()
+#
+# if __name__ == "__main__":
+#     asyncio.run(evaluate_priorzero_model())
+#
+#
+# ============================================================================
+# 案例 2: 覆盖部分默认参数（高级）
+# ============================================================================
+#
+# import asyncio
+# from eval_orz import Evaluator
+#
+# async def evaluate_with_custom_params():
+#     """使用自定义参数评估模型"""
+#
+#     evaluator = Evaluator(
+#         model_path="path/to/priorzero/checkpoint/iter45/policy",
+#         eval_prompt_data=[
+#             "orz-eval/data/eval_data/math500.json",  # 仅评估 Math500
+#         ],
+#         # 覆盖默认参数
+#         temperature=0.7,  # 降低采样温度获得更确定的答案
+#         gpu_memory_utilization=0.5,  # 增加 GPU 内存使用
+#         vllm_num_engines=1,  # 单 GPU 环境
+#     )
+#
+#     try:
+#         results = await evaluator.eval()
+#         print(f"Math500 Accuracy: {results.get('math500/accuracy', 0):.4f}")
+#     finally:
+#         evaluator.cleanup()
+#
+# if __name__ == "__main__":
+#     asyncio.run(evaluate_with_custom_params())
+#
+#
+# ============================================================================
+# 案例 3: 使用完整配置对象（高级）
+# ============================================================================
+#
+# import asyncio
+# from eval_orz import EvaluatorConfig, Evaluator
+#
+# async def evaluate_with_full_config():
+#     """使用完整的配置对象进行评估"""
+#
+#     config = EvaluatorConfig(
+#         model_path="path/to/priorzero/checkpoint/iter45/policy",
+#         tokenizer_path="path/to/priorzero/checkpoint/iter45/policy",
+#         vllm_num_engines=1,
+#         vllm_tensor_parallel_size=1,
+#         enable_prefix_caching=True,
+#         gpu_memory_utilization=0.3,
+#         max_model_len=8192,
+#         temperature=1.0,
+#         top_p=1.0,
+#         top_k=-1,
+#         generate_max_len=8000,
+#         stop=["User:", "Human:", "Assistant:", "</answer>"],
+#         eval_prompt_data=[
+#             "orz-eval/data/eval_data/eval_jericho_dataset_his10_4games_1.8k_20251013_instruct.json",
+#             "orz-eval/data/eval_data/math500.json",
+#             "orz-eval/data/eval_data/aime2024.json",
+#             "orz-eval/data/eval_data/gpqa_diamond.json",
+#         ],
+#         prompt_max_len=2048,
+#         output_dir="eval_results_priorzero",
+#         save_detailed_results=True,
+#     )
+#
+#     evaluator = Evaluator(config)
+#
+#     try:
+#         results = await evaluator.eval()
+#         # 结果将保存在 eval_results_priorzero/ 目录中
+#     finally:
+#         evaluator.cleanup()
+#
+# if __name__ == "__main__":
+#     asyncio.run(evaluate_with_full_config())
+#
+
+
 if __name__ == "__main__":
     import os
     # Disable tokenizer parallelism to prevent multi-process conflicts

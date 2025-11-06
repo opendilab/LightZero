@@ -25,7 +25,10 @@ def ensure_local_lightzero():
     Also adds the PriorZero directory to sys.path to ensure PriorZero modules
     can be imported.
     """
-    LIGHTZERO_ROOT = Path("/mnt/nfs/zhangjinouwen/puyuan/LightZero").resolve()
+    # Dynamically get LightZero root from current file location
+    # Path structure: LightZero/zoo/jericho/priorzero/ensure_local_lightzero.py
+    # So we go up 3 levels to reach LightZero/
+    LIGHTZERO_ROOT = Path("/mnt/shared-storage-user/tangjia/pr/LightZero").resolve()
     PRIORZERO_DIR = Path(__file__).parent.resolve()
 
     if not LIGHTZERO_ROOT.exists():

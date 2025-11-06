@@ -92,11 +92,11 @@ def get_priorzero_config(
 
     # World model encoder (for processing text observations)
     wm_encoder_option = 'legacy'  # Options: 'legacy', 'clip', 'custom'
-    wm_model_name = 'BAAI/bge-base-en-v1.5'  # Sentence transformer for text encoding
+    wm_model_name = '/mnt/shared-storage-user/tangjia/pr/LightZero/model/BAAI--bge-base-en-v1.5'  # Sentence transformer for text encoding
 
     # LLM policy model
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
-    llm_model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # Smaller model for faster iteration
+    llm_model_name = "/mnt/shared-storage-user/tangjia/pr/LightZero/model/models--Qwen--Qwen3-0.6B/snapshots/ec0dcdfc641f7a94f8e969d459caa772b9c01706"  # Smaller model for faster iteration
 
     # Get action mappings
     action_map, action_inv_map = get_jericho_action_mapping(env_id)
@@ -111,14 +111,14 @@ def get_priorzero_config(
         # Stop conditions
         stop_value=int(1e6),
         max_steps=max_steps,
-
+# /mnt/shared-storage-user/tangjia/pr/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/
         # Observation and action space
         observation_shape=512,  # BGE embedding dimension
         action_space_size=action_space_size,
 
         # [FIX] Jericho environment expects these at top level
         env_id=env_id,
-        game_path=f"/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+        game_path=f"/mnt/shared-storage-user/tangjia/pr/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
         tokenizer_path=wm_model_name,
         env_type="jericho",
         max_action_num=action_space_size,

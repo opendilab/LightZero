@@ -340,6 +340,7 @@ class MuZeroCollector(ISerialCollector):
 
         # --- Initializations ---
         collected_episode = 0
+        collected_step = 0
         env_nums = self._env_num
         retry_waiting_time = 0.05
 
@@ -411,7 +412,7 @@ class MuZeroCollector(ISerialCollector):
                 # Policy Forward Pass
                 # ==============================================================
                 policy_input = {
-                    'x': stack_obs_tensor,
+                    'data': stack_obs_tensor,
                     'action_mask': action_mask,
                     'temperature': temperature,
                     'to_play': to_play,

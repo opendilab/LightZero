@@ -62,9 +62,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
 
     if encoder_option == 'qwen':
-        model_name: str = 'Qwen/Qwen3-0.6B'
+        model_name: str = '/mnt/shared-storage-user/tangjia/pr/LightZero/model/models--Qwen--Qwen3-0.6B/snapshots/ec0dcdfc641f7a94f8e969d459caa772b9c01706'
     elif encoder_option == 'legacy':
-        model_name: str = 'BAAI/bge-base-en-v1.5'
+        model_name: str = '/mnt/shared-storage-user/tangjia/pr/LightZero/model/BAAI--bge-base-en-v1.5'
     else:
         raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
@@ -128,7 +128,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     device="cuda",
                     action_space_size=action_space_size,
                     num_layers=num_layers,
-                    num_heads=24,
+                    num_heads=8, # 24
                     embed_dim=embed_dim,
                     obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -149,6 +149,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     lora_alpha =1,
                     lora_dropout= 0.0,
 
+                    game_segment_length=512,  # Length of game segments for processing
                     decode_loss_mode=None, # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
                     latent_recon_loss_weight=0.1
                 ),
