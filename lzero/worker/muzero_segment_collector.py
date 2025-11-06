@@ -1,7 +1,7 @@
 import logging
 import time
 from collections import deque, namedtuple
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 import numpy as np
 import torch

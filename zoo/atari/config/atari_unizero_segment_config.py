@@ -21,11 +21,12 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
+    norm_type ="LN"
 
     # ====== only for debug =====
     # collector_env_num = 2
@@ -41,7 +42,7 @@ def main(env_id, seed):
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 64, 64),
+            observation_shape=(3, 96, 96),
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -54,11 +55,18 @@ def main(env_id, seed):
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
-                observation_shape=(3, 64, 64),
+                observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
+                norm_type=norm_type,
                 world_model_cfg=dict(
+                    use_new_cache_manager=False,
+                    norm_type=norm_type,
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    # predict_latent_loss_type='mse',
+                    predict_latent_loss_type='cos_sim', # only for latent state layer_norm
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -73,21 +81,58 @@ def main(env_id, seed):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
+                    game_segment_length=game_segment_length,
+                    use_priority=True,
                     rotary_emb=False,
+                    optim_type='AdamW_mix_lr_wdecay',
                 ),
             ),
+            optim_type='AdamW_mix_lr_wdecay',
+            weight_decay=1e-2, # TODO: encoder 5*wd, transformer wd, head 0
+            learning_rate=0.0001,
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
-            use_augmentation=False,
+            
+            # (bool) 是否启用自适应策略熵权重 (alpha)
+            use_adaptive_entropy_weight=True,
+            # (float) 自适应alpha优化器的学习率
+            adaptive_entropy_alpha_lr=1e-3,
+            target_entropy_start_ratio =0.98,
+            target_entropy_end_ratio =0.7,
+            target_entropy_decay_steps = 100000, # 例如，在300k次迭代后达到最终值
+            # ==================== START: Encoder-Clip Annealing Config ====================
+            # (bool) 是否启用 encoder-clip 值的退火。
+            use_encoder_clip_annealing=True,
+            # (str) 退火类型。可选 'linear' 或 'cosine'。
+            encoder_clip_anneal_type='cosine',
+            # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+            encoder_clip_start_value=30.0,
+            # (float) 退火的结束 clip 值 (训练后期，较严格)。
+            encoder_clip_end_value=10.0,
+            # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
+            encoder_clip_anneal_steps=100000,  # 例如，在300k次迭代后达到最终值
+            
+            # ==================== START: label smooth ====================
+            policy_ls_eps_start=0.05, #good start in Pong and MsPacman
+            policy_ls_eps_end=0.01,
+            policy_ls_eps_decay_steps=50000, # 50k
+            label_smoothing_eps=0.1,  #for value
+
+            # ==================== [新增] 范数监控频率 ====================
+            # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+            monitor_norm_freq=5000,
+            
+            # use_augmentation=False,
+            use_augmentation=True,
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
-            use_priority=False,
+            use_priority=True,
+            priority_prob_alpha=1,
+            priority_prob_beta=1,
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
             replay_ratio=replay_ratio,
             batch_size=batch_size,
-            optim_type='AdamW',
-            learning_rate=0.0001,
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
@@ -126,7 +171,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'./data_lz/data_unizero_atari/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

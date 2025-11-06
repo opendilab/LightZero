@@ -16,6 +16,15 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
 
+from collections import OrderedDict, defaultdict
+logging.getLogger().setLevel(logging.DEBUG)
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import os
+import datetime
+
+
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -115,9 +124,6 @@ class WorldModel(nn.Module):
 
         self._initialize_last_layer()
 
-        # Cache structures
-        self._initialize_cache_structures()
-
         # Projection input dimension
         self._initialize_projection_input_dim()
 
@@ -129,19 +135,24 @@ class WorldModel(nn.Module):
 
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
+        
+        # 先设置为game_segment_length，以保持self.shared_pool_init_infer都是有效的kv
+        # TODO: 非常重要，应该改为和segment_length一样
+        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
 
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
         # If needed, recurrent_infer should store the results of the one MCTS search.
         self.num_simulations = getattr(self.config, 'num_simulations', 50)
-        self.shared_pool_size = int(self.num_simulations*self.env_num)
-        self.shared_pool_recur_infer = [None] * self.shared_pool_size
+        self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
+        self.shared_pool_recur_infer = [None] * self.shared_pool_size_recur
         self.shared_pool_index = 0
+        
+        # Cache structures
+        self._initialize_cache_structures()
 
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
-        # self.shared_pool_size_init = int(2*self.env_num)
-        self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -151,6 +162,117 @@ class WorldModel(nn.Module):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+    
+    def _analyze_latent_representation(
+            self, 
+            latent_states: torch.Tensor, 
+            timesteps: torch.Tensor, 
+            game_states: torch.Tensor, 
+            predicted_values: torch.Tensor,
+            predicted_rewards: torch.Tensor,
+            step_counter: int
+        ):
+            """
+            分析并记录 latent states 的统计信息和t-SNE可视化。
+            【新功能】：在t-SNE图上显示对应的游戏图像，并标注预测的Value和Reward。
+            【已修改】：如果保存路径已存在同名文件，则在文件名后附加时间戳。
+            
+            Args:
+                latent_states (torch.Tensor): Encoder的输出, shape (B*L, 1, E)
+                timesteps (torch.Tensor): 对应的时间步, shape (B, L)
+                game_states (torch.Tensor): 原始的游戏观测, shape (B, L, C, H, W)
+                predicted_values (torch.Tensor): 预测的标量Value, shape (B*L,)
+                predicted_rewards (torch.Tensor): 预测的标量Reward, shape (B*L,)
+                step_counter (int): 全局训练步数
+            """
+            # ... (统计分析部分保持不变) ...
+            # (确保 latent_states 和 game_states 的形状为 (N, ...))
+            if latent_states.dim() > 2:
+                latent_states = latent_states.reshape(-1, latent_states.shape[-1])
+            num_c, num_h, num_w = game_states.shape[-3:]
+            game_states = game_states.reshape(-1, num_c, num_h, num_w)
+
+            with torch.no_grad():
+                l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
+                mean = latent_states.mean()
+                std = latent_states.std()
+                print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
+
+            # 带图像和V/R值的 t-SNE 可视化
+            if step_counter >= 0:
+            # if step_counter > 0 and step_counter % 200 == 0:
+
+                print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
+
+                # 将数据转换到CPU
+                latents_np = latent_states.detach().cpu().numpy()
+                images_np = game_states.detach().cpu().numpy()
+                values_np = predicted_values.detach().cpu().numpy()
+                rewards_np = predicted_rewards.detach().cpu().numpy()
+
+                tsne = TSNE(n_components=2, perplexity=30, n_iter=300, random_state=42)
+                tsne_results = tsne.fit_transform(latents_np)
+
+                # --- 绘制带图像和标注的散点图 ---
+
+                # 减少图像数量以保持清晰
+                num_points_to_plot = min(len(latents_np), 70) # 减少到70个点
+                indices = np.random.choice(len(latents_np), num_points_to_plot, replace=False)
+
+                fig, ax = plt.subplots(figsize=(20, 18)) # 增大画布尺寸
+
+                # 先画出所有点的散点图作为背景
+                ax.scatter(tsne_results[:, 0], tsne_results[:, 1], c=values_np, cmap='viridis', alpha=0.3, s=10)
+
+                for i in indices:
+                    x, y = tsne_results[i]
+                    img = images_np[i].transpose(1, 2, 0)
+                    img = np.clip(img, 0, 1)
+
+                    # 放置图像
+                    im = OffsetImage(img, zoom=0.7) # 稍微放大图像
+                    ab = AnnotationBbox(im, (x, y), frameon=True, pad=0.0, bboxprops=dict(edgecolor='none'))
+                    ax.add_artist(ab)
+
+                    # 在图像下方添加文字标注
+                    text_label = f"V:{values_np[i]:.1f} R:{rewards_np[i]:.1f}"
+                    ax.text(x, y - 1.0, text_label, ha='center', va='top', fontsize=8, color='red',
+                            bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.5))
+
+                ax.update_datalim(tsne_results)
+                ax.autoscale()
+
+                ax.set_title(f't-SNE of Latent States (Value as Color) at Step {step_counter}', fontsize=16)
+                ax.set_xlabel('t-SNE dimension 1', fontsize=12)
+                ax.set_ylabel('t-SNE dimension 2', fontsize=12)
+
+                # 添加colorbar来解释背景点的颜色
+                norm = plt.Normalize(values_np.min(), values_np.max())
+                sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
+                sm.set_array([])
+                fig.colorbar(sm, ax=ax, label='Predicted Value')
+
+                # --- 修改部分：检查文件是否存在，如果存在则添加时间戳 ---
+                base_save_path = (
+                    f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
+                    f'tsne_with_vr_{self.config.optim_type}_step_{step_counter}.png'
+                )
+
+                # 2. 检查文件是否存在，并确定最终保存路径
+                if os.path.exists(base_save_path):
+                    # 如果文件已存在，则生成时间戳并附加到文件名
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    path_root, path_ext = os.path.splitext(base_save_path)
+                    save_path = f"{path_root}_{timestamp}{path_ext}"
+                    print(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
+                else:
+                    # 如果文件不存在，则使用原始路径
+                    save_path = base_save_path
+
+                # 3. 保存图像
+                plt.savefig(save_path)
+                plt.close(fig) # 明确关闭图形对象
+                print(f"t-SNE plot with V/R annotations saved to {save_path}")
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
@@ -264,7 +386,7 @@ class WorldModel(nn.Module):
             dst_layer._v_cache._size = src_layer._v_cache._size
         
         index = self.shared_pool_index
-        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
+        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size_recur
         
         return index
 
@@ -354,11 +476,55 @@ class WorldModel(nn.Module):
     def _initialize_cache_structures(self) -> None:
         """Initialize cache structures for past keys and values."""
         from collections import defaultdict
-        self.past_kv_cache_recurrent_infer = defaultdict(dict)
-        self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
+        # ==================== Phase 1: Parallel KV Cache Systems ====================
+        # Check if we should use the new KV cache manager
+        self.use_new_cache_manager = getattr(self.config, 'use_new_cache_manager', False)
 
-        self.keys_values_wm_list = []
-        self.keys_values_wm_size_list = []
+        if self.use_new_cache_manager:
+            # Use new unified KV cache manager
+            from .kv_cache_manager import KVCacheManager
+            self.kv_cache_manager = KVCacheManager(
+                config=self.config,
+                env_num=self.env_num,
+                enable_stats=True,
+                clear_recur_log_freq=1000, # MCTS循环清理日志，每1000次打印一次
+                clear_all_log_freq=100      # episode重置清理日志，每100次打印一次
+            )
+            # Keep backward compatibility references
+            self.keys_values_wm_list = self.kv_cache_manager.keys_values_wm_list
+            self.keys_values_wm_size_list = self.kv_cache_manager.keys_values_wm_size_list
+
+            # ==================== BUG FIX: Complete Refactoring ====================
+            # DO NOT initialize old system attributes when using new cache manager.
+            # Any code that depends on these old attributes must be refactored to use
+            # kv_cache_manager instead.
+            #
+            # Old attributes that are NO LONGER available in new system:
+            # - self.past_kv_cache_recurrent_infer
+            # - self.pool_idx_to_key_map_recur_infer
+            # - self.past_kv_cache_init_infer_envs
+            # - self.pool_idx_to_key_map_init_envs
+            #
+            # Migration guide:
+            # - For accessing init cache: use kv_cache_manager.get_init_cache(env_id, key)
+            # - For accessing recur cache: use kv_cache_manager.get_recur_cache(key)
+            # - For hierarchical lookup: use kv_cache_manager.hierarchical_get(env_id, key)
+            # ======================================================================
+
+            logging.info("✓ Using NEW KVCacheManager for cache management")
+        else:
+            # Use old cache system (original implementation)
+            self.past_kv_cache_recurrent_infer = {}
+            self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+            self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
+            # 辅助数据结构，用于反向查找：pool_index -> key
+            self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
+
+            self.keys_values_wm_list = []
+            self.keys_values_wm_size_list = []
+            logging.info("Using OLD cache system (original implementation)")
+        # =============================================================================
+
 
     def _initialize_projection_input_dim(self) -> None:
         """Initialize the projection input dimension based on the number of observation tokens."""
@@ -831,20 +997,33 @@ class WorldModel(nn.Module):
                         state_single_env = last_obs_embeddings[i]
                         # Compute hash value using latent state for a single environment
                         cache_key = hash_state(state_single_env.view(-1).cpu().numpy())  # last_obs_embeddings[i] is torch.Tensor
-
+                        # ==================== Phase 1.6: Storage Layer Integration ====================
                         # Retrieve cached value
-                        cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
-                        if cache_index is not None:
-                            matched_value = self.shared_pool_init_infer[i][cache_index]
+                        if self.use_new_cache_manager:
+                            # NEW SYSTEM: Use KVCacheManager
+                            matched_value = self.kv_cache_manager.get_init_cache(env_id=i, cache_key=cache_key)
                         else:
-                            matched_value = None
+                            # OLD SYSTEM: Use legacy cache dictionaries
+                            cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+                            if cache_index is not None:
+                                matched_value = self.shared_pool_init_infer[i][cache_index]
+                            else:
+                                matched_value = None
 
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
-                            # NOTE: deepcopy is needed because forward modifies matched_value in place
-                            self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                            # ==================== BUG FIX: Cache Corruption Prevention ====================
+                            # Perform a deep copy because the transformer's forward pass modifies matched_value in-place.
+                            if self.use_new_cache_manager:
+                                # NEW SYSTEM: Use KeysValues.clone() for deep copy
+                                cached_copy = matched_value.clone()
+                                self.keys_values_wm_list.append(cached_copy)
+                            else:
+                                # OLD SYSTEM: Use custom_copy_kv_cache_to_shared_wm
+                                self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                            # =============================================================================
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -934,7 +1113,14 @@ class WorldModel(nn.Module):
         """
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, start_pos)
-        self.past_kv_cache_recurrent_infer.clear()
+        # ==================== BUG FIX: Clear Cache Using Correct API ====================
+        if self.use_new_cache_manager:
+            # NEW SYSTEM: Clear recurrent cache using KVCacheManager
+            self.kv_cache_manager.clear_recur_cache()
+        else:
+            # OLD SYSTEM: Clear using legacy attribute
+            self.past_kv_cache_recurrent_infer.clear()
+        # =============================================================================
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
@@ -1210,14 +1396,65 @@ class WorldModel(nn.Module):
                         self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length - 3
                         self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length - 3
 
-            if is_init_infer:
-                # Store the latest key-value cache for initial inference
-                cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
-                self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+            # ==================== Phase 1.5: Storage Layer Integration ====================
+            if self.use_new_cache_manager:
+                # NEW SYSTEM: Use KVCacheManager for cache storage
+                # ==================== BUG FIX: Deep Copy Before Storage ====================
+                # CRITICAL: Must clone before storing to prevent cache corruption.
+                # self.keys_values_wm_single_env is a shared object that gets modified.
+                # Without cloning, all cache entries would point to the same object,
+                # causing incorrect KV retrieval and training divergence.
+                kv_cache_to_store = self.keys_values_wm_single_env.clone()
+                # =============================================================================
+                if is_init_infer:
+                    # Store to per-environment init cache pool
+                    # Note: KVCacheManager automatically handles eviction logic (FIFO/LRU)
+                    self.kv_cache_manager.set_init_cache(
+                        env_id=i,
+                        cache_key=cache_key,
+                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
+                    )
+                else:
+                    # Store to global recurrent cache pool
+                    self.kv_cache_manager.set_recur_cache(
+                        cache_key=cache_key,
+                        kv_cache=kv_cache_to_store # Store cloned copy, not reference
+                    )
             else:
-                # Store the latest key-value cache for recurrent inference
-                cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
-                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                # OLD SYSTEM: Use legacy cache with manual eviction
+                if is_init_infer:
+                    # ==================== 主动淘汰修复逻辑 ====================
+                    # 1. 获取即将被覆写的物理索引
+                    index_to_write = self.shared_pool_index_init_envs[i]
+                    # 2. 使用辅助列表查找该索引上存储的旧的 key
+                    old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
+                    # 3. 如果存在旧 key，就从主 cache map 中删除它
+                    if old_key_to_evict is not None:
+                        # 确保要删除的键确实存在，避免意外错误
+                        if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
+                            del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
+
+                    # 现在可以安全地写入新数据了
+                    cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+
+                    # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
+                    self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
+                    self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
+                else:
+                    # ==================== RECURRENT INFER FIX ====================
+                    # 1. 获取即将被覆写的物理索引
+                    index_to_write = self.shared_pool_index
+                    # 2. 使用辅助列表查找该索引上存储的旧的 key
+                    old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
+                    # 3. 如果存在旧 key，就从主 cache map 中删除它
+                    if old_key_to_evict is not None:
+                        if old_key_to_evict in self.past_kv_cache_recurrent_infer:
+                            del self.past_kv_cache_recurrent_infer[old_key_to_evict]
+                    # 4. 现在可以安全地写入新数据了
+                    cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+                    # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
+                    self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                    self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
 
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -1245,22 +1482,48 @@ class WorldModel(nn.Module):
                 # TODO: check if this is correct
                 matched_value = None
             else:
-                # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-                cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
-                if cache_index is not None:
-                    matched_value = self.shared_pool_init_infer[index][cache_index]
-                else:
-                    matched_value = None
+                # ==================== Phase 1.6: Storage Layer Integration (Refactored) ====================
+                if self.use_new_cache_manager:
+                    # NEW SYSTEM: Use KVCacheManager's hierarchical_get for unified lookup
+                    matched_value = self.kv_cache_manager.hierarchical_get(env_id=index, cache_key=cache_key)
 
-                # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                if matched_value is None:
-                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    # Log cache miss (统计由 KVCacheManager 自动处理)
+                    if matched_value is None:
+                        logging.debug(f"[NEW CACHE MISS] Not found for key={cache_key} in both init and recurrent cache.")
+                else:
+                    # OLD SYSTEM: Use legacy cache dictionaries and pools
+                    # Try to retrieve the cached value from past_kv_cache_init_infer_envs
+                    cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
+                    if cache_index is not None:
+                        matched_value = self.shared_pool_init_infer[index][cache_index]
+                    else:
+                        matched_value = None
+
+                    # 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
+                    if matched_value is None:
+                        # 安全地从字典中获取索引，它可能返回 None
+                        recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                        # 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
+                        if recur_cache_index is not None:
+                            matched_value = self.shared_pool_recur_infer[recur_cache_index]
+                        if recur_cache_index is None:
+                            print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
-                # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
-                self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                # ==================== BUG FIX: Cache Corruption Prevention ====================
+                # Perform a deep copy because the transformer's forward pass modifies matched_value in-place.
+                # Without cloning, the original cache in init_pool or recur_pool would be polluted,
+                # causing incorrect predictions in subsequent queries.
+                if self.use_new_cache_manager:
+                    # NEW SYSTEM: Use KeysValues.clone() for deep copy
+                    cached_copy = matched_value.clone()
+                    self.keys_values_wm_list.append(cached_copy)
+                else:
+                    # OLD SYSTEM: Use custom_copy_kv_cache_to_shared_wm
+                    self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                # =============================================================================
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset
@@ -1311,7 +1574,12 @@ class WorldModel(nn.Module):
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(),
                                                       percentage=self.dormant_threshold)
-            self.past_kv_cache_recurrent_infer.clear()
+            # ==================== BUG FIX: Clear Cache Using Correct API ====================
+            if self.use_new_cache_manager:
+                self.kv_cache_manager.clear_recur_cache()
+            else:
+                self.past_kv_cache_recurrent_infer.clear()
+            # =============================================================================
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
@@ -1328,6 +1596,56 @@ class WorldModel(nn.Module):
 
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
+        
+        # [新增] 从模型输出中获取中间张量 x，并分离计算图
+        intermediate_tensor_x = outputs.output_sequence.detach()
+
+        global_step = kwargs.get('global_step', 0)
+        if global_step > 0 and global_step % 100000000000 == 0: # 20k
+
+            with torch.no_grad():
+                # 将logits转换为标量值
+                # 注意：outputs的形状是(B, L, E)，我们需要reshape
+                batch_size, seq_len = batch['actions'].shape[0], batch['actions'].shape[1]
+
+                pred_val_logits = outputs.logits_value.view(batch_size * seq_len, -1)
+                pred_rew_logits = outputs.logits_rewards.view(batch_size * seq_len, -1)
+
+                scalar_values = inverse_scalar_transform_handle(pred_val_logits).squeeze(-1)
+                scalar_rewards = inverse_scalar_transform_handle(pred_rew_logits).squeeze(-1)
+
+                self._analyze_latent_representation(
+                    latent_states=obs_embeddings,
+                    timesteps=batch['timestep'],
+                    game_states=batch['observations'],
+                    predicted_values=scalar_values, # 传入预测的Value
+                    predicted_rewards=scalar_rewards, # 传入预测的Reward
+                    step_counter=global_step
+                )
+
+        
+        if self.config.use_priority:
+            # ==================== START MODIFICATION 5 ====================
+            # Calculate value_priority, similar to MuZero.
+            with torch.no_grad():
+                # 1. Get the predicted value logits for the first step of the sequence (t=0).
+                # The shape is (B, support_size).
+                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+
+                # 2. Convert the categorical prediction to a scalar value.
+                # The shape becomes (B, 1).
+                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+
+                # 3. Get the target scalar value for the first step from the batch.
+                # The shape is (B, num_unroll_steps), so we take the first column.
+                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+
+                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
+                # This is the priority. We use reduction='none' to get per-sample priorities.
+                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
+            # ===================== END MODIFICATION 5 =====================
+        else:
+            value_priority = torch.tensor(0.)
         
         if self.obs_type == 'image':
             # Reconstruct observations from latent state representations
@@ -1415,7 +1733,12 @@ class WorldModel(nn.Module):
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           percentage=self.dormant_threshold)
-            self.past_kv_cache_recurrent_infer.clear()
+            # ==================== BUG FIX: Clear Cache Using Correct API ====================
+            if self.use_new_cache_manager:
+                self.kv_cache_manager.clear_recur_cache()
+            else:
+                self.past_kv_cache_recurrent_infer.clear()
+            # =============================================================================
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
@@ -1468,6 +1791,15 @@ class WorldModel(nn.Module):
             # assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
             # for name, param in self.tokenizer.encoder.named_parameters():
             #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
+        elif self.predict_latent_loss_type == 'cos_sim':
+            # --- 修复后的代码 (推荐方案) ---
+            # 使用余弦相似度损失 (Cosine Similarity Loss)
+            # F.cosine_similarity 计算的是相似度，范围是 [-1, 1]。我们希望最大化它，
+            # 所以最小化 1 - similarity。
+            # reduction='none' 使得我们可以像原来一样处理mask
+            print("predict_latent_loss_type == 'cos_sim'")
+            cosine_sim_loss = 1 - F.cosine_similarity(logits_observations, labels_observations, dim=-1)
+            loss_obs = cosine_sim_loss
 
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
@@ -1552,6 +1884,10 @@ class WorldModel(nn.Module):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
 
+        # 为了让外部的训练循环能够获取encoder的输出，我们将其加入返回字典
+        # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
+        detached_obs_embeddings = obs_embeddings.detach()
+        
         if self.continuous_action_space:
             return LossWithIntermediateLosses(
                 latent_recon_loss_weight=self.latent_recon_loss_weight,
@@ -1574,6 +1910,21 @@ class WorldModel(nn.Module):
                 policy_mu=mu,
                 policy_sigma=sigma,
                 target_sampled_actions=target_sampled_actions,
+                
+                value_priority=value_priority,
+                intermediate_tensor_x=intermediate_tensor_x,
+                obs_embeddings=detached_obs_embeddings,
+                
+                # logits_value_mean=outputs.logits_value.mean(),
+                # logits_value_max=outputs.logits_value.max(),
+                # logits_value_min=outputs.logits_value.min(),
+                # logits_policy_mean=outputs.logits_policy.mean(),
+                # logits_policy_max=outputs.logits_policy.max(),
+                # logits_policy_min=outputs.logits_policy.min(),
+                logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+                logits_reward=outputs.logits_rewards.detach(),
+                logits_policy=outputs.logits_policy.detach(),
+                
             )
         else:
             return LossWithIntermediateLosses(
@@ -1594,6 +1945,20 @@ class WorldModel(nn.Module):
                 dormant_ratio_encoder=dormant_ratio_encoder,
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
+                
+                value_priority=value_priority,
+                intermediate_tensor_x=intermediate_tensor_x,
+                obs_embeddings=detached_obs_embeddings,
+                
+                # logits_value_mean=outputs.logits_value.mean(),
+                # logits_value_max=outputs.logits_value.max(),
+                # logits_value_min=outputs.logits_value.min(),
+                # logits_policy_mean=outputs.logits_policy.mean(),
+                # logits_policy_max=outputs.logits_policy.max(),
+                # logits_policy_min=outputs.logits_policy.min(),
+                logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+                logits_reward=outputs.logits_rewards.detach(),
+                logits_policy=outputs.logits_policy.detach(),
             )
 
     
@@ -1817,11 +2182,23 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
-        for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear()
-        self.past_kv_cache_recurrent_infer.clear()
-        self.keys_values_wm_list.clear()
-        print(f'Cleared {self.__class__.__name__} past_kv_cache.')
+        if self.use_new_cache_manager:
+            # Use new KV cache manager's clear method
+            self.kv_cache_manager.clear_all()
+            print(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
+
+            # Optionally print stats before clearing
+            if hasattr(self.kv_cache_manager, 'get_stats_summary'):
+                stats = self.kv_cache_manager.get_stats_summary()
+                if stats.get('stats_enabled'):
+                    logging.debug(f'Cache stats before clear: {stats}')
+        else:
+            # Use old cache clearing logic
+            for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            self.past_kv_cache_recurrent_infer.clear()
+            self.keys_values_wm_list.clear()
+            print(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"
