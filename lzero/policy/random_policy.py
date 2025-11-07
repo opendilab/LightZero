@@ -5,6 +5,7 @@ import torch
 from ding.policy.base_policy import Policy
 from ding.utils import POLICY_REGISTRY
 
+from lzero.entry.utils import initialize_zeros_batch, initialize_pad_batch
 from lzero.policy import DiscreteSupport, InverseScalarTransform, select_action, ez_network_output_unpack, mz_network_output_unpack
 
 
@@ -31,10 +32,14 @@ class LightZeroRandomPolicy(Policy):
         elif cfg.type == 'sampled_efficientzero':
             from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
             from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
+        elif cfg.type == 'unizero':
+            from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
         else:
             raise NotImplementedError("need to implement pipeline: {}".format(cfg.type))
-        self.MCTSCtree = MCTSCtree
-        self.MCTSPtree = MCTSPtree
+        if cfg.mcts_ctree:
+            self.MCTSCtree = MCTSCtree
+        else:
+            self.MCTSPtree = MCTSPtree
         self.action_space = action_space
         super().__init__(cfg, model, enable_field)
 
@@ -57,6 +62,8 @@ class LightZeroRandomPolicy(Policy):
                 return 'MuZeroModel', ['lzero.model.muzero_model']
             elif self._cfg.type == 'sampled_efficientzero':
                 return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
+            elif self._cfg.type == 'unizero':
+                return 'UniZeroModel', ['lzero.model.unizero_model']
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
         elif self._cfg.model.model_type == "mlp":
@@ -66,6 +73,8 @@ class LightZeroRandomPolicy(Policy):
                 return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
             elif self._cfg.type == 'sampled_efficientzero':
                 return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
+            elif self._cfg.type == 'unizero':
+                return 'UniZeroModel', ['lzero.model.unizero_model']
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
@@ -85,7 +94,17 @@ class LightZeroRandomPolicy(Policy):
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
-
+        if self._cfg.type == 'unizero':
+            self.collector_env_num = self._cfg.collector_env_num
+            if self._cfg.model.model_type == 'conv':
+                self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+                self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+                
+            elif self._cfg.model.model_type == 'mlp':
+                self.last_batch_obs = torch.full(
+                    [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+                ).to(self._cfg.device)
+                self.last_batch_action = [-1 for i in range(self.collector_env_num)]
     def _forward_collect(
         self,
         data: torch.Tensor,
@@ -94,6 +113,7 @@ class LightZeroRandomPolicy(Policy):
         to_play: List = [-1],
         epsilon: float = 0.25,
         ready_env_id: np.array = None,
+        timestep: List = [0]
     ) -> Dict:
         """
         Overview:
@@ -105,30 +125,30 @@ class LightZeroRandomPolicy(Policy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-        Shape:
-            - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
-                    S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
-            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-            - temperature: :math:`(1, )`.
-            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
-            - ready_env_id: None
-        Returns:
-            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
-                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
+            - timestep (:obj:`list`): The step index of the env in one episode.
         """
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
+        self._collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
+
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data)
             if self._cfg.type in ['efficientzero', 'sampled_efficientzero']:
+                network_output = self._collect_model.initial_inference(data)
                 latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
                     network_output
                 )
             elif self._cfg.type == 'muzero':
+                network_output = self._collect_model.initial_inference(data)
+                latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+            elif self._cfg.type == 'unizero':
+                network_output = self._collect_model.initial_inference(
+                    self.last_batch_obs, self.last_batch_action, data, timestep
+                )
                 latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
@@ -143,8 +163,6 @@ class LightZeroRandomPolicy(Policy):
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             if self._cfg.model.continuous_action_space:
-                # when the action space of the environment is continuous, action_mask[:] is None.
-                # NOTE: in continuous action space env: we set all legal_actions as -1
                 legal_actions = [
                     [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
                 ]
@@ -153,20 +171,22 @@ class LightZeroRandomPolicy(Policy):
                     [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
                 ]
 
-            # the only difference between collect and eval is the dirichlet noise.
             if self._cfg.type in ['sampled_efficientzero']:
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
-                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                    np.random.dirichlet(
+                        [self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
+                    ).astype(np.float32).tolist()
+                    for _ in range(active_collect_env_num)
                 ]
             else:
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                    np.random.dirichlet(
+                        [self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                    ).astype(np.float32).tolist()
+                    for j in range(active_collect_env_num)
                 ]
 
             if self._cfg.mcts_ctree:
-                # cpp mcts_tree
                 if self._cfg.type in ['sampled_efficientzero']:
                     roots = self.MCTSCtree.roots(
                         active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
@@ -175,7 +195,6 @@ class LightZeroRandomPolicy(Policy):
                 else:
                     roots = self.MCTSCtree.roots(active_collect_env_num, legal_actions)
             else:
-                # python mcts_tree
                 if self._cfg.type in ['sampled_efficientzero']:
                     roots = self.MCTSPtree.roots(
                         active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
@@ -192,6 +211,9 @@ class LightZeroRandomPolicy(Policy):
             elif self._cfg.type == 'muzero':
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
                 self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
+            elif self._cfg.type == 'unizero':
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+                self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
             else:
                 raise NotImplementedError("need to implement pipeline: {}".format(self._cfg.type))
 
@@ -199,10 +221,6 @@ class LightZeroRandomPolicy(Policy):
             roots_values = roots.get_values()  # shape: {list: batch_size}
             if self._cfg.type in ['sampled_efficientzero']:
                 roots_sampled_actions = roots.get_sampled_actions()
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
-            output = {i: None for i in ready_env_id}
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -249,8 +267,64 @@ class LightZeroRandomPolicy(Policy):
                         'predicted_policy_logits': policy_logits[i],
                     }
 
+            if self._cfg.type == 'unizero':
+                batch_action = [output[env_id]['action'] for env_id in ready_env_id]
+                self.last_batch_obs = data
+                self.last_batch_action = batch_action
+
         return output
 
+
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+        """
+        Overview:
+            This method resets the collection process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True, the initial data
+            will be reset.
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+        """
+        if self._cfg.type != 'unizero':
+            return
+        if reset_init_data:
+            if self._cfg.model.model_type == 'conv':
+                pad_token_id = -1
+            else:
+                encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+                spad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
+            self.last_batch_obs = initialize_pad_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.collector_env_num,
+                self._cfg.device,
+                pad_token_id=pad_token_id
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the collect model's world model
+            world_model = self._collect_model.world_model
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+    
     def _init_eval(self) -> None:
         """
         Overview:

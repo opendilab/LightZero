@@ -1,7 +1,7 @@
 import copy
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
-
+import logging
 import numpy as np
 import torch
 from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
@@ -558,6 +558,23 @@ class UniZeroPolicy(MuZeroPolicy):
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
+
+        if self._cfg.use_rnd_model:
+            if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='assign',
+                    update_kwargs={'freq': self._cfg.target_update_freq_for_intrinsic_reward}
+                )
+            elif self._cfg.target_model_for_intrinsic_reward_update_type == 'momentum':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='momentum',
+                    update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
+                )
+        
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
@@ -566,10 +583,9 @@ class UniZeroPolicy(MuZeroPolicy):
 
         if self._cfg.model.model_type == 'conv':
             self.pad_token_id = -1
-        else:
+        else: 
             encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
             self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
-
         
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
@@ -652,6 +668,8 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.train()
         self._target_model.train()
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
 
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
@@ -941,6 +959,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update the target model with the current model's parameters
         self._target_model.update(self._learn_model.state_dict())
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -1017,9 +1037,10 @@ class UniZeroPolicy(MuZeroPolicy):
             return_log_dict['current_encoder_clip_value'] = current_clip_value
         # ===================== END: 添加新日志项 =====================
         
-        if self._cfg.use_wandb:
-            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
-            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+        if self._cfg.use_wandb and self._rank == 0:
+            for k, v in return_log_dict.items():
+                wandb.log({'learner_step/' + k: v , "env_step": self.env_step})
+                wandb.log({'learner_iter/' + k: v , "train_iter": self.train_iter})
 
         return return_log_dict
 
