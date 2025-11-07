@@ -1,0 +1,17 @@
+# Core dependencies
+ray>=2.0.0
+torch>=2.0.0
+transformers>=4.30.0
+vllm>=0.3.0
+loguru>=0.7.0
+
+# Data processing
+jinja2>=3.0.0
+peft>=0.4.0
+
+# Deep learning
+deepspeed>=0.9.0
+numpy>=1.21.0
+
+# Optional dependencies for advanced math verification
+sympy>=1.12

@@ -16,7 +16,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
-    gpu_num = 4
+    gpu_num = 1
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     
@@ -24,11 +24,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     encoder_option = 'legacy'        # ['qwen', 'legacy']. Legacy uses the bge encoder
 
     if encoder_option == 'qwen':
-        model_name: str = 'Qwen/Qwen3-0.6B'
+        model_name: str = '/mnt/shared-storage-user/tangjia/pr/LightZero/model/models--Qwen--Qwen3-0.6B/snapshots/ec0dcdfc641f7a94f8e969d459caa772b9c01706'
         batch_size = int(1*gpu_num)
         accumulation_steps=64
     elif encoder_option == 'legacy':
-        model_name: str = 'BAAI/bge-base-en-v1.5'
+        model_name: str = '/mnt/shared-storage-user/tangjia/pr/LightZero/model/BAAI--bge-base-en-v1.5'
         batch_size = int(64*gpu_num)
         accumulation_steps=1
     else:

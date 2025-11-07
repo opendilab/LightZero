@@ -17,6 +17,9 @@ data_*
 *.gv
 *.png
 *.csv
+.github/
+
+model/
 
 pkg/
 src/
