@@ -264,8 +264,15 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs, root = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
-
+            # Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations
+            result = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
+            if len(result) == 3:
+                # ctree implementation returns: action, mcts_probs, root
+                action, mcts_probs, root = result
+            else:
+                # ptree implementation returns: action, mcts_probs
+                action, mcts_probs = result
+                
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
@@ -327,9 +334,16 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs, root = self._eval_mcts.get_next_action(
+            result = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
+            if len(result) == 3:
+                # ctree implementation returns: action, mcts_probs, root
+                action, mcts_probs, root = result
+            else:
+                # ptree implementation returns: action, mcts_probs
+                action, mcts_probs = result
+                
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
