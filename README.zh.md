@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2025.09.29 LightZero-v0.2.0
+最近更新于 2025.11.09 LightZero-v0.2.0
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
@@ -38,7 +38,7 @@
 ## 研究日志
 - [2025.09] 🔥 ScaleZero 论文已发布在 arXiv: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945).
 - [2025.08] [ReZero 论文](https://openreview.net/forum?id=F9Y7j3AJTu)已被 CoRL 2025 RemembeRL workshop 接收。
-- [2024.06] [UniZero 论文](https://openreview.net/forum?id=Gl6dF9soQo)已被 Transactions on Machine Learning Research 接收。
+- [2025.06] [UniZero 论文](https://openreview.net/forum?id=Gl6dF9soQo)已被 Transactions on Machine Learning Research 接收。
 - [2023.09] [LightZero 论文](https://proceedings.neurips.cc/paper_files/paper/2023/hash/765043fe026f7d704c96cec027f13843-Abstract-Datasets_and_Benchmarks.html)已被 NeurIPS 2023 Datasets and Benchmarks Track 接收为 Spotlight Presentation。
 - [2023.04] LightZero v0.0.1 正式发布。
 
