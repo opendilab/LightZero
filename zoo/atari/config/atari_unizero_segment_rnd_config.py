@@ -19,6 +19,10 @@ def main(env_id, seed):
     replay_ratio = 0.25
     num_unroll_steps = 10
     infer_context_length = 4
+    collect_num_simulations = 25
+    eval_num_simulations = 50
+    num_channels=128
+    num_res_blocks=2
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     buffer_reanalyze_freq = 1/100000
@@ -56,10 +60,22 @@ def main(env_id, seed):
             type='rnd_unizero',
             intrinsic_reward_type='add',
             input_type='obs',  # options: ['obs', 'latent_state', 'obs_latent_state']
-            intrinsic_reward_weight=0.5,
+            activation_type='LeakyReLU',
+            enable_image_logging=True,
+            timeline_log_interval=1000,
+            
+            # —— 新增：自适应权重调度 —— #
+            use_intrinsic_weight_schedule=True,     # 打开自适应权重
+            intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
+            intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
+            intrinsic_weight_ramp=50000,            # 从min升到max所需的 estimate 数
+            intrinsic_weight_min=0.0,               
+            intrinsic_weight_max=0.02, 
+            
             obs_shape=(3, 96, 96),
             latent_state_dim=256,
-            hidden_size_list=[128, 128, 256],
+            hidden_size_list=[32, 64, 64],
+            output_dim=512,
             learning_rate=3e-4,
             weight_decay=1e-4,
             input_norm=True,
@@ -81,6 +97,8 @@ def main(env_id, seed):
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
+                num_channels=num_channels,
+                num_res_blocks=num_res_blocks,
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
@@ -113,6 +131,8 @@ def main(env_id, seed):
                     optim_type='AdamW_mix_lr_wdecay',
                 ),
             ),
+            collect_num_simulations=collect_num_simulations,
+            eval_num_simulations=eval_num_simulations,
             optim_type='AdamW_mix_lr_wdecay',
             weight_decay=1e-2, # TODO: encoder 5*wd, transformer wd, head 0
             learning_rate=0.0001,
@@ -206,13 +226,16 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment_with_reward_model
-    main_config.exp_name = (
-        f'./data_lz/data_unizero_atari_rnd/{env_id[:-14]}/'
-        f'{env_id[:-14]}_rnd_w_{main_config.reward_model.intrinsic_reward_weight}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_'
-        f'nlayer{num_layers}_numsegments-{num_segments}_'
-        f'gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_'
-        f'bs{batch_size}_seed{seed}'
-    )
+    main_config.exp_name = (f'./data_lz/data_unizero_atari_rnd/{env_id[:-14]}/rnd_{main_config.reward_model.intrinsic_reward_type}_'
+                            f'{main_config.reward_model.input_type}_wmax_{main_config.reward_model.intrinsic_weight_max}_input_norm_{main_config.reward_model.input_norm}_intrinsic_norm_{main_config.reward_model.intrinsic_norm}_use_intrinsic_weight_schedule_{main_config.reward_model.use_intrinsic_weight_schedule}/'
+                            f'{main_config.policy.model.world_model_cfg.predict_latent_loss_type}_adaptive_entropy_{main_config.policy.use_adaptive_entropy_weight}_use_priority_{main_config.policy.use_priority}_encoder_clip_{main_config.policy.use_encoder_clip_annealing}_label_smoothing_{main_config.policy.label_smoothing_eps}_use_aug_{main_config.policy.use_augmentation}_ncha_{num_channels}_nres_{num_res_blocks}/') 
+    # main_config.exp_name = (
+    #     f'./data_lz/data_unizero_atari_rnd/{env_id[:-14]}/'
+    #     f'{env_id[:-14]}_rnd_w_{main_config.reward_model.intrinsic_reward_weight}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_'
+    #     f'nlayer{num_layers}_numsegments-{num_segments}_'
+    #     f'gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_'
+    #     f'bs{batch_size}_seed{seed}'
+    # )
     train_unizero_segment_with_reward_model(
         [main_config, create_config],
         seed=seed,

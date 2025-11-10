@@ -16,35 +16,62 @@ from ding.utils import RunningMeanStd
 from ding.utils import SequenceType, REWARD_MODEL_REGISTRY
 from easydict import EasyDict
 from ding.utils import get_rank, get_world_size, build_logger, allreduce, synchronize
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from copy import deepcopy
 
 
 class RNDNetwork(nn.Module):
 
-    def __init__(self, obs_shape: Union[int, SequenceType], hidden_size_list: SequenceType) -> None:
+    def __init__(self, obs_shape: Union[int, SequenceType], hidden_size_list: SequenceType, output_dim: int = 512,activation_type: str = "ReLU", kernel_size_list=[8,4,3], stride_size_list=[4,2,1]) -> None:
         super(RNDNetwork, self).__init__()
         assert len(hidden_size_list) >= 1, "hidden_size_list must contain at least one element."
         feature_dim = hidden_size_list[-1]
-        activation = nn.ReLU()
+        if activation_type == "ReLU":
+            self.activation = nn.ReLU()
+        elif activation_type == "LeakyReLU":
+            self.activation = nn.LeakyReLU()
+        else:
+            raise KeyError("not support activation_type for RND model: {}, please customize your own RND model".format(activation_type))
+        
         if isinstance(obs_shape, int) or len(obs_shape) == 1:
-            self.target = FCEncoder(obs_shape, hidden_size_list)
-            predictor_backbone = FCEncoder(obs_shape, hidden_size_list)
+            target_backbone = FCEncoder(obs_shape, hidden_size_list, activation=self.activation)
+            predictor_backbone = FCEncoder(obs_shape, hidden_size_list, activation=self.activation)
         elif len(obs_shape) == 3:
-            self.target = ConvEncoder(obs_shape, hidden_size_list)
-            predictor_backbone = ConvEncoder(obs_shape, hidden_size_list)
+            target_backbone = []
+            predictor_backbone = []
+            input_size = obs_shape[0]
+            for i in range(len(hidden_size_list)):
+                target_backbone.append(nn.Conv2d(input_size , hidden_size_list[i], kernel_size_list[i], stride_size_list[i]))
+                target_backbone.append(self.activation)
+                
+                predictor_backbone.append(nn.Conv2d(input_size , hidden_size_list[i], kernel_size_list[i], stride_size_list[i]))
+                predictor_backbone.append(self.activation)
+                input_size = hidden_size_list[i]
+            target_backbone.append(nn.Flatten())
+            predictor_backbone.append(nn.Flatten())
+            
+            self.target = nn.Sequential(
+                                *target_backbone,
+                                nn.LazyLinear(output_dim)
+                            )
+            self.predictor = nn.Sequential(
+                                *predictor_backbone,
+                                nn.LazyLinear(512),
+                                nn.ReLU(),
+                                nn.LazyLinear(512),
+                                nn.ReLU(),
+                                nn.LazyLinear(output_dim)
+                            )
         else:
             raise KeyError(
                 "not support obs_shape for pre-defined encoder: {}, please customize your own RND model".
                 format(obs_shape)
-            )
-        self.predictor = nn.Sequential(
-            predictor_backbone,
-            activation,
-            nn.Linear(feature_dim, feature_dim),
-        )
+            )        
         for param in self.target.parameters():
             param.requires_grad = False
-        
-
+    
     def forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         predict_feature = self.predictor(obs)
         with torch.no_grad():
@@ -140,7 +167,7 @@ class RNDRewardModel(BaseRewardModel):
             ``reward_norm_max``                        | normalization
         == ====================  =====  =============  =======================================  =======================
     """
-    config = dict(
+    rnd_config = dict(
         # (str) Reward model register name, refer to registry ``REWARD_MODEL_REGISTRY``.
         type='rnd',
         # (str) The intrinsic reward type, including add, new, or assign.
@@ -161,12 +188,24 @@ class RNDRewardModel(BaseRewardModel):
         # Means the relative weight of RND intrinsic_reward.
         # (float) The weight of intrinsic reward
         # r = intrinsic_reward_weight * r_i + r_e.
-        intrinsic_reward_weight=0.01,
         # (bool) Whether to normalize extrinsic reward using running statistics.
         # (bool) Whether to adjust target value with intrinsic reward contribution.
         adjust_value_with_intrinsic=False,
         # (float) Discount factor used when adjusting target value.
         discount_factor=1.0,
+        # 新增：图片日志总开关与可视化参数
+        enable_image_logging=False,         # ← 总开关：是否在TB输出图片（时间线+关键帧等）
+        timeline_log_interval=500,           # 每隔多少次 estimate 产出一张大图
+        peaks_topk=10,                      # 关键帧个数
+        
+        # —— 新增：自适应权重调度 —— #
+        use_intrinsic_weight_schedule=True,     # 打开自适应权重
+        intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
+        intrinsic_weight_warmup=1000,           # 前多少次 estimate 权重=0
+        intrinsic_weight_ramp=5000,            # 从0升到max所需的 estimate 数
+        intrinsic_weight_min=0.0,               
+        intrinsic_weight_max=0.02,              
+        
     )
 
     def __init__(self, config: EasyDict, device: str = 'cpu', tb_logger: 'SummaryWriter' = None, exp_name: str = "default_experiment",
@@ -174,7 +213,8 @@ class RNDRewardModel(BaseRewardModel):
                 target_representation_network: nn.Module = None, use_momentum_representation_network: bool = True, 
                 bp_update_sync: bool = True, multi_gpu: bool = False) -> None:  # noqa
         super(RNDRewardModel, self).__init__()
-        self.cfg = config
+        self.cfg = EasyDict(deepcopy(RNDRewardModel.rnd_config))
+        self.cfg.update(config)
         self.representation_network = representation_network
         self.target_representation_network = target_representation_network
         self.use_momentum_representation_network = use_momentum_representation_network
@@ -191,13 +231,16 @@ class RNDRewardModel(BaseRewardModel):
         self.multi_gpu = multi_gpu
         self._bp_update_sync = bp_update_sync
         self._device = device
+        self.activation_type = getattr(self.cfg, 'activation_type', 'ReLU')
+        self.enable_image_logging = bool(getattr(self.cfg, 'enable_image_logging', False))
+        self.timeline_log_interval = int(getattr(self.cfg, 'timeline_log_interval', 500))
+        self.use_intrinsic_weight_schedule = bool(getattr(self.cfg, 'use_intrinsic_weight_schedule', False))
         
         if self.multi_gpu:
             self._device = 'cuda:{}'.format(self._rank % torch.cuda.device_count()) if 'cuda' in device else 'cpu'
         else:
             self._device = device
             
-        print('rnd.device:' + self._device)
         if self._rank == 0:
             if tb_logger is not None:
                 self._logger, _ = build_logger(
@@ -216,20 +259,42 @@ class RNDRewardModel(BaseRewardModel):
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
             self._tb_logger = None
-            
+        
+        self._logger.info(
+            "[RND] device=%s | input_type=%s | hidden=%s",
+            self._device, self.input_type, str(self.cfg.hidden_size_list)
+        )
+        if self.enable_image_logging:
+            self._logger.info(
+                "[RND] image logging: ENABLED | interval=%d | peaks_topk=%d",
+                self.cfg.timeline_log_interval, self.cfg.peaks_topk,
+            )
+        else:
+            self._logger.info("[RND] image logging: disabled")
+        if self.use_intrinsic_weight_schedule:
+            self._logger.info(
+                "[RND] intrinsic weight schedule: ENABLED | mode=%s | warmup=%d | ramp=%d | min=%.3f | max=%.3f",
+                self.cfg.intrinsic_weight_mode, self.cfg.intrinsic_weight_warmup, self.cfg.intrinsic_weight_ramp, 
+                self.cfg.intrinsic_weight_min, self.cfg.intrinsic_weight_max
+            )
+        else:
+            self._logger.info(
+                "[RND] intrinsic weight schedule: disabled | fixed_weight=%.3f", self.cfg.intrinsic_weight_max
+            )
+        
         if self.input_type == 'obs':
             self.input_shape = self.cfg.obs_shape
-            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self._device)
+            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list, activation_type=self.activation_type).to(self._device)
         elif self.input_type == 'latent_state':
             self.input_shape = self.cfg.latent_state_dim
-            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list).to(self._device)
+            self.reward_model = RNDNetwork(self.input_shape, self.cfg.hidden_size_list, activation_type=self.activation_type).to(self._device)
         elif self.input_type == 'obs_latent_state':
             if self.use_momentum_representation_network:
                 self.reward_model = RNDNetworkRepr(self.cfg.obs_shape, self.cfg.latent_state_dim, self.cfg.hidden_size_list[0:-1],
-                                                  self.target_representation_network).to(self._device)
+                                                  self.target_representation_network, activation_type=self.activation_type).to(self._device)
             else:
                 self.reward_model = RNDNetworkRepr(self.cfg.obs_shape, self.cfg.latent_state_dim, self.cfg.hidden_size_list[0:-1],
-                                                  self.representation_network).to(self._device)
+                                                  self.representation_network, activation_type=self.activation_type).to(self._device)
 
         assert self.intrinsic_reward_type in ['add', 'new', 'assign']
         if self.input_type in ['obs', 'obs_latent_state']:
@@ -250,6 +315,9 @@ class RNDRewardModel(BaseRewardModel):
         self._state_visit_counts = defaultdict(int)
         self._initial_reward_samples: List[np.ndarray] = []
         self._initial_consistency_logged = False
+        self._gv_rewards = []   # 每个 batch 挑一帧的内在奖励
+        self._gv_obs = []       # 对应帧的 obs
+        self._gv_base_idx = 0    
 
     def _resolve_obs_shape(self) -> Tuple[int, ...]:
         """
@@ -497,6 +565,37 @@ class RNDRewardModel(BaseRewardModel):
         self._optimizer_rnd.step()
         self.train_cnt_rnd += 1
 
+    def _intrinsic_weight(self, step: int) -> float:
+        """
+        根据当前 estimate 步数返回 RND 权重：
+        - step < warmup  → 0
+        - warmup 之后    → 线性/余弦从 min 升到 max
+        """
+        if not self.cfg.use_intrinsic_weight_schedule:
+            return float(self.cfg.intrinsic_weight_max)
+
+        wmin = float(self.cfg.intrinsic_weight_min)
+        wmax = float(self.cfg.intrinsic_weight_max)
+        warmup = int(self.cfg.intrinsic_weight_warmup)
+        ramp   = max(1, int(self.cfg.intrinsic_weight_ramp))
+        mode   = str(self.cfg.intrinsic_weight_mode).lower()
+
+        if step <= warmup:
+            return 0.0
+
+        # 归一化进度 p ∈ [0,1]
+        t = min(max(step - warmup, 0), ramp)
+        p = t / float(ramp)
+
+        if mode == 'linear':
+            w = wmin + (wmax - wmin) * p
+        elif mode == 'cosine':
+            w = wmin + 0.5 * (wmax - wmin) * (1.0 - np.cos(np.pi * p))
+        else:
+            w = float(self.cfg.intrinsic_weight_max) 
+
+        return float(w)
+    
     def estimate(self, data: list) -> List[Dict]:
         """
         Rewrite the reward key in each row of the data.
@@ -538,12 +637,31 @@ class RNDRewardModel(BaseRewardModel):
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_mean', extrinsic_normalized.mean(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_min', extrinsic_normalized.min(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_std', extrinsic_normalized.std(), self.estimate_cnt_rnd)
+        
+        # —— 图片日志（总开关 + 间隔）—— #
+        if self.enable_image_logging and self._tb_logger is not None :
+            best_idx = int(np.argmax(rnd_reward_np)) 
+            self._gv_rewards.append(float(rnd_reward_np[best_idx]))
+            self._gv_obs.append(obs_batch_tmp[best_idx])
+            if len(self._gv_rewards) >= self.timeline_log_interval :
+                try:
+                    self._log_intrinsic_figures()
+                    self._gv_base_idx += len(self._gv_rewards)
+                    self._gv_rewards.clear()
+                    self._gv_obs.clear()
+                except Exception as e:
+                    logging.warning(f"[RND] timeline visual failed: {e}")
+                
+        cur_w = self._intrinsic_weight(self.estimate_cnt_rnd)
+        if self._tb_logger is not None:
+            self._tb_logger.add_scalar('rnd_reward_model/intrinsic_weight', cur_w, self.estimate_cnt_rnd)
+
             
         rnd_reward_flat = rnd_reward_np.reshape(batch_size * T, 1)
         if self.intrinsic_reward_type == 'add':
-            target_reward_augmented = extrinsic_normalized + rnd_reward_flat * self.cfg.intrinsic_reward_weight
+            target_reward_augmented = extrinsic_normalized + rnd_reward_flat * cur_w
         elif self.intrinsic_reward_type == 'new':
-            target_reward_augmented = rnd_reward_flat * self.cfg.intrinsic_reward_weight
+            target_reward_augmented = rnd_reward_flat * cur_w
         elif self.intrinsic_reward_type == 'assign':
             target_reward_augmented = rnd_reward_flat
         else:
@@ -571,7 +689,7 @@ class RNDRewardModel(BaseRewardModel):
                 target_values_augmented = (discounted_returns[:, :target_values.shape[1]] * value_mask).astype(np.float32)
             data[1][1] = target_values_augmented
             
-            if self._tb_logger is not None:
+            if self._tb_logger is not None and self.adjust_value_with_intrinsic:
                 self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_max', target_values.max(), self.estimate_cnt_rnd)
                 self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_mean', target_values.mean(), self.estimate_cnt_rnd)
                 self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_min', target_values.min(), self.estimate_cnt_rnd)
@@ -610,3 +728,71 @@ class RNDRewardModel(BaseRewardModel):
         concatenated = np.concatenate(segments, axis=0)
         flattened = self._flatten_obs_batch(concatenated)
         self._update_visit_counts(flattened)
+        
+    # ---------------------- 可视化辅助（新增） ---------------------- #
+    def _select_peaks(self, y: np.ndarray, k: int) -> List[int]:
+        order = np.argsort(-y)
+        picked: List[int] = []
+        for i in order:
+            if len(picked) >= k:
+                break
+            picked.append(int(i))
+        picked.sort()
+        return picked
+
+    def _obs_to_rgb(self, obs_any: np.ndarray) -> np.ndarray:
+        x = np.asarray(obs_any)
+        x = np.squeeze(x)
+        if x.ndim == 3:
+            if x.shape[0] in (1, 3):  # CHW
+                if x.shape[0] == 3:
+                    img = np.transpose(x, (1, 2, 0))
+                elif x.shape[0] == 1:
+                    img = x[0]
+            elif x.shape[-1] in (1, 3):  # HWC
+                if x.shape[-1] == 3:
+                    img = x
+                elif x.shape[-1] == 1:
+                    img = x[..., 0]
+        else:
+            pass
+        img = (img * 255.0).clip(0, 255).astype(np.uint8)
+        return img
+
+    def _log_intrinsic_figures(self) -> None:
+        if not getattr(self, 'enable_image_logging', False) or self._tb_logger is None:
+            return
+        y = np.array(self._gv_rewards, dtype=np.float32)
+        y = y.reshape(-1)
+        k = self.cfg.peaks_topk
+        start = self._gv_base_idx
+        end = start + y.shape[0]
+        steps = np.arange(start, end, dtype=np.int32)
+        peaks = self._select_peaks(y, k=k)
+
+        frames: List[np.ndarray] = []
+        for idx in peaks:
+            frames.append(self._obs_to_rgb(self._gv_obs[idx]))
+
+        ncols = k
+        fig = plt.figure(figsize=(ncols * 1.5, 3.8 + 1.5), dpi=120)
+        gs = fig.add_gridspec(2, ncols, height_ratios=[1, 2])
+
+        for i in range(k):
+            ax = fig.add_subplot(gs[0, i])
+            ax.imshow(frames[i])
+            ax.set_axis_off()
+            ax.set_title(str(i + 1), fontsize=8, pad=2)
+
+        ax_line = fig.add_subplot(gs[1, :])
+        ax_line.plot(steps, y, linewidth=1.0)
+        ax_line.set_xlabel("Steps")
+        ax_line.set_ylabel("Intrinsic reward")
+        for i, idx in enumerate(peaks):
+            ax_line.scatter([steps[idx]], [y[idx]], s=14)
+            ax_line.annotate(str(i + 1), (steps[idx], y[idx]),
+                            textcoords="offset points", xytext=(0, 8), ha="center", fontsize=8)
+        fig.tight_layout()
+        
+        self._tb_logger.add_figure("rnd_visual/intrinsic_timeline", fig, end)
+        plt.close(fig)
