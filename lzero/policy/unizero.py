@@ -666,11 +666,19 @@ class UniZeroPolicy(MuZeroPolicy):
         target_reward, target_value, target_policy = target_batch
 
         # --- NEW: Calculate current epsilon for policy ---
-        if self.policy_ls_eps_start > 0:
-            progress = min(1.0, train_iter / self.policy_ls_eps_decay_steps)
-            current_policy_label_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
+        # ==================== [NEW] Fix2: Continuous Label Smoothing ====================
+        use_continuous_label_smoothing = self._cfg.get('use_continuous_label_smoothing', False)
+        if use_continuous_label_smoothing:
+            # Use fixed high epsilon throughout training
+            current_policy_label_eps = self._cfg.get('continuous_ls_eps', 0.05)
         else:
-            current_policy_label_eps = 0.0
+            # Use original decay schedule
+            if self.policy_ls_eps_start > 0:
+                progress = min(1.0, train_iter / self.policy_ls_eps_decay_steps)
+                current_policy_label_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
+            else:
+                current_policy_label_eps = 0.0
+        # ================================================================================
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
@@ -895,7 +903,9 @@ class UniZeroPolicy(MuZeroPolicy):
             # self.reward_loss_weight = 1.
             # self.policy_loss_weight = 1.
             # self.ends_loss_weight = 0.
-            self.obs_loss_weight = 2 # TODO ===============
+            # self.obs_loss_weight = 10 # TODO ===============
+            self.obs_loss_weight = 5 # TODO ===============
+            # self.obs_loss_weight = 2 # TODO ===============
             self.value_loss_weight = 0.5
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
@@ -1088,6 +1098,40 @@ class UniZeroPolicy(MuZeroPolicy):
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
         # =======================================================================
+
+        # ==================== [NEW] Fix4: Enhanced Policy Monitoring ====================
+        use_enhanced_policy_monitoring = self._cfg.get('use_enhanced_policy_monitoring', False)
+        if use_enhanced_policy_monitoring:
+            # Monitor policy logits statistics
+            with torch.no_grad():
+                logits_policy = losses.intermediate_losses.get('logits_policy')
+                if logits_policy is not None:
+                    return_log_dict['policy_logits/norm'] = logits_policy.norm(dim=-1).mean().item()
+                    return_log_dict['policy_logits/max'] = logits_policy.max().item()
+                    return_log_dict['policy_logits/min'] = logits_policy.min().item()
+                    return_log_dict['policy_logits/std'] = logits_policy.std().item()
+
+                # [NEW] Also monitor Value and Reward logits
+                logits_value = losses.intermediate_losses.get('logits_value')
+                if logits_value is not None:
+                    return_log_dict['value_logits/abs_max'] = logits_value.abs().max().item()
+                    return_log_dict['value_logits/norm'] = logits_value.norm(dim=-1).mean().item()
+
+                logits_reward = losses.intermediate_losses.get('logits_reward')
+                if logits_reward is not None:
+                    return_log_dict['reward_logits/abs_max'] = logits_reward.abs().max().item()
+                    return_log_dict['reward_logits/norm'] = logits_reward.norm(dim=-1).mean().item()
+
+                # Monitor target_policy entropy statistics (minimum entropy indicates extreme distributions)
+                valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+                target_policy_entropies = -torch.sum(
+                    valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
+                )
+                return_log_dict['target_policy_entropy/mean'] = target_policy_entropies.mean().item()
+                return_log_dict['target_policy_entropy/min'] = target_policy_entropies.min().item()
+                return_log_dict['target_policy_entropy/max'] = target_policy_entropies.max().item()
+                return_log_dict['target_policy_entropy/std'] = target_policy_entropies.std().item()
+        # ================================================================================
 
         # ==================== START: 添加新日志项 ====================
         if self.use_adaptive_entropy_weight:
@@ -1713,13 +1757,29 @@ class UniZeroPolicy(MuZeroPolicy):
             'embeddings/obs/norm_max',
             'embeddings/obs/norm_min',
         ]
+
+        # ==================== [NEW] Fix4: Enhanced Policy Monitoring Variables ====================
+        enhanced_policy_vars = [
+            # Policy logits statistics
+            'policy_logits/norm',
+            'policy_logits/max',
+            'policy_logits/min',
+            'policy_logits/std',
+            # Target policy entropy statistics
+            'target_policy_entropy/mean',
+            'target_policy_entropy/min',
+            'target_policy_entropy/max',
+            'target_policy_entropy/std',
+        ]
+        # ==========================================================================================
+
         # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
         # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
         # 或者在本地打印 `norm_log_dict` 来进行详细分析。
         # wandb等工具可以更好地处理大量的动态指标。
         # ========================================================================
 
-        return base_vars + norm_vars
+        return base_vars + norm_vars + enhanced_policy_vars
     
 
     def _state_dict_learn(self) -> Dict[str, Any]:

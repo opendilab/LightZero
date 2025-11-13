@@ -577,6 +577,26 @@ class WorldModel(nn.Module):
         self.num_layers = self.config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
+        # ==================== [NEW] Policy Stability Fix Options ====================
+        # Load fix options from config (with defaults for backward compatibility)
+        self.use_policy_logits_clip = getattr(self.config, 'use_policy_logits_clip', False)
+        self.policy_logits_clip_min = getattr(self.config, 'policy_logits_clip_min', -10.0)
+        self.policy_logits_clip_max = getattr(self.config, 'policy_logits_clip_max', 10.0)
+
+        # [NEW] Fix5: Temperature scaling for policy loss
+        self.use_policy_loss_temperature = getattr(self.config, 'use_policy_loss_temperature', False)
+        self.policy_loss_temperature = getattr(self.config, 'policy_loss_temperature', 1.0)
+
+        # [NEW] Debug: Print configuration on initialization
+        if self.use_policy_logits_clip:
+            logging.info(f"[Policy Logits Clip] ENABLED: range=[{self.policy_logits_clip_min}, {self.policy_logits_clip_max}]")
+        else:
+            logging.warning(f"[Policy Logits Clip] DISABLED! Using default values.")
+
+        if self.use_policy_loss_temperature and self.policy_loss_temperature != 1.0:
+            logging.info(f"[Policy Loss Temperature] ENABLED: temperature={self.policy_loss_temperature}")
+        # =============================================================================
+
     def _initialize_patterns(self) -> None:
         """Initialize patterns for block masks."""
         self.all_but_last_latent_state_pattern = torch.ones(self.config.tokens_per_block)
@@ -915,6 +935,17 @@ class WorldModel(nn.Module):
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+
+        # ==================== [NEW] Fix1: Clip Policy Logits ====================
+        # Prevent policy logits from exploding, which can cause gradient issues
+        if self.use_policy_logits_clip:
+            logits_policy = torch.clamp(
+                logits_policy,
+                min=self.policy_logits_clip_min,
+                max=self.policy_logits_clip_max
+            )
+        # ========================================================================
+
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
         # The 'logits_ends' is intentionally set to None.
@@ -1999,10 +2030,19 @@ class WorldModel(nn.Module):
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
         loss_obs = (loss_obs * mask_padding_expanded)
 
-        # Compute labels for policy and value
-        labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
-                                                                                   batch['target_policy'],
-                                                                                   batch['mask_padding'])
+        # ==================== [NEW] Fix3: Load re-smooth options from config ====================
+        use_target_policy_resmooth = getattr(self.config, 'use_target_policy_resmooth', False)
+        target_policy_resmooth_eps = getattr(self.config, 'target_policy_resmooth_eps', 0.05)
+        # ======================================================================================
+
+        # Compute labels for policy and value (with optional re-smoothing)
+        labels_policy, labels_value = self.compute_labels_world_model_value_policy(
+            batch['target_value'],
+            batch['target_policy'],
+            batch['mask_padding'],
+            use_target_policy_resmooth=use_target_policy_resmooth,
+            target_policy_resmooth_eps=target_policy_resmooth_eps
+        )
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
@@ -2313,9 +2353,15 @@ class WorldModel(nn.Module):
 
         logits = getattr(outputs, f'logits_{element}')
 
+        # ==================== [NEW] Fix5: Temperature Scaling for Policy ====================
+        if element == 'policy' and self.use_policy_loss_temperature and self.policy_loss_temperature != 1.0:
+            # Apply temperature scaling to soften the distribution
+            logits = logits / self.policy_loss_temperature
+        # ===================================================================================
+
         if torch.isnan(logits).any():
             raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")
-        
+
         if torch.isnan(labels).any():
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
@@ -2374,9 +2420,20 @@ class WorldModel(nn.Module):
 
     #@profile
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
-                                                mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                                                mask_padding: torch.BoolTensor,
+                                                use_target_policy_resmooth: bool = False,
+                                                target_policy_resmooth_eps: float = 0.05) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Compute labels for value and policy predictions. """
         mask_fill = torch.logical_not(mask_padding)
+
+        # ==================== [NEW] Fix3: Re-smooth Target Policy ====================
+        # Re-smooth target_policy to prevent extreme distributions in buffer
+        if use_target_policy_resmooth and target_policy_resmooth_eps > 0:
+            num_actions = target_policy.shape[-1]
+            uniform_dist = torch.ones_like(target_policy) / num_actions
+            target_policy = (1 - target_policy_resmooth_eps) * target_policy + \
+                           target_policy_resmooth_eps * uniform_dist
+        # =============================================================================
 
         # Fill the masked areas of policy
         mask_fill_policy = mask_fill.unsqueeze(-1).expand_as(target_policy)
