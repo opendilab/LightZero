@@ -178,10 +178,10 @@ def train_unizero_segment_with_reward_model(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        # if evaluator.should_eval(learner.train_iter):
-        #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-        #     if stop:
-        #         break
+        if learner.train_iter > 0 or evaluator.should_eval(learner.train_iter):
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep, reward_model=reward_model)
+            if stop:
+                break
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)

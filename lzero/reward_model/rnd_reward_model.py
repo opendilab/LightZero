@@ -195,8 +195,7 @@ class RNDRewardModel(BaseRewardModel):
         discount_factor=1.0,
         # 新增：图片日志总开关与可视化参数
         enable_image_logging=False,         # ← 总开关：是否在TB输出图片（时间线+关键帧等）
-        timeline_log_interval=500,           # 每隔多少次 estimate 产出一张大图
-        peaks_topk=10,                      # 关键帧个数
+        peaks_topk=12,                      # 关键帧个数
         
         # —— 新增：自适应权重调度 —— #
         use_intrinsic_weight_schedule=True,     # 打开自适应权重
@@ -233,7 +232,6 @@ class RNDRewardModel(BaseRewardModel):
         self._device = device
         self.activation_type = getattr(self.cfg, 'activation_type', 'ReLU')
         self.enable_image_logging = bool(getattr(self.cfg, 'enable_image_logging', False))
-        self.timeline_log_interval = int(getattr(self.cfg, 'timeline_log_interval', 500))
         self.use_intrinsic_weight_schedule = bool(getattr(self.cfg, 'use_intrinsic_weight_schedule', False))
         
         if self.multi_gpu:
@@ -264,13 +262,6 @@ class RNDRewardModel(BaseRewardModel):
             "[RND] device=%s | input_type=%s | hidden=%s",
             self._device, self.input_type, str(self.cfg.hidden_size_list)
         )
-        if self.enable_image_logging:
-            self._logger.info(
-                "[RND] image logging: ENABLED | interval=%d | peaks_topk=%d",
-                self.cfg.timeline_log_interval, self.cfg.peaks_topk,
-            )
-        else:
-            self._logger.info("[RND] image logging: disabled")
         if self.use_intrinsic_weight_schedule:
             self._logger.info(
                 "[RND] intrinsic weight schedule: ENABLED | mode=%s | warmup=%d | ramp=%d | min=%.3f | max=%.3f",
@@ -315,9 +306,6 @@ class RNDRewardModel(BaseRewardModel):
         self._state_visit_counts = defaultdict(int)
         self._initial_reward_samples: List[np.ndarray] = []
         self._initial_consistency_logged = False
-        self._gv_rewards = []   # 每个 batch 挑一帧的内在奖励
-        self._gv_obs = []       # 对应帧的 obs
-        self._gv_base_idx = 0    
 
     def _resolve_obs_shape(self) -> Tuple[int, ...]:
         """
@@ -498,8 +486,6 @@ class RNDRewardModel(BaseRewardModel):
         concatenated = np.concatenate(segments, axis=0)
         flattened = self._flatten_obs_batch(concatenated)
         total = flattened.shape[0]
-        if total == 0:
-            return
         self._update_visit_counts(flattened)
         inputs = self._prepare_inputs_from_obs(flattened)
         self._update_input_running_stats(inputs)
@@ -550,10 +536,7 @@ class RNDRewardModel(BaseRewardModel):
         if prepared_inputs.numel() == 0:
             return
         self._update_input_running_stats(prepared_inputs)
-
-        # 目前不抽取mini-batchsize
-        batch_inputs = prepared_inputs
-        normalized_input = self._normalize_inputs(batch_inputs)
+        normalized_input = self._normalize_inputs(prepared_inputs)
         predict_feature, target_feature = self.reward_model(normalized_input)
         loss = F.mse_loss(predict_feature, target_feature)
         if self._tb_logger:
@@ -637,20 +620,6 @@ class RNDRewardModel(BaseRewardModel):
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_mean', extrinsic_normalized.mean(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_min', extrinsic_normalized.min(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_std', extrinsic_normalized.std(), self.estimate_cnt_rnd)
-        
-        # —— 图片日志（总开关 + 间隔）—— #
-        if self.enable_image_logging and self._tb_logger is not None :
-            best_idx = int(np.argmax(rnd_reward_np)) 
-            self._gv_rewards.append(float(rnd_reward_np[best_idx]))
-            self._gv_obs.append(obs_batch_tmp[best_idx])
-            if len(self._gv_rewards) >= self.timeline_log_interval :
-                try:
-                    self._log_intrinsic_figures()
-                    self._gv_base_idx += len(self._gv_rewards)
-                    self._gv_rewards.clear()
-                    self._gv_obs.clear()
-                except Exception as e:
-                    logging.warning(f"[RND] timeline visual failed: {e}")
                 
         cur_w = self._intrinsic_weight(self.estimate_cnt_rnd)
         if self._tb_logger is not None:
@@ -758,41 +727,100 @@ class RNDRewardModel(BaseRewardModel):
             pass
         img = (img * 255.0).clip(0, 255).astype(np.uint8)
         return img
+    
+    def UpdateFuncAnimation(self, all_obs_per_episode: List[np.ndarray]) -> None:
+        """
+        Overview:
+            给定一条 episode 的完整 obs 序列（list，每个元素为 (C,H,W) 或 (H,W,C) 的 numpy 数组），
+            使用当前 RND 模型重新计算这一条轨迹上每一步的 intrinsic reward，
+            并画出：
+                - 上方：若干关键帧（intrinsic reward 较大的若干步的观测）
+                - 下方：整条时间线上的 intrinsic reward 曲线
 
-    def _log_intrinsic_figures(self) -> None:
+            图像会被写入 TensorBoard（若 _tb_logger 不为 None）：
+                tag = "rnd_visual/episode_intrinsic_timeline"
+                step = self.estimate_cnt_rnd
+        """
+        if not all_obs_per_episode:
+            return
+
         if not getattr(self, 'enable_image_logging', False) or self._tb_logger is None:
             return
-        y = np.array(self._gv_rewards, dtype=np.float32)
-        y = y.reshape(-1)
-        k = self.cfg.peaks_topk
-        start = self._gv_base_idx
-        end = start + y.shape[0]
-        steps = np.arange(start, end, dtype=np.int32)
-        peaks = self._select_peaks(y, k=k)
 
+        # 1) 堆叠成 (T, ...) 方便后续处理
+        obs_array = np.stack(all_obs_per_episode, axis=0)  # (T, C, H, W) 或 (T, H, W, C)
+        # 2) 展平成 (T, *obs_shape)，和 _flatten_obs_batch 保持一致
+        flat_obs = self._flatten_obs_batch(obs_array)  # (T, *obs_shape)
+        if flat_obs.size == 0:
+            return
+        # 3) 准备输入 + 归一化（与 estimate 中逻辑一致）
+        inputs = self._prepare_inputs_from_obs(flat_obs)
+
+        # 更新输入 running mean/std，再做标准化
+        norm_inputs = self._normalize_inputs(inputs.clone())
+
+        # 4) 通过 RND 模型得到每一步 intrinsic reward（MSE）
+        with torch.no_grad():
+            predict_feature, target_feature = self.reward_model(norm_inputs)
+            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)  # (T,)
+
+        mse_np = mse.detach().cpu().numpy()
+        mse_tensor = torch.from_numpy(mse_np).to(self._device)
+        rnd_reward_tensor = self._normalize_intrinsic_rewards(mse_tensor)
+        rnd_rewards = rnd_reward_tensor.detach().cpu().numpy().reshape(-1)  # (T,)
+
+        T = rnd_rewards.shape[0]
+        steps = np.arange(T, dtype=np.int32)
+        # 5) 选出若干“峰值位置”，对应关键帧
+        k_cfg = int(getattr(self.cfg, 'peaks_topk', 10))
+        k = max(1, min(k_cfg, T)) 
+        peak_indices = self._select_peaks(rnd_rewards, k=k)  
+        # 6) 把对应 obs 转成 RGB / Gray 图像
         frames: List[np.ndarray] = []
-        for idx in peaks:
-            frames.append(self._obs_to_rgb(self._gv_obs[idx]))
-
+        for idx in peak_indices:
+            frames.append(self._obs_to_rgb(flat_obs[idx]))
+            
+        # 7) 画图：上方一行 key frames，下方一行 reward 曲线
         ncols = k
         fig = plt.figure(figsize=(ncols * 1.5, 3.8 + 1.5), dpi=120)
         gs = fig.add_gridspec(2, ncols, height_ratios=[1, 2])
 
+        # 上排：关键帧
         for i in range(k):
             ax = fig.add_subplot(gs[0, i])
-            ax.imshow(frames[i])
+            img = frames[i]
+            if img.ndim == 2:
+                ax.imshow(img, cmap='gray')
+            else:
+                ax.imshow(img)
             ax.set_axis_off()
-            ax.set_title(str(i + 1), fontsize=8, pad=2)
+            ax.set_title(f"t={peak_indices[i]}", fontsize=8, pad=2)
 
+        # 下排：时间线曲线
         ax_line = fig.add_subplot(gs[1, :])
-        ax_line.plot(steps, y, linewidth=1.0)
-        ax_line.set_xlabel("Steps")
+        ax_line.plot(steps, rnd_rewards, linewidth=1.0)
+        ax_line.set_xlabel("Episode step")
         ax_line.set_ylabel("Intrinsic reward")
-        for i, idx in enumerate(peaks):
-            ax_line.scatter([steps[idx]], [y[idx]], s=14)
-            ax_line.annotate(str(i + 1), (steps[idx], y[idx]),
-                            textcoords="offset points", xytext=(0, 8), ha="center", fontsize=8)
+
+        for i, idx in enumerate(peak_indices):
+            ax_line.scatter([steps[idx]], [rnd_rewards[idx]], s=14)
+            ax_line.annotate(
+                str(i + 1),
+                (steps[idx], rnd_rewards[idx]),
+                textcoords="offset points",
+                xytext=(0, 8),
+                ha="center",
+                fontsize=8,
+            )
+
         fig.tight_layout()
-        
-        self._tb_logger.add_figure("rnd_visual/intrinsic_timeline", fig, end)
+
+        # 8) 写进 TensorBoard
+        global_step = int(self.estimate_cnt_rnd)
+        self._tb_logger.add_figure("rnd_visual/episode_intrinsic_timeline", fig, global_step)
         plt.close(fig)
+
+        logging.info(
+            "[RND] UpdateFuncAnimation: logged episode intrinsic timeline | T=%d | peaks=%d | step=%d",
+            T, k, global_step,
+        )

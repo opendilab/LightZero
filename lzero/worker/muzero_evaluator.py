@@ -197,6 +197,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             envstep: int = -1,
             n_episode: Optional[int] = None,
             return_trajectory: bool = False,
+            reward_model = None,
     ) -> Tuple[bool, float]:
         """
         Overview:
@@ -227,7 +228,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             # initializations
             init_obs = self._env.ready_obs
-
+            if self.policy_config.use_rnd_model and self.policy_config.model.world_model_cfg.obs_type == 'image':
+                obs_for_rnd = [[] for i in range(env_nums)]
+                
             retry_waiting_time = 0.001
             while len(init_obs.keys()) != self._env_num:
                 # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
@@ -306,6 +309,10 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                    if self.policy_config.use_rnd_model and self.policy_config.model.world_model_cfg.obs_type == 'image':
+                        for idx, env_id in enumerate(ready_env_id):
+                            obs_for_rnd[env_id].append(stack_obs[idx])
+                    
                     stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                     # ==============================================================
@@ -386,7 +393,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                         timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
                         if self.policy_config.use_ture_chance_label_in_chance_encoder:
                             chance_dict[env_id] = to_ndarray(obs['chance'])
-
                         dones[env_id] = done
                         if episode_timestep.done:
                             # Env reset is done by env_manager automatically.
@@ -460,6 +466,12 @@ class MuZeroEvaluator(ISerialEvaluator):
             
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
+            if self.policy_config.use_rnd_model and self.policy_config.model.world_model_cfg.obs_type == 'image':
+                max_return = max(episode_return)
+                max_idx = episode_return.index(max_return)
+                obs_for_rnd_res = obs_for_rnd[max_idx]
+                reward_model.UpdateFuncAnimation(obs_for_rnd_res)
+            
             info = {
                 'train_iter': train_iter,
                 'ckpt_name': 'iteration_{}.pth.tar'.format(train_iter),

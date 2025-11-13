@@ -11,7 +11,7 @@ def main(env_id, seed):
     collector_env_num = 8
     num_segments = 8
     game_segment_length = 20
-    evaluator_env_num = 10
+    evaluator_env_num = 3
     num_simulations = 50
     max_env_step = int(5e5)
     batch_size = 64
@@ -62,13 +62,12 @@ def main(env_id, seed):
             input_type='obs',  # options: ['obs', 'latent_state', 'obs_latent_state']
             activation_type='LeakyReLU',
             enable_image_logging=True,
-            timeline_log_interval=1000,
             
             # —— 新增：自适应权重调度 —— #
-            use_intrinsic_weight_schedule=True,     # 打开自适应权重
+            use_intrinsic_weight_schedule=False,     # 打开自适应权重
             intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
             intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
-            intrinsic_weight_ramp=50000,            # 从min升到max所需的 estimate 数
+            intrinsic_weight_ramp=30000,            # 从min升到max所需的 estimate 数
             intrinsic_weight_min=0.0,               
             intrinsic_weight_max=0.02, 
             
@@ -79,8 +78,8 @@ def main(env_id, seed):
             learning_rate=3e-4,
             weight_decay=1e-4,
             input_norm=True,
-            input_norm_clamp_max=5,
-            input_norm_clamp_min=-5,
+            input_norm_clamp_max=30,
+            input_norm_clamp_min=-30,
             
             intrinsic_norm=True,
             intrinsic_norm_clamp_min=-5,
@@ -140,7 +139,7 @@ def main(env_id, seed):
             model_path=None,
             
             # (bool) 是否启用自适应策略熵权重 (alpha)
-            use_adaptive_entropy_weight=True,
+            use_adaptive_entropy_weight=False,
             # (float) 自适应alpha优化器的学习率
             adaptive_entropy_alpha_lr=1e-3,
             target_entropy_start_ratio =0.98,
@@ -148,7 +147,7 @@ def main(env_id, seed):
             target_entropy_decay_steps = 100000, # 例如，在300k次迭代后达到最终值
             # ==================== START: Encoder-Clip Annealing Config ====================
             # (bool) 是否启用 encoder-clip 值的退火。
-            use_encoder_clip_annealing=True,
+            use_encoder_clip_annealing=False,
             # (str) 退火类型。可选 'linear' 或 'cosine'。
             encoder_clip_anneal_type='cosine',
             # (float) 退火的起始 clip 值 (训练初期，较宽松)。
@@ -168,8 +167,8 @@ def main(env_id, seed):
             # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
             monitor_norm_freq=5000,
             
-            # use_augmentation=False,
-            use_augmentation=True,
+            use_augmentation=False,
+            # use_augmentation=True,
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
             use_priority=True,
@@ -226,7 +225,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment_with_reward_model
-    main_config.exp_name = (f'./data_lz/data_unizero_atari_rnd/{env_id[:-14]}/rnd_{main_config.reward_model.intrinsic_reward_type}_'
+    main_config.exp_name = (f'./data_lz/data_unizero_atari_rnd/{env_id[:-14]}_obs_latent_w_10/rnd_{main_config.reward_model.intrinsic_reward_type}_'
                             f'{main_config.reward_model.input_type}_wmax_{main_config.reward_model.intrinsic_weight_max}_input_norm_{main_config.reward_model.input_norm}_intrinsic_norm_{main_config.reward_model.intrinsic_norm}_use_intrinsic_weight_schedule_{main_config.reward_model.use_intrinsic_weight_schedule}/'
                             f'{main_config.policy.model.world_model_cfg.predict_latent_loss_type}_adaptive_entropy_{main_config.policy.use_adaptive_entropy_weight}_use_priority_{main_config.policy.use_priority}_encoder_clip_{main_config.policy.use_encoder_clip_annealing}_label_smoothing_{main_config.policy.label_smoothing_eps}_use_aug_{main_config.policy.use_augmentation}_ncha_{num_channels}_nres_{num_res_blocks}/') 
     # main_config.exp_name = (
