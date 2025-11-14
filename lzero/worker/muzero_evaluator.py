@@ -470,7 +470,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                 max_return = max(episode_return)
                 max_idx = episode_return.index(max_return)
                 obs_for_rnd_res = obs_for_rnd[max_idx]
-                reward_model.UpdateFuncAnimation(obs_for_rnd_res)
+                if max_return > 0:
+                    reward_model.UpdateFuncAnimation(obs_for_rnd_res)
             
             info = {
                 'train_iter': train_iter,

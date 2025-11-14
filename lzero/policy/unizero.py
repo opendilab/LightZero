@@ -62,7 +62,7 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         {
             'params': list(tokenizer_params.values()),
             'lr': learning_rate,  
-            'weight_decay': weight_decay  * 5.0
+            'weight_decay': weight_decay 
 
         },
         {

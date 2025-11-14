@@ -19,7 +19,7 @@ def main(env_id, seed):
     replay_ratio = 0.25
     num_unroll_steps = 10
     infer_context_length = 4
-    collect_num_simulations = 25
+    collect_num_simulations = 50
     eval_num_simulations = 50
     num_channels=128
     num_res_blocks=2
@@ -64,12 +64,12 @@ def main(env_id, seed):
             enable_image_logging=True,
             
             # —— 新增：自适应权重调度 —— #
-            use_intrinsic_weight_schedule=False,     # 打开自适应权重
+            use_intrinsic_weight_schedule=True,     # 打开自适应权重
             intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
             intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
-            intrinsic_weight_ramp=30000,            # 从min升到max所需的 estimate 数
+            intrinsic_weight_ramp=20000,            # 从min升到max所需的 estimate 数
             intrinsic_weight_min=0.0,               
-            intrinsic_weight_max=0.02, 
+            intrinsic_weight_max=0.05, 
             
             obs_shape=(3, 96, 96),
             latent_state_dim=256,
@@ -78,8 +78,8 @@ def main(env_id, seed):
             learning_rate=3e-4,
             weight_decay=1e-4,
             input_norm=True,
-            input_norm_clamp_max=30,
-            input_norm_clamp_min=-30,
+            input_norm_clamp_max=10,
+            input_norm_clamp_min=-10,
             
             intrinsic_norm=True,
             intrinsic_norm_clamp_min=-5,
@@ -108,8 +108,8 @@ def main(env_id, seed):
                     norm_type=norm_type,
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse',
-                    predict_latent_loss_type='cos_sim', # only for latent state layer_norm
+                    predict_latent_loss_type='mse',
+                    # predict_latent_loss_type='cos_sim', # only for latent state layer_norm
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -125,7 +125,7 @@ def main(env_id, seed):
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
                     game_segment_length=game_segment_length,
-                    use_priority=True,
+                    use_priority=False,
                     rotary_emb=False,
                     optim_type='AdamW_mix_lr_wdecay',
                 ),
@@ -161,7 +161,7 @@ def main(env_id, seed):
             policy_ls_eps_start=0.05, #good start in Pong and MsPacman
             policy_ls_eps_end=0.01,
             policy_ls_eps_decay_steps=50000, # 50k
-            label_smoothing_eps=0.1,  #for value
+            label_smoothing_eps=0.0,  #for value
 
             # ==================== [新增] 范数监控频率 ====================
             # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
@@ -171,7 +171,7 @@ def main(env_id, seed):
             # use_augmentation=True,
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
-            use_priority=True,
+            use_priority=False,
             priority_prob_alpha=1,
             priority_prob_beta=1,
             num_unroll_steps=num_unroll_steps,
