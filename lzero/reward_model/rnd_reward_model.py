@@ -1,6 +1,8 @@
+import logging
 import copy
 import random
-from typing import Union, Tuple, List, Dict
+from collections import defaultdict
+from typing import Union, Tuple, List, Dict, Optional
 
 import numpy as np
 import torch
@@ -18,19 +20,28 @@ class RNDNetwork(nn.Module):
 
     def __init__(self, obs_shape: Union[int, SequenceType], hidden_size_list: SequenceType) -> None:
         super(RNDNetwork, self).__init__()
+        assert len(hidden_size_list) >= 1, "hidden_size_list must contain at least one element."
+        feature_dim = hidden_size_list[-1]
+        activation = nn.ReLU()
         if isinstance(obs_shape, int) or len(obs_shape) == 1:
             self.target = FCEncoder(obs_shape, hidden_size_list)
-            self.predictor = FCEncoder(obs_shape, hidden_size_list)
+            predictor_backbone = FCEncoder(obs_shape, hidden_size_list)
         elif len(obs_shape) == 3:
             self.target = ConvEncoder(obs_shape, hidden_size_list)
-            self.predictor = ConvEncoder(obs_shape, hidden_size_list)
+            predictor_backbone = ConvEncoder(obs_shape, hidden_size_list)
         else:
             raise KeyError(
                 "not support obs_shape for pre-defined encoder: {}, please customize your own RND model".
                 format(obs_shape)
             )
+        self.predictor = nn.Sequential(
+            predictor_backbone,
+            activation,
+            nn.Linear(feature_dim, feature_dim),
+        )
         for param in self.target.parameters():
             param.requires_grad = False
+        
 
     def forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         predict_feature = self.predictor(obs)
@@ -49,17 +60,38 @@ class RNDNetworkRepr(nn.Module):
                  representation_network) -> None:
         super(RNDNetworkRepr, self).__init__()
         self.representation_network = representation_network
+        assert len(hidden_size_list) >= 1, "hidden_size_list must contain at least one element."
+        feature_dim = hidden_size_list[-1]
+        activation = nn.ReLU()
+
         if isinstance(obs_shape, int) or len(obs_shape) == 1:
-            self.target = FCEncoder(obs_shape, hidden_size_list)
-            self.predictor = FCEncoder(latent_shape, hidden_size_list)
+            target_backbone = FCEncoder(obs_shape, hidden_size_list)
         elif len(obs_shape) == 3:
-            self.target = ConvEncoder(obs_shape, hidden_size_list)
-            self.predictor = ConvEncoder(latent_shape, hidden_size_list)
+            target_backbone = ConvEncoder(obs_shape, hidden_size_list)
         else:
             raise KeyError(
                 "not support obs_shape for pre-defined encoder: {}, please customize your own RND model".
                 format(obs_shape)
             )
+
+        if isinstance(latent_shape, int) or (isinstance(latent_shape, SequenceType) and len(latent_shape) == 1):
+            predictor_backbone = FCEncoder(latent_shape, hidden_size_list)
+        elif isinstance(latent_shape, SequenceType) and len(latent_shape) == 3:
+            predictor_backbone = ConvEncoder(latent_shape, hidden_size_list)
+        else:
+            raise KeyError(
+                "not support latent_shape for pre-defined encoder: {}, please customize your own RND model".
+                format(latent_shape)
+            )
+
+        self.target = nn.Sequential(target_backbone, activation)
+        self.predictor = nn.Sequential(
+            predictor_backbone,
+            activation,
+            nn.Linear(feature_dim, feature_dim),
+            activation,
+            nn.Linear(feature_dim, feature_dim),
+        )
         for param in self.target.parameters():
             param.requires_grad = False
 
@@ -115,31 +147,26 @@ class RNDRewardModel(BaseRewardModel):
         intrinsic_reward_type='add',
         # (float) The step size of gradient descent.
         learning_rate=1e-3,
-        # (float) Batch size.
-        batch_size=64,
         # (list(int)) Sequence of ``hidden_size`` of reward network.
         # If obs.shape == 1,  use MLP layers.
         # If obs.shape == 3,  use conv layer and final dense layer.
         hidden_size_list=[64, 64, 128],
         # (int) How many updates(iterations) to train after collector's one collection.
-        # Bigger "update_per_collect" means bigger off-policy.
-        # collect data -> update policy-> collect data -> ...
-        update_per_collect=100,
         # (bool) Observation normalization: transform obs to mean 0, std 1.
         input_norm=True,
         # (int) Min clip value for observation normalization.
-        input_norm_clamp_min=-1,
+        input_norm_clamp_min=-5,
         # (int) Max clip value for observation normalization.
-        input_norm_clamp_max=1,
+        input_norm_clamp_max=5,
         # Means the relative weight of RND intrinsic_reward.
         # (float) The weight of intrinsic reward
         # r = intrinsic_reward_weight * r_i + r_e.
         intrinsic_reward_weight=0.01,
-        # (bool) Whether to normalize extrinsic reward.
-        # Normalize the reward to [0, extrinsic_reward_norm_max].
-        extrinsic_reward_norm=True,
-        # (int) The upper bound of the reward normalization.
-        extrinsic_reward_norm_max=1,
+        # (bool) Whether to normalize extrinsic reward using running statistics.
+        # (bool) Whether to adjust target value with intrinsic reward contribution.
+        adjust_value_with_intrinsic=False,
+        # (float) Discount factor used when adjusting target value.
+        discount_factor=1.0,
     )
 
     def __init__(self, config: EasyDict, device: str = 'cpu', tb_logger: 'SummaryWriter' = None, exp_name: str = "default_experiment",
@@ -155,13 +182,15 @@ class RNDRewardModel(BaseRewardModel):
         self._bp_update_sync = bp_update_sync
         self.multi_gpu = multi_gpu
         assert self.input_type in ['obs', 'latent_state', 'obs_latent_state'], self.input_type
-        self.rnd_buffer_size = config.rnd_buffer_size
         self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
+        self.adjust_value_with_intrinsic = getattr(self.cfg, 'adjust_value_with_intrinsic', False)
+        self.discount_factor = getattr(self.cfg, 'discount_factor', 1.0)
         
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._rank = get_rank()
         self._world_size = get_world_size()
+        
         if self.multi_gpu:
             self._device = 'cuda:{}'.format(self._rank % torch.cuda.device_count()) if 'cuda' in device else 'cpu'
         else:
@@ -219,8 +248,206 @@ class RNDRewardModel(BaseRewardModel):
 
         self._running_mean_std_rnd_reward = RunningMeanStd(epsilon=1e-4)
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
+        self._running_mean_std_reward = RunningMeanStd(epsilon=1e-4)
+        self._obs_shape_tuple = self._resolve_obs_shape()
         self.estimate_cnt_rnd = 0
         self.train_cnt_rnd = 0
+        self._state_visit_counts = defaultdict(int)
+        self._initial_reward_samples: List[np.ndarray] = []
+        self._initial_consistency_logged = False
+
+    def _resolve_obs_shape(self) -> Tuple[int, ...]:
+        """
+        Overview:
+            Convert the configured observation shape to a tuple for downstream processing.
+        """
+        obs_shape = self.cfg.obs_shape
+        if isinstance(obs_shape, int):
+            return (obs_shape,)
+        if isinstance(obs_shape, (list, tuple)):
+            return tuple(obs_shape)
+        raise TypeError(f"Unsupported obs_shape type for RND: {type(obs_shape)}")
+
+    def _flatten_obs_batch(self, obs_batch: np.ndarray) -> np.ndarray:
+        """
+        Overview:
+            Flatten time/batch dimensions while keeping the per-observation shape intact.
+        """
+        if not isinstance(obs_batch, np.ndarray):
+            obs_batch = np.asarray(obs_batch)
+        feature_size = int(np.prod(self._obs_shape_tuple))
+        total = obs_batch.size // feature_size
+        target_shape = (total,) + self._obs_shape_tuple
+        return obs_batch.reshape(target_shape)
+
+    def _prepare_inputs_from_obs(self, obs_array: np.ndarray) -> torch.Tensor:
+        """
+        Overview:
+            Convert raw observations into tensors that can be consumed by the RND networks
+            according to the configured input type.
+        """
+        obs_tensor = to_tensor(obs_array).to(self._device)
+        if self.input_type == 'latent_state':
+            with torch.no_grad():
+                inputs = self.representation_network(obs_tensor)
+        else:
+            inputs = obs_tensor
+        return inputs
+
+
+    def _update_input_running_stats(self, tensor: torch.Tensor) -> None:
+        """
+        Overview:
+            Update running mean/std for input normalization using the provided tensor.
+        """
+        if not self.cfg.input_norm or tensor.numel() == 0:
+            return
+        self._running_mean_std_rnd_obs.update(tensor.detach().cpu().numpy())
+
+    def _normalize_intrinsic_rewards(self, tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Overview:
+            Normalize intrinsic rewards with the running std statistics.
+        """
+        if getattr(self.cfg, 'intrinsic_norm', False):
+            std = to_tensor(self._running_mean_std_rnd_reward.std).to(self._device)
+            std = torch.clamp(std, min=1e-6)
+            normalized = tensor / std
+            return torch.clamp(
+                normalized,
+                min=getattr(self.cfg, 'intrinsic_norm_clamp_min', -5),
+                max=getattr(self.cfg, 'intrinsic_norm_clamp_max', 5)
+            )
+        return tensor
+    
+    def _normalize_inputs(self, tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Overview:
+            Normalize inputs with the running mean/std statistics (intrinsic input normalization).
+        """
+        if not self.cfg.input_norm or tensor.numel() == 0:
+            return tensor
+        if self.cfg.input_norm:
+            mean = to_tensor(self._running_mean_std_rnd_obs.mean).to(self._device)
+            std = to_tensor(self._running_mean_std_rnd_obs.std).to(self._device)
+            std = torch.clamp(std, min=1e-6)
+            normalized = (tensor - mean) / std
+            return torch.clamp(normalized, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max)
+        return tensor
+
+    def _normalize_rewards(self, rewards: np.ndarray) -> np.ndarray:
+        """
+        Overview:
+            Normalize extrinsic rewards using running statistics when enabled.
+        """
+        if rewards.size == 0:
+            return rewards
+        normalized = np.asarray(rewards, dtype=np.float32)
+        if getattr(self.cfg, 'extrinsic_norm', False):
+            self._running_mean_std_reward.update(normalized)
+            mean = np.asarray(self._running_mean_std_reward.mean, dtype=np.float32)
+            std = np.asarray(self._running_mean_std_reward.std, dtype=np.float32) + 1e-6
+            normalized = (normalized - mean) / std
+            normalized = np.clip(
+                normalized,
+                a_min=getattr(self.cfg, 'extrinsic_norm_clamp_min', -5),
+                a_max=getattr(self.cfg, 'extrinsic_norm_clamp_max', 5)
+            )
+        elif getattr(self.cfg, 'extrinsic_sign', False):
+            normalized = np.sign(normalized)
+        return normalized
+
+    def _hash_obs(self, obs: np.ndarray) -> int:
+        return hash(obs.tobytes())
+
+    def _update_visit_counts(self, obs_array: np.ndarray) -> None:
+        if obs_array.size == 0:
+            return
+        flat = obs_array.reshape(obs_array.shape[0], -1)
+        for obs in flat:
+            self._state_visit_counts[self._hash_obs(obs)] += 1
+
+    def _spearmanr(self, x: np.ndarray, y: np.ndarray) -> float:
+        if x.size < 2 or y.size < 2:
+            return 0.0
+        x_rank = np.argsort(np.argsort(x))
+        y_rank = np.argsort(np.argsort(y))
+        x_rank = x_rank.astype(np.float32)
+        y_rank = y_rank.astype(np.float32)
+        x_rank -= x_rank.mean()
+        y_rank -= y_rank.mean()
+        denom = np.linalg.norm(x_rank) * np.linalg.norm(y_rank)
+        if denom == 0:
+            return 0.0
+        return float(np.dot(x_rank, y_rank) / denom)
+
+    def _log_initial_bonus_consistency(self) -> None:
+        if self._initial_consistency_logged or not self._initial_reward_samples:
+            return
+        rewards = np.concatenate(self._initial_reward_samples, axis=0)
+        if rewards.size == 0:
+            return
+        rewards = rewards - rewards.min()
+        rewards = rewards + 1e-8
+        p = rewards / rewards.sum()
+        kl = float(np.sum(p * np.log(p * len(p))))
+        if self._tb_logger:
+            self._tb_logger.add_scalar('rnd_metrics/bcs_initial_kl', kl, 0)
+        self._initial_consistency_logged = True
+        self._initial_reward_samples = []
+
+    def _log_final_metrics(self, intrinsic_rewards: np.ndarray, obs_array: np.ndarray, step: int) -> None:
+        if intrinsic_rewards.size == 0 or obs_array.size == 0:
+            return
+        intrinsic_flat = intrinsic_rewards.reshape(-1)
+        flat_obs = obs_array.reshape(obs_array.shape[0], -1)
+        hashes = [self._hash_obs(obs) for obs in flat_obs]
+        counts = np.array([max(self._state_visit_counts.get(h, 1), 1) for h in hashes], dtype=np.float32)
+        inv_counts = 1.0 / (counts + 1e-6)
+        bcs_final = self._spearmanr(intrinsic_flat, inv_counts)
+        pca_spearman = bcs_final
+        if self._tb_logger:
+            self._tb_logger.add_scalar('rnd_metrics/bcs_final_spearman', bcs_final, step)
+            self._tb_logger.add_scalar('rnd_metrics/pca_spearman', pca_spearman, step)
+
+    def _discount_cumsum(self, rewards: np.ndarray, gamma: float) -> np.ndarray:
+        if rewards.ndim != 2:
+            rewards = rewards.reshape(rewards.shape[0], -1)
+        discounted = np.zeros_like(rewards, dtype=np.float32)
+        if rewards.shape[1] == 0:
+            return discounted
+        discounted[:, -1] = rewards[:, -1]
+        for t in range(rewards.shape[1] - 2, -1, -1):
+            discounted[:, t] = rewards[:, t] + gamma * discounted[:, t + 1]
+        return discounted
+
+    def warmup_with_random_segments(self, data: list) -> None:
+        """
+        Overview:
+            Use randomly collected segments to bootstrap the input normalization statistics
+            before the main training loop starts.
+        """
+        if data is None or len(data) == 0:
+            return
+        segments = [game_segment.obs_segment for game_segment in data[0] if len(game_segment.obs_segment)]
+        if not segments:
+            return
+        concatenated = np.concatenate(segments, axis=0)
+        flattened = self._flatten_obs_batch(concatenated)
+        total = flattened.shape[0]
+        if total == 0:
+            return
+        self._update_visit_counts(flattened)
+        inputs = self._prepare_inputs_from_obs(flattened)
+        self._update_input_running_stats(inputs)
+        inputs = self._normalize_inputs(inputs.clone())
+        with torch.no_grad():
+            predict_feature, target_feature = self.reward_model(inputs)
+            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1).detach().cpu().numpy()
+        if mse.size > 0:
+            self._initial_reward_samples.append(mse)
+            self._log_initial_bonus_consistency()
+            
         
     def sync_gradients(self, model: torch.nn.Module) -> None:
         """
@@ -245,47 +472,35 @@ class RNDRewardModel(BaseRewardModel):
                         allreduce(zero_grad)
         else:
             synchronize()
-            
-    def _train_with_data_one_step(self) -> None:
-        if self.input_type in ['obs', 'obs_latent_state']:
-            train_data = random.sample(self.train_obs, self.cfg.batch_size)
-        elif self.input_type == 'latent_state':
-            train_data = random.sample(self.train_latent_state, self.cfg.batch_size)
 
-        train_data = torch.stack(train_data).to(self._device)
 
-        if self.cfg.input_norm:
-            # Note: observation normalization: transform obs to mean 0, std 1
-            self._running_mean_std_rnd_obs.update(train_data.detach().cpu().numpy())
-            normalized_train_data = (train_data - to_tensor(self._running_mean_std_rnd_obs.mean).to(
-                self._device)) / to_tensor(
-                self._running_mean_std_rnd_obs.std
-            ).to(self._device)
-            train_data = torch.clamp(normalized_train_data, min=self.cfg.input_norm_clamp_min,
-                                     max=self.cfg.input_norm_clamp_max)
+    def train_with_policy_batch(self, data: list, gradient_steps: Optional[int] = None) -> None:
+        """
+        Overview:
+            Update the RND predictor using the same batch of transitions sampled for the policy learner.
+        """
+        if data is None or len(data) == 0:
+            return
+        obs_batch = data[0][0]
+        flat_obs = self._flatten_obs_batch(obs_batch)
+        prepared_inputs = self._prepare_inputs_from_obs(flat_obs)
+        if prepared_inputs.numel() == 0:
+            return
+        self._update_input_running_stats(prepared_inputs)
 
-        predict_feature, target_feature = self.reward_model(train_data)
+        # 目前不抽取mini-batchsize
+        batch_inputs = prepared_inputs
+        normalized_input = self._normalize_inputs(batch_inputs)
+        predict_feature, target_feature = self.reward_model(normalized_input)
         loss = F.mse_loss(predict_feature, target_feature)
-        
-        if self._tb_logger is not None:
+        if self._tb_logger:
             self._tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
         self._optimizer_rnd.zero_grad()
         loss.backward()
-        
         if self.multi_gpu:
             self.sync_gradients(self.reward_model.predictor)
         self._optimizer_rnd.step()
-
-    def train_with_data(self) -> None:
-        for _ in range(self.cfg.update_per_collect):
-            # for name, param in self.reward_model.named_parameters():
-            #     if param.grad is not None:
-            #         print(f"{name}: {torch.isnan(param.grad).any()}, {torch.isinf(param.grad).any()}")
-            #         print(f"{name}: grad min: {param.grad.min()}, grad max: {param.grad.max()}")
-            # # enable the following line to check whether there is nan or inf in the gradient.
-            # torch.autograd.set_detect_anomaly(True)
-            self._train_with_data_one_step()
-            self.train_cnt_rnd += 1
+        self.train_cnt_rnd += 1
 
     def estimate(self, data: list) -> List[Dict]:
         """
@@ -298,66 +513,79 @@ class RNDRewardModel(BaseRewardModel):
         target_reward = data[1][0]
         batch_size = obs_batch_orig.shape[0]
         T = target_reward.shape[1]  
+        logging.info("[RND] estimate enter, batch=%s, horizon=%s", batch_size, T)
 
-        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size * T, self.cfg.obs_shape))
-
-        if self.input_type == 'latent_state':
-            with torch.no_grad():
-                latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self._device))
-            input_data = latent_state
-        elif self.input_type in ['obs', 'obs_latent_state']:
-            input_data = to_tensor(obs_batch_tmp).to(self._device)
+        obs_batch_tmp = self._flatten_obs_batch(obs_batch_orig)
+        self._update_visit_counts(obs_batch_tmp)
+        input_data = self._prepare_inputs_from_obs(obs_batch_tmp)
 
         # NOTE: deepcopy reward part of data is very important,
-        # otherwise the reward of data in the replay buffer will be incorrectly modified.
-        target_reward_augmented = copy.deepcopy(target_reward)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * T, 1))
-
-        if self.cfg.input_norm:
-            # add this line to avoid inplace operation on the original tensor.
-            input_data = input_data.clone()
-            # Note: observation normalization: transform obs to mean 0, std 1
-            input_data = (input_data - to_tensor(self._running_mean_std_rnd_obs.mean
-                                                 ).to(self._device)) / to_tensor(self._running_mean_std_rnd_obs.std).to(
-                self._device)
-            input_data = torch.clamp(input_data, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max)
-        else:
-            input_data = input_data
+        original_reward = np.reshape(np.array(target_reward, dtype=np.float32), (batch_size * T, 1))
+        input_data = self._normalize_inputs(input_data.clone())
+        extrinsic_normalized = self._normalize_rewards(original_reward)
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(input_data)
             mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)
-            self._running_mean_std_rnd_reward.update(mse.detach().cpu().numpy())
+        mse_np = mse.detach().cpu().numpy()
+        self._running_mean_std_rnd_reward.update(mse_np)
+        mse_tensor = torch.from_numpy(mse_np).to(self._device)
+        rnd_reward_tensor = self._normalize_intrinsic_rewards(mse_tensor)
 
-            # Note: according to the min-max normalization, transform rnd reward to [0,1]
-            rnd_reward = (mse - mse.min()) / (mse.max() - mse.min() + 1e-6)
-
-            # save the rnd_reward statistics into tb_logger
-            self.estimate_cnt_rnd += 1
-            if self._tb_logger is not None:
-                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward.max(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward.mean(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
-
-        rnd_reward = rnd_reward.to(self._device).unsqueeze(1).cpu().numpy()
+        rnd_reward_np = rnd_reward_tensor.detach().cpu().numpy()
+        self._log_final_metrics(rnd_reward_np, obs_batch_tmp, self.estimate_cnt_rnd)
+        self.estimate_cnt_rnd += 1
+        if self._tb_logger:
+            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward_np.max(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward_np.mean(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward_np.min(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward_np.std(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_max', extrinsic_normalized.max(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_mean', extrinsic_normalized.mean(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_min', extrinsic_normalized.min(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_std', extrinsic_normalized.std(), self.estimate_cnt_rnd)
+            
+        rnd_reward_flat = rnd_reward_np.reshape(batch_size * T, 1)
         if self.intrinsic_reward_type == 'add':
-            if self.cfg.extrinsic_reward_norm:
-                target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max + rnd_reward * self.cfg.intrinsic_reward_weight
-            else:
-                target_reward_augmented = target_reward_augmented + rnd_reward * self.cfg.intrinsic_reward_weight
+            target_reward_augmented = extrinsic_normalized + rnd_reward_flat * self.cfg.intrinsic_reward_weight
         elif self.intrinsic_reward_type == 'new':
-            if self.cfg.extrinsic_reward_norm:
-                target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max
+            target_reward_augmented = rnd_reward_flat * self.cfg.intrinsic_reward_weight
         elif self.intrinsic_reward_type == 'assign':
-            target_reward_augmented = rnd_reward
-
+            target_reward_augmented = rnd_reward_flat
+        else:
+            target_reward_augmented = extrinsic_normalized
+        
         if self._tb_logger is not None:
-            self._tb_logger.add_scalar('augmented_reward/reward_max', np.max(target_reward_augmented), self.estimate_cnt_rnd)
-            self._tb_logger.add_scalar('augmented_reward/reward_mean', np.mean(target_reward_augmented),
-                                    self.estimate_cnt_rnd)
-            self._tb_logger.add_scalar('augmented_reward/reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
-            self._tb_logger.add_scalar('augmented_reward/reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_max', np.max(target_reward_augmented), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_mean', np.mean(target_reward_augmented),self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
 
+        if self.adjust_value_with_intrinsic:
+            target_values = np.asarray(data[1][1], dtype=np.float32).reshape(batch_size, -1)
+            augmented_rewards_seq = target_reward_augmented.reshape(batch_size, T)
+            value_mask = np.asarray(data[0][3], dtype=np.float32)
+            value_mask = value_mask[:, :target_values.shape[1]]
+            if self.intrinsic_reward_type == 'add':
+                original_rewards_seq = extrinsic_normalized.reshape(batch_size, T)
+                delta_seq = augmented_rewards_seq - original_rewards_seq
+                delta_returns = self._discount_cumsum(delta_seq, self.discount_factor)
+                delta_returns = (delta_returns[:, :target_values.shape[1]] * value_mask).astype(np.float32)
+                target_values_augmented = target_values + delta_returns
+            else:
+                discounted_returns = self._discount_cumsum(augmented_rewards_seq, self.discount_factor)
+                target_values_augmented = (discounted_returns[:, :target_values.shape[1]] * value_mask).astype(np.float32)
+            data[1][1] = target_values_augmented
+            
+            if self._tb_logger is not None:
+                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_max', target_values.max(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_mean', target_values.mean(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_min', target_values.min(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_std', target_values.std(), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_max', np.max(target_values_augmented), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_mean', np.mean(target_values_augmented),self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_min', np.min(target_values_augmented), self.estimate_cnt_rnd)
+                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_std', np.std(target_values_augmented), self.estimate_cnt_rnd)
+        
         # reshape to (target_reward_augmented.shape[0], T, 1)
         target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, T, 1))
         # TODO why? batchsizw * T -> batchsize * T * 1
@@ -365,31 +593,6 @@ class RNDRewardModel(BaseRewardModel):
         train_data_augmented = data
 
         return train_data_augmented
-
-    def collect_data(self, data: list) -> None:
-        segments = [game_segment.obs_segment for game_segment in data[0] if len(game_segment.obs_segment)]
-        if not segments:
-            return
-        collected_transitions = np.concatenate(segments, axis=0)
-        if self.input_type == 'latent_state':
-            with torch.no_grad():
-                self.train_latent_state.extend(
-                    self.representation_network(torch.from_numpy(collected_transitions).to(self._device)))
-        elif self.input_type == 'obs':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self._device))
-        elif self.input_type == 'obs_latent_state':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self._device))
-
-    def clear_old_data(self) -> None:
-        if self.input_type == 'latent_state':
-            if len(self.train_latent_state) >= self.cfg.rnd_buffer_size:
-                self.train_latent_state = self.train_latent_state[-self.cfg.rnd_buffer_size:]
-        elif self.input_type == 'obs':
-            if len(self.train_obs) >= self.cfg.rnd_buffer_size:
-                self.train_obs = self.train_obs[-self.cfg.rnd_buffer_size:]
-        elif self.input_type == 'obs_latent_state':
-            if len(self.train_obs) >= self.cfg.rnd_buffer_size:
-                self.train_obs = self.train_obs[-self.cfg.rnd_buffer_size:]
 
     def state_dict(self) -> Dict:
         return self.reward_model.state_dict()
@@ -402,3 +605,13 @@ class RNDRewardModel(BaseRewardModel):
 
     def train(self):
         pass
+
+    def collect_data(self, data) -> None:
+        if data is None or len(data) == 0:
+            return
+        segments = [game_segment.obs_segment for game_segment in data[0] if len(game_segment.obs_segment)]
+        if not segments:
+            return
+        concatenated = np.concatenate(segments, axis=0)
+        flattened = self._flatten_obs_batch(concatenated)
+        self._update_visit_counts(flattened)

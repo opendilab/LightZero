@@ -139,7 +139,7 @@ def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], b
     else:
         raise TypeError(f"observation_shape must be int, list, or tuple, but got {type(observation_shape).__name__}")
 
-    return torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
+    return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == -1 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
 
 def random_collect(
         policy_cfg: 'EasyDict',  # noqa
@@ -149,8 +149,8 @@ def random_collect(
         collector_env: 'BaseEnvManager',  # noqa
         replay_buffer: 'IBuffer',  # noqa
         postprocess_data_fn: Optional[Callable] = None
-) -> None:  # noqa
-    assert policy_cfg.random_collect_episode_num > 0
+) -> list:  # noqa
+    assert policy_cfg.random_collect_data, "random_collect_data should be True."
 
     random_policy = RandomPolicy(cfg=policy_cfg, action_space=collector_env.env_ref.action_space)
     # set the policy to random policy
@@ -161,7 +161,7 @@ def random_collect(
     collect_kwargs = {'temperature': 1, 'epsilon': 0.0}
 
     # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0,
+    new_data = collector.collect(train_iter=0,
                                  policy_kwargs=collect_kwargs)
 
     if postprocess_data_fn is not None:
@@ -174,6 +174,7 @@ def random_collect(
 
     # restore the policy
     collector.reset_policy(policy.collect_mode)
+    return new_data
 
 
 def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
@@ -190,28 +191,21 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         writer.add_scalar('Buffer/num_of_all_collected_episodes', buffer.num_of_collected_episodes, train_iter)
         writer.add_scalar('Buffer/num_of_game_segments', len(buffer.game_segment_buffer), train_iter)
         writer.add_scalar('Buffer/num_of_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
-
         game_segment_buffer = buffer.game_segment_buffer
-
         # Calculate the amount of memory occupied by self.game_segment_buffer (in bytes).
         buffer_memory_usage = asizeof(game_segment_buffer)
-
         # Convert buffer_memory_usage to megabytes (MB).
         buffer_memory_usage_mb = buffer_memory_usage / (1024 * 1024)
-
         # Record the memory usage of self.game_segment_buffer to TensorBoard.
         writer.add_scalar('Buffer/memory_usage/game_segment_buffer', buffer_memory_usage_mb, train_iter)
-
         # Get the amount of memory currently used by the process (in bytes).
         process = psutil.Process(os.getpid())
         process_memory_usage = process.memory_info().rss
-
         # Convert process_memory_usage to megabytes (MB).
         process_memory_usage_mb = process_memory_usage / (1024 * 1024)
-
         # Record the memory usage of the process to TensorBoard.
         writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
-
+        
 
 def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
     """

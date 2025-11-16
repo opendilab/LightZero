@@ -1,7 +1,7 @@
 import copy
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
-
+import logging
 import numpy as np
 import torch
 import wandb
@@ -373,8 +373,11 @@ class UniZeroPolicy(MuZeroPolicy):
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
 
-        encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
-        self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
+        if self._cfg.model.model_type == 'conv':
+            self.pad_token_id = -1
+        else: 
+            encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+            self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
         
         if self._cfg.use_wandb:
             # TODO: add the model to wandb``
