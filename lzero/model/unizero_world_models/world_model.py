@@ -587,6 +587,16 @@ class WorldModel(nn.Module):
         self.use_policy_loss_temperature = getattr(self.config, 'use_policy_loss_temperature', False)
         self.policy_loss_temperature = getattr(self.config, 'policy_loss_temperature', 1.0)
 
+        # [NEW] Fix3: Check if target policy re-smooth is enabled (now deprecated in favor of Fix2)
+        use_target_policy_resmooth = getattr(self.config, 'use_target_policy_resmooth', False)
+        if use_target_policy_resmooth:
+            logging.warning(
+                "[DEPRECATED] use_target_policy_resmooth=True is deprecated! "
+                "Policy label smoothing should now be controlled by 'continuous_ls_eps' in policy config. "
+                "Fix3 (use_target_policy_resmooth) creates redundant smoothing with Fix2. "
+                "Please set use_target_policy_resmooth=False and use continuous_ls_eps instead."
+            )
+
         # [NEW] Debug: Print configuration on initialization
         if self.use_policy_logits_clip:
             logging.info(f"[Policy Logits Clip] ENABLED: range=[{self.policy_logits_clip_min}, {self.policy_logits_clip_max}]")

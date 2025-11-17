@@ -1,7 +1,7 @@
 import copy
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
-
+import logging
 import numpy as np
 import torch
 import wandb
@@ -733,7 +733,17 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
                                             device=self._cfg.device)
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
-        batch_for_gpt['target_policy'] = target_policy[:, :-1]
+
+        # ==================== [FIXED] Fix2: Apply Policy Label Smoothing ====================
+        # This was previously computed but never applied. Now we actually smooth the target_policy.
+        smoothed_target_policy = target_policy[:, :-1]
+        if current_policy_label_eps > 0:
+            num_actions = smoothed_target_policy.shape[-1]
+            uniform_dist = torch.ones_like(smoothed_target_policy) / num_actions
+            smoothed_target_policy = (1.0 - current_policy_label_eps) * smoothed_target_policy + \
+                                    current_policy_label_eps * uniform_dist
+        batch_for_gpt['target_policy'] = smoothed_target_policy
+        # ===================================================================================
 
         batch_for_gpt['scalar_target_value'] = target_value
 
@@ -803,6 +813,42 @@ class UniZeroPolicy(MuZeroPolicy):
                     norm_log_dict['embeddings/obs/norm_std'] = emb_norms.std().item()
                     norm_log_dict['embeddings/obs/norm_max'] = emb_norms.max().item()
                     norm_log_dict['embeddings/obs/norm_min'] = emb_norms.min().item()
+
+                # ==================== [NEW] Early Warning System ====================
+                # Detect potential training instability and issue warnings
+                warnings_issued = []
+
+                # Check 1: Policy logits explosion (should be caught by clip, but warn anyway)
+                if 'logits/policy/abs_max' in norm_log_dict:
+                    policy_abs_max = norm_log_dict['logits/policy/abs_max']
+                    if policy_abs_max > 8.0:
+                        warnings_issued.append(f"⚠️ CRITICAL: Policy logits explosion detected! abs_max={policy_abs_max:.2f} (threshold: 8.0)")
+                    elif policy_abs_max > 5.0:
+                        warnings_issued.append(f"⚠️ WARNING: Policy logits getting large! abs_max={policy_abs_max:.2f} (threshold: 5.0)")
+
+                # Check 2: Embedding norm explosion
+                if 'embeddings/obs/norm_std' in norm_log_dict:
+                    emb_norm_std = norm_log_dict['embeddings/obs/norm_std']
+                    if emb_norm_std > 10.0:
+                        warnings_issued.append(f"⚠️ CRITICAL: Embedding norm std explosion! std={emb_norm_std:.2f} (threshold: 10.0)")
+                    elif emb_norm_std > 5.0:
+                        warnings_issued.append(f"⚠️ WARNING: Embedding norm std increasing! std={emb_norm_std:.2f} (threshold: 5.0)")
+
+                # Check 3: X token norm collapse
+                if 'norm/x_token/std' in norm_log_dict:
+                    x_token_std = norm_log_dict['norm/x_token/std']
+                    if x_token_std < 0.1:
+                        warnings_issued.append(f"⚠️ CRITICAL: X token norm collapse! std={x_token_std:.4f} (threshold: 0.1)")
+                    elif x_token_std < 0.5:
+                        warnings_issued.append(f"⚠️ WARNING: X token norm decreasing! std={x_token_std:.4f} (threshold: 0.5)")
+
+                # Log warnings if any
+                if warnings_issued:
+                    logging.warning(f"\n{'='*80}\n[TRAINING STABILITY] Iteration {train_iter}:\n" + "\n".join(warnings_issued) + f"\n{'='*80}")
+                    norm_log_dict['stability/warning_count'] = float(len(warnings_issued))
+                else:
+                    norm_log_dict['stability/warning_count'] = 0.0
+                # ====================================================================
         # =================================================================
 
         # ==================== START MODIFICATION 2 ====================
@@ -904,8 +950,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # self.policy_loss_weight = 1.
             # self.ends_loss_weight = 0.
             # self.obs_loss_weight = 10 # TODO ===============
-            self.obs_loss_weight = 5 # TODO ===============
-            # self.obs_loss_weight = 2 # TODO ===============
+            # self.obs_loss_weight = 5 # TODO ===============
+            self.obs_loss_weight = 2 # TODO ===============
             self.value_loss_weight = 0.5
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
@@ -1773,14 +1819,20 @@ class UniZeroPolicy(MuZeroPolicy):
         ]
         # ==========================================================================================
 
+        # ==================== [NEW] Stability Monitoring Variables ====================
+        stability_vars = [
+            'stability/warning_count',  # Number of warnings issued in current check
+        ]
+        # ==============================================================================
+
         # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
         # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
         # 或者在本地打印 `norm_log_dict` 来进行详细分析。
         # wandb等工具可以更好地处理大量的动态指标。
         # ========================================================================
 
-        return base_vars + norm_vars + enhanced_policy_vars
-    
+        return base_vars + norm_vars + enhanced_policy_vars + stability_vars
+
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """

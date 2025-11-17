@@ -42,8 +42,8 @@ def main(env_id, seed):
 
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/50
-    buffer_reanalyze_freq = 1/5000000000
+    buffer_reanalyze_freq = 1/50
+    # buffer_reanalyze_freq = 1/5000000000
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -165,20 +165,27 @@ def main(env_id, seed):
                     # These fixes belong in world_model_cfg because they are read by world_model.py
 
                     # Fix1: Clip policy logits to prevent explosion
-                    use_policy_logits_clip=True,        # Set to False to disable this fix
-                    policy_logits_clip_min=-5.0,        # STRENGTHENED: Min value (was -5.0)
-                    policy_logits_clip_max=5.0,         # STRENGTHENED: Max value (was 5.0)
+                    # RECOMMENDED: Enable this as a safety net against catastrophic logits
+                    use_policy_logits_clip=True,
+                    policy_logits_clip_min=-3.0,        # STRENGTHENED: Tighter clip (was -5.0)
+                    policy_logits_clip_max=3.0,         # STRENGTHENED: Tighter clip (was 5.0)
 
                     # Fix3: Re-smooth target_policy from buffer before training
-                    use_target_policy_resmooth=False,    
-                    # use_target_policy_resmooth=True,    # ⚠️ MUST BE TRUE! (was False)
-                    target_policy_resmooth_eps=0.05,    # INCREASED: Re-smooth epsilon (was 0.05)
+                    # ⚠️ DEPRECATED: This is now handled by Fix2 in unizero.py
+                    # Setting to False to avoid redundant smoothing
+                    use_target_policy_resmooth=False,
+                    target_policy_resmooth_eps=0.05,    # Ignored when use_target_policy_resmooth=False
 
-                    # [NEW] Fix5: Policy loss temperature scaling
-                    use_policy_loss_temperature=True,   # Scale policy logits in loss computation
-                    policy_loss_temperature=1.5,        # Temperature for softening target
+                    # Fix5: Policy loss temperature scaling
+                    # RECOMMENDED: Enable for smoother gradients
+                    use_policy_loss_temperature=True,
+                    policy_loss_temperature=1.5,        # Temperature for softening policy distribution
                     # =================================================================================
 
+                    # Fix2: Unified policy label smoothing (applied in unizero.py)
+                    # This is the PRIMARY smoothing mechanism
+                    use_continuous_label_smoothing=True,  # Enable continuous smoothing
+                    continuous_ls_eps=0.1,                # INCREASED: More aggressive smoothing (was 0.05)
                 ),
             ),
             optim_type='AdamW_mix_lr_wdecay',
@@ -236,9 +243,6 @@ def main(env_id, seed):
             # ==================== [FIXED LOCATION] Policy-Level Fixes ====================
             # These fixes belong at policy level because they are read by unizero.py
 
-            # Fix2: Keep label smoothing high throughout training
-            use_continuous_label_smoothing=True,  # Set to False to use original decay
-            continuous_ls_eps=0.1,                # INCREASED: Fixed epsilon (was 0.05)
 
             # Fix4: Enhanced monitoring for policy logits and target policy entropy
             use_enhanced_policy_monitoring=True,  # Set to False to disable extra logging
@@ -276,6 +280,8 @@ def main(env_id, seed):
             # inal_learning_rate=4e-5, # dreamerv3
 
             replay_buffer_size=int(5e5), # TODO
+            # replay_buffer_size=int(1e6), # TODO
+            
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -307,7 +313,9 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_claudefix-true_tprnot_fixdownnorm_head-wd_recon-perc-w05_cossimloss5_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1116/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-clip3_pol-smo-01_rbs5e5_head-wd_recon-perc-w05_cossimloss2_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    
+    # main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_claudefix-true_tprnot_fixdownnorm_head-wd_recon-perc-w05_cossimloss5_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_claudefix-true_fixdownnorm_250k-reset-head_head-wd_recon-perc-w05_cossimloss2_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 

@@ -455,10 +455,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =======================================================================
 
             # if not in training, obtain the scalars of the value/reward
+            # FIXED: Use self.value_support instead of non-existent self._cfg.model.support_scale
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
                     m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    inverse_scalar_transform(m_output.value, self.value_support),
                     m_output.policy_logits
                 ]
             )
