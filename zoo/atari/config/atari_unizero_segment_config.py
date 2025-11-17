@@ -170,8 +170,7 @@ def main(env_id, seed):
                     policy_logits_clip_max=5.0,         # STRENGTHENED: Max value (was 5.0)
 
                     # Fix3: Re-smooth target_policy from buffer before training
-                    use_target_policy_resmooth=False,    
-                    # use_target_policy_resmooth=True,    # ⚠️ MUST BE TRUE! (was False)
+                    use_target_policy_resmooth=True,    # ⚠️ MUST BE TRUE! (was False)
                     target_policy_resmooth_eps=0.05,    # INCREASED: Re-smooth epsilon (was 0.05)
 
                     # [NEW] Fix5: Policy loss temperature scaling
