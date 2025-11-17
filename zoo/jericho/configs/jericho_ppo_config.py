@@ -27,7 +27,7 @@ jericho_ppo_config = dict(
         remove_stuck_actions=False,
         add_location_and_inventory=False,
         stop_value=int(1e6),
-        observation_shape=512,
+        observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
         max_steps=max_steps,
         max_action_num=action_space_size,
         tokenizer_path=model_name,
@@ -47,7 +47,7 @@ jericho_ppo_config = dict(
             obs_shape=None,
             action_shape=action_space_size,
             action_space='discrete',
-            encoder_hidden_size_list = [512],
+            encoder_hidden_size_list = [512],  # Match BGE embedding dimension
             actor_head_hidden_size= 512,
             critic_head_hidden_size = 512,
         ),

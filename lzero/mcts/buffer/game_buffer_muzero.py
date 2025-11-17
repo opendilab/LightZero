@@ -776,7 +776,27 @@ class MuZeroGameBuffer(GameBuffer):
                         distributions = child_visit[current_index]
                         if self._cfg.action_type == 'fixed_action_space':
                             # for atari/classic_control/box2d environments that only have one player.
-                            target_policies.append(distributions)
+                            # [FIX] Ensure distributions is padded/truncated to policy_shape
+                            # Issue: distributions may have variable length (e.g., different valid actions)
+                            if isinstance(distributions, np.ndarray):
+                                distributions = distributions.tolist()
+
+                            if len(distributions) == policy_shape:
+                                # Perfect match, use as is
+                                target_policies.append(distributions)
+                            elif len(distributions) < policy_shape:
+                                # Pad with zeros
+                                policy_tmp = distributions + [0.0] * (policy_shape - len(distributions))
+                                target_policies.append(policy_tmp)
+                            else:
+                                # Truncate (should not happen, but handle gracefully)
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                logger.warning(
+                                    f"[POLICY_SHAPE_MISMATCH] distributions length ({len(distributions)}) "
+                                    f"> policy_shape ({policy_shape}). Truncating."
+                                )
+                                target_policies.append(distributions[:policy_shape])
                         else:
                             # for board games that have two players or envs that have varied action space.
                             policy_tmp = [0 for _ in range(policy_shape)]

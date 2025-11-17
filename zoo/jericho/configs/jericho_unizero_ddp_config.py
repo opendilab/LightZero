@@ -64,7 +64,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     num_layers: int = 2              # Number of layers in the model
     replay_ratio: float = 0.1       # Replay ratio for experience replay
-    embed_dim: int = 768             # Embedding dimension
+    embed_dim: int = 512             # Embedding dimension
 
     # Reanalysis (reanalyze) parameters:
     # buffer_reanalyze_freq: Frequency of reanalysis (e.g., 1 means reanalyze once per epoch)
@@ -91,7 +91,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     jericho_unizero_config: Dict[str, Any] = dict(
         env=dict(
             stop_value=int(1e6),
-            observation_shape=512,
+            observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
             max_steps=max_steps,
             max_action_num=action_space_size,
             tokenizer_path=model_name,
@@ -115,7 +115,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             ),
             accumulation_steps=accumulation_steps,  # TODO: Accumulated gradient steps (currently default)
             model=dict(
-                observation_shape=512,
+                observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
                 action_space_size=action_space_size,
                 encoder_url=model_name,
                 encoder_option=encoder_option, 
