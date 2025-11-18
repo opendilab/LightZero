@@ -891,34 +891,32 @@ class UniZeroPolicy(MuZeroPolicy):
         # -----------------------------------------------------------------
         # 仍然在 torch.no_grad() 环境下执行
         # =================================================================
-        with torch.no_grad():
-            # 1. Encoder-Clip
-            # ==================== START: 动态计算当前 Clip 阈值 ====================
-            current_clip_value = self.latent_norm_clip_threshold  # 默认使用固定值
-            if self.use_encoder_clip_annealing:
+        if self.use_encoder_clip_annealing:
+            with torch.no_grad():
+                # 1. Encoder-Clip
+                # ==================== START: 动态计算当前 Clip 阈值 ====================
+                current_clip_value = self.latent_norm_clip_threshold  # 默认使用固定值
                 progress = min(1.0, train_iter / self.encoder_clip_anneal_steps)
-
                 if self.encoder_clip_anneal_type == 'cosine':
                     # 余弦调度: 从1平滑过渡到0
                     cosine_progress = 0.5 * (1.0 + np.cos(np.pi * progress))
                     current_clip_value = self.encoder_clip_end + \
-                                         (self.encoder_clip_start - self.encoder_clip_end) * cosine_progress
+                                            (self.encoder_clip_start - self.encoder_clip_end) * cosine_progress
                 else:  # 默认为线性调度
                     current_clip_value = self.encoder_clip_start * (1 - progress) + \
-                                         self.encoder_clip_end * progress
-            # ===================== END: 动态计算当前 Clip 阈值 =====================
-
-            # 1. Encoder-Clip (使用动态计算出的 current_clip_value)
-            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
-                obs_embeddings = losses.intermediate_losses['obs_embeddings']
-                if obs_embeddings is not None:
-                    max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
-                    if max_latent_norm > current_clip_value:
-                        scale_factor = current_clip_value / max_latent_norm.item()
-                        # 不再频繁打印，或者可以改为每隔N步打印一次
-                        if train_iter % 1000 == 0:
-                            print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
-                        scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
+                                            self.encoder_clip_end * progress
+                # ===================== END: 动态计算当前 Clip 阈值 =====================
+                # 1. Encoder-Clip (使用动态计算出的 current_clip_value)
+                if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
+                    obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                    if obs_embeddings is not None:
+                        max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
+                        if max_latent_norm > current_clip_value:
+                            scale_factor = current_clip_value / max_latent_norm.item()
+                            # 不再频繁打印，或者可以改为每隔N步打印一次
+                            if train_iter % 1000 == 0:
+                                print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
+                            scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:

@@ -602,6 +602,7 @@ class RNDRewardModel(BaseRewardModel):
         extrinsic_normalized = self._normalize_rewards(original_reward)
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(input_data)
+            # TODO F.mse_loss改成没有mean的结果
             mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)
         mse_np = mse.detach().cpu().numpy()
         self._running_mean_std_rnd_reward.update(mse_np)
