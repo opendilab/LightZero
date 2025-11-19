@@ -453,6 +453,24 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Haoran Luo, Haihong E, Yikai Guo, Qika Lin, Xiaobao Wu, Xinyu Mu, Wenhao Liu, Meina Song, Yifan Zhu, Anh Tuan Luu
   - Key: Knowledge Base Question Answering, Large Language Model, LLM Agents, Monte Carlo Tree Search
   - ExpEnv: GrailQA, WebQSP, GraphQ
+- [Monte Carlo Tree Diffusion for System 2 Planning](https://proceedings.mlr.press/v267/yoon25a.html) 2025
+  - Jaesik Yoon, Hyeonseo Cho, Doojin Baek, Yoshua Bengio, Sungjin Ahn
+  - Key: Diffusion Models, MCTS, System 2 Planning, Trajectory Optimization
+  - ExpEnv: Maze2D, Kitchen, Block stacking
+  - [Code](https://github.com/ahn-ml/mctd)
+- [Monte-Carlo Tree Search with Uncertainty Propagation via Optimal Transport](https://openreview.net/forum?id=DUGFTH9W8B) 2025
+  - Tuan Quang Dam, Pascal Stenger, Lukas Schneider, Joni Pajarinen, Carlo D’Eramo, Odalric-Ambrym Maillard
+  - Key: Optimal Transport, Wasserstein Distance, Uncertainty Propagation, MCTS
+  - ExpEnv: FrozenLake, NChain, RiverSwim, SixArms, Taxi, Rocksample
+- [Online Robust Reinforcement Learning Through Monte-Carlo Planning](https://openreview.net/forum?id=m25ma7O7Ec) 2025
+  - Tuan Quang Dam, Kishan Panaganti, Brahim Driss, Adam Wierman
+  - Key: Robust RL, MCTS, Distributionally Robust Optimization, Sim-to-Real
+  - ExpEnv: Gambler’s Problem, Frozen Lake, American Option Pricing
+  - [Code](https://github.com/brahimdriss/RobustMCTS)
+- [Power Mean Estimation in Stochastic Continuous Monte-Carlo Tree Search](https://icml.cc/virtual/2025/poster/45596) 2025
+  - Tuan Quang Dam
+  - Key: Continuous MCTS, Polynomial Exploration, Stochastic Environments, Power Mean
+  - ExpEnv: Continuous Cartpole, Inverted Pendulum
 - [Language Agent Tree Search Unifies Reasoning, Acting, and Planning in Language Models](https://icml.cc/virtual/2024/poster/33107) 2024  
   - Andy Zhou, Kai Yan, Michal Shlapentokh-Rothman, Haohan Wang, Yu-Xiong Wang  
   - Key: language models, decision-making, Monte Carlo Tree Search, reasoning, acting, planning  
@@ -469,6 +487,11 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Zhengmian Hu, Heng Huang  
   - Key: speculative sampling, large language models, tree Monte Carlo, inference acceleration  
   - ExpEnv: Not specified
+- [Provably Efficient Long-Horizon Exploration in Monte Carlo Tree Search through State Occupancy Regularization](https://arxiv.org/abs/2407.05511) 2024
+  - Liam Schramm, Abdeslam Boularias
+  - Key: Exploration, State Occupancy, Long-horizon planning, Volume-MCTS
+  - ExpEnv: Robot Navigation, 2D Maze
+  - [Code](https://github.com/schrammlb2/Volume-MCTS-ICML)
 - [Scalable Safe Policy Improvement via Monte Carlo Tree Search](https://openreview.net/pdf?id=tevbBSzSfK) 2023
   - Alberto Castellini, Federico Bianchi, Edoardo Zorzi, Thiago D. Simão, Alessandro Farinelli, Matthijs T. J. Spaan
   - Key: safe policy improvement online using a MCTS based strategy, Safe Policy Improvement with Baseline Bootstrapping
@@ -495,32 +518,6 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Key: chemical retrosynthetic planning, neural-based A*-like algorithm, ANDOR tree
   - ExpEnv: USPTO datasets
   - [Code](https://github.com/binghong-ml/retro_star)
-
-
-
-- [Monte Carlo Tree Diffusion for System 2 Planning](https://proceedings.mlr.press/v267/yoon25a.html) 2025
-  - Jaesik Yoon, Hyeonseo Cho, Doojin Baek, Yoshua Bengio, Sungjin Ahn
-  - Key: Diffusion Models, MCTS, System 2 Planning, Trajectory Optimization
-  - ExpEnv: Maze2D, Kitchen, Block stacking
-  - [Code](https://github.com/ahn-ml/mctd)
-- [Monte-Carlo Tree Search with Uncertainty Propagation via Optimal Transport](https://openreview.net/forum?id=DUGFTH9W8B) 2025
-  - Tuan Quang Dam, Pascal Stenger, Lukas Schneider, Joni Pajarinen, Carlo D’Eramo, Odalric-Ambrym Maillard
-  - Key: Optimal Transport, Wasserstein Distance, Uncertainty Propagation, MCTS
-  - ExpEnv: FrozenLake, NChain, RiverSwim, SixArms, Taxi, Rocksample
-- [Online Robust Reinforcement Learning Through Monte-Carlo Planning](https://openreview.net/forum?id=m25ma7O7Ec) 2025
-  - Tuan Quang Dam, Kishan Panaganti, Brahim Driss, Adam Wierman
-  - Key: Robust RL, MCTS, Distributionally Robust Optimization, Sim-to-Real
-  - ExpEnv: Gambler’s Problem, Frozen Lake, American Option Pricing
-  - [Code](https://github.com/brahimdriss/RobustMCTS)
-- [Power Mean Estimation in Stochastic Continuous Monte-Carlo Tree Search](https://icml.cc/virtual/2025/poster/45596) 2025
-  - Tuan Quang Dam
-  - Key: Continuous MCTS, Polynomial Exploration, Stochastic Environments, Power Mean
-  - ExpEnv: Continuous Cartpole, Inverted Pendulum
-- [Provably Efficient Long-Horizon Exploration in Monte Carlo Tree Search through State Occupancy Regularization](https://arxiv.org/abs/2407.05511) 2024
-  - Liam Schramm, Abdeslam Boularias
-  - Key: Exploration, State Occupancy, Long-horizon planning, Volume-MCTS
-  - ExpEnv: Robot Navigation, 2D Maze
-  - [Code](https://github.com/schrammlb2/Volume-MCTS-ICML)
 #### ICLR
 - [OptionZero: Planning with Learned Options](https://openreview.net/forum?id=3IFRygQKGL) 2025  
   - Po-Wei Huang, Pei-Chiun Peng, Hung Guei, Ti-Rong Wu  
@@ -538,6 +535,19 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Antonis Antoniades, Albert Örwall, Kexun Zhang, Yuxi Xie, Anirudh Goyal, William Yang Wang  
   - Key: agents, LLM, SWE-agents, SWE-bench, search, planning, reasoning, self-improvement, open-ended  
   - ExpEnv: SWE-bench
+- [Epistemic Monte Carlo Tree Search](https://openreview.net/forum?id=Tb8RiXOc3N) 2025
+  - Wendelin Boehmer, Zheng Shen, Haoran Duan, Chengzhi Mao, Rosario Scalise
+  - Key: MCTS, Epistemic Uncertainty, Exploration, Sparse Reward, Model-based RL
+  - ExpEnv: Deep Sea, SUBLEQ (Assembly language)
+- [DeepSeek-Prover-V1.5: Harnessing Proof Assistant Feedback for Reinforcement Learning and Monte-Carlo Tree Search](https://openreview.net/forum?id=I4YAIwrsXa) 2025
+  - DeepSeek Prover Team
+  - Key: Automated Theorem Proving, LLM, MCTS, RL from Proof Assistant Feedback (RLPAF), RMaxTS
+  - ExpEnv: Lean 4, miniF2F, ProofNet
+  - [Code](https://github.com/deepseek-ai/DeepSeek-Prover-V1.5)
+- [Bayes Adaptive Monte Carlo Tree Search for Offline Model-based Reinforcement Learning](https://openreview.net/forum?id=RGjqr1jBJy) 2025
+  - Lucas Niu Janson, et al.
+  - Key: Offline RL, Model-based RL, Bayes-Adaptive MDP, Uncertainty Propagation
+  - ExpEnv: D4RL
 - [The Update Equivalence Framework for Decision-Time Planning](https://openreview.net/forum?id=JXGph215fL) 2024
   - Samuel Sokota, Gabriele Farina, David J Wu, Hengyuan Hu, Kevin A. Wang, J Zico Kolter, Noam Brown
   - Key: imperfect-information games, search, decision-time planning, update equivalence
@@ -546,6 +556,11 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Qihan Liu, Jianing Ye, Xiaoteng Ma, Jun Yang, Bin Liang, Chongjie Zhang
   - Key: multi-agent reinforcement learning, planning, multi-agent MCTS
   - ExpEnv: SMAC, LunarLander, MuJoCo, and Google Research Football
+- [PromptAgent: Strategic Planning with Large Language Models Enables Expert-Level Prompt Optimization](https://openreview.net/forum?id=22pyNMuIoa) 2024
+  - Zhutian Yang, et al.
+  - Key: Prompt Optimization, Strategic Planning, MCTS, LLM Agent
+  - ExpEnv: BIG-Bench Hard (BBH), MMLU, HellaSwag
+  - [Code](https://github.com/zhutianyang/PromptAgent)
 - [Become a Proficient Player with Limited Data through Watching Pure Videos](https://openreview.net/pdf?id=Sy-o2N0hF4f) 2023
   - Weirui Ye, Yunsheng Zhang, Pieter Abbeel, Yang Gao
   - Key: pre-training from action-free videos, forward-inverse cycle consistency (FICC) objective based on vector quantization, pre-training phase, fine-tuning phase.
@@ -593,25 +608,29 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Binghong Chen, Bo Dai, Qinjie Lin, Guo Ye, Han Liu, Le Song
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
   - ExpEnv: a 2d workspace with a 2 DoF (degrees of freedom) point robot, a 3 DoF stick robot and a 5 DoF snake robot
-- [Epistemic Monte Carlo Tree Search](https://openreview.net/forum?id=Tb8RiXOc3N) 2025
-  - Wendelin Boehmer, Zheng Shen, Haoran Duan, Chengzhi Mao, Rosario Scalise
-  - Key: MCTS, Epistemic Uncertainty, Exploration, Sparse Reward, Model-based RL
-  - ExpEnv: Deep Sea, SUBLEQ (Assembly language)
-- [DeepSeek-Prover-V1.5: Harnessing Proof Assistant Feedback for Reinforcement Learning and Monte-Carlo Tree Search](https://openreview.net/forum?id=I4YAIwrsXa) 2025
-  - DeepSeek Prover Team
-  - Key: Automated Theorem Proving, LLM, MCTS, RL from Proof Assistant Feedback (RLPAF), RMaxTS
-  - ExpEnv: Lean 4, miniF2F, ProofNet
-  - [Code](https://github.com/deepseek-ai/DeepSeek-Prover-V1.5)
-- [Bayes Adaptive Monte Carlo Tree Search for Offline Model-based Reinforcement Learning](https://openreview.net/forum?id=RGjqr1jBJy) 2025
-  - Lucas Niu Janson, et al.
-  - Key: Offline RL, Model-based RL, Bayes-Adaptive MDP, Uncertainty Propagation
-  - ExpEnv: D4RL
-- [PromptAgent: Strategic Planning with Large Language Models Enables Expert-Level Prompt Optimization](https://openreview.net/forum?id=22pyNMuIoa) 2024
-  - Zhutian Yang, et al.
-  - Key: Prompt Optimization, Strategic Planning, MCTS, LLM Agent
-  - ExpEnv: BIG-Bench Hard (BBH), MMLU, HellaSwag
-  - [Code](https://github.com/zhutianyang/PromptAgent)
 #### NeurIPS
+- [Feedback-Aware MCTS for Goal-Oriented Information Seeking](https://openreview.net/pdf?id=ustF8MMZDJ) 2025
+  - Harmanpreet Chopra, Chirag Shah
+  - Key: Conversational AI, Goal-Oriented Information Seeking, MCTS, LLM
+  - ExpEnv: 20 Questions, GuessWhat?, MutualFriends
+- [MCTS-Transfer: Monte Carlo Tree Search based Space Transfer for Black-box Optimization](https://openreview.net/forum?id=T5UfIfmDbq) 2024
+  - Shukuan Wang, Ke Xue, Lei Song, Xiaobin Huang, Chao Qian
+  - Key: Black-box Optimization, Transfer Learning, MCTS, Search Space Transfer
+  - ExpEnv: Synthetic functions (Ackley, etc.), Design-Bench, Hyper-parameter optimization
+  - [Code](https://github.com/lamda-bbo/mcts-transfer)
+- [Speculative Monte-Carlo Tree Search](https://proceedings.neurips.cc/paper_files/paper/2024/file/a19940b01b77b6acd41ff8b32b334e7c-Paper-Conference.pdf) 2024
+  - Jungwoo Park, David Wu, Kellin Pelrine, Jimmy Wei, Thomas Anthony, Julian Schrittwieser, Junwhan Ahn
+  - Key: Efficiency, Speculative Execution, Parallelism, AlphaZero
+  - ExpEnv: Go (9x9, 19x19)
+- [Generating Code World Models with Large Language Models Guided by Monte Carlo Tree Search](https://proceedings.neurips.cc/paper_files/paper/2024/file/6f479ea488e0908ac8b1b37b27fd134c-Paper-Conference.pdf) 2024
+  - Nicola Dainese, Matteo Merler, Minttu Alakuijala, Pekka Marttinen
+  - Key: Code Generation, World Models, MCTS, Model-based Planning
+  - ExpEnv: CWMB (Code World Models Benchmark), Crafter
+- [ReST-MCTS*: LLM Self-Training via Process Reward Guided Tree Search](https://openreview.net/forum?id=8rcFOqEud5) 2024
+  - Dan Zhang, Sining Zhoubian, Ziniu Hu, Yisong Yue, Yuxiao Dong, Jie Tang
+  - Key: LLM Self-training, Process Reward, Reasoning, CoT
+  - ExpEnv: GSM8K, MATH
+  - [Code](https://github.com/THUDM/ReST-MCTS)
 - [LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios](https://openreview.net/pdf?id=oIUXpBnyjv) 2023
   - Yazhe Niu, Yuan Pu, Zhenjie Yang, Xueyan Li, Tong Zhou, Jiyuan Ren, Shuai Hu, Hongsheng Li, Yu Liu
   - Key: the first unified benchmark for deploying MCTS/MuZero in general sequential decision scenarios.
@@ -677,28 +696,6 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Matthew Faw, Rajat Sen, Karthikeyan Shanmugam, Constantine Caramanis, Sanjay Shakkottai
   - Key: covariate shift problem, Mix&Match combines stochastic gradient descent (SGD) with optimistic tree search and model re-use (evolving partially trained models with samples from different mixture distributions)
   - [Code](https://github.com/matthewfaw/mixnmatch)
-- [Feedback-Aware MCTS for Goal-Oriented Information Seeking](https://openreview.net/pdf?id=ustF8MMZDJ) 2025
-  - Harmanpreet Chopra, Chirag Shah
-  - Key: Conversational AI, Goal-Oriented Information Seeking, MCTS, LLM
-  - ExpEnv: 20 Questions, GuessWhat?, MutualFriends
-- [MCTS-Transfer: Monte Carlo Tree Search based Space Transfer for Black-box Optimization](https://openreview.net/forum?id=T5UfIfmDbq) 2024
-  - Shukuan Wang, Ke Xue, Lei Song, Xiaobin Huang, Chao Qian
-  - Key: Black-box Optimization, Transfer Learning, MCTS, Search Space Transfer
-  - ExpEnv: Synthetic functions (Ackley, etc.), Design-Bench, Hyper-parameter optimization
-  - [Code](https://github.com/lamda-bbo/mcts-transfer)
-- [Speculative Monte-Carlo Tree Search](https://proceedings.neurips.cc/paper_files/paper/2024/file/a19940b01b77b6acd41ff8b32b334e7c-Paper-Conference.pdf) 2024
-  - Jungwoo Park, David Wu, Kellin Pelrine, Jimmy Wei, Thomas Anthony, Julian Schrittwieser, Junwhan Ahn
-  - Key: Efficiency, Speculative Execution, Parallelism, AlphaZero
-  - ExpEnv: Go (9x9, 19x19)
-- [Generating Code World Models with Large Language Models Guided by Monte Carlo Tree Search](https://proceedings.neurips.cc/paper_files/paper/2024/file/6f479ea488e0908ac8b1b37b27fd134c-Paper-Conference.pdf) 2024
-  - Nicola Dainese, Matteo Merler, Minttu Alakuijala, Pekka Marttinen
-  - Key: Code Generation, World Models, MCTS, Model-based Planning
-  - ExpEnv: CWMB (Code World Models Benchmark), Crafter
-- [ReST-MCTS*: LLM Self-Training via Process Reward Guided Tree Search](https://openreview.net/forum?id=8rcFOqEud5) 2024
-  - Dan Zhang, Sining Zhoubian, Ziniu Hu, Yisong Yue, Yuxiao Dong, Jie Tang
-  - Key: LLM Self-training, Process Reward, Reasoning, CoT
-  - ExpEnv: GSM8K, MATH
-  - [Code](https://github.com/THUDM/ReST-MCTS)
 #### Other Conference or Journal
 - [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/pdf/2012.07910.pdf) AAAI 2021.
 - [On Monte Carlo Tree Search and Reinforcement Learning](https://www.jair.org/index.php/jair/article/download/11099/26289/20632) Journal of Artificial Intelligence Research 2017.
