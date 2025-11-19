@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2025.11.09 LightZero-v0.2.0
+最近更新于 2025.11.19 LightZero-v0.2.0
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
@@ -77,13 +77,13 @@
     - [论文笔记](#论文笔记)
     - [算法框架图](#算法框架图)
   - [MCTS 相关论文](#mcts-相关论文)
-    - [重要论文](#重要论文)
+    - [经典与基础论文](#经典与基础论文)
       - [LightZero Implemented series](#lightzero-implemented-series)
       - [AlphaGo series](#alphago-series)
       - [MuZero series](#muzero-series)
       - [MCTS Analysis](#mcts-analysis)
       - [MCTS Application](#mcts-application)
-    - [其他论文](#其他论文)
+    - [最新研究与新兴应用](#最新研究与新兴应用)
       - [ICML](#icml)
       - [ICLR](#iclr)
       - [NeurIPS](#neurips)
@@ -342,7 +342,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 
 以下是关于 **MCTS** 相关的论文集合，[这一部分](#MCTS-相关论文) 将会持续更新，追踪 MCTS 的前沿动态。
 
-### 重要论文
+### 经典与基础论文
 
 <details closed>
 <summary>(点击查看)</summary>
@@ -386,7 +386,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 
 </details>
 
-### 其他论文
+### 最新研究与新兴应用
 
 <details closed>
 <summary>(点击查看)</summary>
@@ -440,6 +440,24 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
   - Haoran Luo, Haihong E, Yikai Guo, Qika Lin, Xiaobao Wu, Xinyu Mu, Wenhao Liu, Meina Song, Yifan Zhu, Anh Tuan Luu
   - Key: Knowledge Base Question Answering, Large Language Model, LLM Agents, Monte Carlo Tree Search
   - ExpEnv: GrailQA, WebQSP, GraphQ
+- [Monte Carlo Tree Diffusion for System 2 Planning](https://proceedings.mlr.press/v267/yoon25a.html) 2025
+  - Jaesik Yoon, Hyeonseo Cho, Doojin Baek, Yoshua Bengio, Sungjin Ahn
+  - Key: Diffusion Models, MCTS, System 2 Planning, Trajectory Optimization
+  - ExpEnv: Maze2D, Kitchen, Block stacking
+  - [Code](https://github.com/ahn-ml/mctd)
+- [Monte-Carlo Tree Search with Uncertainty Propagation via Optimal Transport](https://openreview.net/forum?id=DUGFTH9W8B) 2025
+  - Tuan Quang Dam, Pascal Stenger, Lukas Schneider, Joni Pajarinen, Carlo D’Eramo, Odalric-Ambrym Maillard
+  - Key: Optimal Transport, Wasserstein Distance, Uncertainty Propagation, MCTS
+  - ExpEnv: FrozenLake, NChain, RiverSwim, SixArms, Taxi, Rocksample
+- [Online Robust Reinforcement Learning Through Monte-Carlo Planning](https://openreview.net/forum?id=m25ma7O7Ec) 2025
+  - Tuan Quang Dam, Kishan Panaganti, Brahim Driss, Adam Wierman
+  - Key: Robust RL, MCTS, Distributionally Robust Optimization, Sim-to-Real
+  - ExpEnv: Gambler’s Problem, Frozen Lake, American Option Pricing
+  - [Code](https://github.com/brahimdriss/RobustMCTS)
+- [Power Mean Estimation in Stochastic Continuous Monte-Carlo Tree Search](https://icml.cc/virtual/2025/poster/45596) 2025
+  - Tuan Quang Dam
+  - Key: Continuous MCTS, Polynomial Exploration, Stochastic Environments, Power Mean
+  - ExpEnv: Continuous Cartpole, Inverted Pendulum
 - [Language Agent Tree Search Unifies Reasoning, Acting, and Planning in Language Models](https://icml.cc/virtual/2024/poster/33107) 2024  
   - Andy Zhou, Kai Yan, Michal Shlapentokh-Rothman, Haohan Wang, Yu-Xiong Wang  
   - Key: language models, decision-making, Monte Carlo Tree Search, reasoning, acting, planning  
@@ -456,22 +474,26 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
   - Zhengmian Hu, Heng Huang  
   - Key: speculative sampling, large language models, tree Monte Carlo, inference acceleration  
   - ExpEnv: Not specified
+- [Provably Efficient Long-Horizon Exploration in Monte Carlo Tree Search through State Occupancy Regularization](https://arxiv.org/abs/2407.05511) 2024
+  - Liam Schramm, Abdeslam Boularias
+  - Key: Exploration, State Occupancy, Long-horizon planning, Volume-MCTS
+  - ExpEnv: Robot Navigation, 2D Maze
+  - [Code](https://github.com/schrammlb2/Volume-MCTS-ICML)
 - [Scalable Safe Policy Improvement via Monte Carlo Tree Search](https://openreview.net/pdf?id=tevbBSzSfK) 2023
   - Alberto Castellini, Federico Bianchi, Edoardo Zorzi, Thiago D. Simão, Alessandro Farinelli, Matthijs T. J. Spaan
   - Key: safe policy improvement online using a MCTS based strategy, Safe Policy Improvement with Baseline Bootstrapping
   - ExpEnv: Gridworld and SysAdmin
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
   - Dengwei Zhao, Shikui Tu, Lei Xu
-  - Key: limited amount of self-plays, path consistency (PC) optimality
+  - Key: limited amount of self-plays,  path consistency (PC) optimality
   - ExpEnv: Go, Othello, Gomoku
 - [Visualizing MuZero Models](https://arxiv.org/abs/2102.12924) 2021
   - Joery A. de Vries, Ken S. Voskuil, Thomas M. Moerland, Aske Plaat
   - Key: visualizing the value equivalent dynamics model, action trajectories diverge, two regularization techniques
   - ExpEnv: CartPole and MountainCar.
-and internal state transition dynamics,
 - [Convex Regularization in Monte-Carlo Tree Search](https://arxiv.org/pdf/2007.00391.pdf) 2021
   - Tuan Dam, Carlo D'Eramo, Jan Peters, Joni Pajarinen
-  - Key: entropy-regularization backup operators, regret analysis, Tsallis etropy
+  - Key: entropy-regularization backup operators, regret analysis, Tsallis entropy
   - ExpEnv: synthetic tree, Atari
 - [Information Particle Filter Tree: An Online Algorithm for POMDPs with Belief-Based Rewards on Continuous Domains](http://proceedings.mlr.press/v119/fischer20a/fischer20a.pdf) 2020
   - Johannes Fischer, Ömer Sahin Tas
@@ -500,6 +522,19 @@ and internal state transition dynamics,
   - Antonis Antoniades, Albert Örwall, Kexun Zhang, Yuxi Xie, Anirudh Goyal, William Yang Wang  
   - Key: agents, LLM, SWE-agents, SWE-bench, search, planning, reasoning, self-improvement, open-ended  
   - ExpEnv: SWE-bench
+- [Epistemic Monte Carlo Tree Search](https://openreview.net/forum?id=Tb8RiXOc3N) 2025
+  - Wendelin Boehmer, Zheng Shen, Haoran Duan, Chengzhi Mao, Rosario Scalise
+  - Key: MCTS, Epistemic Uncertainty, Exploration, Sparse Reward, Model-based RL
+  - ExpEnv: Deep Sea, SUBLEQ (Assembly language)
+- [DeepSeek-Prover-V1.5: Harnessing Proof Assistant Feedback for Reinforcement Learning and Monte-Carlo Tree Search](https://openreview.net/forum?id=I4YAIwrsXa) 2025
+  - DeepSeek Prover Team
+  - Key: Automated Theorem Proving, LLM, MCTS, RL from Proof Assistant Feedback (RLPAF), RMaxTS
+  - ExpEnv: Lean 4, miniF2F, ProofNet
+  - [Code](https://github.com/deepseek-ai/DeepSeek-Prover-V1.5)
+- [Bayes Adaptive Monte Carlo Tree Search for Offline Model-based Reinforcement Learning](https://openreview.net/forum?id=RGjqr1jBJy) 2025
+  - Lucas Niu Janson, et al.
+  - Key: Offline RL, Model-based RL, Bayes-Adaptive MDP, Uncertainty Propagation
+  - ExpEnv: D4RL
 - [The Update Equivalence Framework for Decision-Time Planning](https://openreview.net/forum?id=JXGph215fL) 2024
   - Samuel Sokota, Gabriele Farina, David J Wu, Hengyuan Hu, Kevin A. Wang, J Zico Kolter, Noam Brown
   - Key: imperfect-information games, search, decision-time planning, update equivalence
@@ -508,6 +543,11 @@ and internal state transition dynamics,
   - Qihan Liu, Jianing Ye, Xiaoteng Ma, Jun Yang, Bin Liang, Chongjie Zhang
   - Key: multi-agent reinforcement learning, planning, multi-agent MCTS
   - ExpEnv: SMAC, LunarLander, MuJoCo, and Google Research Football
+- [PromptAgent: Strategic Planning with Large Language Models Enables Expert-Level Prompt Optimization](https://openreview.net/forum?id=22pyNMuIoa) 2024
+  - Zhutian Yang, et al.
+  - Key: Prompt Optimization, Strategic Planning, MCTS, LLM Agent
+  - ExpEnv: BIG-Bench Hard (BBH), MMLU, HellaSwag
+  - [Code](https://github.com/zhutianyang/PromptAgent)
 - [Become a Proficient Player with Limited Data through Watching Pure Videos](https://openreview.net/pdf?id=Sy-o2N0hF4f) 2023
   - Weirui Ye, Yunsheng Zhang, Pieter Abbeel, Yang Gao
   - Key: pre-training from action-free videos, forward-inverse cycle consistency (FICC) objective based on vector quantization, pre-training phase, fine-tuning phase.
@@ -531,32 +571,53 @@ and internal state transition dynamics,
   - [Code](https://github.com/sail-sg/rosmo/tree/main)
 - [Enabling Arbitrary Translation Objectives with Adaptive Tree Search](https://arxiv.org/pdf/2202.11444.pdf) 2022
   - Wang Ling, Wojciech Stokowiec, Domenic Donato, Chris Dyer, Lei Yu, Laurent Sartran, Austin Matthews
-  - Key: adaptive tree search, translation models, autoregressive models, 
+  - Key: adaptive tree search, translation models, autoregressive models
   - ExpEnv: Chinese–English and Pashto–English tasks from WMT2020, German–English from WMT2014
 - [What's Wrong with Deep Learning in Tree Search for Combinatorial Optimization](https://arxiv.org/abs/2201.10494) 2022
   - Maximili1an Böther, Otto Kißig, Martin Taraz, Sarel Cohen, Karen Seidel, Tobias Friedrich
-  - Key: Combinatorial optimization, open-source benchmark suite for the NP-hard MAXIMUM INDEPENDENT SET problem, an in-depth analysis of the popular guided tree search algorithm,  compare the tree search implementations to other solvers
+  - Key: combinatorial optimization, open-source benchmark suite for the NP-hard maximum independent set problem, an in-depth analysis of the popular guided tree search algorithm, compare the tree search implementations to other solvers
   - ExpEnv: NP-hard MAXIMUM INDEPENDENT SET.
   - [Code](https://github.com/maxiboether/mis-benchmark-framework)
 - [Monte-Carlo Planning and Learning with Language Action Value Estimates](https://openreview.net/pdf?id=7_G8JySGecm) 2021
   - Youngsoo Jang, Seokin Seo, Jongmin Lee, Kee-Eung Kim
-  - Key: Monte-Carlo tree search with language-driven exploration, locally optimistic language value estimates,
+  - Key: Monte-Carlo tree search with language-driven exploration, locally optimistic language value estimates.
   - ExpEnv: Interactive Fiction (IF) games
 - [Practical Massively Parallel Monte-Carlo Tree Search Applied to Molecular Design](https://arxiv.org/abs/2006.10504) 2021
   - Xiufeng Yang, Tanuj Kr Aasawat, Kazuki Yoshizoe
-  - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search, 
+  - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search
   - ExpEnv:  octanol-water partition coefficient (logP) penalized by the synthetic accessibility (SA) and large Ring Penalty score.
 - [Watch the Unobserved: A Simple Approach to Parallelizing Monte Carlo Tree Search](https://arxiv.org/pdf/1810.11755.pdf) 2020
   - Anji Liu, Jianshu Chen, Mingze Yu, Yu Zhai, Xuewen Zhou, Ji Liu
-  - Key: parallel Monte-Carlo Tree Search, partition the tree into sub-trees efficiently, compare the observation ratio of each processor
+  - Key: parallel Monte-Carlo Tree Search, partition the tree into sub-trees efficiently, compare the observation ratio of each processor.
   - ExpEnv: speedup and performance comparison on JOY-CITY game, average episode return on atari game
   - [Code](https://github.com/liuanji/WU-UCT)
 - [Learning to Plan in High Dimensions via Neural Exploration-Exploitation Trees](https://openreview.net/pdf?id=rJgJDAVKvB) 2020
   - Binghong Chen, Bo Dai, Qinjie Lin, Guo Ye, Han Liu, Le Song
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
   - ExpEnv: a 2d workspace with a 2 DoF (degrees of freedom) point robot, a 3 DoF stick robot and a 5 DoF snake robot
-
 #### NeurIPS
+- [Feedback-Aware MCTS for Goal-Oriented Information Seeking](https://openreview.net/pdf?id=ustF8MMZDJ) 2025
+  - Harmanpreet Chopra, Chirag Shah
+  - Key: Conversational AI, Goal-Oriented Information Seeking, MCTS, LLM
+  - ExpEnv: 20 Questions, GuessWhat?, MutualFriends
+- [MCTS-Transfer: Monte Carlo Tree Search based Space Transfer for Black-box Optimization](https://openreview.net/forum?id=T5UfIfmDbq) 2024
+  - Shukuan Wang, Ke Xue, Lei Song, Xiaobin Huang, Chao Qian
+  - Key: Black-box Optimization, Transfer Learning, MCTS, Search Space Transfer
+  - ExpEnv: Synthetic functions (Ackley, etc.), Design-Bench, Hyper-parameter optimization
+  - [Code](https://github.com/lamda-bbo/mcts-transfer)
+- [Speculative Monte-Carlo Tree Search](https://proceedings.neurips.cc/paper_files/paper/2024/file/a19940b01b77b6acd41ff8b32b334e7c-Paper-Conference.pdf) 2024
+  - Jungwoo Park, David Wu, Kellin Pelrine, Jimmy Wei, Thomas Anthony, Julian Schrittwieser, Junwhan Ahn
+  - Key: Efficiency, Speculative Execution, Parallelism, AlphaZero
+  - ExpEnv: Go (9x9, 19x19)
+- [Generating Code World Models with Large Language Models Guided by Monte Carlo Tree Search](https://proceedings.neurips.cc/paper_files/paper/2024/file/6f479ea488e0908ac8b1b37b27fd134c-Paper-Conference.pdf) 2024
+  - Nicola Dainese, Matteo Merler, Minttu Alakuijala, Pekka Marttinen
+  - Key: Code Generation, World Models, MCTS, Model-based Planning
+  - ExpEnv: CWMB (Code World Models Benchmark), Crafter
+- [ReST-MCTS*: LLM Self-Training via Process Reward Guided Tree Search](https://openreview.net/forum?id=8rcFOqEud5) 2024
+  - Dan Zhang, Sining Zhoubian, Ziniu Hu, Yisong Yue, Yuxiao Dong, Jie Tang
+  - Key: LLM Self-training, Process Reward, Reasoning, CoT
+  - ExpEnv: GSM8K, MATH
+  - [Code](https://github.com/THUDM/ReST-MCTS)
 - [LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios](https://openreview.net/pdf?id=oIUXpBnyjv) 2023
   - Yazhe Niu, Yuan Pu, Zhenjie Yang, Xueyan Li, Tong Zhou, Jiyuan Ren, Shuai Hu, Hongsheng Li, Yu Liu
   - Key: the first unified benchmark for deploying MCTS/MuZero in general sequential decision scenarios.
@@ -583,8 +644,8 @@ and internal state transition dynamics,
   - ExpEnv: Atari, 9x9 Go
 - [Planning for Sample Efficient Imitation Learning](https://openreview.net/forum?id=BkN5UoAqF7) 2022
   - Zhao-Heng Yin, Weirui Ye, Qifeng Chen, Yang Gao
-  - Key: Behavioral Cloning，Adversarial Imitation Learning (AIL)，MCTS-based RL，
-  - ExpEnv: DeepMind Control Suite
+  - Key: Behavioral Cloning，Adversarial Imitation Learning (AIL)，MCTS-based RL.
+  - ExpEnv:  DeepMind Control Suite
   - [Code](https://github.com/zhaohengyin/EfficientImitate)
 - [Evaluation Beyond Task Performance: Analyzing Concepts in AlphaZero in Hex](https://openreview.net/pdf?id=dwKwB2Cd-Km) 2022 
   - Charles Lovering, Jessica Zosa Forde, George Konidaris, Ellie Pavlick, Michael L. Littman
@@ -592,7 +653,7 @@ and internal state transition dynamics,
   - ExpEnv: Hex
 - [Are AlphaZero-like Agents Robust to Adversarial Perturbations?](https://openreview.net/pdf?id=yZ_JlZaOCzv) 2022
   - Li-Cheng Lan, Huan Zhang, Ti-Rong Wu, Meng-Yu Tsai, I-Chen Wu, 4 Cho-Jui Hsieh
-  - Key:  adversarial states, first adversarial attack on Go AIs
+  - Key: adversarial states, first adversarial attack on Go AIs.
   - ExpEnv: Go
 - [Monte Carlo Tree Descent for Black-Box Optimization](https://openreview.net/pdf?id=FzdmrTUyZ4g) 2022
   - Yaoguang Zhai, Sicun Gao
@@ -600,24 +661,24 @@ and internal state transition dynamics,
   - ExpEnv: synthetic functions for nonlinear optimization, reinforcement learning problems in MuJoCo locomotion environments, and optimization problems in Neural Architecture Search (NAS).
 - [Monte Carlo Tree Search based Variable Selection for High Dimensional Bayesian Optimization](https://openreview.net/pdf?id=SUzPos_pUC) 2022
   - Lei Song∗ , Ke Xue∗ , Xiaobin Huang, Chao Qian
-  - Key:  a low-dimensional subspace via MCTS, optimizes in the subspace with any Bayesian optimization algorithm.
+  - Key: a low-dimensional subspace via MCTS, optimizes in the subspace with any Bayesian optimization algorithm.
   - ExpEnv: NAS-bench problems and MuJoCo locomotion
 - [Monte Carlo Tree Search With Iteratively Refining State Abstractions](https://proceedings.neurips.cc/paper/2021/file/9b0ead00a217ea2c12e06a72eec4923f-Paper.pdf) 2021
   - Samuel Sokota, Caleb Ho, Zaheen Ahmad, J. Zico Kolter
-  - Key: stochastic environments, Progressive widening, abstraction refining,
-  - ExpEnv:  Blackjack, Trap, five by five Go.
+  - Key: stochastic environments, Progressive widening, abstraction refining
+  - ExpEnv: Blackjack, Trap, five by five Go.
 - [Deep Synoptic Monte Carlo Planning in Reconnaissance Blind Chess](https://proceedings.neurips.cc/paper/2021/file/215a71a12769b056c3c32e7299f1c5ed-Paper.pdf) 2021
   - Gregory Clark
   - Key: imperfect information, belief state with an unweighted particle filter, a novel stochastic abstraction of information states.
   - ExpEnv:  reconnaissance blind chess
 - [POLY-HOOT: Monte-Carlo Planning in Continuous Space MDPs with Non-Asymptotic Analysis](https://proceedings.neurips.cc/paper/2020/file/30de24287a6d8f07b37c716ad51623a7-Paper.pdf) 2020
   - Weichao Mao, Kaiqing Zhang, Qiaomin Xie, Tamer Ba¸sar
-  - Key: continuous state-action spaces, Hierarchical Optimistic Optimization,
+  - Key: continuous state-action spaces, Hierarchical Optimistic Optimization.
   - ExpEnv: CartPole, Inverted Pendulum, Swing-up, and LunarLander.
 - [Learning Search Space Partition for Black-box Optimization using Monte Carlo Tree Search](https://proceedings.neurips.cc/paper/2020/file/e2ce14e81dba66dbff9cbc35ecfdb704-Paper.pdf) 2020
   - Linnan Wang, Rodrigo Fonseca, Yuandong Tian
   - Key: learns the partition of the search space using a few samples, a nonlinear decision boundary and learns a local model to pick good candidates.
-  - ExpEnv: MuJoCo locomotion tasks, Small-scale Benchmarks, 
+  - ExpEnv: MuJoCo locomotion tasks, Small-scale Benchmarks
 - [Mix and Match: An Optimistic Tree-Search Approach for Learning Models from Mixture Distributions](https://arxiv.org/abs/1907.10154) 2020
   - Matthew Faw, Rajat Sen, Karthikeyan Shanmugam, Constantine Caramanis, Sanjay Shakkottai
   - Key: covariate shift problem, Mix&Match combines stochastic gradient descent (SGD) with optimistic tree search and model re-use (evolving partially trained models with samples from different mixture distributions)
