@@ -342,7 +342,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 
 以下是关于 **MCTS** 相关的论文集合，[这一部分](#MCTS-相关论文) 将会持续更新，追踪 MCTS 的前沿动态。
 
-### 重要论文
+### 经典与基础论文
 
 <details closed>
 <summary>(点击查看)</summary>
@@ -386,7 +386,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 
 </details>
 
-### 其他论文
+### 最新研究与新兴应用
 
 <details closed>
 <summary>(点击查看)</summary>
