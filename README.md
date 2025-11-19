@@ -358,7 +358,7 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 Here is a collection of research papers about **Monte Carlo Tree Search**.
 [This Section](#awesome-msts-papers) will be continuously updated to track the frontier of MCTS. 
 
-### Key Papers
+### Classic & Foundational Papers
 
 <details><summary>Click to expand</summary>
 
@@ -400,7 +400,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 </details>
 
-### Other Papers
+### Recent Research & Emerging Applications
 
 <details><summary>Click to expand</summary>
 
