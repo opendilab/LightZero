@@ -28,7 +28,7 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2025.11.09 LightZero-v0.2.0
+Updated on 2025.11.19 LightZero-v0.2.0
 
 
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
@@ -83,13 +83,13 @@ For further details, please refer to [Features](#features), [Framework Structure
     - [Paper Notes](#paper-notes)
     - [Algo. Overview](#algo-overview)
   - [Awesome-MCTS Papers](#awesome-mcts-papers)
-    - [Key Papers](#key-papers)
+    - [Classic & Foundational Papers](#classic--foundational-papers)
       - [LightZero Implemented series](#lightzero-implemented-series)
       - [AlphaGo series](#alphago-series)
       - [MuZero series](#muzero-series)
       - [MCTS Analysis](#mcts-analysis)
       - [MCTS Application](#mcts-application)
-    - [Other Papers](#other-papers)
+    - [Recent Research & Emerging Applications](#recent-research--emerging-applications)
       - [ICML](#icml)
       - [ICLR](#iclr)
       - [NeurIPS](#neurips)
@@ -506,7 +506,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - ExpEnv: CartPole and MountainCar.
 - [Convex Regularization in Monte-Carlo Tree Search](https://arxiv.org/pdf/2007.00391.pdf) 2021
   - Tuan Dam, Carlo D'Eramo, Jan Peters, Joni Pajarinen
-  - Key: entropy-regularization backup operators, regret analysis, Tsallis etropy, 
+  - Key: entropy-regularization backup operators, regret analysis, Tsallis entropy
   - ExpEnv: synthetic tree, Atari
 - [Information Particle Filter Tree: An Online Algorithm for POMDPs with Belief-Based Rewards on Continuous Domains](http://proceedings.mlr.press/v119/fischer20a/fischer20a.pdf) 2020
   - Johannes Fischer, Ömer Sahin Tas
@@ -584,7 +584,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - [Code](https://github.com/sail-sg/rosmo/tree/main)
 - [Enabling Arbitrary Translation Objectives with Adaptive Tree Search](https://arxiv.org/pdf/2202.11444.pdf) 2022
   - Wang Ling, Wojciech Stokowiec, Domenic Donato, Chris Dyer, Lei Yu, Laurent Sartran, Austin Matthews
-  - Key: adaptive tree search, translation models, autoregressive models, 
+  - Key: adaptive tree search, translation models, autoregressive models
   - ExpEnv: Chinese–English and Pashto–English tasks from WMT2020, German–English from WMT2014
 - [What's Wrong with Deep Learning in Tree Search for Combinatorial Optimization](https://arxiv.org/abs/2201.10494) 2022
   - Maximili1an Böther, Otto Kißig, Martin Taraz, Sarel Cohen, Karen Seidel, Tobias Friedrich
@@ -597,7 +597,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - ExpEnv: Interactive Fiction (IF) games
 - [Practical Massively Parallel Monte-Carlo Tree Search Applied to Molecular Design](https://arxiv.org/abs/2006.10504) 2021
   - Xiufeng Yang, Tanuj Kr Aasawat, Kazuki Yoshizoe
-  - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search, 
+  - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search
   - ExpEnv:  octanol-water partition coefficient (logP) penalized by the synthetic accessibility (SA) and large Ring Penalty score.
 - [Watch the Unobserved: A Simple Approach to Parallelizing Monte Carlo Tree Search](https://arxiv.org/pdf/1810.11755.pdf) 2020
   - Anji Liu, Jianshu Chen, Mingze Yu, Yu Zhai, Xuewen Zhou, Ji Liu
@@ -691,7 +691,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 - [Learning Search Space Partition for Black-box Optimization using Monte Carlo Tree Search](https://proceedings.neurips.cc/paper/2020/file/e2ce14e81dba66dbff9cbc35ecfdb704-Paper.pdf) 2020
   - Linnan Wang, Rodrigo Fonseca, Yuandong Tian
   - Key: learns the partition of the search space using a few samples, a nonlinear decision boundary and learns a local model to pick good candidates.
-  - ExpEnv: MuJoCo locomotion tasks, Small-scale Benchmarks, 
+  - ExpEnv: MuJoCo locomotion tasks, Small-scale Benchmarks
 - [Mix and Match: An Optimistic Tree-Search Approach for Learning Models from Mixture Distributions](https://arxiv.org/abs/1907.10154) 2020
   - Matthew Faw, Rajat Sen, Karthikeyan Shanmugam, Constantine Caramanis, Sanjay Shakkottai
   - Key: covariate shift problem, Mix&Match combines stochastic gradient descent (SGD) with optimistic tree search and model re-use (evolving partially trained models with samples from different mixture distributions)
