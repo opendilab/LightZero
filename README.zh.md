@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2025.11.09 LightZero-v0.2.0
+最近更新于 2025.11.19 LightZero-v0.2.0
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
@@ -77,13 +77,13 @@
     - [论文笔记](#论文笔记)
     - [算法框架图](#算法框架图)
   - [MCTS 相关论文](#mcts-相关论文)
-    - [重要论文](#重要论文)
+    - [经典与基础论文](#经典与基础论文)
       - [LightZero Implemented series](#lightzero-implemented-series)
       - [AlphaGo series](#alphago-series)
       - [MuZero series](#muzero-series)
       - [MCTS Analysis](#mcts-analysis)
       - [MCTS Application](#mcts-application)
-    - [其他论文](#其他论文)
+    - [最新研究与新兴应用](#最新研究与新兴应用)
       - [ICML](#icml)
       - [ICLR](#iclr)
       - [NeurIPS](#neurips)
@@ -493,7 +493,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
   - ExpEnv: CartPole and MountainCar.
 - [Convex Regularization in Monte-Carlo Tree Search](https://arxiv.org/pdf/2007.00391.pdf) 2021
   - Tuan Dam, Carlo D'Eramo, Jan Peters, Joni Pajarinen
-  - Key: entropy-regularization backup operators, regret analysis, Tsallis etropy, 
+  - Key: entropy-regularization backup operators, regret analysis, Tsallis entropy
   - ExpEnv: synthetic tree, Atari
 - [Information Particle Filter Tree: An Online Algorithm for POMDPs with Belief-Based Rewards on Continuous Domains](http://proceedings.mlr.press/v119/fischer20a/fischer20a.pdf) 2020
   - Johannes Fischer, Ömer Sahin Tas
@@ -571,7 +571,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
   - [Code](https://github.com/sail-sg/rosmo/tree/main)
 - [Enabling Arbitrary Translation Objectives with Adaptive Tree Search](https://arxiv.org/pdf/2202.11444.pdf) 2022
   - Wang Ling, Wojciech Stokowiec, Domenic Donato, Chris Dyer, Lei Yu, Laurent Sartran, Austin Matthews
-  - Key: adaptive tree search, translation models, autoregressive models, 
+  - Key: adaptive tree search, translation models, autoregressive models
   - ExpEnv: Chinese–English and Pashto–English tasks from WMT2020, German–English from WMT2014
 - [What's Wrong with Deep Learning in Tree Search for Combinatorial Optimization](https://arxiv.org/abs/2201.10494) 2022
   - Maximili1an Böther, Otto Kißig, Martin Taraz, Sarel Cohen, Karen Seidel, Tobias Friedrich
@@ -584,7 +584,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
   - ExpEnv: Interactive Fiction (IF) games
 - [Practical Massively Parallel Monte-Carlo Tree Search Applied to Molecular Design](https://arxiv.org/abs/2006.10504) 2021
   - Xiufeng Yang, Tanuj Kr Aasawat, Kazuki Yoshizoe
-  - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search, 
+  - Key: massively parallel Monte-Carlo Tree Search, molecular design, Hash-driven parallel search
   - ExpEnv:  octanol-water partition coefficient (logP) penalized by the synthetic accessibility (SA) and large Ring Penalty score.
 - [Watch the Unobserved: A Simple Approach to Parallelizing Monte Carlo Tree Search](https://arxiv.org/pdf/1810.11755.pdf) 2020
   - Anji Liu, Jianshu Chen, Mingze Yu, Yu Zhai, Xuewen Zhou, Ji Liu
@@ -678,7 +678,7 @@ LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找�
 - [Learning Search Space Partition for Black-box Optimization using Monte Carlo Tree Search](https://proceedings.neurips.cc/paper/2020/file/e2ce14e81dba66dbff9cbc35ecfdb704-Paper.pdf) 2020
   - Linnan Wang, Rodrigo Fonseca, Yuandong Tian
   - Key: learns the partition of the search space using a few samples, a nonlinear decision boundary and learns a local model to pick good candidates.
-  - ExpEnv: MuJoCo locomotion tasks, Small-scale Benchmarks, 
+  - ExpEnv: MuJoCo locomotion tasks, Small-scale Benchmarks
 - [Mix and Match: An Optimistic Tree-Search Approach for Learning Models from Mixture Distributions](https://arxiv.org/abs/1907.10154) 2020
   - Matthew Faw, Rajat Sen, Karthikeyan Shanmugam, Constantine Caramanis, Sanjay Shakkottai
   - Key: covariate shift problem, Mix&Match combines stochastic gradient descent (SGD) with optimistic tree search and model re-use (evolving partially trained models with samples from different mixture distributions)
