@@ -96,7 +96,7 @@ def get_priorzero_config(
 
     # LLM policy model
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
-    llm_model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # Smaller model for faster iteration
+    llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
 
     # Get action mappings
     action_map, action_inv_map = get_jericho_action_mapping(env_id)
@@ -118,7 +118,7 @@ def get_priorzero_config(
 
         # [FIX] Jericho environment expects these at top level
         env_id=env_id,
-        game_path=f"/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+        game_path=f"/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
         tokenizer_path=wm_model_name,
         env_type="jericho",
         max_action_num=action_space_size,
@@ -211,8 +211,8 @@ def get_priorzero_config(
             # Analysis flags
             analysis_sim_norm=False,
             analysis_dormant_ratio_weight_rank=False,
-            # use_priority=False,
-            use_priority=True,
+            use_priority=False,
+            # use_priority=True,
             
             # Position encoding
             rotary_emb=False,  # Whether to use RoPE
@@ -278,7 +278,7 @@ def get_priorzero_config(
 
         # [PRIORZERO-OOM-FIX] Gradient accumulation for memory efficiency
         # Process LLM training in smaller micro-batches to avoid OOM
-        llm_micro_batch_size=4,  # Small batch size per forward pass (reduce if still OOM)
+        llm_micro_batch_size=16,  # Small batch size per forward pass (reduce if still OOM)
         llm_gradient_accumulation_steps=8,  # Accumulate gradients over 8 steps (effective batch = 4*8=32)
         # Note: Effective batch size = llm_micro_batch_size * llm_gradient_accumulation_steps
 
@@ -288,12 +288,14 @@ def get_priorzero_config(
 
         # Prompting strategy
         history_length=5,      # Number of recent (obs, action, reward) tuples to include
-        use_cot=True,          # Whether to use Chain-of-Thought prompting
+        # use_cot=True,          # Whether to use Chain-of-Thought prompting
+        use_cot=False,
 
         # Training strategy
         sft_target='mcts_policy',  # 'mcts_policy' or 'oracle_policy'
-        enable_rft=enable_rft,     # Whether to enable RFT with env rewards
-        # enable_rft=False,     # Whether to enable RFT with env rewards # TODO
+        enable_sft=True,
+        # enable_rft=enable_rft,     # Whether to enable RFT with env rewards
+        enable_rft=False,     # Whether to enable RFT with env rewards # TODO
 
         # vLLM settings
         vllm_tensor_parallel_size=1,
@@ -392,7 +394,7 @@ def get_priorzero_config(
         # Replay buffer
         # replay_buffer_size=int(1e4),
         replay_buffer_size=int(1e5),
-        use_priority=True,  # Prioritized experience replay
+        use_priority=False,  # Prioritized experience replay
         priority_prob_alpha=0.6,
         priority_prob_beta=0.4,
 
@@ -528,87 +530,6 @@ def get_priorzero_config(
     return main_config, create_config
 
 
-def get_priorzero_config_for_quick_test(env_id: str = 'zork1.z5', seed: int = 0, debug_mode: bool = False):
-    """
-    Get a lightweight configuration for quick testing (reduced resources).
-
-    This is useful for:
-    - Debugging
-    - CI/CD pipelines
-    - Local development without powerful GPUs
-
-    IMPORTANT: All sequence-length related parameters must be consistent:
-    - num_unroll_steps: Number of timesteps in training unroll
-    - max_blocks: Should equal num_unroll_steps
-    - max_tokens: Should equal num_unroll_steps * tokens_per_block (= num_unroll_steps * 2)
-    - infer_context_length: Context length for inference
-    - context_length: Should equal infer_context_length * tokens_per_block (= infer_context_length * 2)
-    """
-    main_config, create_config = get_priorzero_config(env_id, seed, debug_mode=debug_mode)
-
-    # ==============================================================================
-    # [CRITICAL FIX] Define num_unroll_steps FIRST to ensure consistency
-    # ==============================================================================
-    quick_test_num_unroll_steps = 10  # Core parameter that determines sequence length
-    quick_test_infer_context_length = 4  # Inference context length
-    tokens_per_block = 2  # obs + action (fixed in UniZero architecture)
-
-    # Reduce computational requirements
-    main_config.env.collector_env_num = 2
-    main_config.env.evaluator_env_num = 1
-    main_config.env.n_evaluator_episode = 1
-
-    # ==============================================================================
-    # Policy-level configurations
-    # ==============================================================================
-    main_config.policy.num_simulations = 5
-    # main_config.policy.batch_size = 20
-    main_config.policy.batch_size = 2
-    main_config.policy.game_segment_length = 20  # Can be larger than num_unroll_steps
-    main_config.policy.num_segments = 2  # Must equal collector_env_num
-    main_config.policy.replay_buffer_size = 1000
-
-    # [CRITICAL] Set policy-level num_unroll_steps to match world model
-    main_config.policy.num_unroll_steps = quick_test_num_unroll_steps
-
-    # ==============================================================================
-    # World model configurations - ALL must be consistent with num_unroll_steps
-    # ==============================================================================
-    main_config.policy.model.world_model_cfg.num_layers = 1
-    main_config.policy.model.world_model_cfg.num_heads = 2
-
-    # Update env_num to match the reduced collector/evaluator counts
-    main_config.policy.model.world_model_cfg.env_num = max(
-        main_config.env.collector_env_num,
-        main_config.env.evaluator_env_num
-    )
-
-    # [CRITICAL] Sequence length parameters - must all be consistent
-    main_config.policy.model.world_model_cfg.num_unroll_steps = quick_test_num_unroll_steps
-    main_config.policy.model.world_model_cfg.max_blocks = quick_test_num_unroll_steps
-    main_config.policy.model.world_model_cfg.max_tokens = quick_test_num_unroll_steps * tokens_per_block  # 3 * 2 = 6
-
-    main_config.policy.model.world_model_cfg.infer_context_length = quick_test_infer_context_length
-    main_config.policy.model.world_model_cfg.context_length = quick_test_infer_context_length * tokens_per_block  # 2 * 2 = 4
-
-    # Verify tokens_per_block is set correctly (should already be 2 from base config)
-    main_config.policy.model.world_model_cfg.tokens_per_block = tokens_per_block
-
-    # ==============================================================================
-    # LLM policy configurations
-    # ==============================================================================
-    main_config.policy.llm_policy_cfg.prompt_max_len = 1024
-    main_config.policy.llm_policy_cfg.generate_max_len = 128
-    main_config.policy.llm_policy_cfg.history_length = 3
-    # [PRIORZERO-OOM-FIX] Reduce micro-batch size for quick test to avoid OOM
-    main_config.policy.llm_policy_cfg.llm_micro_batch_size = 2
-    main_config.policy.llm_policy_cfg.llm_gradient_accumulation_steps = 4
-
-    main_config.exp_name = f"{main_config.exp_name}_debug"
-
-    return main_config, create_config
-
-
 # ==============================================================================
 # Preset Configurations for Different Scenarios
 # ==============================================================================
@@ -644,45 +565,3 @@ def get_config_with_lora(env_id: str = 'zork1.z5', seed: int = 0):
     main_config.exp_name = f"priorzero_lora_{env_id}_seed{seed}"
     return main_config, create_config
 
-
-# ==============================================================================
-# Example Usage
-# ==============================================================================
-
-if __name__ == "__main__":
-    # Test configuration generation
-    print("="*80)
-    print("Testing PriorZero Configuration Generation")
-    print("="*80)
-
-    # 1. Standard config
-    print("\n1. Standard PriorZero Config:")
-    main_cfg, create_cfg = get_priorzero_config(env_id='zork1.z5', seed=0)
-    print(f"  Exp name: {main_cfg.exp_name}")
-    print(f"  Action space size: {main_cfg.policy.model.action_space_size}")
-    print(f"  LLM model: {main_cfg.policy.llm_policy_cfg.pretrain_llm_path}")
-    print(f"  World model layers: {main_cfg.policy.model.world_model_cfg.num_layers}")
-    print(f"  Num action mappings: {len(main_cfg.policy.action_map)}")
-
-    # 2. Quick test config
-    print("\n2. Quick Test Config:")
-    test_cfg, _ = get_priorzero_config_for_quick_test()
-    print(f"  Batch size: {test_cfg.policy.batch_size}")
-    print(f"  Num simulations: {test_cfg.policy.num_simulations}")
-    print(f"  Collector envs: {test_cfg.env.collector_env_num}")
-
-    # 3. Pure UniZero config
-    print("\n3. Pure UniZero Config:")
-    unizero_cfg, _ = get_config_pure_unizero()
-    print(f"  LLM loss weight: {unizero_cfg.policy.llm_policy_cfg.llm_loss_weight}")
-    print(f"  RFT enabled: {unizero_cfg.policy.llm_policy_cfg.enable_rft}")
-
-    # 4. Config with LoRA
-    print("\n4. Config with LoRA:")
-    lora_cfg, _ = get_config_with_lora()
-    print(f"  Use LoRA: {lora_cfg.policy.llm_policy_cfg.use_lora}")
-    print(f"  LoRA rank: {lora_cfg.policy.llm_policy_cfg.lora_r}")
-
-    print("\n" + "="*80)
-    print("✓ All configurations generated successfully!")
-    print("="*80)

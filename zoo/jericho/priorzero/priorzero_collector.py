@@ -37,7 +37,7 @@ from vllm import AsyncLLMEngine, SamplingParams
 from lzero.worker.muzero_segment_collector import MuZeroSegmentCollector as OriginalCollector
 from lzero.mcts.utils import prepare_observation
 from game_segment_priorzero import GameSegment
-
+from priorzero_policy import build_llm_prompt
 
 # ==============================================================================
 # Helper Functions
@@ -124,6 +124,7 @@ class PriorZeroCollector(OriginalCollector):
         super().__init__(**kwargs)
 
         self.vllm_engine = vllm_engine
+        self._vllm_tokenizer = None
         # self.policy_config already set by parent class from kwargs
         self.llm_policy_cfg = policy_config.llm_policy_cfg
 
@@ -133,203 +134,182 @@ class PriorZeroCollector(OriginalCollector):
             lambda: deque(maxlen=self.llm_policy_cfg.history_length)
         )
 
-        # [PRIORZERO-NEW] Statistics for logging
-        self.llm_stats = {
-            'total_calls': 0,
-            'successful_calls': 0,
-            'failed_calls': 0,
-            'retry_count': 0,
-            'total_latency': 0.0,
-            'llm_prior_top1_match_count': 0,  # How often LLM top-1 matches MCTS choice
-        }
-
         self._logger.info("✓ PriorZeroCollector initialized with vLLM engine")
         self._logger.info(f"  - History length: {self.llm_policy_cfg.history_length}")
         self._logger.info(f"  - Generate max length: {self.llm_policy_cfg.generate_max_len}")
 
-        # [PRIORZERO-NEW] Use custom GameSegment
-        self.GameSegment = GameSegment
+    def pad_and_save_last_trajectory(
+            self, i: int, last_game_segments: List[GameSegment], last_game_priorities: List[np.ndarray],
+            game_segments: List[GameSegment], done: np.ndarray
+    ) -> None:
+        beg_index = self.policy_config.model.frame_stack_num
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        
+        pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
+        pad_raw_obs_lst = game_segments[i].raw_obs_segment[beg_index:end_index]
+        pad_history_obs_lst = game_segments[i].history_obs_segment[beg_index:end_index]
 
+        # NOTE: Specific padding logic for UniZero.
+        pad_action_lst = game_segments[i].action_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+
+        beg_index = 0
+        end_index = beg_index + self.unroll_plus_td_steps - 1
+        pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            chance_lst = game_segments[i].chance_segment[beg_index:end_index]
+
+        beg_index = 0
+        end_index = beg_index + self.unroll_plus_td_steps
+        pad_root_values_lst = game_segments[i].root_value_segment[beg_index:end_index]
+
+        if self.policy_config.gumbel_algo:
+            pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index:end_index]
+
+        # Pad and finalize the last game segment.
+        if self.policy_config.gumbel_algo:
+            last_game_segments[i].pad_over(
+                pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
+                next_segment_improved_policy=pad_improved_policy_prob
+            )
+        else:
+            if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                last_game_segments[i].pad_over(
+                    pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
+                    next_chances=chance_lst
+                )
+            else:
+                last_game_segments[i].pad_over(
+                    pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst, 
+                    next_segment_raw_obs=pad_raw_obs_lst, next_segment_history_obs=pad_history_obs_lst
+                )
+
+        last_game_segments[i].game_segment_to_array()
+
+        # Add the completed game segment to the pool.
+        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
+
+        # Reset placeholders for the next collection cycle.
+        last_game_segments[i] = None
+        last_game_priorities[i] = None
+    
+    async def _get_tokenizer(self):
+        """
+        从 vLLM 引擎获取已加载的 tokenizer 引用。
+        只在第一次调用时会有极小的 async 开销，之后直接返回内存引用。
+        """
+        if self._vllm_tokenizer is None:
+            self._vllm_tokenizer = await self.vllm_engine.get_tokenizer()
+        return self._vllm_tokenizer
+    
     async def _async_get_llm_prior(
         self,
         states: List[str],
         request_ids: List[str],
+        valid_actions_list: List[List[str]], 
         histories: Optional[List[List[Tuple[str, str, float]]]] = None,
-        max_retries: int = 3,
         timeout: float = 30.0
     ) -> List[Any]:
         """
-        [PRIORZERO-NEW]
-        Async call to LLM to get action ranking priors.
-
+        [PRIORZERO-SEQUENCE-SCORING]
+        Async call to calculate the log-probability of full action sequences.
+        
+        Method:
+        Constructs "Context + Action" for every valid action, feeds it to vLLM with 
+        prompt_logprobs=1, and sums the log-probs of the action tokens.
+        
         Args:
-            states: List of current observation texts
-            request_ids: List of unique request IDs for tracking
-            histories: Optional list of history tuples for each state
-            max_retries: Maximum number of retries on failure
-            timeout: Timeout in seconds for each request
-
+            states: List of observation texts.
+            request_ids: IDs for the request batch.
+            valid_actions_list: List of valid actions for each env.
+            
         Returns:
-            llm_outputs: List of vLLM output objects
+            prior_results: List of dicts {action_str: total_logprob}.
         """
-        # [FIX] Check if vLLM engine is available
-        if self.vllm_engine is None:
-            self._logger.info("INFO: vLLM engine not available, skipping LLM prior")
-            return [None] * len(states)
+        
+        
 
-        from priorzero_policy import build_llm_prompt
-
-        # Build prompts
-        prompts = []
+        # 1. Check Engine Availability & Get Tokenizer
+        assert self.vllm_engine is not None, "vLLM engine is not initialized."
+        tokenizer = await self._get_tokenizer()
+        
+        # 2. Prepare Flattened Prompt Data (Env x Actions)
+        all_prompts_data = []
         for i, state in enumerate(states):
-            history = histories[i] if histories is not None else None
-
-            # Build instruction using the helper function from policy
+            history = histories[i]
             instruction = build_llm_prompt(
                 current_obs=state,
                 history=history,
                 use_cot=self.llm_policy_cfg.use_cot
             )
-
-            # Apply chat template if policy has tokenizer
-            if hasattr(self._policy, 'llm_tokenizer'):
-                prompt = self._policy.llm_tokenizer.apply_chat_template(
-                    [{"role": "user", "content": instruction}],
-                    tokenize=False,
-                    add_generation_prompt=True
-                )
-            else:
-                prompt = instruction
-
-            # [FIX] Ensure prompt is a string
-            if prompt is None:
-                self._logger.error(f"[ERROR] Prompt {i} is None! Instruction was: {instruction[:100] if instruction else 'None'}")
-                prompt = ""  # Fallback to empty string
-            elif not isinstance(prompt, str):
-                self._logger.error(f"[ERROR] Prompt {i} is not a string! Type: {type(prompt)}, Value: {prompt}")
-                prompt = str(prompt)  # Force conversion to string
-
-            prompts.append(prompt)
-
-        # Configure sampling parameters
+            context_text = tokenizer.apply_chat_template(
+                [{"role": "user", "content": instruction}], 
+                tokenize=False, 
+                add_generation_prompt=True
+            )
+            context_tokens = tokenizer.encode(context_text)
+            context_len = len(context_tokens)
+            
+            actions = valid_actions_list[i]
+            
+            for act_idx, action in enumerate(actions):
+                # 我们构造成模型应该生成的完整格式: "<answer>Turn Left</answer>"
+                formatted_action = f"<answer>{action}</answer>"
+                
+                # 拼接 Full Text
+                # Context: "... Assistant:" # Target:  "<answer>Turn Left</answer>" # Result:  "... Assistant:<answer>Turn Left</answer>"
+                full_text = context_text + formatted_action
+                unique_req_id = f"{request_ids[i]}_act_{act_idx}"
+                all_prompts_data.append({
+                    "idx": i,
+                    "action_str": action, 
+                    "full_text": full_text,
+                    "context_len": context_len,
+                    "req_id": unique_req_id
+                })
+            
+        # 3. Configure sampling parameters
         sampling_params = SamplingParams(
             temperature=1.0,
-            top_p=1.0,
-            max_tokens=self.llm_policy_cfg.generate_max_len,
-            skip_special_tokens=False,
+            max_tokens=1,
+            prompt_logprobs=1, 
         )
+        
+        # 4. 定义单个请求的处理函数 (逻辑解耦)
+        async def get_sequence_score(item):
+            # vLLM 的 generate 返回一个 async iterator
+            results_generator = self.vllm_engine.generate(item["full_text"], sampling_params, item["req_id"])
+            final_output = None
+            # 使用 asyncio.wait_for 自动处理超时
+            async for request_output in results_generator:
+                final_output = request_output
 
-        # Retry logic
-        for attempt in range(max_retries):
-            try:
-                start_time = time.time()
+            # 5. Extract & Sum Logprobs: 从 Context 结束的位置开始，提取后面所有 Token (即 <answer>...</answer>) 的分数
+            action_logprobs_list = final_output.prompt_logprobs[item["context_len"]:]
+            total_score, valid_tokens = 0.0, 0
+            for token_dict in action_logprobs_list:
+                if token_dict:
+                    for lp_obj in token_dict.values():
+                        total_score += lp_obj.logprob
+                        valid_tokens += 1
+                        break 
+            return item["idx"], item["action_str"], total_score
+            
 
-                # [DEBUG] Log prompts and parameters before generation
-                if self.debug_mode and attempt == 0:
-                    self._logger.info(f"[DEBUG] Sending {len(prompts)} prompts to vLLM engine")
-                    for i, prompt in enumerate(prompts[:2]):  # Show first 2 prompts
-                        self._logger.info(f"[DEBUG] Prompt {i} (len={len(prompt)}): {prompt[:200]}...")
-                    self._logger.info(f"[DEBUG] Sampling params: temp={sampling_params.temperature}, max_tokens={sampling_params.max_tokens}, top_p={sampling_params.top_p}")
-                    self._logger.info(f"[DEBUG] Request IDs: {request_ids[:2]}...")
-
-                # [FIX] vLLM V1 generate() takes single prompt, not list
-                # Create generators for each prompt individually
-                generators = []
-                for i, (prompt, req_id) in enumerate(zip(prompts, request_ids)):
-                    gen = self.vllm_engine.generate(
-                        prompt,  # Single prompt string
-                        sampling_params,
-                        req_id  # Single request_id string
-                    )
-                    generators.append((i, gen))
-
-                # Collect results
-                llm_outputs = [None] * len(prompts)
-
-                try:
-                    # Collect all results concurrently
-                    async def collect_from_generator(idx, gen):
-                        """Collect final result from a generator"""
-                        final_result = None
-                        async for result in gen:
-                            final_result = result
-                            # Check timeout
-                            if time.time() - start_time > timeout:
-                                raise asyncio.TimeoutError(f"LLM generation timeout after {timeout}s")
-                        return idx, final_result
-
-                    # Gather all results concurrently
-                    tasks = [collect_from_generator(idx, gen) for idx, gen in generators]
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    # Process results
-                    for result in results:
-                        if isinstance(result, Exception):
-                            raise result
-                        idx, output = result
-                        llm_outputs[idx] = output
-
-                except asyncio.TimeoutError:
-                    self._logger.warning(f"⚠ LLM generation timeout after {timeout}s (attempt {attempt+1}/{max_retries})")
-                    if attempt < max_retries - 1:
-                        self.llm_stats['retry_count'] += 1
-                        continue
-                    else:
-                        # On final timeout, return None for all
-                        self.llm_stats['failed_calls'] += len(prompts)
-                        return [None] * len(prompts)
-
-                # Check if all outputs were received
-                if None in llm_outputs:
-                    missing_count = llm_outputs.count(None)
-                    self._logger.warning(f"⚠ {missing_count}/{len(prompts)} LLM outputs missing (attempt {attempt+1}/{max_retries})")
-                    if attempt < max_retries - 1:
-                        self.llm_stats['retry_count'] += 1
-                        continue
-
-                # Success
-                elapsed = time.time() - start_time
-                self.llm_stats['total_calls'] += len(prompts)
-                self.llm_stats['successful_calls'] += len([o for o in llm_outputs if o is not None])
-                self.llm_stats['failed_calls'] += len([o for o in llm_outputs if o is None])
-                self.llm_stats['total_latency'] += elapsed
-
-                self._logger.debug(f"✓ LLM generation completed in {elapsed:.2f}s ({len(prompts)} prompts)")
-
-                # [DEBUG] Log detailed LLM outputs if debug mode is enabled
-                if self.debug_mode:
-                    for i, (prompt, output) in enumerate(zip(prompts, llm_outputs)):
-                        if output is not None:
-                            output_text = output.outputs[0].text if output.outputs else "[No output]"
-                            self._logger.info(f"[DEBUG] Env {i} - Prompt: {prompt[:100]}... -> LLM Output: {output_text[:100]}...")
-                        else:
-                            self._logger.warning(f"[DEBUG] Env {i} - LLM output is None")
-
-                return llm_outputs
-
-            except Exception as e:
-                import traceback
-                error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
-                error_trace = traceback.format_exc()
-
-                # [FIX] Always log the full traceback on first attempt or in debug mode
-                if attempt == 0 or self.debug_mode:
-                    self._logger.error(f"✗ LLM generation error (attempt {attempt+1}/{max_retries}): {error_msg}")
-                    self._logger.error(f"Full traceback:\n{error_trace}")
-                else:
-                    self._logger.error(f"✗ LLM generation error (attempt {attempt+1}/{max_retries}): {error_msg}")
-
-                if attempt < max_retries - 1:
-                    self.llm_stats['retry_count'] += 1
-                    await asyncio.sleep(0.5)  # Brief pause before retry
-                else:
-                    # Final failure
-                    self._logger.error(f"✗ LLM generation failed after {max_retries} attempts. Last error: {error_msg}")
-                    self._logger.error(f"Final traceback:\n{error_trace}")
-                    self.llm_stats['failed_calls'] += len(prompts)
-                    return [None] * len(prompts)
-
-        return [None] * len(prompts)
+        # 6. 并发执行所有请求
+        # 使用 wait_for 在最外层控制整体超时，避免死等
+        try:
+            tasks = [get_sequence_score(item) for item in all_prompts_data]
+            results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=timeout)
+        except Exception as e:
+            self._logger.error(f"Batch LLM critical error: {e}")
+            return [{}] * len(states)
+            
+        final_priors = [{} for _ in range(len(states))]
+        for i, action_str, score in results:
+            final_priors[i][action_str] = score
+        return final_priors
 
     async def collect(
         self,
@@ -394,6 +374,8 @@ class PriorZeroCollector(OriginalCollector):
                 self.to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
                 self.timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
 
+        last_game_segments = [None for _ in range(env_nums)]
+        last_game_priorities = [None for _ in range(env_nums)]
         # Initialize game segments
         game_segments = [
             GameSegment(
@@ -415,7 +397,7 @@ class PriorZeroCollector(OriginalCollector):
                 for _ in range(self.policy_config.model.frame_stack_num)
             ]
             observation_window_stack[env_id].extend(initial_frames)
-            game_segments[env_id].reset(observation_window_stack[env_id])
+            game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]))
 
         # Priority calculation lists
         search_values_lst = [[] for _ in range(env_nums)]
@@ -463,7 +445,9 @@ class PriorZeroCollector(OriginalCollector):
                 # ==============================================================
                 # [PRIORZERO-NEW] Get LLM Priors
                 # ==============================================================
-                if not collect_with_pure_policy:
+                if collect_with_pure_policy:
+                    continue
+                else:
                     # Extract text observations and valid actions
                     raw_obs_list = []
                     histories_list = []
@@ -487,19 +471,20 @@ class PriorZeroCollector(OriginalCollector):
                         for i in range(len(raw_obs_list))
                     ]
 
-                    # Async call to LLM
-                    llm_outputs = await self._async_get_llm_prior(
-                        raw_obs_list,
-                        request_ids,
-                        histories_list
+                    # Async call to LLM debug
+                    llm_prior_logprob = await self._async_get_llm_prior(
+                        states=raw_obs_list,
+                        request_ids=request_ids,
+                        valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
+                        histories=histories_list
                     )
-
-                    # Add to policy kwargs
-                    policy_kwargs['llm_prior_outputs'] = llm_outputs
-                    policy_kwargs['valid_actions_list'] = valid_actions_list  # [PRIORZERO] Pass valid actions
-                else:
-                    policy_kwargs['llm_prior_outputs'] = None
-                    policy_kwargs['valid_actions_list'] = None
+                    # llm_prior_logprob = []
+                    # for i, actions in enumerate(valid_actions_list):
+                    #     tmp_dict = {}
+                    #     for action in actions:
+                    #         tmp_dict[action] = -3  # Placeholder zero logprob
+                    #     llm_prior_logprob.append(tmp_dict)
+                    
 
                 # ==============================================================
                 # Policy Forward Pass
@@ -508,13 +493,12 @@ class PriorZeroCollector(OriginalCollector):
                 policy_kwargs_forward = {
                     'ready_env_id': sorted(list(ready_env_id)),
                     'timestep': timestep,
-                    'llm_prior_outputs': policy_kwargs.get('llm_prior_outputs'),
-                    'valid_actions_list': policy_kwargs.get('valid_actions_list')  # [PRIORZERO] Pass valid actions
+                    'llm_prior_logprob': llm_prior_logprob,
+                    'valid_actions_list': valid_actions_list
                 }
 
                 if self.task_id is not None:
                     policy_kwargs_forward['task_id'] = self.task_id
-
                 policy_output = self._policy.forward(*policy_args, **policy_kwargs_forward)
 
                 # Extract outputs
@@ -540,11 +524,6 @@ class PriorZeroCollector(OriginalCollector):
                 # ==============================================================
                 timesteps = self._env.step(actions)
 
-                # [DEBUG] Log actions taken if debug mode is enabled
-                if self.debug_mode:
-                    for env_id, action in actions.items():
-                        self._logger.info(f"[DEBUG] Env {env_id} - Action taken: {action}")
-
             interaction_duration = self._timer.value / len(timesteps)
 
             # ==================================================================
@@ -566,25 +545,17 @@ class PriorZeroCollector(OriginalCollector):
                         episode_timestep.done,
                         episode_timestep.info
                     )
-
-                    # [DEBUG] Log observation and reward if debug mode is enabled
-                    if self.debug_mode:
-                        raw_obs_preview = extract_raw_obs_text(obs_new)[:150]
-                        self._logger.info(f"[DEBUG] Env {env_id} - Obs: {raw_obs_preview}... | Reward: {reward} | Done: {done}")
-
-                    # Store search statistics
-                    if collect_with_pure_policy:
-                        game_segments[env_id].store_search_stats(temp_visit_list, 0)
-                    else:
-                        game_segments[env_id].store_search_stats(
-                            distributions_dict_with_env_id[env_id],
-                            value_dict_with_env_id[env_id]
-                        )
-
+                    game_segments[env_id].store_search_stats(
+                        distributions_dict_with_env_id[env_id],
+                        value_dict_with_env_id[env_id])
+                    # ===========================================================
+                    # [PRIORZERO-NEW] Update History Buffer
+                    # ===========================================================
+                    raw_obs_text = extract_raw_obs_text(obs[env_id])
+                    action = valid_actions_list[env_id][actions[env_id]]
+                    self.history_buffers[env_id].append((raw_obs_text, action, float(reward)))
+                    
                     # Append transition to game segment
-                    # [PRIORZERO-FIX] Extract and pass raw_obs_text to GameSegment
-                    raw_obs_text_for_segment = extract_raw_obs_text(obs_new)
-
                     game_segments[env_id].append(
                         actions[env_id],
                         to_ndarray(obs_new['observation']),
@@ -592,24 +563,9 @@ class PriorZeroCollector(OriginalCollector):
                         self.action_mask_dict[env_id],
                         self.to_play_dict[env_id],
                         timestep=to_ndarray(obs_new.get('timestep', -1)),
-                        raw_obs_text=raw_obs_text_for_segment
+                        raw_obs_text=extract_raw_obs_text(obs_new),
+                        history_obs=list(self.history_buffers[env_id])
                     )
-
-                    # ===========================================================
-                    # [PRIORZERO-NEW] Update History Buffer
-                    # ===========================================================
-                    raw_obs_text = extract_raw_obs_text(obs[env_id])
-                    # [PRIORZERO] Use dynamic action mapping if available
-                    dynamic_action_inv_map = policy_output.get(env_id, {}).get('dynamic_action_inv_map', None)
-                    if dynamic_action_inv_map is not None:
-                        action_text = dynamic_action_inv_map.get(actions[env_id], f"action_{actions[env_id]}")
-                    else:
-                        # Fallback to static mapping
-                        action_text = getattr(self._policy, 'action_inv_map', {}).get(
-                            actions[env_id],
-                            f"action_{actions[env_id]}"
-                        )
-                    self.history_buffers[env_id].append((raw_obs_text, action_text, float(reward)))
 
                     # Update state
                     self.action_mask_dict[env_id] = to_ndarray(obs_new['action_mask'])
@@ -642,26 +598,17 @@ class PriorZeroCollector(OriginalCollector):
                     # Save Full Game Segment
                     # ===========================================================
                     if game_segments[env_id].is_full():
-                        if self.last_game_segments[env_id] is not None:
-                            self.pad_and_save_last_trajectory(
-                                env_id,
-                                self.last_game_segments,
-                                self.last_game_priorities,
-                                game_segments,
-                                self.dones
-                            )
+                        if last_game_segments[env_id] is not None:
+                            self.pad_and_save_last_trajectory(env_id, last_game_segments, last_game_priorities,
+                                                               game_segments, self.dones)
 
                         # Calculate priorities
-                        priorities = self._compute_priorities(
-                            env_id,
-                            pred_values_lst,
-                            search_values_lst
-                        )
+                        priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
                         pred_values_lst[env_id], search_values_lst[env_id] = [], []
 
                         # Save segment
-                        self.last_game_segments[env_id] = game_segments[env_id]
-                        self.last_game_priorities[env_id] = priorities
+                        last_game_segments[env_id] = game_segments[env_id]
+                        last_game_priorities[env_id] = priorities
 
                         # Create new segment
                         game_segments[env_id] = GameSegment(
@@ -670,7 +617,7 @@ class PriorZeroCollector(OriginalCollector):
                             config=self.policy_config,
                             task_id=self.task_id
                         )
-                        game_segments[env_id].reset(observation_window_stack[env_id])
+                        game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(obs_new), init_history_obs=list(self.history_buffers[env_id]))
 
                     self._env_info[env_id]['step'] += 1
                     collected_step += 1
@@ -683,13 +630,11 @@ class PriorZeroCollector(OriginalCollector):
                 if episode_timestep.done:
                     self._logger.info(f'======== Env {env_id} episode finished! ========')
                     self._total_episode_count += 1
-
                     # Logging
                     info_log = {
                         'reward': episode_timestep.info['eval_episode_return'],
                         'time': self._env_info[env_id]['time'],
-                        'step': self._env_info[env_id]['step'],
-                    }
+                        'step': self._env_info[env_id]['step']}
                     if not collect_with_pure_policy:
                         info_log['visit_entropy'] = (
                             visit_entropies_lst[env_id] / eps_steps_lst[env_id]
@@ -698,23 +643,11 @@ class PriorZeroCollector(OriginalCollector):
 
                     collected_episode += 1
                     self._episode_info.append(info_log)
-
                     # Save remaining segments
-                    if self.last_game_segments[env_id] is not None:
-                        self.pad_and_save_last_trajectory(
-                            env_id,
-                            self.last_game_segments,
-                            self.last_game_priorities,
-                            game_segments,
-                            self.dones
-                        )
+                    if last_game_segments[env_id] is not None:
+                        self.pad_and_save_last_trajectory( env_id, last_game_segments, last_game_priorities, game_segments, self.dones)
 
-                    priorities = self._compute_priorities(
-                        env_id,
-                        pred_values_lst,
-                        search_values_lst
-                    )
-
+                    priorities = self._compute_priorities( env_id, pred_values_lst, search_values_lst)
                     game_segments[env_id].game_segment_to_array()
                     if len(game_segments[env_id].reward_segment) > 0:
                         self.game_segment_pool.append((
@@ -722,7 +655,6 @@ class PriorZeroCollector(OriginalCollector):
                             priorities,
                             self.dones[env_id]
                         ))
-
                     # Reset
                     pred_values_lst[env_id], search_values_lst[env_id] = [], []
                     eps_steps_lst[env_id], visit_entropies_lst[env_id] = 0, 0
@@ -732,15 +664,22 @@ class PriorZeroCollector(OriginalCollector):
 
                     # Clear history buffer for this environment
                     self.history_buffers[env_id].clear()
-
                     # Re-initialize game segment
+                    init_obs = self._env.ready_obs
+                    observation_window_stack[env_id] = deque(
+                            [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
+                            maxlen=self.policy_config.model.frame_stack_num
+                        )
+                    
                     game_segments[env_id] = GameSegment(
                         self._env.action_space,
                         game_segment_length=self.policy_config.game_segment_length,
                         config=self.policy_config,
                         task_id=self.task_id
                     )
-                    game_segments[env_id].reset(observation_window_stack[env_id])
+                    game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]))
+                    last_game_segments[env_id] = None
+                    last_game_priorities[env_id] = None
 
             # ==================================================================
             # Check if Enough Segments Collected
@@ -777,19 +716,6 @@ class PriorZeroCollector(OriginalCollector):
 
         self._output_log(train_iter)
 
-        # [PRIORZERO-NEW] Log LLM statistics
-        if self.llm_stats['total_calls'] > 0:
-            avg_latency = self.llm_stats['total_latency'] / self.llm_stats['total_calls']
-            success_rate = self.llm_stats['successful_calls'] / self.llm_stats['total_calls']
-
-            self._logger.info(
-                f"📊 LLM Prior Statistics:\n"
-                f"  - Total calls: {self.llm_stats['total_calls']}\n"
-                f"  - Success rate: {success_rate*100:.1f}%\n"
-                f"  - Avg latency: {avg_latency:.3f}s\n"
-                f"  - Retry count: {self.llm_stats['retry_count']}"
-            )
-
         return return_data
 
     def _output_log(self, train_iter: int) -> None:
@@ -798,3 +724,4 @@ class PriorZeroCollector(OriginalCollector):
         Log collection statistics (inherited from parent).
         """
         super()._output_log(train_iter)
+    

@@ -477,16 +477,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         append_kwargs['chance'] = self.chance_dict_tmp[env_id]
 
-                    # [PRIORZERO-NEW] Add raw_obs_text if available in obs (not info!)
-                    # Jericho env puts raw_obs_text in the obs dictionary
-                    if env_id == 0 and collected_step < 5:  # Debug first few steps
-                        print(f"[OBS_DEBUG] Step {collected_step} env {env_id}: obs keys = {list(obs.keys())}")
-                        print(f"[OBS_DEBUG] obs type = {type(obs)}")
-                        if 'raw_obs_text' in obs:
-                            print(f"[OBS_DEBUG] Found raw_obs_text: {str(obs['raw_obs_text'])[:100]}...")
-                        else:
-                            print(f"[OBS_DEBUG] NO raw_obs_text in obs!")
-
                     if 'raw_obs_text' in obs:
                         append_kwargs['raw_obs_text'] = obs['raw_obs_text']
                     elif 'raw_obs_text' in info:

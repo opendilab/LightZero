@@ -25,7 +25,7 @@ def ensure_local_lightzero():
     Also adds the PriorZero directory to sys.path to ensure PriorZero modules
     can be imported.
     """
-    LIGHTZERO_ROOT = Path("/mnt/nfs/zhangjinouwen/puyuan/LightZero").resolve()
+    LIGHTZERO_ROOT = Path("/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero").resolve()
     PRIORZERO_DIR = Path(__file__).parent.resolve()
 
     if not LIGHTZERO_ROOT.exists():

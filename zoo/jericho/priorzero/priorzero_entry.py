@@ -45,7 +45,7 @@ from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 
 # Import PriorZero components
-from priorzero_config import get_priorzero_config, get_priorzero_config_for_quick_test
+from priorzero_config import get_priorzero_config
 from priorzero_collector import PriorZeroCollector
 from priorzero_evaluator import PriorZeroEvaluator
 # Import policy to ensure registration happens
@@ -142,7 +142,7 @@ async def train_priorzero(
             engine_args = AsyncEngineArgs(
                 model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
                 tensor_parallel_size=tensor_parallel,
-                gpu_memory_utilization=gpu_mem_util * 0.9,  # Even more conservative
+                gpu_memory_utilization=gpu_mem_util * 0.7,  # Even more conservative
                 distributed_executor_backend=distributed_backend,
                 trust_remote_code=True,
                 enable_prefix_caching=False,
@@ -449,7 +449,7 @@ async def train_priorzero(
 
                     # Sample batch
                     train_data = replay_buffer.sample(batch_size, policy)
-                    train_data.insert(2, learner.train_iter)
+                    train_data.append(learner.train_iter)
 
                     # Train
                     log_vars = learner.train(train_data, collector.envstep)

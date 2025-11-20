@@ -55,98 +55,6 @@ import lzero.model.unizero_model  # noqa: F401
 # ==============================================================================
 # Helper Functions for LLM Prior Processing
 # ==============================================================================
-
-def parse_llm_action_ranking(
-    text: str,
-    action_map: Dict[str, int],
-    action_space_size: int,
-    fallback_to_uniform: bool = True
-) -> np.ndarray:
-    """
-    [PRIORZERO-NEW]
-    Parse LLM generated action ranking text into a policy distribution.
-
-    Args:
-        text: LLM generated text with ranked actions (e.g., "1. take key\\n2. go north")
-        action_map: Mapping from action text to action index
-        action_space_size: Size of the action space
-        fallback_to_uniform: If True, return uniform distribution when no valid action found
-
-    Returns:
-        policy: Probability distribution over actions (shape: [action_space_size])
-    """
-    # Extract ranked actions using regex
-    # Supports formats: "1. action", "1) action", "1: action"
-    ranked_actions = re.findall(r'(?:^|\n)\s*\d+[\.\):\s]+(.+?)(?=\n|$)', text, re.MULTILINE)
-
-    policy = np.zeros(action_space_size, dtype=np.float32)
-    found_count = 0
-
-    for rank, action_text in enumerate(ranked_actions):
-        action_text = action_text.strip().lower()
-
-        # Try exact match first
-        if action_text in action_map:
-            action_idx = action_map[action_text]
-            # Assign decreasing weights (higher rank = higher weight)
-            policy[action_idx] = len(ranked_actions) - rank
-            found_count += 1
-        else:
-            # Try fuzzy matching (find best substring match)
-            best_match_score = 0
-            best_action_idx = None
-            for candidate_text, candidate_idx in action_map.items():
-                if candidate_text in action_text or action_text in candidate_text:
-                    score = len(set(candidate_text.split()) & set(action_text.split()))
-                    if score > best_match_score:
-                        best_match_score = score
-                        best_action_idx = candidate_idx
-
-            if best_action_idx is not None:
-                policy[best_action_idx] = len(ranked_actions) - rank
-                found_count += 1
-
-    # Normalize to probability distribution
-    if policy.sum() > 0:
-        policy /= policy.sum()
-    elif fallback_to_uniform:
-        # If LLM didn't generate any valid actions, return uniform distribution
-        policy = np.ones(action_space_size, dtype=np.float32) / action_space_size
-
-    return policy
-
-
-def format_mcts_policy_to_text(
-    mcts_policy: np.ndarray,
-    action_inv_map: Dict[int, str],
-    top_k: int = 5
-) -> str:
-    """
-    [PRIORZERO-NEW]
-    Convert MCTS policy vector into ranked action text for SFT training.
-
-    Args:
-        mcts_policy: MCTS visit count distribution (shape: [action_space_size])
-        action_inv_map: Mapping from action index to action text
-        top_k: Number of top actions to include
-
-    Returns:
-        Formatted text with ranked actions (e.g., "1. take key\\n2. go north\\n...")
-    """
-    # Sort actions by policy probability (descending)
-    sorted_indices = np.argsort(mcts_policy)[::-1]
-
-    output_lines = []
-    rank = 1
-    for idx in sorted_indices:
-        if mcts_policy[idx] > 0 and rank <= top_k:
-            action_text = action_inv_map.get(idx, f"action_{idx}")
-            output_lines.append(f"{rank}. {action_text}")
-            rank += 1
-
-    return "\n".join(output_lines) if output_lines else "No valid actions found."
-
-
 def build_llm_prompt(
     current_obs: str,
     history: Optional[List[Tuple[str, str, float]]] = None,
@@ -155,7 +63,14 @@ def build_llm_prompt(
 ) -> str:
     """
     [PRIORZERO-NEW]
-    Build a high-quality prompt for LLM to generate action ranking.
+    Build a high-quality prompt for LLM to generate the next action.
+
+    When use_cot is True, the model should:
+        - First output its reasoning inside <think></think>
+        - Then output the SINGLE best next action inside <action></action>
+
+    When use_cot is False, the model should:
+        - Output ONLY the SINGLE best next action inside <action></action>
 
     Args:
         current_obs: Current observation text
@@ -171,15 +86,17 @@ def build_llm_prompt(
     # System instruction
     prompt_parts.append(
         "You are an expert player in a text-based adventure game. "
-        "Your goal is to maximize the score by taking the best actions."
+        "Your goal is to maximize the score by choosing the best possible next action. "
+        "You must choose exactly ONE best next action."
     )
 
-    # Add history if available
-    if history and len(history) > 0:
+    # Add recent history (if available)
+    if history:
         prompt_parts.append("\n=== Recent History ===")
-        for i, (obs, action, reward) in enumerate(history[-5:]):  # Last 5 steps
-            prompt_parts.append(f"Step {i+1}:")
-            prompt_parts.append(f"  Observation: {obs[:100]}...")  # Truncate long obs
+        for i, (obs, action, reward) in enumerate(history[-5:], start=1):  # last 5 steps
+            obs_str = obs if len(obs) <= 100 else obs[:100] + "..."
+            prompt_parts.append(f"Step {i}:")
+            prompt_parts.append(f"  Observation: {obs_str}")
             prompt_parts.append(f"  Action: {action}")
             prompt_parts.append(f"  Reward: {reward}")
 
@@ -187,30 +104,41 @@ def build_llm_prompt(
     prompt_parts.append("\n=== Current Situation ===")
     prompt_parts.append(current_obs)
 
-    # Task instruction
+    # Available actions (if provided)
+    if action_descriptions:
+        prompt_parts.append("\n=== Available Actions ===")
+        prompt_parts.append(
+            "You MUST choose the best action from the list below. "
+            "Do not invent actions that are not in this list."
+        )
+        for action_text, desc in action_descriptions.items():
+            # action_text: should match exactly the string we want inside <action>...</action>
+            prompt_parts.append(f"- {action_text}: {desc}")
+
+    # Task + output format
     if use_cot:
+        # CoT 模式：先 <think>，再 <action>
         prompt_parts.append(
             "\n=== Task ===\n"
-            "Think step-by-step:\n"
-            "1. Analyze the current situation and your goal\n"
-            "2. Consider what actions might help you progress\n"
-            "3. Rank the best actions in order of priority\n"
-            "\nProvide your analysis and then list the top 5 actions in this format:\n"
-            "1. [first action]\n"
-            "2. [second action]\n"
-            "..."
+            "Analyze the recent history and the current situation, and decide on the SINGLE best next action.\n\n"
+            "OUTPUT FORMAT:\n"
+            "- First, write your detailed reasoning inside <think>...</think>.\n"
+            "- Then, on a new line, output ONLY the chosen action text inside <action>...</action>.\n"
+            "- Finally, do not put any text outside the <think> and <action> tags.\n\n"
+            "Example (format only):\n"
+            "<think>your step-by-step reasoning here</think>\n"
+            "<action>the best action text here</action>\n\n"
         )
     else:
+        # 非 CoT：只要最终动作
         prompt_parts.append(
             "\n=== Task ===\n"
-            "List the top 5 best actions in order of priority:\n"
-            "1. [first action]\n"
-            "2. [second action]\n"
-            "..."
+            "Analyze the recent history and the current situation, and decide on the SINGLE best next action.\n\n"
+            "Your result should be wrapped in <action></action>, and please keep the output concise, avoiding any other content."
+            "\nExample: <action>turn on</action>"
         )
 
     return "\n".join(prompt_parts)
-
 
 # ==============================================================================
 # PriorZero Policy Class
@@ -260,16 +188,11 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
     def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None):
         # [PRIORZERO-NEW] Initialize LLM-related attributes BEFORE super().__init__
-        # because super().__init__ will call _init_learn which needs these attributes
-        self.llm_policy_model = None
+        # because super().__init__ will call _init_learn which needs these attributes        self.llm_policy_model = None
         self.llm_tokenizer = None
         self._optimizer_llm = None
         self._lr_scheduler_llm = None
         self.llm_policy_cfg = cfg.llm_policy_cfg  # Set from cfg, not self._cfg (not set yet)
-
-        # Action mapping (will be set from config)
-        self.action_map = None  # str -> int
-        self.action_inv_map = None  # int -> str
 
         # Call parent init (this will trigger _init_learn, _init_collect, _init_eval)
         super().__init__(cfg, model, enable_field)
@@ -280,33 +203,11 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         Initialize both UniZero world model and LLM policy model with their optimizers.
         Align with UniZero implementation - use logging instead of self._logger.
         """
-        import logging
-
         # ======================================================================
         # 1. Initialize UniZero World Model (from parent class)
         # ======================================================================
         super()._init_learn()
         logging.info("✓ UniZero World Model and optimizer initialized")
-
-        # [PRIORZERO-FIX] Ensure scalar transform handles are initialized
-        # These are normally initialized in UniZeroPolicy.__init__ but we need to ensure they exist
-        if not hasattr(self, 'value_support') or self.value_support is None:
-            self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
-        if not hasattr(self, 'reward_support') or self.reward_support is None:
-            self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        if not hasattr(self, 'value_inverse_scalar_transform_handle'):
-            self.value_inverse_scalar_transform_handle = InverseScalarTransform(
-                self.value_support, self._cfg.model.categorical_distribution
-            )
-        if not hasattr(self, 'reward_inverse_scalar_transform_handle'):
-            self.reward_inverse_scalar_transform_handle = InverseScalarTransform(
-                self.reward_support, self._cfg.model.categorical_distribution
-            )
-        logging.info("✓ Scalar transform handles verified/initialized")
-
-        # ======================================================================
-        # 2. [PRIORZERO-NEW] Initialize LLM Policy Model
-        # ======================================================================
         logging.info(f"Loading LLM from: {self.llm_policy_cfg.pretrain_llm_path}")
 
         # Load tokenizer
@@ -363,20 +264,126 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         logging.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
         logging.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
 
-        # ======================================================================
-        # 4. [PRIORZERO-NEW] Load Action Mappings
-        # ======================================================================
-        if hasattr(self._cfg, 'action_map') and self._cfg.action_map is not None:
-            self.action_map = self._cfg.action_map
-            self.action_inv_map = {v: k for k, v in self.action_map.items()}
-            logging.info(f"✓ Action mappings loaded ({len(self.action_map)} actions)")
-        else:
-            logging.warning("⚠ Action mappings not found in config. Will use index-based actions.")
-            # Fallback: create dummy mappings
-            action_space_size = self._cfg.model.action_space_size
-            self.action_inv_map = {i: f"action_{i}" for i in range(action_space_size)}
-            self.action_map = {v: k for k, v in self.action_inv_map.items()}
+    
+    
+    
+    def compute_sft_loss(
+        self, 
+        raw_obs_list: List[List[str]], 
+        history_obs_list: List[List[List[Tuple[str, str, float]]]]
+    ) -> torch.Tensor:
+        """
+        Calculate SFT loss given batch of observations and histories.
+        
+        Args:
+            raw_obs_list: Shape [B, T]. Text observations.
+            history_obs_list: Shape [B, T]. History context corresponding to each obs.
+                              Each element is a list of (obs, action, reward) tuples.
+        """
+        sft_prompts = []
+        sft_targets = []
+        
+        B = len(raw_obs_list)
+        if B == 0: 
+            return torch.tensor(0.0, device=self._cfg.device)
+        T = len(raw_obs_list[0]) 
+        # ============================================================
+        # 1. Data Alignment & Extraction (Offset Logic)
+        # ============================================================
+        for b in range(B):
+            # 我们只能遍历到 T-1，因为我们需要 t+1 时刻的历史来获取 t 时刻的 Action。 比如一共11步(0-10)，我们只能训练 0-9 步，第 10 步没有下一步的历史来告诉我们它做了什么
+            for t in range(T - 1):
+                current_obs = raw_obs_list[b][t]
+                current_history = history_obs_list[b][t]
+                # t+1 时刻的历史
+                next_step_history = history_obs_list[b][t+1]
+                if isinstance(next_step_history, np.ndarray):
+                    next_step_history = next_step_history.tolist()
+                try:
+                    if not next_step_history:
+                        continue
+                except:
+                    logging.info(f"Invalid next_step_history at batch {b}, time {t+1}: {next_step_history}")
+                    continue
+                _, true_action, _ = next_step_history[-1]
+                if not true_action:
+                    continue
+                
+                instruction = build_llm_prompt(
+                    current_obs=current_obs,
+                    history=current_history,
+                    use_cot=self.llm_policy_cfg.use_cot
+                )
+                prompt = self.llm_tokenizer.apply_chat_template(
+                    [{"role": "user", "content": instruction}],
+                    tokenize=False,
+                    add_generation_prompt=True
+                )
+                target_text = f"<action>{true_action}</action>{self.llm_tokenizer.eos_token}"
+                sft_prompts.append(prompt)
+                sft_targets.append(target_text)
+                
+        # ============================================================
+        # 2. Compute Loss with Micro-Batching
+        # ============================================================
+        num_sft_samples = len(sft_prompts)
+        if num_sft_samples == 0:
+            return torch.tensor(0.0, device=self._cfg.device)
 
+        micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
+        micro_batch_size = min(micro_batch_size, num_sft_samples)
+        
+        num_micro_batches = (num_sft_samples + micro_batch_size - 1) // micro_batch_size
+        accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
+        full_texts = [p + t for p, t in zip(sft_prompts, sft_targets)]
+        
+        accumulated_sft_loss = 0.0
+        self.llm_policy_model.train()
+
+        for micro_batch_idx in range(num_micro_batches):
+            start_idx = micro_batch_idx * micro_batch_size
+            end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_sft_samples)
+
+            batch_full_texts = full_texts[start_idx:end_idx]
+            batch_prompts = sft_prompts[start_idx:end_idx]
+
+            inputs = self.llm_tokenizer(
+                batch_full_texts,
+                padding=True,
+                truncation=True,
+                max_length=self.llm_policy_cfg.prompt_max_len,
+                return_tensors="pt"
+            ).to(self._cfg.device)
+
+            labels = inputs.input_ids.clone()
+            labels[labels == self.llm_tokenizer.pad_token_id] = -100
+
+            for i, prompt_str in enumerate(batch_prompts):
+                prompt_tokens = self.llm_tokenizer.encode(prompt_str, add_special_tokens=False) 
+                prompt_len = len(prompt_tokens)
+                
+                if prompt_len < labels.shape[1]:
+                    labels[i, :prompt_len] = -100
+                else:
+                    labels[i, :] = -100
+                    
+            outputs = self.llm_policy_model(
+                input_ids=inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                labels=labels
+            )
+            loss = outputs.loss
+            micro_batch_loss = loss / accumulation_steps
+            accumulated_sft_loss += micro_batch_loss.item()
+            
+            micro_batch_loss.backward()
+
+            del inputs, labels, outputs, loss
+            torch.cuda.empty_cache()
+
+        return torch.tensor(accumulated_sft_loss, device=self._cfg.device)
+    
+    
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         [PRIORZERO-MODIFIED]
@@ -394,51 +401,21 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         Returns:
             log_dict: Dictionary of training metrics
         """
-        import logging
-
         self._learn_model.train()
         self.llm_policy_model.train()
 
-        # Unpack data
-        # NOTE: game_segments is our custom GameSegment with mcts_policy_segment
-        # [FIX] Handle both 3-element (from buffer) and 4-element (with explicit train_iter) formats
-        if len(data) == 4:
-            # Format: [current_batch, target_batch, train_iter, game_segments]
-            # This is when learner explicitly adds train_iter
-            current_batch, target_batch, train_iter, game_segments = data
-        elif len(data) == 3:
-            # Format: [current_batch, target_batch, game_segments]
-            # This is the standard format from PriorZeroGameBuffer.sample()
-            current_batch, target_batch, game_segments = data
-            train_iter = self._train_iteration  # Get from instance variable
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.debug(
-                f"[PRIORZERO] Using 3-element format. game_segments: "
-                f"{type(game_segments)}, count: {len(game_segments) if game_segments else 0}"
-            )
-        else:
-            raise ValueError(f"Unexpected data format: expected 3 or 4 elements, got {len(data)}")
-
+        current_batch, target_batch, train_iter = data
         # ==============================================================================
         # Part 1: UniZero World Model Training (Full Implementation)
         # ==============================================================================
 
         # Unpack batches
-        (obs_batch_ori, action_batch, mask_batch, batch_index_tensor,
-         weights, make_time) = current_batch[:6]
+        obs_batch_ori, action_batch, target_action_batch, mask_batch, batch_index_tensor, weights, make_time, timestep_batch, raw_obs_list, history_obs_list = current_batch
         target_reward, target_value, target_policy = target_batch
-
-        # Handle optional timestep
-        if len(current_batch) > 6:
-            timestep_batch = current_batch[6]
-        else:
-            timestep_batch = None
 
         # Convert to tensors and move to device
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
-        (mask_batch, target_reward, target_value,
-         target_policy, weights) = to_torch_float_tensor(data_list, self._cfg.device)
+        (mask_batch, target_reward, target_value, target_policy, weights) = to_torch_float_tensor(data_list, self._cfg.device)
 
         # Reshape targets
         batch_size = self._cfg.batch_size
@@ -452,54 +429,23 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         transformed_target_value = scalar_transform(target_value)
 
         # Convert to categorical distribution (for distributional RL)
-        target_reward_categorical = phi_transform(
-            self.reward_support, transformed_target_reward
-        )
-        target_value_categorical = phi_transform(
-            self.value_support, transformed_target_value
-        )
+        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
         # Prepare batch for world model
         # NOTE: This follows the exact format required by UniZero world model
         # [FIX] Convert obs_batch_ori to tensor if needed
+        import logging
         if not isinstance(obs_batch_ori, torch.Tensor):
-            # [DEBUG] Check obs_batch_ori shape
-            import logging
-            logger = logging.getLogger(__name__)
             if isinstance(obs_batch_ori, np.ndarray):
-                logger.info(f"[DEBUG] obs_batch_ori type: numpy, shape: {obs_batch_ori.shape}, dtype: {obs_batch_ori.dtype}")
-
-                # [FIX] Reshape if observations are flattened (2D instead of 3D)
-                # Expected: [batch_size, num_unroll_steps+1, obs_dim] (buffer includes next_obs)
-                # Got: [batch_size, (num_unroll_steps+1) * obs_dim]
+                logging.info(f"[DEBUG] obs_batch_ori type: numpy, shape: {obs_batch_ori.shape}, dtype: {obs_batch_ori.dtype}")
                 if len(obs_batch_ori.shape) == 2:
-                    # Infer num_unroll_steps and obs_dim
-                    # For text: obs_dim should be max_seq_len (e.g., 512)
-                    obs_dim = 512  # Standard max_seq_len for BERT
+                    obs_dim = 512  
                     total_size = obs_batch_ori.shape[1]
-                    if total_size % obs_dim == 0:
-                        inferred_steps = total_size // obs_dim
-                        # Simply reshape to [batch_size, inferred_steps, obs_dim]
-                        # The truncation to match action_batch will happen later (like unizero.py line 675)
-                        obs_batch_ori = obs_batch_ori.reshape(batch_size, inferred_steps, obs_dim)
-                        logger.info(f"[RESHAPE] Reshaped obs_batch_ori from (batch_size, {total_size}) to {obs_batch_ori.shape}")
-                    else:
-                        logger.warning(f"[RESHAPE_ERROR] Cannot reshape: total_size ({total_size}) not divisible by obs_dim ({obs_dim})")
+                    assert total_size % obs_dim == 0
+                    inferred_steps = total_size // obs_dim
+                    obs_batch_ori = obs_batch_ori.reshape(batch_size, inferred_steps, obs_dim)
 
-                # Check if it's an object array (inhomogeneous shapes)
-                if obs_batch_ori.dtype == np.object_:
-                    logger.warning(f"[SHAPE_ISSUE] obs_batch_ori is object array - inhomogeneous shapes!")
-                    logger.warning(f"[SHAPE_ISSUE] First element shape: {obs_batch_ori[0].shape if len(obs_batch_ori) > 0 else 'N/A'}")
-                    if len(obs_batch_ori) > 1:
-                        logger.warning(f"[SHAPE_ISSUE] Second element shape: {obs_batch_ori[1].shape}")
-                    # Try to handle inhomogeneous array by padding/truncating
-                    # For now, just raise a descriptive error
-                    raise ValueError(
-                        f"obs_batch_ori has inhomogeneous shapes. "
-                        f"First element shape: {obs_batch_ori[0].shape}, "
-                        f"Cannot directly convert to tensor. "
-                        f"This suggests the replay buffer is storing observations with different sequence lengths."
-                    )
             obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device)
 
         # [FIX] Convert action_batch to tensor and handle shape correctly
@@ -508,49 +454,30 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         if action_batch.shape[-1] == 1:
             actions_processed = action_batch.squeeze(-1).long()
-        elif len(action_batch.shape) == 1:
-            actions_processed = action_batch.long()
         else:
             actions_processed = action_batch.long()
 
-        if timestep_batch is not None:
-            # Convert timestep_batch to tensor if needed
-            if not isinstance(timestep_batch, torch.Tensor):
-                timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device)
+        if not isinstance(timestep_batch, torch.Tensor):
+            timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device)
 
-            # Handle timestep_batch shape
-            if timestep_batch.shape[-1] == 1:
-                timestep_processed = timestep_batch.squeeze(-1).long()
-            elif len(timestep_batch.shape) == 1:
-                timestep_processed = timestep_batch.long()
-            else:
-                timestep_processed = timestep_batch.long()
-
-            batch_for_gpt = {
-                'observations': obs_batch_ori,
-                'actions': actions_processed,
-                'timestep': timestep_processed,
-                'rewards': target_reward_categorical[:, :-1],
-                'target_value': target_value_categorical[:, :-1],
-                'target_policy': target_policy[:, :-1],
-            }
+        # Handle timestep_batch shape
+        if timestep_batch.shape[-1] == 1:
+            timestep_processed = timestep_batch.squeeze(-1).long()
         else:
-            batch_for_gpt = {
-                'observations': obs_batch_ori,
-                'actions': actions_processed,
-                'rewards': target_reward_categorical[:, :-1],
-                'target_value': target_value_categorical[:, :-1],
-                'target_policy': target_policy[:, :-1],
-            }
+            timestep_processed = timestep_batch.long()
+
+        batch_for_gpt = {
+            'observations': obs_batch_ori,
+            'actions': actions_processed,
+            'timestep': timestep_processed,
+            'rewards': target_reward_categorical[:, :-1],
+            'target_value': target_value_categorical[:, :-1],
+            'target_policy': target_policy[:, :-1],
+        }
 
         # [FIX] Following unizero.py lines 673-675 exactly:
         # Convert mask_batch to boolean, then truncate to align with observations/rewards
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data. Shape: (B, T)
-
-        # [DEBUG] Log shapes before truncation
-        logger.info(f"[SHAPE_DEBUG] Before truncation: obs={batch_for_gpt['observations'].shape}, "
-                   f"mask_padding={batch_for_gpt['mask_padding'].shape}, "
-                   f"actions={batch_for_gpt['actions'].shape}")
 
         # [CRITICAL] Truncate observations to align with rewards/actions
         # - observations from buffer include next_obs → shape (B, T+1, obs_dim)
@@ -558,14 +485,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # - After target processing: rewards[:, :-1] → (B, T-1)
         # - So only observations need truncation
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # Shape: (B, T-1, obs_dim)
-
-        # [FIX] Check if mask_padding needs truncation based on actual shape
-        if batch_for_gpt['mask_padding'].shape[1] > batch_for_gpt['observations'].shape[1]:
-            logger.warning(f"[SHAPE_FIX] Truncating mask_padding from {batch_for_gpt['mask_padding'].shape} to match obs")
-            batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
-
-        logger.info(f"[SHAPE_DEBUG] After truncation: obs={batch_for_gpt['observations'].shape}, "
-                   f"mask_padding={batch_for_gpt['mask_padding'].shape}")
+        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
 
         # [FIX] Add missing 'ends' field (following unizero.py line 676)
         # 'ends' marks terminal states in the trajectory (0 = not terminal)
@@ -574,10 +494,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # [FIX] Add 'scalar_target_value' field for priority calculation (following unizero.py line 681)
         batch_for_gpt['scalar_target_value'] = target_value
 
-        # [FIX] Log shapes for debugging
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"[BATCH_SHAPES] obs: {batch_for_gpt['observations'].shape}, actions: {batch_for_gpt['actions'].shape}, rewards: {batch_for_gpt['rewards'].shape}, mask_padding: {batch_for_gpt['mask_padding'].shape}")
+        logging.info(f"[BATCH_SHAPES] obs: {batch_for_gpt['observations'].shape}, actions: {batch_for_gpt['actions'].shape}, rewards: {batch_for_gpt['rewards'].shape}, mask_padding: {batch_for_gpt['mask_padding'].shape}")
 
         # Compute world model loss
         wm_losses = self._learn_model.world_model.compute_loss(
@@ -592,305 +509,93 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # ==============================================================================
         # Part 2: [PRIORZERO-NEW] LLM Policy Training (SFT + RFT)
         # ==============================================================================
+        if self.llm_policy_cfg.enable_sft:
+            llm_sft_loss = self.compute_sft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
+        if self.llm_policy_cfg.enable_rft:
+            llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
+        else:
+            llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
+        # # ============================================================
+        # # Train LLM with RFT (Policy Gradient with gradient accumulation)
+        # # ============================================================
+        # if num_rft_samples > 0 and self.llm_policy_cfg.enable_rft:
+        #     # [PRIORZERO-OOM-FIX] Use micro-batching with gradient accumulation
+        #     micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
+        #     num_micro_batches = (num_rft_samples + micro_batch_size - 1) // micro_batch_size
+        #     accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
 
-        llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
-        llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
-        num_sft_samples = 0
-        num_rft_samples = 0
-        
-        # [FIX] Only perform LLM training if game_segments available
-        # [DEBUG] Always log game_segments status
-        logger = logging.getLogger(__name__)
-        logger.info(f"[LLM Training] game_segments type: {type(game_segments)}, "
-                    f"is None: {game_segments is None}, "
-                    f"len: {len(game_segments) if game_segments is not None else 'N/A'}")
+        #     # Process in micro-batches
+        #     accumulated_rft_loss = 0.0
+        #     for micro_batch_idx in range(num_micro_batches):
+        #         start_idx = micro_batch_idx * micro_batch_size
+        #         end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_rft_samples)
 
-        # [DEBUG] Check first segment's data
-        if game_segments is not None and len(game_segments) > 0:
-            seg0 = game_segments[0]
-            logger.info(f"[LLM Training] First segment stats: "
-                       f"mcts_policies={len(seg0.mcts_policy_segment) if hasattr(seg0, 'mcts_policy_segment') else 0}, "
-                       f"raw_obs={len([x for x in (seg0.raw_obs_segment if hasattr(seg0, 'raw_obs_segment') else []) if x is not None])}/{len(seg0.raw_obs_segment) if hasattr(seg0, 'raw_obs_segment') else 0}, "
-                       f"actions={len(seg0.action_segment) if hasattr(seg0, 'action_segment') else 0}")
+        #         # Get micro-batch
+        #         micro_batch_prompts = rft_prompts[start_idx:end_idx]
+        #         micro_batch_rewards = rft_rewards[start_idx:end_idx]
 
-        if game_segments is not None and len(game_segments) > 0:
-            # Collect training data from game segments
-            sft_prompts = []
-            sft_targets = []
-            rft_prompts = []
-            rft_rewards = []
+        #         # Tokenize prompts
+        #         inputs = self.llm_tokenizer(
+        #             micro_batch_prompts,
+        #             padding=True,
+        #             truncation=True,
+        #             max_length=self.llm_policy_cfg.prompt_max_len,
+        #             return_tensors="pt"
+        #         ).to(self._cfg.device)
 
-            # [DEBUG] Log segment information
-            logger.info(f"[LLM Training] Processing {len(game_segments)} game segments")
+        #         # [FIX] Forward pass WITH gradient tracking (remove no_grad)
+        #         outputs = self.llm_policy_model(
+        #             input_ids=inputs.input_ids,
+        #             attention_mask=inputs.attention_mask
+        #         )
 
-            for seg_idx, segment in enumerate(game_segments):
-                # [FIX] Use action_segment length, not obs_segment
-                # obs_segment includes frame_stack + unroll_steps, while
-                # mcts_policy_segment only has entries for actual actions taken
-                segment_length = len(segment.action_segment)
+        #         # Compute policy gradient loss (REINFORCE)
+        #         # Loss = -reward * log_prob(action)
+        #         logits = outputs.logits
+        #         log_probs = F.log_softmax(logits, dim=-1)
 
-                # [FIX] Ensure mcts_policy_segment has the same length
-                # It might be a list or numpy array depending on whether game_segment_to_array() was called
-                mcts_policy_length = len(segment.mcts_policy_segment) if hasattr(segment, 'mcts_policy_segment') else 0
+        #         # Get log probability of actual tokens
+        #         shifted_log_probs = log_probs[:, :-1, :].contiguous()
+        #         shifted_labels = inputs.input_ids[:, 1:].contiguous()
 
-                # [DEBUG] Log segment lengths for debugging
-                if self._cfg.get('debug_segment_processing', False):
-                    obs_len = len(segment.obs_segment) if hasattr(segment, 'obs_segment') else 0
-                    raw_obs_len = len(segment.raw_obs_segment) if hasattr(segment, 'raw_obs_segment') else 0
-                    logging.info(
-                        f"[Segment {seg_idx}] action_len={segment_length}, "
-                        f"mcts_policy_len={mcts_policy_length}, obs_len={obs_len}, raw_obs_len={raw_obs_len}"
-                    )
+        #         # Gather log probs of actual tokens
+        #         token_log_probs = shifted_log_probs.gather(
+        #             dim=-1,
+        #             index=shifted_labels.unsqueeze(-1)
+        #         ).squeeze(-1)
 
-                # [SAFETY] Use the minimum of the two lengths to avoid IndexError
-                max_index = min(segment_length, mcts_policy_length)
+        #         # Mask padding tokens
+        #         mask = (shifted_labels != self.llm_tokenizer.pad_token_id).float()
+        #         token_log_probs = token_log_probs * mask
 
-                if max_index == 0:
-                    if self._cfg.get('debug_segment_processing', False):
-                        logging.warning(f"[Segment {seg_idx}] Empty segment, skipping")
-                    continue  # Skip empty segments
+        #         # Sum log probs per sequence
+        #         sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
 
-                for i in range(max_index):
-                    # [FIX] Safe access to mcts_policy_segment with bounds check
-                    try:
-                        mcts_policy = segment.mcts_policy_segment[i]
-                    except (IndexError, KeyError, TypeError) as e:
-                        # Log detailed error information for debugging
-                        if self._cfg.get('debug_segment_processing', False):
-                            logging.error(
-                                f"[Segment {seg_idx}, Index {i}] Failed to access mcts_policy_segment: {e}\n"
-                                f"  segment_length={segment_length}, mcts_policy_length={mcts_policy_length}\n"
-                                f"  mcts_policy_segment type: {type(segment.mcts_policy_segment)}"
-                            )
-                        continue
+        #         # Compute REINFORCE loss for micro-batch
+        #         rewards_tensor = torch.tensor(
+        #             micro_batch_rewards,
+        #             device=self._cfg.device,
+        #             dtype=torch.float32
+        #         )
 
-                    # Skip if no MCTS policy available
-                    if mcts_policy is None:
-                        continue
+        #         # Normalize rewards within micro-batch (important for stable training)
+        #         if len(micro_batch_rewards) > 1:
+        #             rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
 
-                    # [FIX] Use raw_obs_segment for text observations
-                    # PriorZero's GameSegment stores raw text in raw_obs_segment
-                    raw_obs_text = None
-                    if hasattr(segment, 'raw_obs_segment') and i < len(segment.raw_obs_segment):
-                        raw_obs_text = segment.raw_obs_segment[i]
-                    elif i < len(segment.obs_segment):
-                        # Fallback to obs_segment if raw_obs_segment not available
-                        raw_obs_text = str(segment.obs_segment[i])
+        #         micro_batch_rft_loss = -(rewards_tensor * sequence_log_probs).mean() / accumulation_steps
+        #         accumulated_rft_loss += micro_batch_rft_loss.item()
 
-                    # Skip if raw_obs_text is None
-                    if raw_obs_text is None:
-                        continue
+        #         # Backward pass (accumulate gradients)
+        #         micro_batch_rft_loss.backward()
 
-                    # Build history context
-                    history = []
-                    for j in range(max(0, i - self.llm_policy_cfg.history_length), i):
-                        # [FIX] Use raw_obs_segment for history as well
-                        obs_text = None
-                        if hasattr(segment, 'raw_obs_segment') and j < len(segment.raw_obs_segment):
-                            obs_text = segment.raw_obs_segment[j]
-                        elif j < len(segment.obs_segment):
-                            obs_text = str(segment.obs_segment[j])
+        #         # Free memory
+        #         del inputs, outputs, logits, log_probs, rewards_tensor
+        #         torch.cuda.empty_cache()
 
-                        if obs_text is not None and j < len(segment.action_segment):
-                            history.append((
-                                obs_text,
-                                self.action_inv_map.get(segment.action_segment[j], f"action_{segment.action_segment[j]}"),
-                                float(segment.reward_segment[j]) if j < len(segment.reward_segment) else 0.0
-                            ))
+        #     # Average loss for logging
+        #     llm_rft_loss = torch.tensor(accumulated_rft_loss, device=self._cfg.device)
 
-                    # Build prompt
-                    instruction = build_llm_prompt(
-                        current_obs=raw_obs_text,
-                        history=history,
-                        use_cot=self.llm_policy_cfg.use_cot
-                    )
-
-                    # Apply chat template
-                    prompt = self.llm_tokenizer.apply_chat_template(
-                        [{"role": "user", "content": instruction}],
-                        tokenize=False,
-                        add_generation_prompt=True
-                    )
-
-                    # ============================================================
-                    # SFT: Supervised Fine-Tuning with MCTS Policy
-                    # ============================================================
-                    if self.llm_policy_cfg.sft_target == 'mcts_policy':
-                        # [FIX] Use the mcts_policy we already safely retrieved above
-                        # Don't access segment.mcts_policy_segment[i] again to avoid IndexError
-                        mcts_policy_vec = mcts_policy
-
-                        # Convert MCTS policy to ranked action text
-                        target_text = format_mcts_policy_to_text(
-                            mcts_policy_vec,
-                            self.action_inv_map,
-                            top_k=5
-                        )
-
-                        sft_prompts.append(prompt)
-                        sft_targets.append(target_text)
-                        num_sft_samples += 1
-
-                    # ============================================================
-                    # RFT: Reinforcement Fine-Tuning with Environment Reward
-                    # ============================================================
-                    if self.llm_policy_cfg.enable_rft and i < len(segment.reward_segment):
-                        env_reward = float(segment.reward_segment[i])
-
-                        # TODO
-                        # Only use transitions with non-zero reward for RFT
-                        if abs(env_reward) > 1e-9:
-                            rft_prompts.append(prompt)
-                            rft_rewards.append(env_reward)
-                            num_rft_samples += 1
-
-        # ============================================================
-        # Train LLM with SFT (with gradient accumulation for memory efficiency)
-        # ============================================================
-        # num_sft_samples=0 # TODO
-        if num_sft_samples > 0:
-            # [PRIORZERO-OOM-FIX] Use micro-batching with gradient accumulation
-            micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
-            num_micro_batches = (num_sft_samples + micro_batch_size - 1) // micro_batch_size
-            accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
-
-            # Prepare full texts (prompt + target + eos)
-            full_texts = [
-                p + t + self.llm_tokenizer.eos_token
-                for p, t in zip(sft_prompts, sft_targets)
-            ]
-
-            # Process in micro-batches
-            accumulated_sft_loss = 0.0
-            for micro_batch_idx in range(num_micro_batches):
-                start_idx = micro_batch_idx * micro_batch_size
-                end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_sft_samples)
-
-                # Get micro-batch
-                micro_batch_texts = full_texts[start_idx:end_idx]
-                micro_batch_prompts = sft_prompts[start_idx:end_idx]
-
-                # Tokenize micro-batch
-                inputs = self.llm_tokenizer(
-                    micro_batch_texts,
-                    padding=True,
-                    truncation=True,
-                    max_length=self.llm_policy_cfg.prompt_max_len,
-                    return_tensors="pt"
-                ).to(self._cfg.device)
-
-                # Create labels (mask prompt tokens to only compute loss on target)
-                labels = inputs.input_ids.clone()
-                labels[labels == self.llm_tokenizer.pad_token_id] = -100
-
-                # Mask prompt tokens
-                for i, prompt in enumerate(micro_batch_prompts):
-                    prompt_tokens = self.llm_tokenizer.encode(prompt, add_special_tokens=False)
-                    prompt_len = len(prompt_tokens)
-                    labels[i, :prompt_len] = -100
-
-                # Forward pass
-                llm_outputs = self.llm_policy_model(
-                    input_ids=inputs.input_ids,
-                    attention_mask=inputs.attention_mask,
-                    labels=labels
-                )
-
-                # Scale loss by number of accumulation steps (for correct gradient magnitude)
-                micro_batch_loss = llm_outputs.loss / accumulation_steps
-                accumulated_sft_loss += micro_batch_loss.item()
-
-                # Backward pass (accumulate gradients)
-                micro_batch_loss.backward()
-
-                # Free memory
-                del inputs, labels, llm_outputs
-                torch.cuda.empty_cache()
-
-            # Average loss for logging
-            llm_sft_loss = torch.tensor(accumulated_sft_loss, device=self._cfg.device)
-
-        # ============================================================
-        # Train LLM with RFT (Policy Gradient with gradient accumulation)
-        # ============================================================
-        if num_rft_samples > 0 and self.llm_policy_cfg.enable_rft:
-            # [PRIORZERO-OOM-FIX] Use micro-batching with gradient accumulation
-            micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
-            num_micro_batches = (num_rft_samples + micro_batch_size - 1) // micro_batch_size
-            accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
-
-            # Process in micro-batches
-            accumulated_rft_loss = 0.0
-            for micro_batch_idx in range(num_micro_batches):
-                start_idx = micro_batch_idx * micro_batch_size
-                end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_rft_samples)
-
-                # Get micro-batch
-                micro_batch_prompts = rft_prompts[start_idx:end_idx]
-                micro_batch_rewards = rft_rewards[start_idx:end_idx]
-
-                # Tokenize prompts
-                inputs = self.llm_tokenizer(
-                    micro_batch_prompts,
-                    padding=True,
-                    truncation=True,
-                    max_length=self.llm_policy_cfg.prompt_max_len,
-                    return_tensors="pt"
-                ).to(self._cfg.device)
-
-                # [FIX] Forward pass WITH gradient tracking (remove no_grad)
-                outputs = self.llm_policy_model(
-                    input_ids=inputs.input_ids,
-                    attention_mask=inputs.attention_mask
-                )
-
-                # Compute policy gradient loss (REINFORCE)
-                # Loss = -reward * log_prob(action)
-                logits = outputs.logits
-                log_probs = F.log_softmax(logits, dim=-1)
-
-                # Get log probability of actual tokens
-                shifted_log_probs = log_probs[:, :-1, :].contiguous()
-                shifted_labels = inputs.input_ids[:, 1:].contiguous()
-
-                # Gather log probs of actual tokens
-                token_log_probs = shifted_log_probs.gather(
-                    dim=-1,
-                    index=shifted_labels.unsqueeze(-1)
-                ).squeeze(-1)
-
-                # Mask padding tokens
-                mask = (shifted_labels != self.llm_tokenizer.pad_token_id).float()
-                token_log_probs = token_log_probs * mask
-
-                # Sum log probs per sequence
-                sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
-
-                # Compute REINFORCE loss for micro-batch
-                rewards_tensor = torch.tensor(
-                    micro_batch_rewards,
-                    device=self._cfg.device,
-                    dtype=torch.float32
-                )
-
-                # Normalize rewards within micro-batch (important for stable training)
-                if len(micro_batch_rewards) > 1:
-                    rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
-
-                micro_batch_rft_loss = -(rewards_tensor * sequence_log_probs).mean() / accumulation_steps
-                accumulated_rft_loss += micro_batch_rft_loss.item()
-
-                # Backward pass (accumulate gradients)
-                micro_batch_rft_loss.backward()
-
-                # Free memory
-                del inputs, outputs, logits, log_probs, rewards_tensor
-                torch.cuda.empty_cache()
-
-            # Average loss for logging
-            llm_rft_loss = torch.tensor(accumulated_rft_loss, device=self._cfg.device)
-
-        # ==============================================================================
+        # # ==============================================================================
         # Part 3: Joint Optimization
         # ==============================================================================
 
@@ -1062,8 +767,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'llm_sft_loss': llm_sft_loss.item(),
             'llm_rft_loss': llm_rft_loss.item(),
             'llm_total_loss': llm_loss.item(),
-            'num_sft_samples': float(num_sft_samples),
-            'num_rft_samples': float(num_rft_samples),
+            # 'num_sft_samples': float(num_sft_samples),
+            # 'num_rft_samples': float(num_rft_samples),
             'total_loss': total_loss.item(),
         }
 
@@ -1090,8 +795,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                         'train/llm/total_loss': log_dict['llm_total_loss'],
                         'train/llm/grad_norm': log_dict['llm_grad_norm'],
                         'train/llm/learning_rate': log_dict['llm_lr'],
-                        'train/llm/num_sft_samples': float(log_dict['num_sft_samples']),
-                        'train/llm/num_rft_samples': float(log_dict['num_rft_samples']),
+                        # 'train/llm/num_sft_samples': float(log_dict['num_sft_samples']),
+                        # 'train/llm/num_rft_samples': float(log_dict['num_rft_samples']),
 
                         # Combined Metrics
                         'train/total_loss': log_dict['total_loss'],
@@ -1123,8 +828,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'llm_lr',                    # LLM learning rate
 
             # ============ LLM Training Statistics ============
-            'num_sft_samples',           # Number of SFT samples in batch
-            'num_rft_samples',           # Number of RFT samples in batch
+            # 'num_sft_samples',           # Number of SFT samples in batch
+            # 'num_rft_samples',           # Number of RFT samples in batch
 
             # ============ Combined Metrics ============
             'total_loss',                # Total loss (WM + LLM)
@@ -1235,6 +940,20 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # wandb等工具可以更好地处理大量的动态指标。
         # ========================================================================
     
+    def pad_to_fixed_length(self, data, target_len=55, pad_val=-1e9, dtype=torch.float32):
+        """
+        data: List[Sequence[Number]]，每个元素长度可以不一样（比如 3 或 4）
+        返回: tensor, 形状 [B, target_len]，多余部分全是 pad_val
+        """
+        batch_size = len(data)
+        out = torch.full((batch_size, target_len), pad_val, dtype=dtype)
+        for i, seq in enumerate(data):
+            if isinstance(seq, np.ndarray):
+                seq = seq.tolist()
+            L = min(len(seq), target_len)
+            if L > 0:
+                out[i, :L] = torch.tensor(seq[:L], dtype=dtype)
+        return out
     
     def _forward_collect(
         self,
@@ -1275,10 +994,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # ======================================================================
         # [PRIORZERO-NEW] Get LLM Prior Outputs
         # ======================================================================
-        llm_prior_outputs = kwargs.pop('llm_prior_outputs', None)
+        llm_prior_logprob = kwargs.pop('llm_prior_logprob', None)
+        valid_actions_list = kwargs.get('valid_actions_list', None)
 
-        if llm_prior_outputs is None:
-            # If no LLM prior available, fall back to standard UniZero behavior
+        if llm_prior_logprob is None:
             logging.debug("No LLM priors provided, using standard UniZero MCTS")
             return super()._forward_collect(
                 data, action_mask, temperature, to_play, epsilon,
@@ -1289,24 +1008,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # Parse LLM Outputs into Policy Priors
         # ======================================================================
         policy_priors = []
-        for output in llm_prior_outputs:
-            # Extract generated text
-            generated_text = output.outputs[0].text if hasattr(output, 'outputs') else str(output)
-
-            # Parse into policy distribution
-            prior_policy = parse_llm_action_ranking(
-                generated_text,
-                self.action_map,
-                self._cfg.model.action_space_size,
-                fallback_to_uniform=True
-            )
-
-            # Convert to log probabilities (for compatibility with MCTS)
-            policy_logits = torch.log(torch.from_numpy(prior_policy) + 1e-9)
-            policy_priors.append(policy_logits)
-
-        policy_priors = torch.stack(policy_priors).to(self._cfg.device)
-
+        for idx, actions in enumerate(valid_actions_list):
+            prior = []
+            for action in actions:
+                prior.append(llm_prior_logprob[idx][action])
+            policy_priors.append(prior)
+        policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
         # ======================================================================
         # World Model Initial Inference
         # ======================================================================
@@ -1381,7 +1088,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             # ======================================================================
             # [PRIORZERO] Get valid_actions_list for dynamic action mapping
             # ======================================================================
-            valid_actions_list = kwargs.get('valid_actions_list', None)
+            
 
             # ======================================================================
             # Select Actions and Prepare Output (Aligned with UniZero)
