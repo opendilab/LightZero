@@ -144,7 +144,11 @@ class CurriculumLoRALinear(nn.Module):
                     adapter['lora_B'].requires_grad = False
                 for scale in self.adapter_scales:
                     scale.logit.requires_grad = False
-            logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: Base layer trainable.")
+
+            # Log only from rank 0 to avoid excessive output
+            from ding.utils import get_rank
+            if get_rank() == 0:
+                logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: Base layer trainable.")
 
         # --- Stage >= 1: Adaptation ---
         else:
@@ -169,8 +173,11 @@ class CurriculumLoRALinear(nn.Module):
                     # The current stage's scale α_s (idx = stage - 1) is NOT trained.
                     is_previous_scale = (idx < stage - 1)
                     scale.logit.requires_grad = is_previous_scale
-            
-            logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: Activating adapter {stage - 1} and scales for stages < {stage - 1}.")
+
+            # Log only from rank 0 to avoid excessive output
+            from ding.utils import get_rank
+            if get_rank() == 0:
+                logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: Activating adapter {stage - 1} and scales for stages < {stage - 1}.")
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -427,7 +434,10 @@ def set_curriculum_stage(model: nn.Module, stage: int) -> None:
         if isinstance(module, CurriculumLoRALinear):
             module.set_curriculum_stage(stage)
             count += 1
-    if count > 0:
+
+    # Log only from rank 0 to avoid excessive output
+    from ding.utils import get_rank
+    if count > 0 and get_rank() == 0:
         logging.info(f"[Curriculum] Updated {count} CurriculumLoRALinear modules in {type(model).__name__} to stage {stage}.")
 
 # Alias for backward compatibility
@@ -652,7 +662,10 @@ class Block(nn.Module):
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=config.num_experts_per_tok,
             )
-            logging.info(f"Using MoE in transformer feed-forward with {config.num_experts_of_moe_in_transformer} experts.")
+            # Log only from rank 0 to avoid excessive output
+            from ding.utils import get_rank
+            if get_rank() == 0:
+                logging.info(f"Using MoE in transformer feed-forward with {config.num_experts_of_moe_in_transformer} experts.")
         elif config.multiplication_moe_in_transformer:
             from .moe import MoELayer, MultiplicationFeedForward
             # Create multiple FeedForward instances for multiplication-based MoE
@@ -665,7 +678,10 @@ class Block(nn.Module):
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=config.num_experts_per_tok,
             )
-            logging.info(f"Using Multiplication MoE in transformer feed-forward with {config.num_experts_of_moe_in_transformer} experts.")
+            # Log only from rank 0 to avoid excessive output
+            from ding.utils import get_rank
+            if get_rank() == 0:
+                logging.info(f"Using Multiplication MoE in transformer feed-forward with {config.num_experts_of_moe_in_transformer} experts.")
         else:
             # Standard MLP, with linear layers potentially wrapped for LoRA.
             self.feed_forward = nn.Sequential(

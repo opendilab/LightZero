@@ -587,8 +587,12 @@ class RepresentationNetworkUniZero(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-        logging.info(f"Using norm type: {norm_type}")
-        logging.info(f"Using activation type: {activation}")
+
+        # Only log from rank 0 to avoid excessive output in distributed training
+        from ding.utils import get_rank
+        if get_rank() == 0:
+            logging.info(f"Using norm type: {norm_type}")
+            logging.info(f"Using activation type: {activation}")
 
         self.observation_shape = observation_shape
         self.downsample = downsample

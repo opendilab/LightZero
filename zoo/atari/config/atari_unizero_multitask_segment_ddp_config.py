@@ -129,6 +129,7 @@ def create_config(
                 num_res_blocks=2,
                 num_channels=256,
                 continuous_action_space=False,
+                num_layers=num_layers,
                 world_model_cfg=dict(
                     num_res_blocks=2,
                     num_channels=256,
@@ -172,7 +173,7 @@ def create_config(
                     moe_in_transformer=False,
 
                     multiplication_moe_in_transformer=True,
-                    # multiplication_moe_in_transformer=False, # TODO=====
+                    # multiplication_moe_in_transformer=False, # TODO===============
 
                     n_shared_experts=1,
                     num_experts_per_tok=1,
@@ -291,7 +292,7 @@ def generate_configs(
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
     # benchmark_tag = "data_unizero_mt_refactor1010_debug"  # e.g., unizero_atari_mt_20250612
-    benchmark_tag = "data_unizero_mt_refactor1024"  # e.g., unizero_atari_mt_20250612
+    benchmark_tag = "data_unizero_mt_refactor1121"  # e.g., unizero_atari_mt_20250612
 
     # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
     # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
@@ -356,6 +357,10 @@ if __name__ == "__main__":
         export CUDA_VISIBLE_DEVICES=4,5,6,7
 
         cd /path/to/your/project/
+        
+        torchrun --nproc_per_node=4 /mnt/afs/wanzunian/niuyazhe/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/afs/wanzunian/niuyazhe/puyuan/LightZero/logs/202511/atari26_scalezero_nlayer1.log
+
+        
         /mnt/shared-storage-user/puyuan/lz/bin/python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code_20250828/LightZero/log/20251024_vit_nlayer2_alpha-100k-098-05.log
 
         python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251012_resnet_nlayer4_alpha-100k-098-05.log
@@ -367,9 +372,15 @@ if __name__ == "__main__":
     import os
 
     # --- Main Experiment Settings ---
-    num_games = 8  # Options: 3, 8, 26
-    # num_layers = 4
-    num_layers = 2 # debug
+    # num_games = 8  # Options: 3, 8, 26
+    num_games = 26  # Options: 3, 8, 26
+    
+    num_layers = 2
+    # num_layers = 8
+    # num_layers = 1
+    
+    
+    # num_layers = 2 # debug
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8

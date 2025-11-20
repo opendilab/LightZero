@@ -61,8 +61,8 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
             'params': list(tokenizer_params.values()),
             'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
             # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
-            'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
-            # 'weight_decay': weight_decay  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+            # 'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+            'weight_decay': weight_decay  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
         },
         {
             'params': list(transformer_params.values()),
@@ -934,7 +934,9 @@ class UniZeroPolicy(MuZeroPolicy):
             with torch.no_grad():
                 # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
                 # self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
-                self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
+                # self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
+                self.log_alpha.clamp_(np.log(5e-2), np.log(10.0))
+                
 
             # --- 使用当前更新后的 alpha (截断梯度流) ---
             current_alpha = self.log_alpha.exp().detach()
@@ -1589,7 +1591,8 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         if reset_init_data:
             if task_id is not None:
-                self.last_batch_obs_eval = initialize_zeros_batch(
+                # self.last_batch_obs_eval = initialize_zeros_batch(
+                self.last_batch_obs_eval = initialize_pad_batch(
                     self._cfg.model.observation_shape_list[task_id],
                     self._cfg.evaluator_env_num,
                     self._cfg.device,

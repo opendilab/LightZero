@@ -3,14 +3,14 @@ Modified from https://github.com/CompVis/taming-transformers
 This module provides an autoencoder-style tokenizer for encoding observations into latent embeddings and decoding them back.
 """
 
+import inspect
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import torch
 import torch.nn as nn
 from einops import rearrange
 from torch.nn import functional as F
-from typing import Optional, List
 from transformers.modeling_outputs import BaseModelOutput
 
 class LossWithIntermediateLosses:
@@ -145,7 +145,15 @@ class Tokenizer(nn.Module):
         # Note: 2D (B, E) and 4D (B, C, H, W) inputs are processed directly without reshaping.
 
         # Step 3: Pass the processed tensor through the encoder.
-        obs_embeddings = encoder_module(x)
+        # Some encoders (like RepresentationNetworkMLPMT) require task_id as a parameter,
+        # while others do not. We use inspect to check the signature and pass task_id only if needed.
+        sig = inspect.signature(encoder_module.forward)
+        if 'task_id' in sig.parameters:
+            # Encoder requires task_id (e.g., RepresentationNetworkMLPMT)
+            obs_embeddings = encoder_module(x, task_id=task_id)
+        else:
+            # Encoder does not require task_id (e.g., standard CNN/MLP encoders)
+            obs_embeddings = encoder_module(x)
         if len(obs_embeddings.shape) != 2:
             raise RuntimeError(
                 f"Encoder output was expected to be 2D (batch, embedding_dim), but got shape {obs_embeddings.shape}."

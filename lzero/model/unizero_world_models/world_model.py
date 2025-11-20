@@ -108,7 +108,10 @@ class WorldModel(nn.Module):
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
+        # self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
+        #                                             self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
+        #                                            )
+        self.head_observations = self._create_head_for_latent(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
                                                     self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
                                                    )
         if self.continuous_action_space:
@@ -620,10 +623,28 @@ class WorldModel(nn.Module):
         """Create head modules for the transformer."""
         modules = [
             nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
-            nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
+            # nn.Linear(self.config.embed_dim, self.config.embed_dim),
+            nn.Linear(self.config.embed_dim, self.config.embed_dim*4),
+            nn.LayerNorm(self.config.embed_dim*4),      # 2. <-- 新增！稳定内部激活
             nn.GELU(approximate='tanh'),
-            nn.Linear(self.config.embed_dim, output_dim)
+            nn.Linear(self.config.embed_dim*4, output_dim)
+        ]
+        if norm_layer:
+            modules.append(norm_layer)
+        return Head(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=nn.Sequential(*modules)
+        )
+    
+    def _create_head_for_latent(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+        """Create head modules for the transformer."""
+        modules = [
+            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
+            nn.Linear(self.config.embed_dim, self.config.embed_dim*4),
+            nn.LayerNorm(self.config.embed_dim*4),      # 2. <-- 新增！稳定内部激活
+            nn.GELU(approximate='tanh'),
+            nn.Linear(self.config.embed_dim*4, output_dim)
         ]
         if norm_layer:
             modules.append(norm_layer)

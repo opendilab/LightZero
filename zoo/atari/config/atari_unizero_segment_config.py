@@ -32,7 +32,8 @@ def main(env_id, seed):
 
     # batch_size = 2 # only for debug
 
-    batch_size = 64 # for decode-loss
+    # batch_size = 64 # for decode-loss
+    batch_size = 128 # for decode-loss # TODO
     replay_ratio = 0.25
 
     # batch_size = 256
@@ -42,8 +43,8 @@ def main(env_id, seed):
 
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    buffer_reanalyze_freq = 1/50
-    # buffer_reanalyze_freq = 1/5000000000
+    # buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/5000000000
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -84,7 +85,8 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000000000, ), ), ),  # default is 10000
+            # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
@@ -100,11 +102,11 @@ def main(env_id, seed):
                     # latent_recon_loss_weight=1,
                     # perceptual_loss_weight=1,
 
-                    latent_recon_loss_weight=0.5,
-                    perceptual_loss_weight=0.5,
+                    # latent_recon_loss_weight=0.5,
+                    # perceptual_loss_weight=0.5,
 
-                    # latent_recon_loss_weight=0.1,
-                    # perceptual_loss_weight=0.1,
+                    latent_recon_loss_weight=0.1,
+                    perceptual_loss_weight=0.1,
 
                     # latent_recon_loss_weight=0,
                     # perceptual_loss_weight=0,  # TODO
@@ -115,8 +117,8 @@ def main(env_id, seed):
                     norm_type=norm_type,
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
-                    # predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
-                    predict_latent_loss_type='cos_sim', # TODO: only for latent state layer_norm
+                    predict_latent_loss_type='mse', # TODO: only for latent state layer_norm
+                    # predict_latent_loss_type='cos_sim', # TODO: only for latent state layer_norm
 
                     # final_norm_option_in_obs_head='SimNorm',
                     # final_norm_option_in_encoder='SimNorm',
@@ -147,7 +149,10 @@ def main(env_id, seed):
                     # use_priority=False,
                     use_priority=True,
                     rotary_emb=False,
+                    
                     encoder_type='resnet',
+                    # encoder_type='vit',qbert
+                    
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
@@ -167,8 +172,10 @@ def main(env_id, seed):
                     # Fix1: Clip policy logits to prevent explosion
                     # RECOMMENDED: Enable this as a safety net against catastrophic logits
                     use_policy_logits_clip=True,
-                    policy_logits_clip_min=-3.0,        # STRENGTHENED: Tighter clip (was -5.0)
-                    policy_logits_clip_max=3.0,         # STRENGTHENED: Tighter clip (was 5.0)
+                    policy_logits_clip_min=-10.0,        # STRENGTHENED: Tighter clip (was -5.0)
+                    policy_logits_clip_max=10.0,         # STRENGTHENED: Tighter clip (was 5.0)
+                    # policy_logits_clip_min=-3.0,        # STRENGTHENED: Tighter clip (was -5.0)
+                    # policy_logits_clip_max=3.0,         # STRENGTHENED: Tighter clip (was 5.0)
 
                     # Fix3: Re-smooth target_policy from buffer before training
                     # ⚠️ DEPRECATED: This is now handled by Fix2 in unizero.py
@@ -185,7 +192,7 @@ def main(env_id, seed):
                     # Fix2: Unified policy label smoothing (applied in unizero.py)
                     # This is the PRIMARY smoothing mechanism
                     use_continuous_label_smoothing=True,  # Enable continuous smoothing
-                    continuous_ls_eps=0.1,                # INCREASED: More aggressive smoothing (was 0.05)
+                    continuous_ls_eps=0.05,                # INCREASED: More aggressive smoothing (was 0.05)
                 ),
             ),
             optim_type='AdamW_mix_lr_wdecay',
@@ -270,6 +277,12 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
+            
+            # target_update_theta=0.005,
+            # target_update_theta=0.01,
+            
+            target_update_theta=0.05,
+            
             train_start_after_envsteps=0, # only for debug
             # train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
@@ -313,7 +326,15 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1116/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-clip3_pol-smo-01_rbs5e5_head-wd_recon-perc-w05_cossimloss2_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1121_worker/{env_id[3:-3]}/{env_id[3:-3]}_uz_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    
+    # main_config.exp_name = f'data_unizero_st_refactor1121_worker/{env_id[3:-3]}/{env_id[3:-3]}_uz_reset-pvr-250k_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    
+    # main_config.exp_name = f'data_unizero_st_refactor1121_worker/{env_id[3:-3]}/{env_id[3:-3]}_uz_mse-loss_target005_allhead4_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_cossimloss2_targetentropy-alpha-500k-098-005-min005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    
+    # main_config.exp_name = f'data_unizero_st_refactor1121/{env_id[3:-3]}/{env_id[3:-3]}_uz_mse-loss_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_cossimloss2_targetentropy-alpha-500k-098-005_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    
+    # main_config.exp_name = f'data_unizero_st_refactor1118_worker/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-clip3_pol-smo-01_pol-loss-tmp-1.5_rbs5e5_head-wd_recon-perc-w05_cossimloss2_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     
     # main_config.exp_name = f'data_unizero_st_refactor1105/{env_id[3:-3]}/{env_id[3:-3]}_uz_claudefix-true_tprnot_fixdownnorm_head-wd_recon-perc-w05_cossimloss5_nokvcachemanager_targetentropy-alpha-400k-098-005-clipmin5e-3-lr1e-3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 

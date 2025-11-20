@@ -282,11 +282,26 @@ def train_unizero_multitask_balance_segment_ddp(
 
     # --- Environment, Policy, and Worker Initialization ---
     task_configs, replay_buffers, collectors, evaluators = [], [], [], []
-    
+
     # Use the first task's config to create the shared policy and learner
     _, [main_cfg, main_create_cfg] = tasks_for_this_rank[0]
     for _, [cfg, _] in tasks_for_this_rank:
         cfg.policy.task_num = len(tasks_for_this_rank)
+
+    # ==================== START: Robust exp_name Fix ====================
+    # Ensure main_cfg has a valid exp_name before calling compile_config.
+    # If exp_name is missing, None, or too long, set a safe default.
+    if not hasattr(main_cfg, 'exp_name') or main_cfg.exp_name is None or len(str(main_cfg.exp_name)) > 200:
+        # Use a simplified experiment name for the main config
+        safe_exp_name = f'data_unizero_mt_balance/dmc_multitask_seed{seed}'
+        logging.warning(
+            f"Rank {rank}: main_cfg.exp_name is missing, None, or too long. "
+            f"Setting to safe default: {safe_exp_name}"
+        )
+        main_cfg.exp_name = safe_exp_name
+    else:
+        logging.info(f"Rank {rank}: Using exp_name from config: {main_cfg.exp_name}")
+    # ==================== END: Robust exp_name Fix ====================
 
     assert main_create_cfg.policy.type in ['unizero_multitask', 'sampled_unizero_multitask'], \
         "This entry only supports 'unizero_multitask' or 'sampled_unizero_multitask' policies."
@@ -299,12 +314,37 @@ def train_unizero_multitask_balance_segment_ddp(
 
     main_cfg.policy.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     compiled_cfg = compile_config(main_cfg, seed=seed, auto=True, create_cfg=main_create_cfg, save_cfg=True)
-    
+
     policy = create_policy(compiled_cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
+
+    # Log initial model architecture info BEFORE loading checkpoint
+    if rank == 0:
+        num_layers_config = compiled_cfg.policy.model.world_model_cfg.num_layers
+        initial_params = sum(p.numel() for p in policy._learn_model.world_model.parameters())
+        initial_trainable = sum(p.numel() for p in policy._learn_model.world_model.parameters() if p.requires_grad)
+        logging.info(f"=" * 80)
+        logging.info(f"Model Architecture Configuration:")
+        logging.info(f"  - num_layers from config: {num_layers_config}")
+        logging.info(f"  - Total parameters (before checkpoint load): {initial_params:,}")
+        logging.info(f"  - Trainable parameters (before checkpoint load): {initial_trainable:,}")
+        logging.info(f"=" * 80)
+
     if model_path:
         logging.info(f'Loading pre-trained model from: {model_path}')
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=compiled_cfg.policy.device))
         logging.info('Model loading complete.')
+        if rank == 0:
+            loaded_params = sum(p.numel() for p in policy._learn_model.world_model.parameters())
+            loaded_trainable = sum(p.numel() for p in policy._learn_model.world_model.parameters() if p.requires_grad)
+            logging.info(f"Model Parameters After Loading Checkpoint:")
+            logging.info(f"  - Total parameters (after checkpoint load): {loaded_params:,}")
+            logging.info(f"  - Trainable parameters (after checkpoint load): {loaded_trainable:,}")
+            if initial_params != loaded_params:
+                logging.warning(f"⚠️ WARNING: Parameter count mismatch!")
+                logging.warning(f"  Config specifies {initial_params:,} params, but loaded model has {loaded_params:,} params")
+                logging.warning(f"  This usually means the checkpoint was trained with different num_layers!")
+                logging.warning(f"  The loaded checkpoint architecture will override your config settings.")
+
 
     tb_logger = SummaryWriter(os.path.join(f'./{compiled_cfg.exp_name}/log', f'rank_{rank}'))
     learner = BaseLearner(compiled_cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=compiled_cfg.exp_name)
@@ -314,6 +354,19 @@ def train_unizero_multitask_balance_segment_ddp(
     for local_task_id, (task_id, [cfg, create_cfg]) in enumerate(tasks_for_this_rank):
         task_seed = seed + task_id
         cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
+
+        # ==================== START: Robust exp_name Fix for Task Config ====================
+        # Ensure each task config has a valid exp_name before calling compile_config
+        if not hasattr(cfg, 'exp_name') or cfg.exp_name is None:
+            # Extract env_id from config if available, otherwise use task_id
+            env_id = getattr(cfg.env, 'env_id', f'task{task_id}')
+            cfg.exp_name = f'data_unizero_mt_balance/task_{env_id}_seed{task_seed}'
+            logging.warning(
+                f"Rank {rank}: Task {task_id} config missing exp_name. "
+                f"Setting to: {cfg.exp_name}"
+            )
+        # ==================== END: Robust exp_name Fix for Task Config ====================
+
         compiled_task_cfg = compile_config(cfg, seed=task_seed, auto=True, create_cfg=create_cfg, save_cfg=True)
         
         env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(compiled_task_cfg.env)
@@ -324,8 +377,28 @@ def train_unizero_multitask_balance_segment_ddp(
         set_pkg_seed(task_seed, use_cuda=compiled_task_cfg.policy.cuda)
 
         replay_buffers.append(GameBuffer(compiled_task_cfg.policy))
-        collectors.append(Collector(collector_env, policy.collect_mode, tb_logger, compiled_task_cfg.exp_name, compiled_task_cfg.policy, task_id))
-        evaluators.append(Evaluator(compiled_task_cfg.policy.eval_freq, compiled_task_cfg.env.n_evaluator_episode, compiled_task_cfg.env.stop_value, evaluator_env, policy.eval_mode, tb_logger, compiled_task_cfg.exp_name, compiled_task_cfg.policy, task_id))
+        collectors.append(Collector(
+            collect_print_freq=100,
+            env=collector_env,
+            policy=policy.collect_mode,
+            tb_logger=tb_logger,
+            exp_name=compiled_task_cfg.exp_name,
+            instance_name=f'collector_task{task_id}',
+            policy_config=compiled_task_cfg.policy,
+            task_id=task_id
+        ))
+        evaluators.append(Evaluator(
+            eval_freq=compiled_task_cfg.policy.eval_freq,
+            n_evaluator_episode=compiled_task_cfg.env.n_evaluator_episode,
+            stop_value=compiled_task_cfg.env.stop_value,
+            env=evaluator_env,
+            policy=policy.eval_mode,
+            tb_logger=tb_logger,
+            exp_name=compiled_task_cfg.exp_name,
+            instance_name=f'evaluator_task{task_id}',
+            policy_config=compiled_task_cfg.policy,
+            task_id=task_id
+        ))
         task_configs.append(compiled_task_cfg)
 
     # --- Curriculum and Training Loop Initialization ---
@@ -348,8 +421,17 @@ def train_unizero_multitask_balance_segment_ddp(
             allocated_batch_sizes = allocate_batch_size(task_configs, replay_buffers, alpha=1.0, clip_scale=clip_scale)
             if rank == 0:
                 logging.info(f"Dynamically allocated batch sizes: {allocated_batch_sizes}")
+            # Assign the corresponding batch size to each task config
             for i, cfg in enumerate(task_configs):
-                cfg.policy.batch_size = allocated_batch_sizes
+                task_id = cfg.policy.task_id
+                if isinstance(allocated_batch_sizes, dict):
+                    cfg.policy.batch_size = allocated_batch_sizes.get(task_id, cfg.policy.batch_size)
+                elif isinstance(allocated_batch_sizes, list):
+                    # Use the index in the list or task_id as fallback
+                    cfg.policy.batch_size = allocated_batch_sizes[i] if i < len(allocated_batch_sizes) else cfg.policy.batch_size
+                else:
+                    logging.warning(f"Unexpected type for allocated_batch_sizes: {type(allocated_batch_sizes)}")
+            # Also update the policy config (use the full list for compatibility)
             policy._cfg.batch_size = allocated_batch_sizes
 
         # --- 2. Data Collection and Evaluation for each task on this rank ---
@@ -505,7 +587,15 @@ def train_unizero_multitask_balance_segment_ddp(
                 train_data_list = []
                 total_envstep = sum(c.envstep for c in collectors)
                 for cfg, replay_buffer in zip(unsolved_cfgs, unsolved_buffers):
-                    batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    # Handle batch_size whether it's an int, list, or dict
+                    if isinstance(cfg.policy.batch_size, (list, tuple)):
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    elif isinstance(cfg.policy.batch_size, dict):
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    else:
+                        # batch_size is already an integer
+                        batch_size = cfg.policy.batch_size
+
                     if replay_buffer.get_num_of_transitions() >= batch_size:
                         train_data = replay_buffer.sample(batch_size, policy)
                         train_data.append(cfg.policy.task_id)

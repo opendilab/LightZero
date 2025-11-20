@@ -554,7 +554,13 @@ def train_unizero_multitask_segment_ddp(
             )
 
             cfgs.append(cfg)
-            replay_buffer.batch_size = cfg.policy.batch_size[task_id]
+            # Handle batch_size robustly - it might be a list or already an integer
+            if isinstance(cfg.policy.batch_size, (list, tuple)):
+                replay_buffer.batch_size = cfg.policy.batch_size[task_id]
+            elif isinstance(cfg.policy.batch_size, dict):
+                replay_buffer.batch_size = cfg.policy.batch_size[task_id]
+            else:
+                replay_buffer.batch_size = cfg.policy.batch_size
 
             game_buffers.append(replay_buffer)
             collector_envs.append(collector_env)
@@ -583,10 +589,19 @@ def train_unizero_multitask_segment_ddp(
             allocated_batch_sizes = allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=clip_scale)
             if rank == 0:
                 print("分配后的 batch_sizes: ", allocated_batch_sizes)
+            # Assign the corresponding batch size to each task config
             for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                     zip(cfgs, collectors, evaluators, game_buffers)):
-                cfg.policy.batch_size = allocated_batch_sizes
-                policy._cfg.batch_size = allocated_batch_sizes
+                task_id = cfg.policy.task_id
+                if isinstance(allocated_batch_sizes, dict):
+                    cfg.policy.batch_size = allocated_batch_sizes.get(task_id, cfg.policy.batch_size)
+                elif isinstance(allocated_batch_sizes, list):
+                    # Use the index in the list or task_id as fallback
+                    cfg.policy.batch_size = allocated_batch_sizes[idx] if idx < len(allocated_batch_sizes) else cfg.policy.batch_size
+                else:
+                    logging.warning(f"Unexpected type for allocated_batch_sizes: {type(allocated_batch_sizes)}")
+            # Also update the policy config (use the full list for compatibility)
+            policy._cfg.batch_size = allocated_batch_sizes
 
         # For each task on the current rank, perform data collection and evaluation.
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
@@ -737,7 +752,14 @@ def train_unizero_multitask_segment_ddp(
                 envstep_multi_task = 0
                 for idx, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
                     envstep_multi_task += collector.envstep
-                    batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    # Handle batch_size robustly - it might be a list or already an integer
+                    if isinstance(cfg.policy.batch_size, (list, tuple)):
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    elif isinstance(cfg.policy.batch_size, dict):
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    else:
+                        batch_size = cfg.policy.batch_size
+
                     if replay_buffer.get_num_of_transitions() > batch_size:
                         if cfg.policy.buffer_reanalyze_freq >= 1:
                             if i % reanalyze_interval == 0 and \

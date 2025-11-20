@@ -5,14 +5,14 @@ import logging
 
 # Set up logging configuration
 # Configure logging to output to both a file and the console.
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    handlers=[
-        logging.FileHandler("output.log", encoding="utf-8"),  # Log to file
-        logging.StreamHandler()  # Log to console
-    ]
-)
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format='%(asctime)s - %(message)s',
+#     handlers=[
+#         logging.FileHandler("output.log", encoding="utf-8"),  # Log to file
+#         logging.StreamHandler()  # Log to console
+#     ]
+# )
 
 
 def create_config(
@@ -96,6 +96,8 @@ def create_config(
 
     # --- World Model Configuration ---
     world_model_cfg = dict(
+        game_segment_length=100,
+        
         # --- Normalization and Loss ---
         final_norm_option_in_obs_head='LayerNorm',
         final_norm_option_in_encoder='LayerNorm',
@@ -118,7 +120,8 @@ def create_config(
         device='cuda',
 
         # --- Transformer/MOE Settings ---
-        num_layers=8,  # TODO: 8 for standard, 1 for debug
+        num_layers=4,  # TODO: 8 for standard, 1 for debug
+        # num_layers=8,  # TODO: 8 for standard, 1 for debug
         num_heads=24,
         embed_dim=768,
         moe_in_transformer=False,
@@ -306,8 +309,15 @@ def generate_configs(
     configs = []
 
     # Define the experiment name prefix. This helps in organizing experiment logs and results.
+    # IMPORTANT: To avoid filesystem path length issues, consider using a simplified version
+    # if you encounter "File name too long" errors.
+    #
+    # ===== Simplified Version (RECOMMENDED if you encounter path length issues) =====
+    # exp_name_prefix = f'data_20251120/dmc_{len(env_id_list)}t_brf{buffer_reanalyze_freq:.0e}_s{seed}/'
+    #
+    # ===== Detailed Version (Current) =====
     exp_name_prefix = (
-        f'data_suz_dmc_mt_20250601/dmc_{len(env_id_list)}tasks_frameskip4-pendulum-skip8_ln-mse'
+        f'data_suz_dmc_mt_20251120/dmc_{len(env_id_list)}tasks_frameskip4-pendulum-skip8_ln-mse'
         f'_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
     )
 
@@ -384,6 +394,8 @@ if __name__ == "__main__":
 
         # Using torchrun (recommended)
         torchrun --nproc_per_node=8 <PATH_TO_THIS_SCRIPT>/dmc2gym_state_suz_multitask_ddp_config.py
+        torchrun --nproc_per_node=4 /mnt/afs/wanzunian/niuyazhe/puyuan/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
+        
     """
     # --- Import necessary components for training ---
     # It's good practice to place imports inside the main guard

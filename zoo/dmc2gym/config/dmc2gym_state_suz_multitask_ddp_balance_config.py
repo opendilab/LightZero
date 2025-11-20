@@ -11,7 +11,7 @@ import logging
 from typing import Any, Dict, List
 
 from easydict import EasyDict
-
+import copy
 # ==============================================================
 # Global setup: Logging
 # ==============================================================
@@ -71,10 +71,14 @@ def get_base_config(env_id_list: list[str], collector_env_num: int, evaluator_en
             task_num=len(env_id_list),
             # Model configuration
             model=dict(
+                reward_support_range=(-50., 51., 1.),
+                value_support_range=(-50., 51., 1.),
                 continuous_action_space=True,
                 num_of_sampled_actions=20,
                 model_type='mlp',
                 world_model_cfg=dict(
+                    game_segment_length=100,
+                    
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse',  # TODO(user): Loss type for latent state with LayerNorm.
@@ -193,6 +197,7 @@ def create_task_config(
         reanalyze_ratio: float,
         batch_size: int,
         num_unroll_steps: int,
+        infer_context_length: int,
         norm_type: str,
         buffer_reanalyze_freq: float,
         reanalyze_batch_size: int,
@@ -255,6 +260,7 @@ def create_task_config(
         action_space_size_list=action_space_size_list,
         num_unroll_steps=num_unroll_steps,
         norm_type=norm_type,
+        context_length=2 * infer_context_length, 
     ))
     
     # Update policy settings
@@ -315,9 +321,23 @@ def generate_experiment_name(num_tasks: int, curriculum_stage_num: int, buffer_r
     """
     # NOTE: This is a template for the experiment name.
     # Users should customize it to reflect their specific experiment settings.
+    #
+    # IMPORTANT: To avoid filesystem path length issues, consider using the simplified version below.
+    # Uncomment the simplified version and comment out the detailed version if you encounter
+    # "File name too long" errors.
+    #
+    # ===== Simplified Version (RECOMMENDED to avoid path length issues) =====
+    # return f'data_20251120/dmc_{num_tasks}t_s{curriculum_stage_num}_brf{buffer_reanalyze_freq:.0e}_s{seed}/'
+    #
+    # ===== Detailed Version (Current) =====
+    # return (
+    #     f'data_suz_dmc_mt_balance_20251120/dmc_{num_tasks}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}'
+    #     f'_stage0-10k-5k_fix-lora-update-stablescale_moe8-uselora_nlayer4_not-share-head'
+    #     f'_brf{buffer_reanalyze_freq}_seed{seed}/'
+    # )
     return (
-        f'data_suz_dmc_mt_balance_20250625/dmc_{num_tasks}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}'
-        f'_stage0-10k-5k_fix-lora-update-stablescale_moe8-uselora_nlayer4_not-share-head'
+        f'data_suz_dmc_mt_balance_20251120/dmc_{num_tasks}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}'
+        f'_stage0-10k-5k_moe8_nlayer4'
         f'_brf{buffer_reanalyze_freq}_seed{seed}/'
     )
 
@@ -378,7 +398,8 @@ def generate_all_task_configs(
 
     for task_id, env_id in enumerate(env_id_list):
         task_specific_config = create_task_config(
-            base_config=base_config.clone(),  # Use a clone to avoid modifying the base config
+            # base_config=base_config.clone(),  # Use a clone to avoid modifying the base config
+            base_config=copy.deepcopy(base_config),
             env_id=env_id,
             action_space_size_list=action_space_size_list,
             observation_shape_list=observation_shape_list,
@@ -422,7 +443,7 @@ def main():
 
         2. Using `torchrun`:
            cd <PATH_TO_YOUR_PROJECT>/LightZero/
-           torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py
+           torchrun --nproc_per_node=4 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py
     """
     from lzero.entry import train_unizero_multitask_balance_segment_ddp
     from ding.utils import DDPContext
@@ -472,7 +493,9 @@ def main():
     # max_env_step = int(1e3)
 
     # Production settings
-    curriculum_stage_num = 5
+    # curriculum_stage_num = 5
+    curriculum_stage_num = 3
+    
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
