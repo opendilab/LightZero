@@ -19,7 +19,10 @@ Date: 2025-01-20
 import copy
 import re
 import sys
+import time
+import cProfile
 import logging
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Union, Optional
 
@@ -192,7 +195,15 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         self.llm_tokenizer = None
         self._optimizer_llm = None
         self._lr_scheduler_llm = None
+        self._last_llm_grad_norm = 0.0
         self.llm_policy_cfg = cfg.llm_policy_cfg  # Set from cfg, not self._cfg (not set yet)
+        self.profile_cfg = getattr(cfg, 'profile_cfg', {})
+        self._profile_enabled = bool(self.profile_cfg.get('enable_cprofile', False))
+        profile_dir_cfg = self.profile_cfg.get('output_dir')
+        self._profile_dir = Path(profile_dir_cfg) if profile_dir_cfg is not None else Path("./profile_stats")
+        self._profile_log_interval = int(self.profile_cfg.get('log_interval', 50))
+        self._profile_stats: Dict[str, Dict[str, float]] = {}
+        self._profile_stats_file = self._profile_dir / "train_time.log"
 
         # Call parent init (this will trigger _init_learn, _init_collect, _init_eval)
         super().__init__(cfg, model, enable_field)
@@ -260,55 +271,80 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             eta_min=self.llm_policy_cfg.llm_learning_rate * 0.1
         )
 
+        if self._profile_enabled:
+            self._profile_dir.mkdir(parents=True, exist_ok=True)
+
         logging.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
         logging.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
         logging.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
 
-    
-    
-    
-    def compute_sft_loss(
-        self, 
-        raw_obs_list: List[List[str]], 
+
+    @contextmanager
+    def _profile_block(self, name: str):
+        """
+        Lightweight context manager for optional cProfile sections.
+        """
+        if not self._profile_enabled:
+            yield None
+            return
+        self._profile_dir.mkdir(parents=True, exist_ok=True)
+        profiler = cProfile.Profile()
+        start_time = time.perf_counter()
+        profiler.enable()
+        try:
+            yield profiler
+        finally:
+            profiler.disable()
+            elapsed = time.perf_counter() - start_time
+            self._record_profile_time(name, elapsed)
+            # No per-iteration .prof dumps; aggregate stats in a single log file instead.
+
+    def _record_profile_time(self, name: str, elapsed: float) -> None:
+        log_every = max(1, self._profile_log_interval)
+        stats = self._profile_stats.setdefault(name, {'count': 0, 'total': 0.0, 'max': 0.0})
+        stats['count'] += 1
+        stats['total'] += elapsed
+        stats['max'] = max(stats['max'], elapsed)
+        if stats['count'] % log_every == 0:
+            avg = stats['total'] / stats['count']
+            self._profile_dir.mkdir(parents=True, exist_ok=True)
+            with self._profile_stats_file.open("a") as f:
+                f.write(
+                    f"{time.time():.3f}\t{name}\tcount={stats['count']}\t"
+                    f"total_s={stats['total']:.4f}\tavg_s={avg:.6f}\tmax_s={stats['max']:.6f}\n"
+                )
+            logging.info(
+                f"[cprofile][agg] {name}: count={stats['count']} total={stats['total']:.2f}s "
+                f"avg={avg:.4f}s max={stats['max']:.4f}s"
+            )
+
+    def _build_llm_samples(
+        self,
+        raw_obs_list: List[List[str]],
         history_obs_list: List[List[List[Tuple[str, str, float]]]]
-    ) -> torch.Tensor:
+    ) -> List[Dict[str, Any]]:
         """
-        Calculate SFT loss given batch of observations and histories.
-        
-        Args:
-            raw_obs_list: Shape [B, T]. Text observations.
-            history_obs_list: Shape [B, T]. History context corresponding to each obs.
-                              Each element is a list of (obs, action, reward) tuples.
+        Build prompt/target pairs (and rewards) for LLM training.
         """
-        sft_prompts = []
-        sft_targets = []
-        
+        samples: List[Dict[str, Any]] = []
         B = len(raw_obs_list)
-        if B == 0: 
-            return torch.tensor(0.0, device=self._cfg.device)
-        T = len(raw_obs_list[0]) 
-        # ============================================================
-        # 1. Data Alignment & Extraction (Offset Logic)
-        # ============================================================
+        if B == 0:
+            return samples
+        T = len(raw_obs_list[0])
+
         for b in range(B):
-            # 我们只能遍历到 T-1，因为我们需要 t+1 时刻的历史来获取 t 时刻的 Action。 比如一共11步(0-10)，我们只能训练 0-9 步，第 10 步没有下一步的历史来告诉我们它做了什么
             for t in range(T - 1):
                 current_obs = raw_obs_list[b][t]
                 current_history = history_obs_list[b][t]
-                # t+1 时刻的历史
-                next_step_history = history_obs_list[b][t+1]
+                next_step_history = history_obs_list[b][t + 1]
                 if isinstance(next_step_history, np.ndarray):
                     next_step_history = next_step_history.tolist()
-                try:
-                    if not next_step_history:
-                        continue
-                except:
-                    logging.info(f"Invalid next_step_history at batch {b}, time {t+1}: {next_step_history}")
+                if not next_step_history:
                     continue
-                _, true_action, _ = next_step_history[-1]
+                _, true_action, reward_value = next_step_history[-1]
                 if not true_action:
                     continue
-                
+
                 instruction = build_llm_prompt(
                     current_obs=current_obs,
                     history=current_history,
@@ -319,33 +355,47 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     tokenize=False,
                     add_generation_prompt=True
                 )
-                target_text = f"<action>{true_action}</action>{self.llm_tokenizer.eos_token}"
-                sft_prompts.append(prompt)
-                sft_targets.append(target_text)
-                
-        # ============================================================
-        # 2. Compute Loss with Micro-Batching
-        # ============================================================
-        num_sft_samples = len(sft_prompts)
-        if num_sft_samples == 0:
+                samples.append(
+                    dict(
+                        prompt=prompt,
+                        target=f"<action>{true_action}</action>{self.llm_tokenizer.eos_token}",
+                        reward=float(reward_value) if reward_value is not None else 0.0,
+                    )
+                )
+        return samples
+
+    def compute_sft_loss(
+        self,
+        raw_obs_list: List[List[str]],
+        history_obs_list: List[List[List[Tuple[str, str, float]]]]
+    ) -> torch.Tensor:
+        """
+        Calculate SFT loss and apply gradient updates with accumulation.
+        """
+        samples = self._build_llm_samples(raw_obs_list, history_obs_list)
+        if len(samples) == 0:
             return torch.tensor(0.0, device=self._cfg.device)
 
-        micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
-        micro_batch_size = min(micro_batch_size, num_sft_samples)
-        
-        num_micro_batches = (num_sft_samples + micro_batch_size - 1) // micro_batch_size
-        accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
-        full_texts = [p + t for p, t in zip(sft_prompts, sft_targets)]
-        
-        accumulated_sft_loss = 0.0
+        micro_batch_size = min(self.llm_policy_cfg.llm_micro_batch_size, len(samples))
+        num_micro_batches = (len(samples) + micro_batch_size - 1) // micro_batch_size
+        grad_accum_steps = max(
+            1, min(self.llm_policy_cfg.llm_gradient_accumulation_steps, num_micro_batches)
+        )
+
+        accumulated_loss = 0.0
+        last_grad_norm = 0.0
         self.llm_policy_model.train()
+        self._optimizer_llm.zero_grad()
+
+        full_texts = [s['prompt'] + s['target'] for s in samples]
+        prompts_only = [s['prompt'] for s in samples]
 
         for micro_batch_idx in range(num_micro_batches):
             start_idx = micro_batch_idx * micro_batch_size
-            end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_sft_samples)
+            end_idx = min((micro_batch_idx + 1) * micro_batch_size, len(samples))
 
             batch_full_texts = full_texts[start_idx:end_idx]
-            batch_prompts = sft_prompts[start_idx:end_idx]
+            batch_prompts = prompts_only[start_idx:end_idx]
 
             inputs = self.llm_tokenizer(
                 batch_full_texts,
@@ -359,29 +409,138 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             labels[labels == self.llm_tokenizer.pad_token_id] = -100
 
             for i, prompt_str in enumerate(batch_prompts):
-                prompt_tokens = self.llm_tokenizer.encode(prompt_str, add_special_tokens=False) 
+                prompt_tokens = self.llm_tokenizer.encode(prompt_str, add_special_tokens=False)
                 prompt_len = len(prompt_tokens)
-                
                 if prompt_len < labels.shape[1]:
                     labels[i, :prompt_len] = -100
                 else:
                     labels[i, :] = -100
-                    
+
             outputs = self.llm_policy_model(
                 input_ids=inputs.input_ids,
                 attention_mask=inputs.attention_mask,
                 labels=labels
             )
             loss = outputs.loss
-            micro_batch_loss = loss / accumulation_steps
-            accumulated_sft_loss += micro_batch_loss.item()
-            
-            micro_batch_loss.backward()
+            accumulated_loss += loss.item()
+            scaled_loss = loss / grad_accum_steps
+            scaled_loss.backward()
+
+            should_step = ((micro_batch_idx + 1) % grad_accum_steps == 0) or (micro_batch_idx == num_micro_batches - 1)
+            if should_step:
+                last_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.llm_policy_model.parameters(),
+                    self._cfg.grad_clip_value
+                ).item()
+                self._optimizer_llm.step()
+                if self._lr_scheduler_llm is not None:
+                    self._lr_scheduler_llm.step()
+                self._optimizer_llm.zero_grad(set_to_none=True)
 
             del inputs, labels, outputs, loss
             torch.cuda.empty_cache()
 
-        return torch.tensor(accumulated_sft_loss, device=self._cfg.device)
+        self._last_llm_grad_norm = last_grad_norm
+        mean_loss = accumulated_loss / max(1, num_micro_batches)
+        return torch.tensor(mean_loss, device=self._cfg.device)
+    
+    def compute_rft_loss(
+        self,
+        raw_obs_list: List[List[str]],
+        history_obs_list: List[List[List[Tuple[str, str, float]]]]
+    ) -> torch.Tensor:
+        """
+        Reinforcement fine-tuning loss with in-function gradient/optimizer updates.
+        """
+        samples = self._build_llm_samples(raw_obs_list, history_obs_list)
+        if len(samples) == 0:
+            return torch.tensor(0.0, device=self._cfg.device)
+
+        micro_batch_size = min(self.llm_policy_cfg.llm_micro_batch_size, len(samples))
+        num_micro_batches = (len(samples) + micro_batch_size - 1) // micro_batch_size
+        grad_accum_steps = max(
+            1, min(self.llm_policy_cfg.llm_gradient_accumulation_steps, num_micro_batches)
+        )
+
+        accumulated_loss = 0.0
+        last_grad_norm = 0.0
+        self.llm_policy_model.train()
+        self._optimizer_llm.zero_grad(set_to_none=True)
+
+        full_texts = [s['prompt'] + s['target'] for s in samples]
+        prompts_only = [s['prompt'] for s in samples]
+        rewards_list = [s['reward'] for s in samples]
+
+        for micro_batch_idx in range(num_micro_batches):
+            start_idx = micro_batch_idx * micro_batch_size
+            end_idx = min((micro_batch_idx + 1) * micro_batch_size, len(samples))
+
+            batch_full_texts = full_texts[start_idx:end_idx]
+            batch_prompts = prompts_only[start_idx:end_idx]
+            batch_rewards = rewards_list[start_idx:end_idx]
+
+            inputs = self.llm_tokenizer(
+                batch_full_texts,
+                padding=True,
+                truncation=True,
+                max_length=self.llm_policy_cfg.prompt_max_len,
+                return_tensors="pt"
+            ).to(self._cfg.device)
+
+            labels = inputs.input_ids.clone()
+            labels[labels == self.llm_tokenizer.pad_token_id] = -100
+            for i, prompt_str in enumerate(batch_prompts):
+                prompt_tokens = self.llm_tokenizer.encode(prompt_str, add_special_tokens=False)
+                prompt_len = len(prompt_tokens)
+                if prompt_len < labels.shape[1]:
+                    labels[i, :prompt_len] = -100
+                else:
+                    labels[i, :] = -100
+
+            outputs = self.llm_policy_model(
+                input_ids=inputs.input_ids,
+                attention_mask=inputs.attention_mask
+            )
+            log_probs = F.log_softmax(outputs.logits, dim=-1)
+            shifted_log_probs = log_probs[:, :-1, :].contiguous()
+            shifted_labels = labels[:, 1:].contiguous()
+            gather_labels = shifted_labels.clone()
+            gather_labels[gather_labels == -100] = self.llm_tokenizer.pad_token_id
+
+            token_log_probs = shifted_log_probs.gather(
+                dim=-1,
+                index=gather_labels.unsqueeze(-1)
+            ).squeeze(-1)
+            mask = (shifted_labels != -100).float()
+            token_log_probs = token_log_probs * mask
+            sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
+
+            rewards_tensor = torch.tensor(batch_rewards, device=self._cfg.device, dtype=torch.float32)
+            if len(batch_rewards) > 1:
+                rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
+
+            loss = -(rewards_tensor * sequence_log_probs).mean()
+            accumulated_loss += loss.item()
+            scaled_loss = loss / grad_accum_steps
+            scaled_loss.backward()
+
+            should_step = ((micro_batch_idx + 1) % grad_accum_steps == 0) or (micro_batch_idx == num_micro_batches - 1)
+            if should_step:
+                last_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.llm_policy_model.parameters(),
+                    self._cfg.grad_clip_value
+                ).item()
+                self._optimizer_llm.step()
+                if self._lr_scheduler_llm is not None:
+                    self._lr_scheduler_llm.step()
+                self._optimizer_llm.zero_grad(set_to_none=True)
+
+            del inputs, labels, outputs, loss
+            torch.cuda.empty_cache()
+
+        self._last_llm_grad_norm = last_grad_norm
+        mean_loss = accumulated_loss / max(1, num_micro_batches)
+        return torch.tensor(mean_loss, device=self._cfg.device)
     
     
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -497,22 +656,28 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         logging.info(f"[BATCH_SHAPES] obs: {batch_for_gpt['observations'].shape}, actions: {batch_for_gpt['actions'].shape}, rewards: {batch_for_gpt['rewards'].shape}, mask_padding: {batch_for_gpt['mask_padding'].shape}")
 
         # Compute world model loss
-        wm_losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt,
-            self._target_model.world_model.tokenizer,
-            self.value_inverse_scalar_transform_handle,
-        )
+        with self._profile_block(f"train_wm_loss_iter{int(train_iter)}"):
+            wm_losses = self._learn_model.world_model.compute_loss(
+                batch_for_gpt,
+                self._target_model.world_model.tokenizer,
+                self.value_inverse_scalar_transform_handle,
+            )
 
-        # Weighted world model loss (for prioritized experience replay)
-        wm_total_loss = (weights * wm_losses.loss_total).mean()
+            # Weighted world model loss (for prioritized experience replay)
+            wm_total_loss = (weights * wm_losses.loss_total).mean()
 
         # ==============================================================================
         # Part 2: [PRIORZERO-NEW] LLM Policy Training (SFT + RFT)
         # ==============================================================================
+        self._last_llm_grad_norm = 0.0
         if self.llm_policy_cfg.enable_sft:
-            llm_sft_loss = self.compute_sft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
+            with self._profile_block(f"train_sft_loss_iter{int(train_iter)}"):
+                llm_sft_loss = self.compute_sft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
+        else:
+            llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
         if self.llm_policy_cfg.enable_rft:
-            llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
+            with self._profile_block(f"train_rft_loss_iter{int(train_iter)}"):
+                llm_rft_loss = self.compute_rft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
         else:
             llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
         # # ============================================================
@@ -620,21 +785,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             self._learn_model.world_model.parameters(),
             self._cfg.grad_clip_value
         )
-        llm_grad_norm = torch.nn.utils.clip_grad_norm_(
-            self.llm_policy_model.parameters(),
-            self._cfg.grad_clip_value
-        )
-
-        # Optimizer step for both models
+        # Optimizer step for world model (LLM is updated inside compute_sft_loss/compute_rft_loss)
         self._optimizer_world_model.step()
-        self._optimizer_llm.step()  # Apply accumulated LLM gradients
-
-        # Zero LLM gradients after step (ready for next iteration)
-        self._optimizer_llm.zero_grad()
-
-        # Learning rate scheduler step (optional)
-        if self._lr_scheduler_llm is not None:
-            self._lr_scheduler_llm.step()
 
         # Update target model (soft update)
         self._target_model.update(self._learn_model.state_dict())
@@ -757,7 +909,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
             # ============ Gradient Norms ============
             'total_grad_norm_before_clip_wm': wm_grad_norm.item(),
-            'llm_grad_norm': llm_grad_norm.item(),
+            'llm_grad_norm': self._last_llm_grad_norm,
 
             # ============ Learning Rates ============
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],

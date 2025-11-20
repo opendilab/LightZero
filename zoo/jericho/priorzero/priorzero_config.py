@@ -278,8 +278,8 @@ def get_priorzero_config(
 
         # [PRIORZERO-OOM-FIX] Gradient accumulation for memory efficiency
         # Process LLM training in smaller micro-batches to avoid OOM
-        llm_micro_batch_size=16,  # Small batch size per forward pass (reduce if still OOM)
-        llm_gradient_accumulation_steps=8,  # Accumulate gradients over 8 steps (effective batch = 4*8=32)
+        llm_micro_batch_size=32,  # Small batch size per forward pass (reduce if still OOM)
+        llm_gradient_accumulation_steps=4,  # Accumulate gradients over 8 steps (effective batch = 4*8=32)
         # Note: Effective batch size = llm_micro_batch_size * llm_gradient_accumulation_steps
 
         # Generation
@@ -290,6 +290,7 @@ def get_priorzero_config(
         history_length=5,      # Number of recent (obs, action, reward) tuples to include
         # use_cot=True,          # Whether to use Chain-of-Thought prompting
         use_cot=False,
+        prompt_log_interval=5000,  # Steps between logging LLM prompt/output during collection (0 disables)
 
         # Training strategy
         sft_target='mcts_policy',  # 'mcts_policy' or 'oracle_policy'
@@ -314,6 +315,11 @@ def get_priorzero_config(
                 ),
         ),
         type='priorzero',
+        profile_cfg=dict(
+            enable_cprofile=True,  # Enable cProfile for collect/train hot paths
+            output_dir=f"{exp_name}/log/profile",
+            log_interval=500,        # Aggregate wall-time stats every N profiled sections
+        ),
 
         # Environment settings (must match env config)
         collector_env_num=env_config['collector_env_num'],
@@ -470,11 +476,9 @@ def get_priorzero_config(
         env=env_config,
         policy=policy_config,
         replay_buffer=replay_buffer_config,
-
         # Experiment settings
-        exp_name=exp_name or f"priorzero_{env_id}_seed{seed}",
+        exp_name=exp_name,
         seed=seed,
-
         # Debug settings
         debug_mode=debug_mode,
     )
@@ -519,14 +523,6 @@ def get_priorzero_config(
     main_config = EasyDict(priorzero_config)
     create_config = EasyDict(create_config)
 
-    # Set experiment path
-    main_config.exp_name = f"data_priorzero/{main_config.exp_name}"
-
-    # [IMPORTANT] Set action mappings as regular attributes (not through EasyDict)
-    # Use object.__setattr__ to bypass EasyDict's __setattr__ which tries to convert dicts
-    object.__setattr__(main_config.policy, 'action_map', _temp_action_map)
-    object.__setattr__(main_config.policy, 'action_inv_map', _temp_action_inv_map)
-
     return main_config, create_config
 
 
@@ -564,4 +560,3 @@ def get_config_with_lora(env_id: str = 'zork1.z5', seed: int = 0):
     main_config.policy.llm_policy_cfg.use_lora = True
     main_config.exp_name = f"priorzero_lora_{env_id}_seed{seed}"
     return main_config, create_config
-

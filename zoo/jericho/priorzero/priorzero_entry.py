@@ -562,7 +562,7 @@ def main():
         logger.info("Using quick test configuration")
         main_cfg, create_cfg = get_priorzero_config_for_quick_test(args.env_id, args.seed, debug_mode=args.debug)
     else:
-        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, debug_mode=args.debug)
+        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_cprofile_{args.env_id}_seed0', debug_mode=args.debug)
 
     # Run training
     asyncio.run(train_priorzero(
