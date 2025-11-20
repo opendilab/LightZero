@@ -251,7 +251,11 @@ class AlphaZeroPolicy(Policy):
         """
         self.collect_mcts_temperature = temperature
         ready_env_id = list(obs.keys())
-        init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+        if self._cfg.simulation_env_id == 'chess': # obs[env_id]['board'] is FEN str
+            init_state = {env_id: obs[env_id]['board'].encode()  for env_id in ready_env_id}  # str → bytes
+        else:
+            init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+
         # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
         # If it's not present (which will raise a KeyError), None is used instead.
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
@@ -259,9 +263,11 @@ class AlphaZeroPolicy(Policy):
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._collect_model
+
         for env_id in ready_env_id:
             state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
+                                                                  # init_state=init_state[env_id], # orig
+                                                                  init_state=np.frombuffer(init_state[env_id], dtype=np.int8) if self._cfg.simulation_env_id == 'chess' else init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
             # Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations
@@ -321,7 +327,11 @@ class AlphaZeroPolicy(Policy):
                 the corresponding policy output in this timestep, including action, probs and so on.
         """
         ready_env_id = list(obs.keys())
-        init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+        if self._cfg.simulation_env_id == 'chess': # obs[env_id]['board'] is FEN str
+            init_state = {env_id: obs[env_id]['board'].encode()  for env_id in ready_env_id}  # str → bytes
+        else:
+            init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
+
         # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
         # If it's not present (which will raise a KeyError), None is used instead.
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
@@ -331,7 +341,7 @@ class AlphaZeroPolicy(Policy):
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
             state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
+                                                                  init_state=np.frombuffer(init_state[env_id], dtype=np.int8) if self._cfg.simulation_env_id == 'chess' else init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
             result = self._eval_mcts.get_next_action(

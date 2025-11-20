@@ -261,7 +261,7 @@ class MCTS(object):
             action = actions[np.argmax(action_probs)]
 
         # Return the selected action and the output probability of each action.
-        return action, action_probs
+        return action, action_probs, None
 
     def _simulate(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:
         """

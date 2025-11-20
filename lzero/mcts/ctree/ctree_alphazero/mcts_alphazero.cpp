@@ -166,6 +166,7 @@ public:
         if (!init_state.is_none()) {
             init_state = py::bytes(init_state.attr("tobytes")());
         }
+
         py::object katago_game_state = state_config_for_env_reset["katago_game_state"];
         if (!katago_game_state.is_none()) {
             katago_game_state = py::module::import("pickle").attr("dumps")(katago_game_state);
