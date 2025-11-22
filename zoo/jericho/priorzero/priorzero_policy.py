@@ -37,27 +37,18 @@ from ding.utils import POLICY_REGISTRY
 from ding.model import model_wrap
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import get_peft_model, LoraConfig, TaskType
+import os
 
 # Import from local LightZero
 from lzero.policy.unizero import UniZeroPolicy as OriginalUniZeroPolicy
-from lzero.policy import (
-    phi_transform,
-    InverseScalarTransform,
-    scalar_transform,  # [PRIORZERO] Added for reward/value transformation
-    DiscreteSupport,   # [PRIORZERO] Added for categorical distribution support
-    to_torch_float_tensor,
-    mz_network_output_unpack
-)
+from lzero.policy import phi_transform, InverseScalarTransform, scalar_transform, DiscreteSupport
+from lzero.policy import to_torch_float_tensor,mz_network_output_unpack, prepare_obs
 from lzero.policy.utils import select_action
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.entry.utils import initialize_zeros_batch
-# Import UniZeroModel to ensure it's registered in MODEL_REGISTRY
-import lzero.model.unizero_model  # noqa: F401
+import lzero.model.unizero_model  
 
 
-# ==============================================================================
-# Helper Functions for LLM Prior Processing
-# ==============================================================================
 def build_llm_prompt(
     current_obs: str,
     history: Optional[List[Tuple[str, str, float]]] = None,
@@ -189,7 +180,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         ),
     )
 
-    def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None):
+    def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None, **kwargs):
         # [PRIORZERO-NEW] Initialize LLM-related attributes BEFORE super().__init__
         # because super().__init__ will call _init_learn which needs these attributes        self.llm_policy_model = None
         self.llm_tokenizer = None
@@ -199,11 +190,15 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         self.llm_policy_cfg = cfg.llm_policy_cfg  # Set from cfg, not self._cfg (not set yet)
         self.profile_cfg = getattr(cfg, 'profile_cfg', {})
         self._profile_enabled = bool(self.profile_cfg.get('enable_cprofile', False))
-        profile_dir_cfg = self.profile_cfg.get('output_dir')
-        self._profile_dir = Path(profile_dir_cfg) if profile_dir_cfg is not None else Path("./profile_stats")
+        self._profile_dir = f"./{kwargs['exp_name']}/log/profile"
         self._profile_log_interval = int(self.profile_cfg.get('log_interval', 50))
-        self._profile_stats: Dict[str, Dict[str, float]] = {}
-        self._profile_stats_file = self._profile_dir / "train_time.log"
+        self._profile_stats = { 'train_world_model': {'count': 0, 'total': 0.0, 'max': 0.0}, 
+                                'train_llm_sft': {'count': 0, 'total': 0.0, 'max': 0.0},
+                                'train_llm_rft': {'count': 0, 'total': 0.0, 'max': 0.0}
+                            }
+        self._profile_stats_file = f'{self._profile_dir}/train_time.log'
+        if self._profile_enabled:
+            os.makedirs(self._profile_dir, exist_ok=True)
 
         # Call parent init (this will trigger _init_learn, _init_collect, _init_eval)
         super().__init__(cfg, model, enable_field)
@@ -271,23 +266,15 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             eta_min=self.llm_policy_cfg.llm_learning_rate * 0.1
         )
 
-        if self._profile_enabled:
-            self._profile_dir.mkdir(parents=True, exist_ok=True)
-
         logging.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
         logging.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
         logging.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
 
-
     @contextmanager
     def _profile_block(self, name: str):
-        """
-        Lightweight context manager for optional cProfile sections.
-        """
         if not self._profile_enabled:
             yield None
             return
-        self._profile_dir.mkdir(parents=True, exist_ok=True)
         profiler = cProfile.Profile()
         start_time = time.perf_counter()
         profiler.enable()
@@ -297,26 +284,20 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             profiler.disable()
             elapsed = time.perf_counter() - start_time
             self._record_profile_time(name, elapsed)
-            # No per-iteration .prof dumps; aggregate stats in a single log file instead.
 
     def _record_profile_time(self, name: str, elapsed: float) -> None:
         log_every = max(1, self._profile_log_interval)
-        stats = self._profile_stats.setdefault(name, {'count': 0, 'total': 0.0, 'max': 0.0})
-        stats['count'] += 1
-        stats['total'] += elapsed
-        stats['max'] = max(stats['max'], elapsed)
-        if stats['count'] % log_every == 0:
-            avg = stats['total'] / stats['count']
-            self._profile_dir.mkdir(parents=True, exist_ok=True)
-            with self._profile_stats_file.open("a") as f:
+        self._profile_stats[name]['count'] += 1
+        self._profile_stats[name]['total'] += elapsed
+        self._profile_stats[name]['max'] = max(self._profile_stats[name]['max'], elapsed)
+        if self._profile_stats[name]['count'] % log_every == 0:
+            avg = self._profile_stats[name]['total'] / self._profile_stats[name]['count']
+            with open(self._profile_stats_file, mode='a', encoding='utf-8') as f:
                 f.write(
-                    f"{time.time():.3f}\t{name}\tcount={stats['count']}\t"
-                    f"total_s={stats['total']:.4f}\tavg_s={avg:.6f}\tmax_s={stats['max']:.6f}\n"
+                    f"{time.time():.3f}\tname={name}\tcount={self._profile_stats[name]['count']}\t"
+                    f"total_s={self._profile_stats[name]['total']:.4f}\tavg_s={avg:.4f}\tmax_s={self._profile_stats[name]['max']:.4f}\n"
                 )
-            logging.info(
-                f"[cprofile][agg] {name}: count={stats['count']} total={stats['total']:.2f}s "
-                f"avg={avg:.4f}s max={stats['max']:.4f}s"
-            )
+    
 
     def _build_llm_samples(
         self,
@@ -561,29 +542,27 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             log_dict: Dictionary of training metrics
         """
         self._learn_model.train()
+        self._target_model.train()
         self.llm_policy_model.train()
 
         current_batch, target_batch, train_iter = data
-        # ==============================================================================
-        # Part 1: UniZero World Model Training (Full Implementation)
-        # ==============================================================================
 
-        # Unpack batches
         obs_batch_ori, action_batch, target_action_batch, mask_batch, batch_index_tensor, weights, make_time, timestep_batch, raw_obs_list, history_obs_list = current_batch
         target_reward, target_value, target_policy = target_batch
+        
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+            -1).long() 
+        timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
+            -1).long()
 
-        # Convert to tensors and move to device
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         (mask_batch, target_reward, target_value, target_policy, weights) = to_torch_float_tensor(data_list, self._cfg.device)
 
-        # Reshape targets
         batch_size = self._cfg.batch_size
         target_reward = target_reward.view(batch_size, -1)
         target_value = target_value.view(batch_size, -1)
 
-        # Apply scalar transform (for value and reward)
-        # [FIX] Use scalar_transform function (not self.scalar_transform)
-        # scalar_transform is a standalone function imported from lzero.policy
         transformed_target_reward = scalar_transform(target_reward)
         transformed_target_value = scalar_transform(target_value)
 
@@ -591,211 +570,66 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
-        # Prepare batch for world model
-        # NOTE: This follows the exact format required by UniZero world model
-        # [FIX] Convert obs_batch_ori to tensor if needed
-        import logging
-        if not isinstance(obs_batch_ori, torch.Tensor):
-            if isinstance(obs_batch_ori, np.ndarray):
-                logging.info(f"[DEBUG] obs_batch_ori type: numpy, shape: {obs_batch_ori.shape}, dtype: {obs_batch_ori.dtype}")
-                if len(obs_batch_ori.shape) == 2:
-                    obs_dim = 512  
-                    total_size = obs_batch_ori.shape[1]
-                    assert total_size % obs_dim == 0
-                    inferred_steps = total_size // obs_dim
-                    obs_batch_ori = obs_batch_ori.reshape(batch_size, inferred_steps, obs_dim)
-
-            obs_batch_ori = torch.from_numpy(obs_batch_ori).to(self._cfg.device)
-
-        # [FIX] Convert action_batch to tensor and handle shape correctly
-        if not isinstance(action_batch, torch.Tensor):
-            action_batch = torch.from_numpy(action_batch).to(self._cfg.device)
-
-        if action_batch.shape[-1] == 1:
-            actions_processed = action_batch.squeeze(-1).long()
-        else:
-            actions_processed = action_batch.long()
-
-        if not isinstance(timestep_batch, torch.Tensor):
-            timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device)
-
-        # Handle timestep_batch shape
-        if timestep_batch.shape[-1] == 1:
-            timestep_processed = timestep_batch.squeeze(-1).long()
-        else:
-            timestep_processed = timestep_batch.long()
-
         batch_for_gpt = {
-            'observations': obs_batch_ori,
-            'actions': actions_processed,
-            'timestep': timestep_processed,
+            'actions': action_batch.squeeze(-1),
+            'timestep': timestep_batch.squeeze(-1),
             'rewards': target_reward_categorical[:, :-1],
             'target_value': target_value_categorical[:, :-1],
             'target_policy': target_policy[:, :-1],
         }
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                self._cfg.batch_size, -1, self._cfg.model.observation_shape)
+        elif len(self._cfg.model.observation_shape) == 3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
-        # [FIX] Following unizero.py lines 673-675 exactly:
-        # Convert mask_batch to boolean, then truncate to align with observations/rewards
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data. Shape: (B, T)
-
-        # [CRITICAL] Truncate observations to align with rewards/actions
-        # - observations from buffer include next_obs → shape (B, T+1, obs_dim)
-        # - mask_padding is already (B, T) from buffer - DO NOT truncate again!
-        # - After target processing: rewards[:, :-1] → (B, T-1)
-        # - So only observations need truncation
-        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # Shape: (B, T-1, obs_dim)
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
-
-        # [FIX] Add missing 'ends' field (following unizero.py line 676)
-        # 'ends' marks terminal states in the trajectory (0 = not terminal)
         batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device)
-
-        # [FIX] Add 'scalar_target_value' field for priority calculation (following unizero.py line 681)
         batch_for_gpt['scalar_target_value'] = target_value
 
-        logging.info(f"[BATCH_SHAPES] obs: {batch_for_gpt['observations'].shape}, actions: {batch_for_gpt['actions'].shape}, rewards: {batch_for_gpt['rewards'].shape}, mask_padding: {batch_for_gpt['mask_padding'].shape}")
-
-        # Compute world model loss
-        with self._profile_block(f"train_wm_loss_iter{int(train_iter)}"):
+        with self._profile_block(name="train_world_model"):
             wm_losses = self._learn_model.world_model.compute_loss(
                 batch_for_gpt,
                 self._target_model.world_model.tokenizer,
                 self.value_inverse_scalar_transform_handle,
             )
 
-            # Weighted world model loss (for prioritized experience replay)
             wm_total_loss = (weights * wm_losses.loss_total).mean()
 
         # ==============================================================================
-        # Part 2: [PRIORZERO-NEW] LLM Policy Training (SFT + RFT)
+        # PRIORZERO-NEW] LLM Policy Training (SFT + RFT)
         # ==============================================================================
         self._last_llm_grad_norm = 0.0
-        if self.llm_policy_cfg.enable_sft:
-            with self._profile_block(f"train_sft_loss_iter{int(train_iter)}"):
+        if self.llm_policy_cfg.enable_llm and self.llm_policy_cfg.enable_sft:
+            with self._profile_block(name="train_llm_sft"):
                 llm_sft_loss = self.compute_sft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
         else:
             llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
-        if self.llm_policy_cfg.enable_rft:
-            with self._profile_block(f"train_rft_loss_iter{int(train_iter)}"):
+        if self.llm_policy_cfg.enable_llm and self.llm_policy_cfg.enable_rft:
+            with self._profile_block(name="train_llm_rft"):
                 llm_rft_loss = self.compute_rft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
         else:
             llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
-        # # ============================================================
-        # # Train LLM with RFT (Policy Gradient with gradient accumulation)
-        # # ============================================================
-        # if num_rft_samples > 0 and self.llm_policy_cfg.enable_rft:
-        #     # [PRIORZERO-OOM-FIX] Use micro-batching with gradient accumulation
-        #     micro_batch_size = self.llm_policy_cfg.llm_micro_batch_size
-        #     num_micro_batches = (num_rft_samples + micro_batch_size - 1) // micro_batch_size
-        #     accumulation_steps = self.llm_policy_cfg.llm_gradient_accumulation_steps
 
-        #     # Process in micro-batches
-        #     accumulated_rft_loss = 0.0
-        #     for micro_batch_idx in range(num_micro_batches):
-        #         start_idx = micro_batch_idx * micro_batch_size
-        #         end_idx = min((micro_batch_idx + 1) * micro_batch_size, num_rft_samples)
-
-        #         # Get micro-batch
-        #         micro_batch_prompts = rft_prompts[start_idx:end_idx]
-        #         micro_batch_rewards = rft_rewards[start_idx:end_idx]
-
-        #         # Tokenize prompts
-        #         inputs = self.llm_tokenizer(
-        #             micro_batch_prompts,
-        #             padding=True,
-        #             truncation=True,
-        #             max_length=self.llm_policy_cfg.prompt_max_len,
-        #             return_tensors="pt"
-        #         ).to(self._cfg.device)
-
-        #         # [FIX] Forward pass WITH gradient tracking (remove no_grad)
-        #         outputs = self.llm_policy_model(
-        #             input_ids=inputs.input_ids,
-        #             attention_mask=inputs.attention_mask
-        #         )
-
-        #         # Compute policy gradient loss (REINFORCE)
-        #         # Loss = -reward * log_prob(action)
-        #         logits = outputs.logits
-        #         log_probs = F.log_softmax(logits, dim=-1)
-
-        #         # Get log probability of actual tokens
-        #         shifted_log_probs = log_probs[:, :-1, :].contiguous()
-        #         shifted_labels = inputs.input_ids[:, 1:].contiguous()
-
-        #         # Gather log probs of actual tokens
-        #         token_log_probs = shifted_log_probs.gather(
-        #             dim=-1,
-        #             index=shifted_labels.unsqueeze(-1)
-        #         ).squeeze(-1)
-
-        #         # Mask padding tokens
-        #         mask = (shifted_labels != self.llm_tokenizer.pad_token_id).float()
-        #         token_log_probs = token_log_probs * mask
-
-        #         # Sum log probs per sequence
-        #         sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
-
-        #         # Compute REINFORCE loss for micro-batch
-        #         rewards_tensor = torch.tensor(
-        #             micro_batch_rewards,
-        #             device=self._cfg.device,
-        #             dtype=torch.float32
-        #         )
-
-        #         # Normalize rewards within micro-batch (important for stable training)
-        #         if len(micro_batch_rewards) > 1:
-        #             rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
-
-        #         micro_batch_rft_loss = -(rewards_tensor * sequence_log_probs).mean() / accumulation_steps
-        #         accumulated_rft_loss += micro_batch_rft_loss.item()
-
-        #         # Backward pass (accumulate gradients)
-        #         micro_batch_rft_loss.backward()
-
-        #         # Free memory
-        #         del inputs, outputs, logits, log_probs, rewards_tensor
-        #         torch.cuda.empty_cache()
-
-        #     # Average loss for logging
-        #     llm_rft_loss = torch.tensor(accumulated_rft_loss, device=self._cfg.device)
-
-        # # ==============================================================================
-        # Part 3: Joint Optimization
-        # ==============================================================================
-
-        # [PRIORZERO-OOM-FIX] Note: LLM gradients already accumulated via micro-batching above
-        # Only need to compute world model gradients here
-
-        # Combine losses (for logging only - LLM loss already backpropagated)
         llm_loss = (
             self.llm_policy_cfg.llm_loss_weight * llm_sft_loss +
             self.llm_policy_cfg.rft_loss_weight * llm_rft_loss
         )
         total_loss = wm_total_loss + llm_loss  # For logging
-
-        # Zero world model gradients only (LLM gradients already accumulated)
+        
         self._optimizer_world_model.zero_grad()
-
-        # Backward pass for world model only
         wm_total_loss.backward()
-
-        # Gradient clipping for both models
         wm_grad_norm = torch.nn.utils.clip_grad_norm_(
             self._learn_model.world_model.parameters(),
             self._cfg.grad_clip_value
         )
-        # Optimizer step for world model (LLM is updated inside compute_sft_loss/compute_rft_loss)
         self._optimizer_world_model.step()
-
-        # Update target model (soft update)
         self._target_model.update(self._learn_model.state_dict())
 
-        # ==============================================================================
-        # Part 4: Logging (Aligned with UniZero)
-        # ==============================================================================
 
-        # Extract intermediate losses from world model (like UniZero)
         intermediate_losses = wm_losses.intermediate_losses
         obs_loss = intermediate_losses.get('loss_obs', torch.tensor(0.0))
         reward_loss = intermediate_losses.get('loss_rewards', torch.tensor(0.0))
@@ -923,40 +757,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             # 'num_rft_samples': float(num_rft_samples),
             'total_loss': total_loss.item(),
         }
-
-        # ==============================================================================
-        # [PRIORZERO-NEW] WandB Logging (if enabled)
-        # ==============================================================================
-        if self._cfg.get('use_wandb', False):
-            try:
-                import wandb
-                if wandb.run is not None:
-                    # Log all metrics to WandB with hierarchical naming
-                    wandb.log({
-                        # World Model Metrics
-                        'train/wm/total_loss': log_dict['wm_total_loss'],
-                        'train/wm/value_loss': log_dict['wm_value_loss'],
-                        'train/wm/policy_loss': log_dict['wm_policy_loss'],
-                        'train/wm/reward_loss': log_dict['wm_reward_loss'],
-                        'train/wm/grad_norm': log_dict['wm_grad_norm'],
-                        'train/wm/learning_rate': log_dict['wm_lr'],
-
-                        # LLM Policy Metrics
-                        'train/llm/sft_loss': log_dict['llm_sft_loss'],
-                        'train/llm/rft_loss': log_dict['llm_rft_loss'],
-                        'train/llm/total_loss': log_dict['llm_total_loss'],
-                        'train/llm/grad_norm': log_dict['llm_grad_norm'],
-                        'train/llm/learning_rate': log_dict['llm_lr'],
-                        # 'train/llm/num_sft_samples': float(log_dict['num_sft_samples']),
-                        # 'train/llm/num_rft_samples': float(log_dict['num_rft_samples']),
-
-                        # Combined Metrics
-                        'train/total_loss': log_dict['total_loss'],
-                    }, step=self._train_iteration)
-            except Exception as e:
-                # Don't fail training if wandb logging fails
-                import logging
-                logging.warning(f"WandB logging failed: {e}")
 
         return log_dict
 
@@ -1115,6 +915,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         to_play: List[int] = None,
         epsilon: float = 0.0,
         ready_env_id: List[int] = None,
+        timestep: List = [0],
         **kwargs
     ) -> Dict[int, Dict[str, Any]]:
         """
@@ -1143,9 +944,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         """
         self._collect_model.eval()
 
-        # ======================================================================
-        # [PRIORZERO-NEW] Get LLM Prior Outputs
-        # ======================================================================
         llm_prior_logprob = kwargs.pop('llm_prior_logprob', None)
         valid_actions_list = kwargs.get('valid_actions_list', None)
 
@@ -1153,12 +951,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             logging.debug("No LLM priors provided, using standard UniZero MCTS")
             return super()._forward_collect(
                 data, action_mask, temperature, to_play, epsilon,
-                ready_env_id=ready_env_id, **kwargs
+                ready_env_id=ready_env_id, timestep=timestep
             )
-
-        # ======================================================================
-        # Parse LLM Outputs into Policy Priors
-        # ======================================================================
+            
         policy_priors = []
         for idx, actions in enumerate(valid_actions_list):
             prior = []
@@ -1169,113 +964,52 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # ======================================================================
         # World Model Initial Inference
         # ======================================================================
+        self._collect_mcts_temperature = temperature
+        self._collect_epsilon = epsilon
+        active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            # Run representation network to get latent state
-            network_output = self._collect_model.initial_inference(data)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            # Unpack network outputs
-            latent_state_roots, reward_roots, pred_values, policy_logits_roots = \
-                mz_network_output_unpack(network_output)
-
-            # [PRIORZERO-KEY] Replace policy logits with LLM priors
             network_output.policy_logits = policy_priors
-
-            # Prepare for MCTS
             if not self._cfg.mcts_ctree:
-                # Python implementation (not recommended for performance)
                 raise NotImplementedError("Python MCTS not supported for PriorZero")
 
             # ======================================================================
             # MCTS Search with LLM-Guided Priors
             # ======================================================================
-            # This is the key part where LLM priors guide the search
-
-            # [FIX] Align with UniZero: construct legal_actions from action_mask
-            active_collect_env_num = len(ready_env_id)
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1]
-                            for j in range(active_collect_env_num)]
-
-            # Get timestep if available
-            timestep = kwargs.get('timestep', None)
-
-            # [FIX] Align with UniZero: transform values and prepare data
             pred_values_np = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots_np = latent_state_roots.detach().cpu().numpy()
-            # reward_roots_np = reward_roots.detach().cpu().numpy()
-            policy_logits_for_mcts = policy_priors.detach().cpu().numpy().tolist()
-
-            # [FIX] Align with UniZero: Create MCTS roots with legal_actions (not action_space_size)
-            roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
-
-            # [FIX] Align with UniZero: noises based on number of valid actions per environment
+            policy_logits = policy_priors.detach().cpu().numpy().tolist()
+            
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                    ).astype(np.float32).tolist()
-                for j in range(active_collect_env_num)
+                                    ).astype(np.float32).tolist() for j in range(active_collect_env_num)
             ]
+            roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
+            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots_np, to_play, timestep=timestep)
 
-            # [FIX] Align with UniZero: prepare roots (note reward_roots_np, not list(pred_values_np))
-            roots.prepare(
-                self._cfg.root_noise_weight,
-                noises,
-                reward_roots,
-                # reward_roots_np,
-                policy_logits_for_mcts,
-                to_play if to_play is not None else [-1] * active_collect_env_num,
-            )
-
-            # Run MCTS search
-            MCTSCtree(self._cfg).search(
-                roots,
-                self._collect_model,
-                latent_state_roots_np,
-                reward_roots,
-                to_play if to_play is not None else [-1] * latent_state_roots_np.shape[0],
-            )
-
-            # Extract search results
             roots_visit_count = roots.get_distributions()
             roots_values = roots.get_values()
 
-            # ======================================================================
-            # [PRIORZERO] Get valid_actions_list for dynamic action mapping
-            # ======================================================================
-            
-
-            # ======================================================================
-            # Select Actions and Prepare Output (Aligned with UniZero)
-            # ======================================================================
-            output = {}
-
+            batch_action = []
             for i, env_id in enumerate(ready_env_id):
-                # [FIX] Get visit count distribution (only contains legal actions)
                 distributions = roots_visit_count[i]
                 value = roots_values[i]
 
-                # [FIX] Use select_action from UniZero (aligns with UniZero line 1115-1117)
-                # NOTE: Only legal actions possess visit counts, so action_index_in_legal_action_set
-                # represents the index within the legal action set, not the entire action set
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions,
-                    temperature=temperature if temperature is not None else self._collect_mcts_temperature,
+                    temperature=self._collect_mcts_temperature,
                     deterministic=False
                 )
 
-                # [FIX] Convert action_index_in_legal_action_set to the actual action in full action space
-                # (aligns with UniZero line 1119)
                 legal_action_indices = np.where(action_mask[i] == 1.0)[0]
                 action = legal_action_indices[action_index_in_legal_action_set]
-
-                # [PRIORZERO] Create dynamic action_inv_map for this specific state
-                # This maps action_index -> action_text using the current state's valid_actions
-                if valid_actions_list is not None and i < len(valid_actions_list):
-                    dynamic_action_inv_map = {
-                        idx: act_text
-                        for idx, act_text in enumerate(valid_actions_list[i])
-                    }
-                else:
-                    # Fallback to static mapping if valid_actions not available
-                    dynamic_action_inv_map = self.action_inv_map
 
                 output[env_id] = {
                     'action': int(action),
@@ -1283,9 +1017,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'searched_value': value,
                     'predicted_value': pred_values_np[i],
-                    'dynamic_action_inv_map': dynamic_action_inv_map,  # [PRIORZERO] Include dynamic mapping
+                    'predicted_policy_logits': policy_logits[i],
+                    'timestep': timestep[i],
                 }
-
+                batch_action.append(action)
+            self.last_batch_obs = data
+            self.last_batch_action = batch_action
         return output
 
     def _state_dict_learn(self) -> Dict[str, Any]:

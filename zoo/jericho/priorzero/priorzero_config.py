@@ -11,7 +11,6 @@ Key Features:
 - Flexible switches to enable/disable components
 
 Author: PriorZero Team
-Date: 2025-01-20
 """
 
 import os
@@ -19,48 +18,10 @@ from typing import Dict, Tuple
 from easydict import EasyDict
 
 
-def get_jericho_action_mapping(env_id: str = 'zork1.z5') -> Tuple[Dict[str, int], Dict[int, str]]:
-    """
-    Get action mapping for Jericho environments.
-
-    In Jericho, the action space is typically defined by the game's valid actions.
-    For simplicity, we'll provide a basic mapping that can be extended.
-
-    Args:
-        env_id: Jericho game ID
-
-    Returns:
-        action_map: Mapping from action text to action index
-        action_inv_map: Mapping from action index to action text
-    """
-    # Basic common actions for text adventure games
-    # These should ideally be loaded from the environment's action space
-    common_actions = [
-        # Movement
-        "go north", "go south", "go east", "go west",
-        "go up", "go down", "go northeast", "go northwest",
-        "go southeast", "go southwest",
-        # Object interaction
-        "take all", "drop all", "inventory", "look",
-        "examine", "open", "close", "unlock",
-        # Common verbs
-        "read", "eat", "drink", "wear", "remove",
-    ]
-
-    # Create mapping
-    action_map = {action.lower(): idx for idx, action in enumerate(common_actions)}
-    action_inv_map = {idx: action for action, idx in action_map.items()}
-
-    return action_map, action_inv_map
-
-
 def get_priorzero_config(
     env_id: str = 'zork1.z5',
     seed: int = 0,
     exp_name: str = None,
-    enable_llm: bool = True,
-    enable_rft: bool = True,
-    debug_mode: bool = False,
 ) -> Tuple[EasyDict, EasyDict]:
     """
     Generate complete PriorZero configuration.
@@ -71,17 +32,11 @@ def get_priorzero_config(
         exp_name: Experiment name (auto-generated if None)
         enable_llm: Whether to enable LLM policy (if False, degrades to pure UniZero)
         enable_rft: Whether to enable RFT training (if False, only use SFT)
-        debug_mode: Whether to enable detailed debug logging (obs, action, LLM output, etc.)
 
     Returns:
         main_config: Main configuration dictionary
         create_config: Creation configuration for DI-engine components
     """
-
-    # ==============================================================================
-    # 1. Basic Settings
-    # ==============================================================================
-    # Action space and max steps per environment (from jericho_unizero_config.py)
     env_configurations = {
         'detective.z5': (12, 100),
         'omniquest.z5': (25, 100),
@@ -89,410 +44,175 @@ def get_priorzero_config(
         'zork1.z5': (55, 500),
     }
     action_space_size, max_steps = env_configurations.get(env_id, (20, 100))
-
-    # World model encoder (for processing text observations)
-    wm_encoder_option = 'legacy'  # Options: 'legacy', 'clip', 'custom'
-    wm_model_name = 'BAAI/bge-base-en-v1.5'  # Sentence transformer for text encoding
+    wm_encoder_option = 'legacy' 
+    wm_model_name = 'BAAI/bge-base-en-v1.5'  
 
     # LLM policy model
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
     llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
+    
+    collector_env_num = 4
+    evaluator_env_num = 2
+    
+    num_unroll_steps = 10
+    infer_context_length = 4
+    game_segment_length = 50
+    num_layers = 2
+    embed_dim = 768
+    replay_ratio = 0.1
+    batch_size = 64
+    collect_num_simulations=25
+    eval_num_simulations=25
+    
 
-    # Get action mappings
-    action_map, action_inv_map = get_jericho_action_mapping(env_id)
-
-    # Convert action_inv_map to use string keys for EasyDict compatibility
-    action_inv_map_str = {str(k): v for k, v in action_inv_map.items()}
-
-    # ==============================================================================
-    # 2. Environment Configuration
-    # ==============================================================================
     env_config = dict(
-        # Stop conditions
         stop_value=int(1e6),
         max_steps=max_steps,
-
-        # Observation and action space
-        observation_shape=512,  # BGE embedding dimension
-        action_space_size=action_space_size,
-
-        # [FIX] Jericho environment expects these at top level
+        observation_shape=512,  
         env_id=env_id,
         game_path=f"/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+        for_unizero=True,
         tokenizer_path=wm_model_name,
-        env_type="jericho",
         max_action_num=action_space_size,
         max_seq_len=512,
-        save_replay=False,
-        save_replay_path="",
-        collect_policy_mode="default",
-
-        # Parallelization
-        collector_env_num=4,
-        evaluator_env_num=2,
-        n_evaluator_episode=2,
-
-        # Environment manager
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        n_evaluator_episode=evaluator_env_num,
         manager=dict(
             shared_memory=False,
-            reset_timeout=60,  # Increased timeout for text env initialization
         ),
     )
-
-    # ==============================================================================
-    # 3. UniZero World Model Configuration
-    # ==============================================================================
-    world_model_config = dict(
-        # [CRITICAL] DI-engine requires 'type' field to identify model class
-        type='UniZeroModel',
-
-        # [FIX] EasyDict.pop() doesn't handle default values properly, must include import_names
-        import_names=[],  # Empty list since UniZeroModel is already registered
-
-        # Model type
-        model_type='mlp',  # For vector observations (text embeddings)
-        continuous_action_space=False,
-
-        # Observation and action
-        observation_shape=512,
-        action_space_size=action_space_size,
-
-        # [FIX] Encoder settings must be at top level for UniZeroModel.__init__
-        encoder_option=wm_encoder_option,
-        encoder_url=wm_model_name,
-
-        # World model architecture
-        world_model_cfg=dict(
-            # Obs type
-            obs_type="text",  # Important: text-based observations
-
-            # Environment settings
-            env_num=max(4, 2),  # max(collector_env_num, evaluator_env_num), will be updated in quick_test
-            action_space_size=action_space_size,
-
-            # Transformer settings
-            # num_layers=4,  # Reduced for faster training
-            num_layers=2,  # Reduced for faster training # TODO
-            num_heads=8,
-            embed_dim=512,
-
-            # Context and unroll
-            # Note: Each timestep contains 2 tokens: observation and action
-            num_unroll_steps=10,  # Number of steps to unroll in training
-            infer_context_length=4,  # Inference context length
-            tokens_per_block=2,  # obs + action
-            max_blocks=10,  # num_unroll_steps (default)
-            max_tokens=2 * 10,  # 2 * num_unroll_steps
-            context_length=2 * 4,  # 2 * infer_context_length
-
-            # Regularization
-            embed_pdrop=0.1,
-            resid_pdrop=0.1,
-            attn_pdrop=0.1,
-
-            # Loss weights
-            latent_recon_loss_weight=0.0,  # Latent reconstruction loss
-            perceptual_loss_weight=0.0,
-            policy_entropy_weight=0.0,  # Entropy regularization
-
-            # Normalization
-            final_norm_option_in_head="LayerNorm",
-            final_norm_option_in_encoder="LayerNorm",
-            predict_latent_loss_type='mse',  # or 'group_kl' with SimNorm
-
-            # Device
-            device="cuda",
-
-            # Advanced settings
-            gru_gating=False,
-            attention='causal',
-            support_size=101,  # For distributional RL
-
-            # Analysis flags
-            analysis_sim_norm=False,
-            analysis_dormant_ratio_weight_rank=False,
-            use_priority=False,
-            # use_priority=True,
-            
-            # Position encoding
-            rotary_emb=False,  # Whether to use RoPE
-            rope_theta=10000,
-            max_seq_len=8192,
-
-            # LoRA (optional, for world model)
-            lora_r=0,  # Set > 0 to enable LoRA
-
-            # Other
-            decode_loss_mode=None,  # 'after_backbone', 'before_backbone', or None
-            gamma=1.0,  # Discount factor
-            dormant_threshold=0.025,
-
-            task_embed_option=None,
-            use_task_embed=False,
-            use_normal_head=True,
-            use_softmoe_head=False,
-            use_moe_head=False,
-            num_experts_in_moe_head=4,
-            moe_in_transformer=False,
-            multiplication_moe_in_transformer=False,
-            n_shared_experts=1,
-            num_experts_per_tok=1,
-            num_experts_of_moe_in_transformer=8,
-            # game_segment_length=200,
-            game_segment_length=50,
-        ),
-
-        # Distributional RL
-        categorical_distribution=True,
-        reward_support_range=(-50., 51., 1.),  # (min, max, step) for reward support
-        value_support_range=(-50., 51., 1.),   # (min, max, step) for value support
-
-        # Self-supervised learning
-        self_supervised_learning_loss=True,
-
-        # Model architecture details
-        frame_stack_num=1,
-        bias=True,
-        res_connection_in_dynamics=True,
-        norm_type='LN',  # LayerNorm for text
-    )
-
-    # ==============================================================================
-    # 4. LLM Policy Configuration (ORZ-style)
-    # ==============================================================================
-    llm_policy_config = dict(
-        # Model path
-        pretrain_llm_path=llm_model_name,
-
-        # LoRA for parameter-efficient fine-tuning
-        use_lora=False,  # Set to True to enable LoRA
-        lora_r=8,
-        lora_alpha=16,
-        lora_dropout=0.05,
-
-        # Training
-        llm_learning_rate=1e-6,
-        llm_weight_decay=0.01,
-        llm_loss_weight=0.5,   # Weight of SFT loss in total loss
-        rft_loss_weight=0.3,   # Weight of RFT loss in total loss
-
-        # [PRIORZERO-OOM-FIX] Gradient accumulation for memory efficiency
-        # Process LLM training in smaller micro-batches to avoid OOM
-        llm_micro_batch_size=32,  # Small batch size per forward pass (reduce if still OOM)
-        llm_gradient_accumulation_steps=4,  # Accumulate gradients over 8 steps (effective batch = 4*8=32)
-        # Note: Effective batch size = llm_micro_batch_size * llm_gradient_accumulation_steps
-
-        # Generation
-        prompt_max_len=2048,
-        generate_max_len=256,  # Max tokens for LLM output
-
-        # Prompting strategy
-        history_length=5,      # Number of recent (obs, action, reward) tuples to include
-        # use_cot=True,          # Whether to use Chain-of-Thought prompting
-        use_cot=False,
-        prompt_log_interval=5000,  # Steps between logging LLM prompt/output during collection (0 disables)
-
-        # Training strategy
-        sft_target='mcts_policy',  # 'mcts_policy' or 'oracle_policy'
-        enable_sft=True,
-        # enable_rft=enable_rft,     # Whether to enable RFT with env rewards
-        enable_rft=False,     # Whether to enable RFT with env rewards # TODO
-
-        # vLLM settings
-        vllm_tensor_parallel_size=1,
-        gpu_memory_utilization=0.3,  # Adjust based on your GPU memory
-    )
-
-    # ==============================================================================
-    # 5. Policy Configuration (Combines World Model + LLM)
-    # ==============================================================================
     policy_config = dict(
+        type='priorzero',
+        multi_gpu=False,  
+        use_wandb=False,
+        profile_cfg=dict(
+            enable_cprofile=True,  # Enable cProfile for collect/train hot paths
+            log_interval=100,        # Aggregate wall-time stats every N profiled sections
+        ),
         learn=dict(
                 learner=dict(
                     hook=dict(
-                        save_ckpt_after_iter=1000000, # To save memory, set a large value. If intermediate checkpoints are needed, reduce this value.
+                        save_ckpt_after_iter=1000000, 
                     ),
                 ),
         ),
-        type='priorzero',
-        profile_cfg=dict(
-            enable_cprofile=True,  # Enable cProfile for collect/train hot paths
-            output_dir=f"{exp_name}/log/profile",
-            log_interval=500,        # Aggregate wall-time stats every N profiled sections
+        model=dict(
+            observation_shape=512,
+            action_space_size=action_space_size,
+            encoder_option=wm_encoder_option,
+            encoder_url=wm_model_name,
+            model_type="mlp",
+            continuous_action_space=False,
+            norm_type="LN",
+            world_model_cfg=dict(
+                norm_type="LN",
+                final_norm_option_in_head="LayerNorm",
+                final_norm_option_in_encoder="LayerNorm",
+                predict_latent_loss_type='mse', 
+                policy_entropy_weight=5e-2, 
+                continuous_action_space=False,
+                max_blocks=num_unroll_steps,  
+                max_tokens=2 * num_unroll_steps,  
+                context_length=2 * infer_context_length,  
+                device="cuda",
+                action_space_size=action_space_size,
+                num_layers=num_layers,
+                num_heads=24,
+                embed_dim=embed_dim,
+                obs_type="text",
+                env_num=max(collector_env_num, evaluator_env_num),
+                decode_loss_mode=None, 
+                latent_recon_loss_weight=0,
+                
+                task_embed_option=None,
+                moe_in_transformer=False,
+                multiplication_moe_in_transformer=False,
+                game_segment_length=game_segment_length,
+            )
         ),
-
-        # Environment settings (must match env config)
-        collector_env_num=env_config['collector_env_num'],
-        evaluator_env_num=env_config['evaluator_env_num'],
-
-        # Model config (world model)
-        model=world_model_config,
-
-        # [PRIORZERO-NEW] LLM policy config
-        llm_policy_cfg=llm_policy_config,
-
-        # [PRIORZERO-NEW] Action mappings (use original dict, not EasyDict)
-        # These will be set directly on policy instance, not through EasyDict
-        _action_map=action_map,  # Prefix with _ to avoid EasyDict conversion
-        _action_inv_map=action_inv_map,
-
-        # ==============================================================================
-        # [ASYNC-NEW] Async Training Configuration
-        # ==============================================================================
-        # off_policy_degree controls the degree of asynchrony between collect and train:
-        # - 0: Fully synchronous (serial) mode - collect -> train -> eval
-        # - 1-10: Low async - train can lag behind collect by a few batches
-        # - 10-50: Medium async - train can lag more, higher throughput
-        # - >50: High async - maximum throughput, highest off-policy bias
-        #
-        # Special value -1: Auto-tune based on buffer size and batch size
-        off_policy_degree=0,  # Default to synchronous mode for stability
-        # off_policy_degree=5,
-
-        # Whether to enable async evaluation (runs eval in background)
-        enable_async_eval=False,
-
-        # MCTS settings
-        num_simulations=25,
-        collect_num_simulations=25,
-        eval_num_simulations=25,
-
-        # MCTS exploration
-        root_dirichlet_alpha=0.3,
-        root_noise_weight=0.25,
-
-        # MCTS variants (set one to True to use that variant)
-        sampled_algo=False,  # Sampled MuZero
-        gumbel_algo=False,   # Gumbel MuZero
-        mcts_ctree=True,     # Use C++ MCTS (faster)
-
-        # Training settings
-        batch_size=32,
-        learning_rate=3e-4,  # World model learning rate
+        update_per_collect=None,
+        num_segments=collector_env_num,
+        action_type="varied_action_space",
+        model_path=None,
+        num_unroll_steps=num_unroll_steps,
+        reanalyze_ratio=0,
+        replay_ratio=replay_ratio,
+        batch_size=batch_size,
+        learning_rate=3e-4,  
         weight_decay=1e-4,
+        cos_lr_scheduler=False,
+        fixed_temperature_value=0.25,
+        manual_temperature_decay=False,
+        n_episode=collector_env_num,
+        train_start_after_envsteps=0,
+        replay_buffer_size=int(5e5),
+        eval_freq=int(3e4),
+        collector_env_num=collector_env_num,
+        evaluator_env_num=evaluator_env_num,
+        buffer_reanalyze_freq=1 / 1000000,
+        reanalyze_batch_size=160,
+        reanalyze_partition=0.75,
+        device='cuda',
+        
+        collect_num_simulations=collect_num_simulations,
+        eval_num_simulations=eval_num_simulations,
+        game_segment_length=game_segment_length,
+        off_policy_degree=0,
+        enable_async_eval=False,
+        
         optim_type='AdamW',
         grad_clip_value=10.0,
-
-        # Loss components
-        value_loss_weight=1.0,
+        value_loss_weight=0.25,
         policy_loss_weight=1.0,
         reward_loss_weight=1.0,
 
-        # Adaptive entropy weight (for exploration)
         use_adaptive_entropy_weight=True,
         adaptive_entropy_alpha_lr=1e-4,
-
-        # Encoder gradient clipping with annealing
         use_encoder_clip_annealing=True,
         encoder_clip_anneal_type='cosine',
         encoder_clip_start_value=30.0,
         encoder_clip_end_value=10.0,
         encoder_clip_anneal_steps=100000,
-
-        # Training schedule
-        num_unroll_steps=10,
-        td_steps=5,
-        train_start_after_envsteps=0,
-        # train_start_after_envsteps=1000,
-        update_per_collect=None,  # Will be set automatically
-        replay_ratio=0.25,
-
-        # Replay buffer
-        # replay_buffer_size=int(1e4),
-        replay_buffer_size=int(1e5),
         use_priority=False,  # Prioritized experience replay
         priority_prob_alpha=0.6,
         priority_prob_beta=0.4,
-
-        # Evaluation
-        eval_freq=500,
-
-        # Game segments
-        # game_segment_length=200,
-        game_segment_length=50,
-        num_segments=env_config['collector_env_num'],  # Must equal collector_env_num
-
-        # Misc
-        ignore_done=False,
-        collect_with_pure_policy=False,
-        monitor_extra_statistics=True,
-
-        # Device
-        cuda=True,
-        device='cuda',
-        multi_gpu=False,
-
-        # Environment type
-        env_type='not_board_games',
-        action_type='varied_action_space',  # Jericho has varied action space per state
-        battle_mode='play_with_bot_mode',
-
-        # Data processing
-        transform2string=False,
-        gray_scale=False,
-        use_augmentation=False,
-
-        # Advanced
-        use_rnd_model=False,  # Random Network Distillation for exploration
-        analysis_sim_norm=False,
-        sample_type='transition',
-
-        # ==============================================================================
-        # [ALIGN WITH UNIZERO] Reanalyze Configuration (atari_unizero_segment_config.py line 201-206)
-        # ==============================================================================
-        # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch,
-        # 2 means reanalyze once every two epochs, 1/50 means reanalyze once every 50 epochs.
-        buffer_reanalyze_freq=1/5000000000,  # Effectively disabled for Jericho (set very low)
-        # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences
-        # (<cfg.policy.num_unroll_steps> transitions per sequence)
-        reanalyze_batch_size=160,
-        # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer,
-        # 0.5 means samples from the first half of the buffer.
-        reanalyze_partition=0.75,
-        # Reanalyze ratio (used in some algorithms, kept for compatibility)
-        reanalyze_ratio=0.0,
+        llm_policy_cfg=dict(
+            enable_llm=False,
+            pretrain_llm_path=llm_model_name,
+            history_length=5,
+            use_cot=False,
+            enable_sft=False,
+            enable_rft=False,
+            
+            lm_learning_rate=1e-6,
+            llm_weight_decay=0.01,
+            llm_loss_weight=0.5,   # Weight of SFT loss in total loss
+            rft_loss_weight=0.3, 
+            llm_micro_batch_size=32,
+            llm_gradient_accumulation_steps=4,
+            prompt_log_interval=1000, # 隔多久step输出模型的回答和valid action进行对比
+            
+            prompt_max_len=2048,
+            generate_max_len=256,
+            vllm_tensor_parallel_size=1,
+            gpu_memory_utilization=0.3,
+        ),
     )
-
-    # ==============================================================================
-    # 6. Replay Buffer Configuration
-    # ==============================================================================
-    replay_buffer_config = dict(
-        type='game',
-        replay_buffer_size=policy_config['replay_buffer_size'],
-        batch_size=policy_config['batch_size'],
-    )
-
-    # ==============================================================================
-    # 6.5 Remove problematic nested dicts before EasyDict conversion
-    # ==============================================================================
-    # Store action mappings separately to avoid EasyDict issues with integer keys
-    _temp_action_map = action_map
-    _temp_action_inv_map = action_inv_map
-
-    # ==============================================================================
-    # 7. Main Configuration Assembly
-    # ==============================================================================
     priorzero_config = dict(
         env=env_config,
         policy=policy_config,
-        replay_buffer=replay_buffer_config,
-        # Experiment settings
         exp_name=exp_name,
-        seed=seed,
-        # Debug settings
-        debug_mode=debug_mode,
+        seed=seed
     )
 
-    # ==============================================================================
-    # 8. Create Configuration (for DI-engine component creation)
-    # ==============================================================================
     create_config = dict(
         env=dict(
             type="jericho",
             import_names=["zoo.jericho.envs.jericho_env"],
         ),
         env_manager=dict(
-            type="base"  # [FIX] Use 'base' for jericho to avoid daemon process issues
+            type="base" 
         ),
         policy=dict(
             type="priorzero",
@@ -512,51 +232,41 @@ def get_priorzero_config(
         ),
     )
 
-    # ==============================================================================
-    # 9. Convert to EasyDict for convenient access
-    # ==============================================================================
-    # IMPORTANT: Remove _action_map and _action_inv_map from policy_config before EasyDict
-    # to avoid integer key issues
-    policy_config_copy = {k: v for k, v in policy_config.items() if not k.startswith('_')}
-    priorzero_config['policy'] = policy_config_copy
-
     main_config = EasyDict(priorzero_config)
     create_config = EasyDict(create_config)
-
     return main_config, create_config
 
 
-# ==============================================================================
-# Preset Configurations for Different Scenarios
-# ==============================================================================
-
-def get_config_pure_unizero(env_id: str = 'zork1.z5', seed: int = 0):
-    """Get config for pure UniZero (without LLM)."""
-    main_config, create_config = get_priorzero_config(
-        env_id=env_id,
-        seed=seed,
-        enable_llm=False,
-    )
-    main_config.exp_name = f"pure_unizero_{env_id}_seed{seed}"
-    main_config.policy.llm_policy_cfg.llm_loss_weight = 0.0
-    main_config.policy.llm_policy_cfg.rft_loss_weight = 0.0
-    return main_config, create_config
-
-
-def get_config_llm_only_sft(env_id: str = 'zork1.z5', seed: int = 0):
-    """Get config for LLM with only SFT (no RFT)."""
-    main_config, create_config = get_priorzero_config(
-        env_id=env_id,
-        seed=seed,
-        enable_rft=False,
-    )
-    main_config.exp_name = f"priorzero_sft_only_{env_id}_seed{seed}"
-    return main_config, create_config
-
-
-def get_config_with_lora(env_id: str = 'zork1.z5', seed: int = 0):
-    """Get config with LoRA enabled for LLM (memory efficient)."""
-    main_config, create_config = get_priorzero_config(env_id=env_id, seed=seed)
-    main_config.policy.llm_policy_cfg.use_lora = True
-    main_config.exp_name = f"priorzero_lora_{env_id}_seed{seed}"
+def get_priorzero_debug_config(
+    env_id: str = 'zork1.z5',
+    seed: int = 0,
+    exp_name: str = None,
+) -> EasyDict:
+    
+    main_config, create_config = get_priorzero_config(env_id=env_id, seed=seed, exp_name=exp_name)
+    collector_env_num = 2
+    evaluator_env_num = 1
+    max_steps=10
+    
+    num_unroll_steps = 5
+    infer_context_length = 2
+    batch_size = 16
+    collect_num_simulations=10
+    eval_num_simulations=10
+    num_layers=1
+    
+    
+    create_config.collector_env_num = collector_env_num
+    create_config.evaluator_env_num = evaluator_env_num
+    create_config.max_steps = max_steps
+    
+    main_config.policy.model.world_model_cfg.max_blocks = num_unroll_steps
+    main_config.policy.model.world_model_cfg.max_tokens = 2 * num_unroll_steps
+    main_config.policy.model.world_model_cfg.context_length = 2 * infer_context_length
+    main_config.policy.model.world_model_cfg.num_layers = num_layers
+    main_config.policy.num_unroll_steps = num_unroll_steps
+    main_config.policy.batch_size = batch_size
+    main_config.policy.collect_num_simulations = collect_num_simulations
+    main_config.policy.eval_num_simulations = eval_num_simulations
+    main_config.policy.update_per_collect = 2
     return main_config, create_config

@@ -20,9 +20,6 @@ import sys
 from functools import partial
 from pathlib import Path
 from typing import Tuple, Optional
-# from lzero.entry.utils import log_buffer_memory_usage
-# from lzero.policy import visit_count_temperature
-# from ding.rl_utils import get_epsilon_greedy_fn
 
 # ==============================================================================
 # [CRITICAL] Ensure local LightZero is used for PriorZero-specific adaptations
@@ -45,11 +42,12 @@ from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 
 # Import PriorZero components
-from priorzero_config import get_priorzero_config
+from priorzero_config import get_priorzero_config, get_priorzero_debug_config
 from priorzero_collector import PriorZeroCollector
 from priorzero_evaluator import PriorZeroEvaluator
 # Import policy to ensure registration happens
 import priorzero_policy  # noqa: F401
+from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
 
 
 async def train_priorzero(
@@ -71,49 +69,23 @@ async def train_priorzero(
         max_train_iter: Maximum training iterations
         enable_save: Whether to save checkpoints
     """
-    # ==================================================================
-    # 1. Compile Configuration
-    # ==================================================================
     cfg = compile_config(cfg, seed=seed, auto=True, create_cfg=create_cfg)
-
-    # ==================================================================
-    # 2. Initialize Ray (for distributed vLLM)
-    # ==================================================================
-    # Note: vLLM will initialize Ray internally if needed.
-    # We skip manual Ray initialization to avoid conflicts with existing clusters.
     if ray.is_initialized():
         logger.info(f"✓ Ray already initialized (connected to existing cluster)")
     else:
         logger.info(f"✓ Ray not initialized - vLLM will handle initialization if needed")
 
-    # ==================================================================
-    # 3. Create vLLM Engine
-    # ==================================================================
     logger.info("Creating vLLM engine...")
-
-    # [ROBUST FIX] Handle shared GPU environment
-    # Issue: vLLM V1 engine fails when other processes release GPU memory during init
-    # Solution: Use alternative initialization method that bypasses V1 checks
-    import os
-
-    # Note: In vLLM>=0.3.0, worker_use_ray is replaced by distributed_executor_backend
-    # For single GPU: use "mp" (multiprocessing)
-    # For multi-GPU: use "ray" if available
     tensor_parallel = cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size
     distributed_backend = "ray" if tensor_parallel > 1 and ray.is_initialized() else None
 
-    # [ROBUST FIX] Lower GPU memory utilization in shared environment
-    # This leaves more headroom for memory fluctuations
     gpu_mem_util = cfg.policy.llm_policy_cfg.gpu_memory_utilization
     if gpu_mem_util > 0.85:
-        gpu_mem_util = 0.75  # More conservative in shared environment
+        gpu_mem_util = 0.75  
         logger.info(f"✓ Adjusted GPU memory utilization to {gpu_mem_util} for stability")
 
-    # [ROBUST FIX] Use alternative initialization to avoid V1 engine issues
-    # Set env var BEFORE importing to ensure it takes effect
     use_v1_env = os.environ.get('VLLM_USE_V1', None)
     if use_v1_env is None:
-        # Only set if not already set by user
         os.environ['VLLM_USE_V1'] = '0'
         logger.info("✓ Using vLLM V0 engine for stability in shared GPU environment")
 
@@ -124,16 +96,13 @@ async def train_priorzero(
             gpu_memory_utilization=gpu_mem_util,
             distributed_executor_backend=distributed_backend,
             trust_remote_code=True,
-            # [ROBUST FIX] Disable prefix caching in shared environment to reduce memory complexity
             enable_prefix_caching=False,
-            # [ROBUST FIX] Disable enforce_eager to avoid memory profiling issues
             enforce_eager=False,
         )
         vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
         logger.info(f"✓ vLLM Engine created (backend: {distributed_backend or 'default'})")
     except (ValueError, RuntimeError) as e:
         if "VLLM_USE_V1" in str(e) or "memory profiling" in str(e):
-            # Fallback: Try without V1 env var
             logger.warning(f"⚠️  Initial vLLM initialization failed: {e}")
             logger.info("Retrying with alternative configuration...")
             if 'VLLM_USE_V1' in os.environ:
@@ -145,7 +114,7 @@ async def train_priorzero(
                 gpu_memory_utilization=gpu_mem_util * 0.7,  # Even more conservative
                 distributed_executor_backend=distributed_backend,
                 trust_remote_code=True,
-                enable_prefix_caching=False,
+                enable_prefix_caching=False, 
                 enforce_eager=True,  # Force eager mode as fallback
             )
             vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
@@ -153,52 +122,23 @@ async def train_priorzero(
         else:
             raise
 
-    # ==================================================================
-    # 4. Create Environments
-    # ==================================================================
     logger.info("Creating environments...")
-    logger.info(f"[DEBUG] Config values: collector_env_num={cfg.env.collector_env_num}, "
-                f"evaluator_env_num={cfg.env.evaluator_env_num}, "
-                f"n_evaluator_episode={cfg.env.n_evaluator_episode}")
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-    logger.info(f"[DEBUG] get_vec_env_setting returned: "
-                f"collector envs={len(collector_env_cfg)}, "
-                f"evaluator envs={len(evaluator_env_cfg)}")
-    collector_env = create_env_manager(
-        cfg.env.manager,
-        [partial(env_fn, cfg=c) for c in collector_env_cfg]
-    )
-    evaluator_env = create_env_manager(
-        cfg.env.manager,
-        [partial(env_fn, cfg=c) for c in evaluator_env_cfg]
-    )
+    collector_env = create_env_manager( cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
+    evaluator_env = create_env_manager( cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
-    # Seed environments
     collector_env.seed(seed)
     evaluator_env.seed(seed, dynamic_seed=False)
     set_pkg_seed(seed, use_cuda=True)
-    logger.info(f"✓ Environments created and seeded (seed={seed})")
-    logger.info(f"[DEBUG] Actual env counts: collector={collector_env.env_num}, "
-                f"evaluator={evaluator_env.env_num}")
 
-    # ==================================================================
-    # 5. Create Policy, Buffer, and Components
-    # ==================================================================
     logger.info("Creating policy, buffer, and components...")
-
-    # Create policy (align with UniZero)
-    policy = create_policy(
-        cfg.policy,
-        enable_field=['learn', 'collect', 'eval']
-    )
+    policy = create_policy( cfg.policy, enable_field=['learn', 'collect', 'eval'], exp_name=cfg.exp_name)
     logger.info("✓ Policy created")
 
-    # Create TensorBoard logger (align with UniZero)
     os.makedirs(f'./{cfg.exp_name}/log/', exist_ok=True)
     tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
     logger.info(f"✓ TensorBoard logger: ./{cfg.exp_name}/log/")
 
-    # Create learner (align with UniZero - this sets up policy._logger)
     learner = BaseLearner(
         cfg.policy.learn.learner,
         policy.learn_mode,
@@ -207,9 +147,7 @@ async def train_priorzero(
     )
     logger.info("✓ BaseLearner created")
 
-    # [PRIORZERO-MODIFIED] Create PriorZero-specific replay buffer
-    # This buffer returns game_segments for LLM training (SFT/RFT)
-    from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
+    
     replay_buffer = PriorZeroGameBufferOptimized(cfg.policy)
     logger.info("✓ PriorZero replay buffer created (with game_segments support)")
 
@@ -238,26 +176,8 @@ async def train_priorzero(
         policy_config=cfg.policy,
     )
     logger.info("✓ Evaluator created")
-
-    # Initialize WandB if enabled (PriorZero enhancement)
-    if cfg.policy.get('use_wandb', True):
-        if get_rank() == 0:
-            wandb.init(
-                project=cfg.policy.get('wandb_project', 'priorzero'),
-                name=cfg.exp_name,
-                config=cfg,
-                tags=['priorzero', 'unizero', 'llm-policy'],
-            )
-            logger.info("✓ WandB initialized")
-        # Set train iter and env step for policy wandb logging
-        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
-
-    # Call learner's before_run hook (align with UniZero)
     learner.call_hook('before_run')
 
-    # ==================================================================
-    # 6. Initialize Async Training Coordinator
-    # ==================================================================
     from async_training_coordinator import AsyncTrainingCoordinator
 
     coordinator = AsyncTrainingCoordinator(
@@ -268,7 +188,7 @@ async def train_priorzero(
     )
 
     # ==================================================================
-    # 7. Main Training Loop
+    # Main Training Loop
     # ==================================================================
     logger.info("="*80)
     logger.info("Starting PriorZero Training")
@@ -297,31 +217,17 @@ async def train_priorzero(
 
     try:
         while True:
-            # ==================================================================
-            # Determine if we're in synchronous or asynchronous mode
-            # ==================================================================
             is_sync_mode = coordinator.is_synchronous
-
-            # ==================================================================
-            # Evaluation (align with train_unizero_segment.py line 158-162)
-            # ==================================================================
             if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
-            # if learner.train_iter == 0 r evaluator.should_eval(learner.train_iter):
-            
                 logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
 
-                # Define async eval function
                 async def eval_fn():
                     return evaluator.eval(
                         save_ckpt_fn=learner.save_checkpoint if enable_save else None,
                         train_iter=learner.train_iter,
                         envstep=collector.envstep
                     )
-
-                # Run eval through coordinator (handles sync/async based on config)
                 eval_result = await coordinator.run_eval(eval_fn)
-
-                # If sync eval, process result immediately
                 if not cfg.policy.enable_async_eval and eval_result is not None:
                     stop, eval_reward_dict = eval_result
                     mean_reward = eval_reward_dict.get('reward_mean', 0)
@@ -336,26 +242,18 @@ async def train_priorzero(
                 else:
                     logger.info(f"  ✓ Async evaluation started in background")
 
-            # ==================================================================
-            # Collect Data (align with train_unizero_segment.py line 165)
-            # ==================================================================
             collect_kwargs = {
                 'temperature': 0.25,
                 'epsilon': 0.0
             }
 
             if is_sync_mode:
-                # ============================================================
-                # SYNCHRONOUS MODE: Original serial execution
-                # ============================================================
                 logger.info(f"\n[Iter {learner.train_iter}] Collecting data...")
 
                 new_data = await collector.collect(
                     train_iter=learner.train_iter,
                     policy_kwargs=collect_kwargs
                 )
-
-                # Update replay buffer
                 from lzero.entry.utils import calculate_update_per_collect
                 update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)
 
@@ -365,36 +263,27 @@ async def train_priorzero(
                 logger.info(f"  ✓ Data collected, buffer size: {buffer_size} transitions")
 
             else:
-                # ============================================================
-                # ASYNCHRONOUS MODE: Collect can overlap with train
-                # ============================================================
-                # Start or check collect task
                 if collect_task is None or collect_task.done():
                     if coordinator.can_collect():
                         logger.info(f"\n[Iter {learner.train_iter}] Starting async collect...")
 
-                        # Define async collect function
                         async def collect_fn():
                             return await collector.collect(
                                 train_iter=learner.train_iter,
                                 policy_kwargs=collect_kwargs
                             )
 
-                        # Start collect task through coordinator
                         collect_task = asyncio.create_task(coordinator.run_collect(collect_fn))
                     else:
                         logger.debug(f"Collect blocked (lag={coordinator.collect_train_lag}/{coordinator.off_policy_degree})")
 
-                # Check if collect completed
                 if collect_task is not None and collect_task.done():
                     new_data = await collect_task
                     collect_task = None
 
-                    # Store for buffer update
                     pending_new_data = new_data
                     logger.info(f"  ✓ Async collect completed, data pending buffer update")
 
-                # Update buffer if we have pending data
                 if pending_new_data is not None:
                     from lzero.entry.utils import calculate_update_per_collect
                     update_per_collect = calculate_update_per_collect(cfg, pending_new_data, world_size=1)
@@ -406,28 +295,18 @@ async def train_priorzero(
 
                     pending_new_data = None
                 else:
-                    # No new data yet, use previous update_per_collect or default
                     update_per_collect = cfg.policy.get('update_per_collect', 10)
 
-            # ============================================================
-            # Periodically reanalyze buffer (align with train_unizero_segment.py line 175-186)
-            # ============================================================
             if cfg.policy.buffer_reanalyze_freq >= 1:
-                # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
                 reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
             else:
-                # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
                 if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                     logger.info(f"[Reanalyze] Starting buffer reanalysis...")
                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                     buffer_reanalyze_count += 1
                     logger.info(f"  ✓ Buffer reanalyze count: {buffer_reanalyze_count}")
 
-            # ============================================================
-            # Training (align with train_unizero_segment.py line 189-221)
-            # ============================================================
             if collector.envstep > cfg.policy.train_start_after_envsteps:
-                # Check if there is sufficient data for training
                 if cfg.policy.sample_type == 'episode':
                     data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
                 else:
@@ -442,51 +321,31 @@ async def train_priorzero(
 
                 logger.info(f"[Iter {learner.train_iter}] Training...")
 
-                # Define training function
                 async def train_one_batch():
-                    # Reanalyze buffer during training (align with train_unizero_segment.py line 202-210)
-                    # Note: This is simplified - full reanalyze logic should be per-batch
-
-                    # Sample batch
                     train_data = replay_buffer.sample(batch_size, policy)
                     train_data.append(learner.train_iter)
 
-                    # Train
                     log_vars = learner.train(train_data, collector.envstep)
-
-                    # Update priority if enabled
                     if cfg.policy.use_priority:
                         replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
                     return log_vars
 
                 if is_sync_mode:
-                    # Synchronous: train all batches sequentially
                     for i in range(update_per_collect):
                         await train_one_batch()
                 else:
-                    # Asynchronous: train batches while allowing collect to proceed
-                    # We still train sequentially per batch, but collect can run in parallel
                     if coordinator.can_train():
-                        # Train one batch through coordinator
                         await coordinator.run_train(train_one_batch)
                     else:
                         logger.debug(f"Train waiting for collect...")
-
-            # Increment epoch counter (align with train_unizero_segment.py line 222)
             train_epoch += 1
-
-            # [FIX] Clear KV cache BEFORE collection to prevent index overflow during MCTS
             policy.recompute_pos_emb_diff_and_clear_cache()
 
-            # ============================================================
-            # Check stopping criteria (align with train_unizero_segment.py line 226-227)
-            # ============================================================
             if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
                 logger.info("Stopping condition met, training ends!")
                 break
 
-            # In async mode, yield to event loop
             if not is_sync_mode:
                 await asyncio.sleep(0.001)
 
@@ -499,12 +358,8 @@ async def train_priorzero(
         traceback.print_exc()
 
     finally:
-        # ============================================================
-        # Cleanup (align with train_unizero_segment.py line 229)
-        # ============================================================
         learner.call_hook('after_run')
 
-        # Wait for any pending async eval
         if cfg.policy.enable_async_eval:
             logger.info("Waiting for async eval to complete...")
             await coordinator.wait_for_eval()
@@ -555,14 +410,13 @@ def main():
 
     args = parser.parse_args()
 
-    # args.quick_test = True # ONLY FOR DEBUG
-
-    # Get configuration
+    
+    # args.quick_test = True
     if args.quick_test:
         logger.info("Using quick test configuration")
-        main_cfg, create_cfg = get_priorzero_config_for_quick_test(args.env_id, args.seed, debug_mode=args.debug)
+        main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_debug_cprofile_no_sft_no_rft_{args.env_id}_seed0')
     else:
-        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_cprofile_{args.env_id}_seed0', debug_mode=args.debug)
+        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_cprofile_no_sft_no_rft_{args.env_id}_seed0')
 
     # Run training
     asyncio.run(train_priorzero(
@@ -576,6 +430,5 @@ def main():
 
 if __name__ == "__main__":
     import os
-    # Disable tokenizer parallelism to prevent multi-process conflicts
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
     main()

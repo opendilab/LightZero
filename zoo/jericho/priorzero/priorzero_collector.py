@@ -34,6 +34,7 @@ from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
 from vllm import AsyncLLMEngine, SamplingParams
+import os
 
 # Import from local LightZero
 from lzero.worker.muzero_segment_collector import MuZeroSegmentCollector as OriginalCollector
@@ -136,21 +137,21 @@ class PriorZeroCollector(OriginalCollector):
             lambda: deque(maxlen=self.llm_policy_cfg.history_length)
         )
         self.prompt_log_interval = getattr(self.llm_policy_cfg, 'prompt_log_interval', 0)
-        self._last_prompt_log_step = 0
 
         self.profile_cfg = getattr(self.policy_config, 'profile_cfg', {})
         self._profile_enabled = bool(self.profile_cfg.get('enable_cprofile', False))
         self._profile_log_interval = int(self.profile_cfg.get('log_interval', 50))
-        self._profile_dir = Path(self.profile_cfg.get('output_dir', f"./{self._exp_name}/log/profile"))
-        
-        self._profile_stats: Dict[str, Dict[str, float]] = {}
-        self._profile_stats_file = self._profile_dir / "collector_time.log"
+        self._profile_dir = f"./{self._exp_name}/log/profile"
+        self._profile_stats = { 'llm_prior_profile': {'count': 0, 'total': 0.0, 'max': 0.0}, 
+                                'collect_step_profile': {'count': 0, 'total': 0.0, 'max': 0.0}
+                            }
+        self._profile_stats_file = f'{self._profile_dir}/collector_time.log'
         if self._profile_enabled:
-            self._profile_dir.mkdir(parents=True, exist_ok=True)
+            os.makedirs(self._profile_dir, exist_ok=True)
 
         # Where to persist sampled LLM outputs during collect
-        self._llm_output_log_path = Path(f"./{self._exp_name}/log/collector/llm_output.log")
-        self._llm_output_log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._llm_output_log_path = f"./{self._exp_name}/log/collector/llm_output.log"
+        self._llm_call_count = 0
 
         self._logger.info("✓ PriorZeroCollector initialized with vLLM engine")
         self._logger.info(f"  - History length: {self.llm_policy_cfg.history_length}")
@@ -246,13 +247,9 @@ class PriorZeroCollector(OriginalCollector):
             prior_results: List of dicts {action_str: total_logprob}.
         """
         
-        
-
-        # 1. Check Engine Availability & Get Tokenizer
         assert self.vllm_engine is not None, "vLLM engine is not initialized."
         tokenizer = await self._get_tokenizer()
         
-        # 2. Prepare Flattened Prompt Data (Env x Actions)
         all_prompts_data = []
         for i, state in enumerate(states):
             history = histories[i]
@@ -287,14 +284,12 @@ class PriorZeroCollector(OriginalCollector):
                     "req_id": unique_req_id
                 })
             
-        # 3. Configure sampling parameters
         sampling_params = SamplingParams(
             temperature=1.0,
             max_tokens=1,
             prompt_logprobs=1, 
         )
         
-        # 4. 定义单个请求的处理函数 (逻辑解耦)
         async def get_sequence_score(item):
             # vLLM 的 generate 返回一个 async iterator
             results_generator = self.vllm_engine.generate(item["full_text"], sampling_params, item["req_id"])
@@ -303,7 +298,7 @@ class PriorZeroCollector(OriginalCollector):
             async for request_output in results_generator:
                 final_output = request_output
 
-            # 5. Extract & Sum Logprobs: 从 Context 结束的位置开始，提取后面所有 Token (即 <answer>...</answer>) 的分数
+            # Extract & Sum Logprobs: 从 Context 结束的位置开始，提取后面所有 Token (即 <answer>...</answer>) 的分数
             action_logprobs_list = final_output.prompt_logprobs[item["context_len"]:]
             total_score, valid_tokens = 0.0, 0
             for token_dict in action_logprobs_list:
@@ -314,9 +309,6 @@ class PriorZeroCollector(OriginalCollector):
                         break 
             return item["idx"], item["action_str"], total_score
             
-
-        # 6. 并发执行所有请求
-        # 使用 wait_for 在最外层控制整体超时，避免死等
         try:
             tasks = [get_sequence_score(item) for item in all_prompts_data]
             results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=timeout)
@@ -334,7 +326,6 @@ class PriorZeroCollector(OriginalCollector):
         if not self._profile_enabled:
             yield None
             return
-        self._profile_dir.mkdir(parents=True, exist_ok=True)
         profiler = cProfile.Profile()
         start_time = time.perf_counter()
         profiler.enable()
@@ -344,43 +335,32 @@ class PriorZeroCollector(OriginalCollector):
             profiler.disable()
             elapsed = time.perf_counter() - start_time
             self._record_profile_time(name, elapsed)
-            # No per-iteration .prof dumps; we only aggregate to the log file.
 
     def _record_profile_time(self, name: str, elapsed: float) -> None:
         log_every = max(1, self._profile_log_interval)
-        stats = self._profile_stats.setdefault(name, {'count': 0, 'total': 0.0, 'max': 0.0})
-        stats['count'] += 1
-        stats['total'] += elapsed
-        stats['max'] = max(stats['max'], elapsed)
-        if stats['count'] % log_every == 0:
-            avg = stats['total'] / stats['count']
-            self._profile_dir.mkdir(parents=True, exist_ok=True)
-            with self._profile_stats_file.open("a") as f:
+        self._profile_stats[name]['count'] += 1
+        self._profile_stats[name]['total'] += elapsed
+        self._profile_stats[name]['max'] = max(self._profile_stats[name]['max'], elapsed)
+        if self._profile_stats[name]['count'] % log_every == 0:
+            avg = self._profile_stats[name]['total'] / self._profile_stats[name]['count']
+            with open(self._profile_stats_file, mode='a', encoding='utf-8') as f:
                 f.write(
-                    f"{time.time():.3f}\t{name}\tcount={stats['count']}\t"
-                    f"total_s={stats['total']:.4f}\tavg_s={avg:.6f}\tmax_s={stats['max']:.6f}\n"
+                    f"{time.time():.3f}\tname={name}\tcount={self._profile_stats[name]['count']}\t"
+                    f"total_s={self._profile_stats[name]['total']:.4f}\tavg_s={avg:.4f}\tmax_s={self._profile_stats[name]['max']:.4f}\n"
                 )
-            self._logger.info(
-                f"[cprofile][agg] {name}: count={stats['count']} total={stats['total']:.2f}s "
-                f"avg={avg:.4f}s max={stats['max']:.4f}s"
-            )
 
     async def _log_llm_response(
         self,
         raw_obs_text: str,
         history: List[Tuple[str, str, float]],
         valid_actions: List[str],
-        train_iter: int,
-        collected_step: int,
     ) -> None:
         """
         Periodically log LLM output for a debug prompt and current valid actions.
         """
-        if self.prompt_log_interval <= 0:
-            return
-        if (collected_step - self._last_prompt_log_step) < self.prompt_log_interval:
-            return
-        self._last_prompt_log_step = collected_step
+        self._llm_call_count += 1
+        if self._llm_call_count != 1 and (self._llm_call_count % self.prompt_log_interval != 0):
+            return 
         tokenizer = await self._get_tokenizer()
         instruction = build_llm_prompt(
             current_obs=raw_obs_text,
@@ -397,12 +377,11 @@ class PriorZeroCollector(OriginalCollector):
             max_tokens=self.llm_policy_cfg.generate_max_len,
             top_p=1.0,
         )
-        request_id = f"debug_prompt_{train_iter}_{collected_step}"
         try:
             result_gen = self.vllm_engine.generate(
                 prompt_text,
                 sampling_params,
-                request_id=request_id,
+                request_id=f"llm_call_count_{self._llm_call_count}",
             )
             async for request_output in result_gen:
                 if request_output.finished:
@@ -411,12 +390,13 @@ class PriorZeroCollector(OriginalCollector):
         except Exception as e:
             llm_output_text = f"[LLM logging error: {repr(e)}]"         
         llm_output_text = llm_output_text.strip()
-        # Truncate for logging
-        with self._llm_output_log_path.open("a", encoding="utf-8") as f:
+
+        with open(self._llm_output_log_path, mode='a', encoding='utf-8') as f:
             f.write(
-                f"iter={train_iter}\tstep={collected_step}\t"
+                f"llm_call_count={self._llm_call_count}\t"
                 f"valid_actions={valid_actions}\n"
-                f"llm_input_output={llm_output_text}\n"
+                f"llm_input={prompt_text}\n"
+                f"llm_output={llm_output_text}\n"
                 "----\n"
             )
 
@@ -574,51 +554,42 @@ class PriorZeroCollector(OriginalCollector):
                         valid_actions = obs[env_id].get('valid_actions', [])
                         valid_actions_list.append(valid_actions)
 
-                    # Generate request IDs
-                    request_ids = [
-                        f"collect_{train_iter}_{i}"
-                        for i in range(len(raw_obs_list))
-                    ]
+                    if self.policy_config.llm_policy_cfg.enable_llm:
+                        request_ids = [
+                            f"collect_{train_iter}_{i}"
+                            for i in range(len(raw_obs_list))
+                        ]
 
-                    # Async call to LLM debug
-                    profile_name = f"collect_llm_prior_iter{train_iter}_step{collected_step}"
-                    with self._profile_block(profile_name):
-                        llm_prior_logprob = await self._async_get_llm_prior(
-                            states=raw_obs_list,
-                            request_ids=request_ids,
-                            valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
-                            histories=histories_list
-                        )
-                    if raw_obs_list:
-                        await self._log_llm_response(
-                            raw_obs_text=raw_obs_list[0],
-                            history=histories_list[0],
-                            valid_actions=valid_actions_list[0],
-                            train_iter=train_iter,
-                            collected_step=collected_step,
-                        )
-                    # llm_prior_logprob = []
-                    # for i, actions in enumerate(valid_actions_list):
-                    #     tmp_dict = {}
-                    #     for action in actions:
-                    #         tmp_dict[action] = -3  # Placeholder zero logprob
-                    #     llm_prior_logprob.append(tmp_dict)
-                    
+                        with self._profile_block(name='llm_prior_profile'):
+                            llm_prior_logprob = await self._async_get_llm_prior(
+                                states=raw_obs_list,
+                                request_ids=request_ids,
+                                valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
+                                histories=histories_list
+                            )
+                        if raw_obs_list:
+                            await self._log_llm_response(
+                                raw_obs_text=raw_obs_list[0],
+                                history=histories_list[0],
+                                valid_actions=valid_actions_list[0],
+                            )
+                    else:
+                        llm_prior_logprob = None
 
                 # ==============================================================
                 # Policy Forward Pass
                 # ==============================================================
-                policy_args = (stack_obs_tensor, action_mask, temperature, to_play, epsilon)
                 policy_kwargs_forward = {
-                    'ready_env_id': sorted(list(ready_env_id)),
-                    'timestep': timestep,
                     'llm_prior_logprob': llm_prior_logprob,
                     'valid_actions_list': valid_actions_list
                 }
 
                 if self.task_id is not None:
                     policy_kwargs_forward['task_id'] = self.task_id
-                policy_output = self._policy.forward(*policy_args, **policy_kwargs_forward)
+                policy_output = self._policy.forward(data=stack_obs_tensor, action_mask=action_mask,
+                                                    temperature=temperature, to_play=to_play, epsilon=epsilon,
+                                                    ready_env_id=sorted(list(ready_env_id)), timestep=timestep,
+                                                     **policy_kwargs_forward)
 
                 # Extract outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -641,7 +612,7 @@ class PriorZeroCollector(OriginalCollector):
                 # ==============================================================
                 # Step Environments
                 # ==============================================================
-                with self._profile_block(f"collect_env_step_iter{train_iter}_envstep{self._total_envstep_count}"):
+                with self._profile_block(name='collect_step_profile'):
                     timesteps = self._env.step(actions)
 
             interaction_duration = self._timer.value / len(timesteps)
