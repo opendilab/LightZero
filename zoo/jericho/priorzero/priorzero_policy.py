@@ -125,13 +125,17 @@ def build_llm_prompt(
         )
     else:
         # 非 CoT：只要最终动作
+        # prompt_parts.append(
+        #     "\n=== Task ===\n"
+        #     "Analyze the recent history and the current situation, and decide on the SINGLE best next action.\n\n"
+        #     "Your result should be wrapped in <action></action>, and please keep the output concise, avoiding any other content."
+        #     "\nExample: <action>turn on</action>"
+        # )
         prompt_parts.append(
             "\n=== Task ===\n"
-            "Analyze the recent history and the current situation, and decide on the SINGLE best next action.\n\n"
-            "Your result should be wrapped in <action></action>, and please keep the output concise, avoiding any other content."
-            "\nExample: <action>turn on</action>"
+            "Analyze the recent history and the current situation, and decide on the SINGLE best next action."
+            "Please keep the output concise, avoiding any other content.\n\n"
         )
-
     return "\n".join(prompt_parts)
 
 # ==============================================================================
@@ -302,7 +306,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
     def _build_llm_samples(
         self,
         raw_obs_list: List[List[str]],
-        history_obs_list: List[List[List[Tuple[str, str, float]]]]
+        history_obs_list: List[List[List[Tuple[str, str, float]]]],
+        action_logprob_list: Optional[List[List[Any]]] = None,
+        target_values = None
     ) -> List[Dict[str, Any]]:
         """
         Build prompt/target pairs (and rewards) for LLM training.
@@ -318,6 +324,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 current_obs = raw_obs_list[b][t]
                 current_history = history_obs_list[b][t]
                 next_step_history = history_obs_list[b][t + 1]
+                if target_values is not None:
+                    value = target_values[b][t].item()
+                else:
+                    value = None
                 if isinstance(next_step_history, np.ndarray):
                     next_step_history = next_step_history.tolist()
                 if not next_step_history:
@@ -336,11 +346,19 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     tokenize=False,
                     add_generation_prompt=True
                 )
+                old_logprob = None
+                if action_logprob_list is not None:
+                    old_logprob = action_logprob_list[b][t+1][true_action]
+
+
                 samples.append(
                     dict(
                         prompt=prompt,
-                        target=f"<action>{true_action}</action>{self.llm_tokenizer.eos_token}",
+                        # target=f"<answer>{true_action}</answer>{self.llm_tokenizer.eos_token}",
+                        target=f"{true_action}{self.llm_tokenizer.eos_token}",
                         reward=float(reward_value) if reward_value is not None else 0.0,
+                        value=value,
+                        old_logprob=old_logprob
                     )
                 )
         return samples
@@ -419,7 +437,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 self._optimizer_llm.zero_grad(set_to_none=True)
 
             del inputs, labels, outputs, loss
-            torch.cuda.empty_cache()
 
         self._last_llm_grad_norm = last_grad_norm
         mean_loss = accumulated_loss / max(1, num_micro_batches)
@@ -428,12 +445,14 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
     def compute_rft_loss(
         self,
         raw_obs_list: List[List[str]],
-        history_obs_list: List[List[List[Tuple[str, str, float]]]]
+        history_obs_list: List[List[List[Tuple[str, str, float]]]],
+        action_logprob_list: Optional[List[List[Any]]] = None,
+        target_values: Optional[List[List[float]]] = None
     ) -> torch.Tensor:
         """
         Reinforcement fine-tuning loss with in-function gradient/optimizer updates.
         """
-        samples = self._build_llm_samples(raw_obs_list, history_obs_list)
+        samples = self._build_llm_samples(raw_obs_list, history_obs_list, action_logprob_list, target_values)
         if len(samples) == 0:
             return torch.tensor(0.0, device=self._cfg.device)
 
@@ -446,11 +465,15 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         accumulated_loss = 0.0
         last_grad_norm = 0.0
         self.llm_policy_model.train()
-        self._optimizer_llm.zero_grad(set_to_none=True)
+        self._optimizer_llm.zero_grad()
 
         full_texts = [s['prompt'] + s['target'] for s in samples]
         prompts_only = [s['prompt'] for s in samples]
         rewards_list = [s['reward'] for s in samples]
+        values_list = [s['value'] for s in samples]
+        old_logprob_list = [s.get('old_logprob', None) for s in samples]
+        loss_type = getattr(self.llm_policy_cfg, 'rft_loss_type', 'reinforce').lower()
+        clip_eps = getattr(self.llm_policy_cfg, 'rft_clip_epsilon', 0.2)
 
         for micro_batch_idx in range(num_micro_batches):
             start_idx = micro_batch_idx * micro_batch_size
@@ -459,6 +482,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             batch_full_texts = full_texts[start_idx:end_idx]
             batch_prompts = prompts_only[start_idx:end_idx]
             batch_rewards = rewards_list[start_idx:end_idx]
+            batch_old_logprob = old_logprob_list[start_idx:end_idx]
+            batch_values = values_list[start_idx:end_idx]
 
             inputs = self.llm_tokenizer(
                 batch_full_texts,
@@ -495,12 +520,26 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             mask = (shifted_labels != -100).float()
             token_log_probs = token_log_probs * mask
             sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
-
-            rewards_tensor = torch.tensor(batch_rewards, device=self._cfg.device, dtype=torch.float32)
+            
+            if self.llm_policy_cfg.rft_reward=='value':
+                rewards_tensor = torch.tensor(batch_values, device=self._cfg.device, dtype=torch.float32)
+            elif self.llm_policy_cfg.rft_reward=='reward':
+                rewards_tensor = torch.tensor(batch_rewards, device=self._cfg.device, dtype=torch.float32)
+            else:
+                pass
             if len(batch_rewards) > 1:
                 rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
 
-            loss = -(rewards_tensor * sequence_log_probs).mean()
+            if loss_type == 'reinforce++' and all(lp is not None for lp in batch_old_logprob):
+                old_lp_tensor = torch.tensor(batch_old_logprob, device=self._cfg.device, dtype=torch.float32)
+                ratio = torch.exp(sequence_log_probs - old_lp_tensor)
+                clipped_ratio = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)
+                surrogate1 = ratio * rewards_tensor
+                surrogate2 = clipped_ratio * rewards_tensor
+                loss_term = torch.min(surrogate1, surrogate2)
+                loss = -loss_term.mean()
+            else:
+                loss = -(rewards_tensor * sequence_log_probs).mean()
             accumulated_loss += loss.item()
             scaled_loss = loss / grad_accum_steps
             scaled_loss.backward()
@@ -517,7 +556,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 self._optimizer_llm.zero_grad(set_to_none=True)
 
             del inputs, labels, outputs, loss
-            torch.cuda.empty_cache()
 
         self._last_llm_grad_norm = last_grad_norm
         mean_loss = accumulated_loss / max(1, num_micro_batches)
@@ -547,7 +585,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         current_batch, target_batch, train_iter = data
 
-        obs_batch_ori, action_batch, target_action_batch, mask_batch, batch_index_tensor, weights, make_time, timestep_batch, raw_obs_list, history_obs_list = current_batch
+        obs_batch_ori, action_batch, target_action_batch, mask_batch, batch_index_tensor, weights, make_time, timestep_batch, raw_obs_list, history_obs_list, action_logprob_list = current_batch
         target_reward, target_value, target_policy = target_batch
         
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
@@ -610,7 +648,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
         if self.llm_policy_cfg.enable_llm and self.llm_policy_cfg.enable_rft:
             with self._profile_block(name="train_llm_rft"):
-                llm_rft_loss = self.compute_rft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
+                llm_rft_loss = self.compute_rft_loss(
+                    raw_obs_list=raw_obs_list,
+                    history_obs_list=history_obs_list,
+                    action_logprob_list=action_logprob_list,
+                    target_values=target_value,
+                )
         else:
             llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
 

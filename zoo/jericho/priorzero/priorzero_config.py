@@ -178,12 +178,15 @@ def get_priorzero_config(
         priority_prob_alpha=0.6,
         priority_prob_beta=0.4,
         llm_policy_cfg=dict(
-            enable_llm=False,
+            enable_llm=True,
             pretrain_llm_path=llm_model_name,
             history_length=5,
             use_cot=False,
             enable_sft=False,
-            enable_rft=False,
+            enable_rft=True,
+            rft_loss_type='reinforce',
+            rft_clip_epsilon=0.2,
+            rft_reward='value',  # ['reward', 'value']
             
             lm_learning_rate=1e-6,
             llm_weight_decay=0.01,

@@ -167,6 +167,7 @@ class PriorZeroCollector(OriginalCollector):
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
         pad_raw_obs_lst = game_segments[i].raw_obs_segment[beg_index:end_index]
         pad_history_obs_lst = game_segments[i].history_obs_segment[beg_index:end_index]
+        pad_action_logprob_lst = game_segments[i].action_logprob_segment[beg_index:end_index]
 
         # NOTE: Specific padding logic for UniZero.
         pad_action_lst = game_segments[i].action_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
@@ -196,12 +197,14 @@ class PriorZeroCollector(OriginalCollector):
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
                 last_game_segments[i].pad_over(
                     pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
-                    next_chances=chance_lst
+                    next_chances=chance_lst, next_segment_raw_obs=pad_raw_obs_lst,
+                    next_segment_history_obs=pad_history_obs_lst, next_segment_action_logprob=pad_action_logprob_lst
                 )
             else:
                 last_game_segments[i].pad_over(
                     pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst, 
-                    next_segment_raw_obs=pad_raw_obs_lst, next_segment_history_obs=pad_history_obs_lst
+                    next_segment_raw_obs=pad_raw_obs_lst, next_segment_history_obs=pad_history_obs_lst,
+                    next_segment_action_logprob=pad_action_logprob_lst
                 )
 
         last_game_segments[i].game_segment_to_array()
@@ -269,11 +272,10 @@ class PriorZeroCollector(OriginalCollector):
             actions = valid_actions_list[i]
             
             for act_idx, action in enumerate(actions):
-                # 我们构造成模型应该生成的完整格式: "<answer>Turn Left</answer>"
-                formatted_action = f"<answer>{action}</answer>"
+                # formatted_action = f"<answer>{action}</answer>"
+                formatted_action= f"{action}"
                 
                 # 拼接 Full Text
-                # Context: "... Assistant:" # Target:  "<answer>Turn Left</answer>" # Result:  "... Assistant:<answer>Turn Left</answer>"
                 full_text = context_text + formatted_action
                 unique_req_id = f"{request_ids[i]}_act_{act_idx}"
                 all_prompts_data.append({
@@ -291,10 +293,8 @@ class PriorZeroCollector(OriginalCollector):
         )
         
         async def get_sequence_score(item):
-            # vLLM 的 generate 返回一个 async iterator
             results_generator = self.vllm_engine.generate(item["full_text"], sampling_params, item["req_id"])
             final_output = None
-            # 使用 asyncio.wait_for 自动处理超时
             async for request_output in results_generator:
                 final_output = request_output
 
@@ -307,7 +307,7 @@ class PriorZeroCollector(OriginalCollector):
                         total_score += lp_obj.logprob
                         valid_tokens += 1
                         break 
-            return item["idx"], item["action_str"], total_score
+            return item["idx"], item["action_str"], total_score / valid_tokens
             
         try:
             tasks = [get_sequence_score(item) for item in all_prompts_data]
@@ -441,22 +441,17 @@ class PriorZeroCollector(OriginalCollector):
         temperature = policy_kwargs.get('temperature', 1.0)
         epsilon = policy_kwargs.get('epsilon', 0.0)
 
-        # ==================================================================
-        # Initialization
-        # ==================================================================
         collected_episode = 0
         collected_step = 0
         env_nums = self._env_num
         init_obs = self._env.ready_obs
 
-        # Wait for all environments to be ready
         retry_waiting_time = 0.05
         while len(init_obs.keys()) != env_nums:
             self._logger.info(f'Waiting for all environments to reset. Ready: {list(init_obs.keys())}')
             time.sleep(retry_waiting_time)
             init_obs = self._env.ready_obs
 
-        # Initialize state tracking
         for env_id in range(env_nums):
             if env_id in init_obs:
                 self.action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
@@ -465,7 +460,6 @@ class PriorZeroCollector(OriginalCollector):
 
         last_game_segments = [None for _ in range(env_nums)]
         last_game_priorities = [None for _ in range(env_nums)]
-        # Initialize game segments
         game_segments = [
             GameSegment(
                 self._env.action_space,
@@ -475,7 +469,6 @@ class PriorZeroCollector(OriginalCollector):
             ) for _ in range(env_nums)
         ]
 
-        # Initialize observation stacks
         observation_window_stack = [
             deque(maxlen=self.policy_config.model.frame_stack_num)
             for _ in range(env_nums)
@@ -486,13 +479,12 @@ class PriorZeroCollector(OriginalCollector):
                 for _ in range(self.policy_config.model.frame_stack_num)
             ]
             observation_window_stack[env_id].extend(initial_frames)
-            game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]))
+            game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), 
+                                        init_history_obs=list(self.history_buffers[env_id]), init_action_logprob=None)
 
-        # Priority calculation lists
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
 
-        # Logging variables
         eps_steps_lst = np.zeros(env_nums)
         visit_entropies_lst = np.zeros(env_nums)
 
@@ -504,21 +496,18 @@ class PriorZeroCollector(OriginalCollector):
         # ==================================================================
         while True:
             with self._timer:
-                # Get ready environments
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
 
                 if len(ready_env_id) < self._env_num:
                     self._logger.debug(f'Only {len(ready_env_id)}/{self._env_num} envs ready')
 
-                # Prepare stacked observations for world model
                 stack_obs_dict = {
                     env_id: game_segments[env_id].get_obs()
                     for env_id in ready_env_id
                 }
                 stack_obs_list = [stack_obs_dict[env_id] for env_id in sorted(list(ready_env_id))]
 
-                # Prepare action masks and other info
                 action_mask = [self.action_mask_dict[env_id] for env_id in sorted(list(ready_env_id))]
                 to_play = [self.to_play_dict[env_id] for env_id in sorted(list(ready_env_id))]
                 timestep = [self.timestep_dict[env_id] for env_id in sorted(list(ready_env_id))]
@@ -540,17 +529,14 @@ class PriorZeroCollector(OriginalCollector):
                     # Extract text observations and valid actions
                     raw_obs_list = []
                     histories_list = []
-                    valid_actions_list = []  # [PRIORZERO] Store valid actions for each env
+                    valid_actions_list = [] 
                     for env_id in sorted(list(ready_env_id)):
-                        # Extract raw text
                         raw_obs_text = extract_raw_obs_text(obs[env_id])
                         raw_obs_list.append(raw_obs_text)
 
-                        # Get history for this environment
                         history = list(self.history_buffers[env_id])
                         histories_list.append(history)
 
-                        # [PRIORZERO] Extract valid actions from observation
                         valid_actions = obs[env_id].get('valid_actions', [])
                         valid_actions_list.append(valid_actions)
 
@@ -576,9 +562,6 @@ class PriorZeroCollector(OriginalCollector):
                     else:
                         llm_prior_logprob = None
 
-                # ==============================================================
-                # Policy Forward Pass
-                # ==============================================================
                 policy_kwargs_forward = {
                     'llm_prior_logprob': llm_prior_logprob,
                     'valid_actions_list': valid_actions_list
@@ -655,7 +638,8 @@ class PriorZeroCollector(OriginalCollector):
                         self.to_play_dict[env_id],
                         timestep=to_ndarray(obs_new.get('timestep', -1)),
                         raw_obs_text=extract_raw_obs_text(obs_new),
-                        history_obs=list(self.history_buffers[env_id])
+                        history_obs=list(self.history_buffers[env_id]),
+                        action_logprob=llm_prior_logprob[env_id] # 是一个字典对 {'open': -151; "down": -231}
                     )
 
                     # Update state
@@ -708,7 +692,7 @@ class PriorZeroCollector(OriginalCollector):
                             config=self.policy_config,
                             task_id=self.task_id
                         )
-                        game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(obs_new), init_history_obs=list(self.history_buffers[env_id]))
+                        game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(obs_new), init_history_obs=list(self.history_buffers[env_id]), init_action_logprob=None)
 
                     self._env_info[env_id]['step'] += 1
                     collected_step += 1
@@ -768,7 +752,7 @@ class PriorZeroCollector(OriginalCollector):
                         config=self.policy_config,
                         task_id=self.task_id
                     )
-                    game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]))
+                    game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]), init_action_logprob=None)
                     last_game_segments[env_id] = None
                     last_game_priorities[env_id] = None
 

@@ -51,9 +51,10 @@ class GameSegment(OriginalGameSegment):
         super().__init__(action_space, game_segment_length, config, task_id)
 
         self.raw_obs_segment = []          # Raw text observations
-        self.history_obs_segment = [] 
+        self.history_obs_segment = []
+        self.action_logprob_segment = []   # Logprob of chosen action (for PPO/RFT)
 
-    def reset(self, init_observations: List[np.ndarray], init_raw_obs, init_history_obs) -> None:
+    def reset(self, init_observations: List[np.ndarray], init_raw_obs, init_history_obs, init_action_logprob) -> None:
         """
         [PRIORZERO-MODIFIED]
         Reset the segment with initial observations.
@@ -64,9 +65,11 @@ class GameSegment(OriginalGameSegment):
         super().reset(init_observations)
         self.raw_obs_segment.clear()
         self.history_obs_segment.clear()
+        self.action_logprob_segment.clear()
         
-        self.raw_obs_segment.append(init_raw_obs)  # Placeholder for initial state
+        self.raw_obs_segment.append(init_raw_obs) 
         self.history_obs_segment.append(init_history_obs)
+        self.action_logprob_segment.append(init_action_logprob)  
 
     def append(
         self,
@@ -79,6 +82,7 @@ class GameSegment(OriginalGameSegment):
         chance: int = 0,
         raw_obs_text: Optional[str] = None,
         history_obs: Optional[List[str]] = None,
+        action_logprob: Optional[float] = None,
         **kwargs
     ) -> None:
         """
@@ -97,6 +101,7 @@ class GameSegment(OriginalGameSegment):
         super().append(action, obs, reward, action_mask, to_play, timestep, chance)
         self.raw_obs_segment.append(raw_obs_text)
         self.history_obs_segment.append(history_obs)
+        self.action_logprob_segment.append(action_logprob)
 
     def store_search_stats(self, visit_counts: List, root_value: List) -> None:
         """
@@ -126,11 +131,12 @@ class GameSegment(OriginalGameSegment):
         """
         # Call parent method to convert standard segments
         super().game_segment_to_array()
+        self.action_logprob_segment = np.asarray(self.action_logprob_segment)
     
     def pad_over(
             self, next_segment_observations: List, next_segment_rewards: List, next_segment_actions: List, next_segment_root_values: List,
             next_segment_child_visits: List, next_segment_improved_policy: List = None, next_chances: List = None, 
-            next_segment_raw_obs: List = None, next_segment_history_obs: List = None
+            next_segment_raw_obs: List = None, next_segment_history_obs: List = None, next_segment_action_logprob: List = None
     ) -> None:
         super().pad_over(
             next_segment_observations, next_segment_rewards, next_segment_actions, next_segment_root_values,
@@ -138,11 +144,14 @@ class GameSegment(OriginalGameSegment):
         )
         assert len(next_segment_raw_obs) <= self.num_unroll_steps + self.td_steps
         assert len(next_segment_history_obs) <= self.num_unroll_steps + self.td_steps
+        assert len(next_segment_action_logprob) <= self.num_unroll_steps + self.td_steps
         import copy
         for raw_obs in next_segment_raw_obs:
             self.raw_obs_segment.append(copy.deepcopy(raw_obs))
         for history_obs in next_segment_history_obs:
             self.history_obs_segment.append(copy.deepcopy(history_obs))
+        for lp in next_segment_action_logprob:
+            self.action_logprob_segment.append(copy.deepcopy(lp))
 
     def get_unroll_raw_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
@@ -177,6 +186,18 @@ class GameSegment(OriginalGameSegment):
                 pad_frames = np.array([stacked_histroy_obs[-1] for _ in range(pad_len)])
                 stacked_histroy_obs = np.concatenate((stacked_histroy_obs, pad_frames))
         return stacked_histroy_obs
+
+    def get_unroll_action_logprob(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+        """
+        Return action logprobs aligned with actions for unroll window.
+        """
+        stacked_logprob = list(self.action_logprob_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps])
+        if padding:
+            pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_logprob)
+            if pad_len > 0:
+                pad_frames = np.array([stacked_logprob[-1] for _ in range(pad_len)])
+                stacked_logprob = np.concatenate((stacked_logprob, pad_frames))
+        return stacked_logprob
 
 # ==============================================================================
 # Utility Functions

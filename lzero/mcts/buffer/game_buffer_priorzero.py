@@ -43,7 +43,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
             batch_size, self._cfg.reanalyze_ratio
         )
 
-        obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list, raw_obs_list, history_obs_list = current_batch
+        obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list, raw_obs_list, history_obs_list, action_logprob_list = current_batch
         # Standard processing
         batch_rewards, batch_target_values = self._compute_target_reward_value(
             reward_value_context, policy._target_model, current_batch[2], timestep_list
@@ -90,6 +90,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
         raw_obs_list, history_obs_list = [], []
+        action_logprob_list = []
         timestep_list = []
         bootstrap_action_list = []
 
@@ -125,6 +126,9 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
             history_obs_list.append(game_segment_list[i].get_unroll_histroy_obs(
                 pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
             ))
+            action_logprob_list.append(game_segment_list[i].get_unroll_action_logprob(
+                pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+            ))
             
             action_list.append(actions_tmp)
             mask_list.append(mask_tmp)
@@ -148,6 +152,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
             
         current_batch.append(raw_obs_list)
         current_batch.append(history_obs_list)
+        current_batch.append(action_logprob_list)
 
         total_transitions = self.get_num_of_transitions()
 
