@@ -527,18 +527,18 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             else:
                 pass
             if len(batch_rewards) > 1:
-                rewards_tensor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
+                advantage_tansor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
 
             if loss_type == 'reinforce++' and all(lp is not None for lp in batch_old_logprob):
                 old_lp_tensor = torch.tensor(batch_old_logprob, device=self._cfg.device, dtype=torch.float32)
                 ratio = torch.exp(sequence_log_probs - old_lp_tensor)
                 clipped_ratio = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)
-                surrogate1 = ratio * rewards_tensor
-                surrogate2 = clipped_ratio * rewards_tensor
+                surrogate1 = ratio * advantage_tansor
+                surrogate2 = clipped_ratio * advantage_tansor
                 loss_term = torch.min(surrogate1, surrogate2)
                 loss = -loss_term.mean()
             else:
-                loss = -(rewards_tensor * sequence_log_probs).mean()
+                loss = -(advantage_tansor * sequence_log_probs).mean()
             accumulated_loss += loss.item()
             scaled_loss = loss / grad_accum_steps
             scaled_loss.backward()
