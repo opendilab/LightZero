@@ -2,7 +2,7 @@
 
 A clean, modular PyTorch library for visualizing neural network loss landscapes.
 
-Extracted and refactored from the original [loss-landscape](https://github.com/zingyi-li/Loss-Surfaces) project with:
+Extracted and refactored from the original [loss-landscape](https://github.com/tomgoldstein/loss-landscape) project with:
 - Simplified API for single GPU usage
 - Removed MPI dependencies
 - Modular architecture for easy integration
