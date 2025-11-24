@@ -15,7 +15,7 @@ from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 from torch.utils.tensorboard import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, convert_to_batch_for_gpt, create_unizero_loss_metrics, UniZeroDataLoader
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
@@ -25,7 +25,7 @@ import torch.distributed as dist
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 
-def train_unizero(
+def plot_loss_landscape(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -53,7 +53,8 @@ def train_unizero(
     Returns:
         - policy (:obj:`Policy`): The converged policy after training.
     """
-
+    # Check DEBUG environment variable and set breakpoint if true
+    
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
@@ -93,7 +94,7 @@ def train_unizero(
             save_code=True,
         )
         logging.info("wandb initialization completed!")
-    
+
     # Create policy
     logging.info("Creating policy...")
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
@@ -163,13 +164,13 @@ def train_unizero(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
-            if stop:
-                logging.info("Stopping condition met, training ends!")
-                break
+        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+        #     logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
+        #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+        #     logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
+        #     if stop:
+        #         logging.info("Stopping condition met, training ends!")
+        #         break
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -184,15 +185,7 @@ def train_unizero(
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
-        if world_size > 1:
-            # Synchronize all ranks before training
-            try:
-                dist.barrier()
-            except Exception as e:
-                logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
-                break
 
-        # Check if there is sufficient data for training
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
@@ -206,35 +199,87 @@ def train_unizero(
                 )
                 continue
 
-            # Execute multiple training rounds
-            for i in range(update_per_collect):
-                train_data = replay_buffer.sample(batch_size, policy)
-                if replay_buffer._cfg.reanalyze_ratio > 0 and i % 20 == 0:
-                    policy.recompute_pos_emb_diff_and_clear_cache()
-                
-                if cfg.policy.use_wandb:
-                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
-
-                train_data.append(learner.train_iter)
-
-                if os.environ.get('DEBUG', '').lower() == 'true':
-                    import pudb; pudb.set_trace()
+        if os.environ.get('DEBUG', '').lower() == 'true':
+                import pudb; pudb.set_trace()
 
 
-                log_vars = learner.train(train_data, collector.envstep)
-                
-                
-                
-                
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+        # ========== Data collection complete. Plot loss landscape. ==========
+        logging.info("=" * 80)
+        logging.info("Data collected! Starting Loss Landscape Computation")
+        logging.info("=" * 80)
 
-        policy.recompute_pos_emb_diff_and_clear_cache()
+        # Import loss landscape modules
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+        from loss_landscape_core import LossLandscape
 
-        # Check stopping criteria
-        if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
-            logging.info("Stopping condition met, training ends!")
-            break
+        if os.environ.get('DEBUG', '').lower() == 'true':
+            import pudb; pudb.set_trace()
+        
+        # Setup loss landscape parameters
+        grid_size = 21  # Higher resolution: 21x21 = 441 points (increased from 11x11 = 121 points)
+        num_batches = 100  # More batches for better loss estimation (increased from 20)
+        use_cuda = torch.cuda.is_available()
+
+        # Create dataloader
+        dataloader = UniZeroDataLoader(replay_buffer, policy, batch_size, num_batches)
+
+        # Create metrics function
+        metrics_fn = create_unizero_loss_metrics(policy)
+
+        # Create output directory
+        output_dir = os.path.join(cfg.exp_name, 'loss_landscape')
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Generate loss landscape file path
+        env_name = cfg.env.env_id.split('-')[0] if '-' in cfg.env.env_id else cfg.env.env_id
+        landscape_file = os.path.join(output_dir, f'loss_landscape_{env_name}_{grid_size}x{grid_size}.h5')
+
+        # Initialize and compute loss landscape
+        logging.info("Initializing LossLandscape")
+        landscape = LossLandscape(
+            net=policy._model,
+            dataloader=dataloader,
+            criterion=metrics_fn,
+            use_cuda=use_cuda,
+            surf_file=landscape_file
+        )
+
+        logging.info(f"Computing 2D loss landscape with {grid_size}x{grid_size} grid")
+        result = landscape.compute_2d(
+            xrange=(-1, 1, grid_size),
+            yrange=(-1, 1, grid_size),
+            dir_type='weights',
+            normalize='filter',
+            ignore='biasbn',
+            save=True
+        )
+
+        logging.info(f"Loss landscape computed and saved to {landscape_file}")
+
+        # Plot results
+        try:
+            landscape.plot_2d_contour(surf_name='auto', vmin=None, vmax=None)
+            logging.info("Contour plot generated")
+        except Exception as e:
+            logging.warning(f"Failed to generate contour plot: {e}")
+
+        try:
+            landscape.plot_2d_surface(surf_name='auto')
+            logging.info("Surface plot generated")
+        except Exception as e:
+            logging.warning(f"Failed to generate surface plot: {e}")
+
+        logging.info("=" * 80)
+        logging.info(f"Loss landscape visualization complete!")
+        logging.info(f"Results saved to: {output_dir}")
+        logging.info("=" * 80)
+
+        # Exit after plotting
+        logging.info("Exiting after loss landscape computation")
+        break
+
+        
 
     learner.call_hook('after_run')
     if cfg.policy.use_wandb:

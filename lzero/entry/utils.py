@@ -247,3 +247,182 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
 
         # Reset the time records in the buffer.
         buffer.reset_runtime_metrics()
+
+
+def convert_to_batch_for_gpt(batch_data, policy_cfg, reward_support, value_support):
+    """
+    Overview:
+        Convert replay buffer sample data to batch_for_gpt format for world_model.compute_loss.
+        This function transforms the raw data from the replay buffer into the format expected
+        by the UniZero world model's compute_loss method.
+
+    Arguments:
+        - batch_data: Data sampled from replay buffer (current_batch, target_batch)
+        - policy_cfg: Policy configuration object
+        - reward_support: Reward support tensor for categorical distribution
+        - value_support: Value support tensor for categorical distribution
+
+    Returns:
+        - batch_for_gpt (:obj:`dict`): Dictionary containing formatted data for world model
+    """
+    from lzero.policy.utils import to_torch_float_tensor, prepare_obs, prepare_obs_stack_for_unizero
+    from lzero.policy import scalar_transform, phi_transform
+
+    # Unpack batch data
+    current_batch, target_batch = batch_data[:2]
+    obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
+    target_reward, target_value, target_policy = target_batch
+
+    # Prepare observations
+    if policy_cfg.model.frame_stack_num > 1:
+        obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, policy_cfg)
+    else:
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, policy_cfg)
+
+    # Convert to tensors
+    action_batch = torch.from_numpy(action_batch).to(policy_cfg.device).unsqueeze(-1).long()
+    timestep_batch = torch.from_numpy(timestep_batch).to(policy_cfg.device).unsqueeze(-1).long()
+    data_list = [mask_batch, target_reward, target_value, target_policy, weights]
+    mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(
+        data_list, policy_cfg.device
+    )
+    target_reward = target_reward.view(policy_cfg.batch_size, -1)
+    target_value = target_value.view(policy_cfg.batch_size, -1)
+
+    # Transform rewards and values
+    transformed_target_reward = scalar_transform(target_reward)
+    transformed_target_value = scalar_transform(target_value)
+
+    # Convert to categorical distributions
+    target_reward_categorical = phi_transform(reward_support, transformed_target_reward)
+    target_value_categorical = phi_transform(value_support, transformed_target_value)
+
+    # Prepare batch_for_gpt
+    batch_for_gpt = {}
+    if isinstance(policy_cfg.model.observation_shape, int) or len(policy_cfg.model.observation_shape) == 1:
+        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+            policy_cfg.batch_size, -1, policy_cfg.model.observation_shape)
+    elif len(policy_cfg.model.observation_shape) == 3:
+        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+            policy_cfg.batch_size, -1, *policy_cfg.model.observation_shape)
+
+    batch_for_gpt['actions'] = action_batch.squeeze(-1)
+    batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
+    batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
+    batch_for_gpt['mask_padding'] = mask_batch == 1.0
+    batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+    batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+    batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=policy_cfg.device)
+    batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
+    batch_for_gpt['target_policy'] = target_policy[:, :-1]
+
+    return batch_for_gpt
+
+
+def create_unizero_loss_metrics(policy):
+    """
+    Overview:
+        Create a metrics function for computing UniZero losses without gradient updates.
+        This is used for loss landscape visualization where we need to compute losses
+        at different parameter values without actually updating the model.
+
+    Arguments:
+        - policy: The policy instance containing model, configuration, and all necessary attributes
+
+    Returns:
+        - compute_metrics (:obj:`Callable`): Function that computes losses for a batch of data
+    """
+    import logging
+
+    # Get reward_support and value_support from policy's learn_mode
+    reward_support = policy.reward_support
+    value_support = policy.value_support
+
+    def compute_metrics(net, dataloader, use_cuda):
+        """
+        Compute losses for loss landscape visualization.
+
+        Arguments:
+            - net: The neural network model
+            - dataloader: DataLoader providing batches of data
+            - use_cuda: Whether to use CUDA
+
+        Returns:
+            - dict: Dictionary containing averaged losses (policy_loss, value_loss, reward_loss, total_loss)
+        """
+        net.eval()
+        total_policy_loss = 0.0
+        total_value_loss = 0.0
+        total_reward_loss = 0.0
+        total_batches = 0
+
+        with torch.no_grad():
+            for batch_data in dataloader:
+                try:
+                    # Convert replay buffer sample to batch_for_gpt format
+                    batch_for_gpt = convert_to_batch_for_gpt(
+                        batch_data,
+                        policy._cfg,
+                        reward_support,
+                        value_support
+                    )
+
+                    # Call world_model.compute_loss (no backward, no optimizer.step)
+                    losses = net.world_model.compute_loss(
+                        batch_for_gpt,
+                        policy._target_model.world_model.tokenizer,
+                        policy.value_inverse_scalar_transform_handle
+                    )
+
+                    # Extract individual losses from intermediate_losses
+                    total_policy_loss += losses.intermediate_losses['loss_policy'].item()
+                    total_value_loss += losses.intermediate_losses['loss_value'].item()
+                    total_reward_loss += losses.intermediate_losses['loss_rewards'].item()
+                    total_batches += 1
+                except Exception as e:
+                    logging.warning(f"Error processing batch in compute_metrics: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+
+        if total_batches > 0:
+            return {
+                'policy_loss': total_policy_loss / total_batches,
+                'value_loss': total_value_loss / total_batches,
+                'reward_loss': total_reward_loss / total_batches,
+                'total_loss': (total_policy_loss + total_value_loss + total_reward_loss) / total_batches
+            }
+        else:
+            return {'policy_loss': 0.0, 'value_loss': 0.0, 'reward_loss': 0.0, 'total_loss': 0.0}
+
+    return compute_metrics
+
+
+class UniZeroDataLoader:
+    """
+    Overview:
+        DataLoader wrapper for UniZero replay buffer sampling.
+        This provides an iterator interface for sampling batches from the replay buffer,
+        compatible with loss landscape visualization tools.
+
+    Arguments:
+        - replay_buffer: The game buffer containing collected episodes
+        - policy: The policy instance for sampling
+        - batch_size (:obj:`int`): Number of samples per batch
+        - num_batches (:obj:`int`): Total number of batches to sample
+    """
+    def __init__(self, replay_buffer, policy, batch_size, num_batches):
+        self.buffer = replay_buffer
+        self.policy = policy
+        self.batch_size = batch_size
+        self.num_batches = num_batches
+
+    def __iter__(self):
+        """Iterator that yields batches from the replay buffer"""
+        for _ in range(self.num_batches):
+            batch = self.buffer.sample(self.batch_size, self.policy)
+            yield batch
+
+    def __len__(self):
+        """Return the total number of batches"""
+        return self.num_batches
