@@ -77,18 +77,17 @@ def build_llm_prompt(
     """
     prompt_parts = []
 
-    # System instruction
     prompt_parts.append(
         "You are an expert player in a text-based adventure game. "
         "Your goal is to maximize the score by choosing the best possible next action. "
         "You must choose exactly ONE best next action."
     )
-
-    # Add recent history (if available)
-    if history:
+    if history is not None and len(history) > 0:
+        history = list(history)
         prompt_parts.append("\n=== Recent History ===")
-        for i, (obs, action, reward) in enumerate(history[-5:], start=1):  # last 5 steps
-            obs_str = obs if len(obs) <= 100 else obs[:100] + "..."
+
+        for i, (obs, action, reward) in enumerate(history, start=1):  
+            obs_str = obs
             prompt_parts.append(f"Step {i}:")
             prompt_parts.append(f"  Observation: {obs_str}")
             prompt_parts.append(f"  Action: {action}")
@@ -723,16 +722,16 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         # Build comprehensive log dict (aligned with UniZero)
         log_dict = {
             # ============ Core Losses ============
-            'weighted_total_loss': wm_total_loss.item(),
-            'obs_loss': obs_loss.item() if torch.is_tensor(obs_loss) else obs_loss,
-            'reward_loss': reward_loss.item() if torch.is_tensor(reward_loss) else reward_loss,
-            'policy_loss': policy_loss.item() if torch.is_tensor(policy_loss) else policy_loss,
-            'value_loss': value_loss.item() if torch.is_tensor(value_loss) else value_loss,
-            'latent_recon_loss': latent_recon_loss.item() if torch.is_tensor(latent_recon_loss) else latent_recon_loss,
-            'perceptual_loss': perceptual_loss.item() if torch.is_tensor(perceptual_loss) else perceptual_loss,
-            'orig_policy_loss': orig_policy_loss.item() if torch.is_tensor(orig_policy_loss) else orig_policy_loss,
-            'policy_entropy': policy_entropy.item() if torch.is_tensor(policy_entropy) else policy_entropy,
-            'target_policy_entropy': average_target_policy_entropy.item(),
+            'wm_total_loss': wm_total_loss.item(),
+            'wm_obs_loss': obs_loss.item() if torch.is_tensor(obs_loss) else obs_loss,
+            'wm_reward_loss': reward_loss.item() if torch.is_tensor(reward_loss) else reward_loss,
+            'wm_policy_loss': policy_loss.item() if torch.is_tensor(policy_loss) else policy_loss,
+            'wm_value_loss': value_loss.item() if torch.is_tensor(value_loss) else value_loss,
+            'wm_latent_recon_loss': latent_recon_loss.item() if torch.is_tensor(latent_recon_loss) else latent_recon_loss,
+            'wm_perceptual_loss': perceptual_loss.item() if torch.is_tensor(perceptual_loss) else perceptual_loss,
+            'wm_orig_policy_loss': orig_policy_loss.item() if torch.is_tensor(orig_policy_loss) else orig_policy_loss,
+            'wm_policy_entropy': policy_entropy.item() if torch.is_tensor(policy_entropy) else policy_entropy,
+            'wm_target_policy_entropy': average_target_policy_entropy.item(),
 
 
             # ============ Step-wise Losses ============
@@ -752,14 +751,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'analysis/last_step_loss_obs': last_step_losses.get('loss_obs', torch.tensor(0.0)).item() if isinstance(last_step_losses.get('loss_obs'), torch.Tensor) else 0.0,
 
             # ============ Analysis Metrics ============
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
-            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,
-            'analysis/dormant_ratio_head': dormant_ratio_head,
-            'analysis/avg_weight_mag_encoder': avg_weight_mag_encoder,
-            'analysis/avg_weight_mag_transformer': avg_weight_mag_transformer,
-            'analysis/avg_weight_mag_head': avg_weight_mag_head,
-            'analysis/e_rank_last_linear': e_rank_last_linear,
-            'analysis/e_rank_sim_norm': e_rank_sim_norm,
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item() if torch.is_tensor(latent_state_l2_norms) else latent_state_l2_norms,
             'analysis/latent_action_l2_norms': latent_action_l2_norms,
 
@@ -777,15 +768,15 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'temperature_policy': temperature_policy,
 
             # ============ Targets ============
-            'target_reward': target_reward.mean().item(),
-            'target_value': target_value.mean().item(),
+            'wm_target_reward': target_reward.mean().item(),
+            'wm_target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'value_priority': value_priority_np.mean().item(),
             'value_priority_orig': value_priority_np,
 
             # ============ Gradient Norms ============
-            'total_grad_norm_before_clip_wm': wm_grad_norm.item(),
+            'wm_grad_norm': wm_grad_norm.item(),
             'llm_grad_norm': self._last_llm_grad_norm,
 
             # ============ Learning Rates ============
@@ -815,23 +806,19 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         """
 
         return [
-                        # ============ LLM Loss Metrics ============
+            # ============ LLM Loss Metrics ============
             'llm_sft_loss',              # Supervised fine-tuning loss
             'llm_rft_loss',              # Reinforcement fine-tuning loss
             'llm_total_loss',            # Combined LLM loss
             'llm_grad_norm',             # LLM gradient norm
             'llm_lr',                    # LLM learning rate
-
             # ============ LLM Training Statistics ============
             # 'num_sft_samples',           # Number of SFT samples in batch
             # 'num_rft_samples',           # Number of RFT samples in batch
-
             # ============ Combined Metrics ============
             'total_loss',                # Total loss (WM + LLM)
             'wm_total_loss',             # World model total loss
             'wm_grad_norm',              # World model gradient norm
-            'wm_lr',                     # World model learning rate
-
             # ============ World Model Component Losses ============
             'wm_value_loss',
             'wm_policy_loss',
@@ -841,18 +828,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_transformer',
             'analysis/dormant_ratio_head',
-
             'analysis/avg_weight_mag_encoder',
             'analysis/avg_weight_mag_transformer',
             'analysis/avg_weight_mag_head',
-            'analysis/e_rank_last_linear',
-            'analysis/e_rank_sim_norm',
-
             'analysis/latent_state_l2_norms',
-            'analysis/l2_norm_before',
-            'analysis/l2_norm_after',
-            'analysis/grad_norm_before',
-            'analysis/grad_norm_after',
 
             'analysis/first_step_loss_value',
             'analysis/first_step_loss_policy',
@@ -879,60 +858,37 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'collect_mcts_temperature',
             'cur_lr_world_model',
             'cur_lr_tokenizer',
-
-            'weighted_total_loss',
-            'obs_loss',
-            'policy_loss',
-            'orig_policy_loss',
-            'policy_entropy',
-            'latent_recon_loss',
-            'target_policy_entropy',
-            'reward_loss',
-            'value_loss',
+            
+            'wm_orig_policy_loss',
+            'wm_policy_entropy',
+            'wm_latent_recon_loss',
+            'wm_target_policy_entropy',
             'consistency_loss',
             'value_priority',
-            'target_reward',
-            'target_value',
+            'wm_target_reward',
+            'wm_target_value',
             'total_grad_norm_before_clip_wm',
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',
-            'perceptual_loss',
+            'wm_perceptual_loss',
 
+            "logits_value_mean",
+            "logits_value_max",
+            "logits_value_min",
+            "logits_policy_mean",
+            "logits_policy_max",
+            "logits_policy_min",
 
-        "logits_value_mean",
-        "logits_value_max",
-        "logits_value_min",
-        "logits_policy_mean",
-        "logits_policy_max",
-        "logits_policy_min",
-
-                     "temperature_value",
-        "temperature_reward",
-        "temperature_policy",
-                "current_policy_label_eps",
-                         'adaptive_alpha',
-                         "adaptive_target_entropy_ratio",
+            "temperature_value",
+            "temperature_reward",
+            "temperature_policy",
+            "current_policy_label_eps",
+            'adaptive_alpha',
+            "adaptive_target_entropy_ratio",
             'alpha_loss',
             "current_encoder_clip_value",
-
-                # ==================== [新增] 添加范数和中间张量监控变量 ====================
-            # 模块总范数
-            'norm/encoder/_total_norm',
-            'norm/transformer/_total_norm',
-            'norm/head_value/_total_norm',
-            'norm/head_reward/_total_norm',
-            'norm/head_policy/_total_norm',
-            # 中间张量 x 的统计信息
-            'norm/x_token/mean',
-            'norm/x_token/std',
-            'norm/x_token/max',
-            'norm/x_token/min',
         ]
-        # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
-        # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
-        # 或者在本地打印 `norm_log_dict` 来进行详细分析。
-        # wandb等工具可以更好地处理大量的动态指标。
         # ========================================================================
     
     def pad_to_fixed_length(self, data, target_len=55, pad_val=-1e9, dtype=torch.float32):
