@@ -25,7 +25,7 @@ import torch.distributed as dist
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 
-def plot_loss_landscape(
+def train_unizero_with_loss_landscape(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -35,10 +35,10 @@ def plot_loss_landscape(
 ) -> 'Policy':
     """
     Overview:
-        This function serves as the training entry point for UniZero, as proposed in our paper "UniZero: Generalized and Efficient Planning with Scalable Latent World Models".
-        UniZero aims to enhance the planning capabilities of reinforcement learning agents by addressing the limitations found in MuZero-style algorithms,
-        particularly in environments that require capturing long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
-    
+        This function serves as the training entry point for UniZero with integrated loss landscape visualization.
+        It trains a UniZero policy as proposed in the paper "UniZero: Generalized and Efficient Planning with Scalable Latent World Models",
+        and then computes and visualizes the loss landscape. More details at https://arxiv.org/abs/2406.10667.
+
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Configuration in dictionary format.
             ``Tuple[dict, dict]`` indicates [user_config, create_cfg].
@@ -49,16 +49,14 @@ def plot_loss_landscape(
             In LightZero, the path typically resembles ``exp_name/ckpt/ckpt_best.pth.tar``.
         - max_train_iter (:obj:`Optional[int]`): Maximum number of policy update iterations during training.
         - max_env_step (:obj:`Optional[int]`): Maximum number of environment interaction steps to collect.
-    
+
     Returns:
-        - policy (:obj:`Policy`): The converged policy after training.
+        - policy (:obj:`Policy`): The trained policy after training and loss landscape computation.
     """
-    # Check DEBUG environment variable and set breakpoint if true
-    
     cfg, create_cfg = input_cfg
 
-    # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero only supports the following algorithms: 'unizero', 'sampled_unizero'"
+    # Ensure the specified policy type is supported for UniZero with loss landscape
+    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero_with_loss_landscape only supports the following algorithms: 'unizero', 'sampled_unizero'"
     logging.info(f"Using policy type: {create_cfg.policy.type}")
 
     # Import the appropriate GameBuffer class based on the policy type
@@ -73,12 +71,12 @@ def plot_loss_landscape(
     # Compile the configuration file
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-    # Create environment manager
+    # Create environment managers for data collection
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
-    # Initialize environment and random seed
+    # Set random seeds for reproducibility
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
@@ -106,43 +104,45 @@ def plot_loss_landscape(
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
         logging.info("Pretrained model loaded successfully!")
 
-    # Create core components for training
+    # Create core components for data collection and loss landscape computation
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
-    replay_buffer = GameBuffer(cfg.policy)
+    replay_buffer = GameBuffer(cfg.policy)  # Buffer to store collected game segments
     collector = Collector(env=collector_env, policy=policy.collect_mode, tb_logger=tb_logger, exp_name=cfg.exp_name,
                           policy_config=cfg.policy)
+    # Note: Evaluator is created but not used in loss landscape mode
     evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
                           tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=cfg.policy)
 
-    # Execute the learner's before_run hook
+    # Execute the learner's initialization hook
     learner.call_hook('before_run')
 
     if cfg.policy.use_wandb:
         policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
-    # Randomly collect data if specified
+    # Perform initial random data collection to seed the replay buffer
     if cfg.policy.random_collect_episode_num > 0:
-        logging.info("Collecting random data...")
+        logging.info("Performing random data collection to initialize replay buffer...")
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
         logging.info("Random data collection completed!")
 
     batch_size = policy._cfg.batch_size
 
+    # Setup multi-GPU configuration
     if cfg.policy.multi_gpu:
-        # Get current world size and rank
         world_size = get_world_size()
         rank = get_rank()
     else:
         world_size = 1
         rank = 0
 
+    # Main training loop: Collect data once, then compute loss landscape
     while True:
         # Log memory usage of the replay buffer
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
 
-        # Set temperature parameter for data collection
+        # Set temperature parameter for data collection during MCTS
         collect_kwargs = {
             'temperature': visit_count_temperature(
                 cfg.policy.manual_temperature_decay,
@@ -153,7 +153,7 @@ def plot_loss_landscape(
             'epsilon': 0.0  # Default epsilon value
         }
 
-        # Configure epsilon-greedy exploration
+        # Configure epsilon-greedy exploration if specified
         if cfg.policy.eps.eps_greedy_exploration_in_collect:
             epsilon_greedy_fn = get_epsilon_greedy_fn(
                 start=cfg.policy.eps.start,
@@ -163,7 +163,9 @@ def plot_loss_landscape(
             )
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
-        # Evaluate policy performance
+        # Note: Policy evaluation is disabled in this loss landscape variant
+        # The training stops after data collection to compute the loss landscape
+        # (Uncomment below if evaluation is needed before loss landscape computation)
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
         #     logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
         #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
@@ -172,71 +174,64 @@ def plot_loss_landscape(
         #         logging.info("Stopping condition met, training ends!")
         #         break
 
-        # Collect new data
+        # Collect data for loss landscape computation (single iteration)
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        logging.info(f"Rank {rank}, Training iteration {learner.train_iter}: New data collection completed!")
+        logging.info(f"Rank {rank}, Data collection iteration {learner.train_iter}: Completed!")
 
-        # Determine updates per collection
-        update_per_collect = cfg.policy.update_per_collect
-        if update_per_collect is None:
-            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size)
+        # Note: In loss landscape mode, we don't perform policy updates
+        # We only collect data to populate the replay buffer for landscape computation
 
-        # Update replay buffer
+        # Update replay buffer with newly collected data
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
-
+        # Check if sufficient data has been collected for loss landscape computation
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
-            
+
             if not data_sufficient:
                 logging.warning(
-                    f'Rank {rank}: The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
+                    f'Rank {rank}: Insufficient data in replay_buffer for landscape computation: '
+                    f'batch_size: {batch_size}, buffer segments/transitions: {replay_buffer}. Continuing to collect data....'
                 )
+                # Continue collecting until enough data is available
                 continue
 
-        if os.environ.get('DEBUG', '').lower() == 'true':
-                import pudb; pudb.set_trace()
-
-
-        # ========== Data collection complete. Plot loss landscape. ==========
+        # Data collection complete - trigger loss landscape computation
+        # ========== START: Loss Landscape Computation ==========
         logging.info("=" * 80)
-        logging.info("Data collected! Starting Loss Landscape Computation")
+        logging.info("Data collection complete! Starting Loss Landscape Computation")
         logging.info("=" * 80)
 
-        # Import loss landscape modules
-        import sys
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
-        from loss_landscape_core import LossLandscape
-
-        if os.environ.get('DEBUG', '').lower() == 'true':
-            import pudb; pudb.set_trace()
+        # Import loss landscape module
+        from lzero.loss_landscape import LossLandscape
         
-        # Setup loss landscape parameters
-        grid_size = 21  # Higher resolution: 21x21 = 441 points (increased from 11x11 = 121 points)
-        num_batches = 100  # More batches for better loss estimation (increased from 20)
+        # ========== Loss Landscape Configuration ==========
+        # Grid resolution for 2D loss landscape
+        grid_size = 21  # 21x21 = 441 evaluation points
+        # Number of batches for averaging loss estimates
+        num_batches = 100  # Use multiple batches for stable loss estimation
         use_cuda = torch.cuda.is_available()
 
-        # Create dataloader
+        # Create data loader from collected replay buffer
         dataloader = UniZeroDataLoader(replay_buffer, policy, batch_size, num_batches)
 
-        # Create metrics function
+        # Create loss and metrics computation function for UniZero
         metrics_fn = create_unizero_loss_metrics(policy)
 
-        # Create output directory
+        # Setup output directory for loss landscape visualizations
         output_dir = os.path.join(cfg.exp_name, 'loss_landscape')
         os.makedirs(output_dir, exist_ok=True)
 
-        # Generate loss landscape file path
+        # Generate HDF5 file path for storing computed loss landscape
         env_name = cfg.env.env_id.split('-')[0] if '-' in cfg.env.env_id else cfg.env.env_id
         landscape_file = os.path.join(output_dir, f'loss_landscape_{env_name}_{grid_size}x{grid_size}.h5')
 
-        # Initialize and compute loss landscape
-        logging.info("Initializing LossLandscape")
+        # Initialize LossLandscape with trained model and data
+        logging.info("Initializing LossLandscape for UniZero model")
         landscape = LossLandscape(
             net=policy._model,
             dataloader=dataloader,
@@ -245,44 +240,45 @@ def plot_loss_landscape(
             surf_file=landscape_file
         )
 
-        logging.info(f"Computing 2D loss landscape with {grid_size}x{grid_size} grid")
+        # Compute 2D loss landscape over the model's weight space
+        logging.info(f"Computing 2D loss landscape with {grid_size}x{grid_size} grid ({grid_size**2} evaluations)")
         result = landscape.compute_2d(
-            xrange=(-1, 1, grid_size),
-            yrange=(-1, 1, grid_size),
-            dir_type='weights',
-            normalize='filter',
-            ignore='biasbn',
-            save=True
+            xrange=(-1, 1, grid_size),           # X-axis: -1 to 1 normalized range
+            yrange=(-1, 1, grid_size),           # Y-axis: -1 to 1 normalized range
+            dir_type='weights',                  # Perturb weights, not states
+            normalize='filter',                  # Normalize by filter (layer-wise)
+            ignore='biasbn',                     # Ignore bias and batch norm parameters
+            save=True                            # Save to HDF5 file
         )
 
-        logging.info(f"Loss landscape computed and saved to {landscape_file}")
+        logging.info(f"Loss landscape computed. Data saved to: {landscape_file}")
 
-        # Plot results
+        # Generate visualization plots from computed landscape
         try:
             landscape.plot_2d_contour(surf_name='auto', vmin=None, vmax=None)
-            logging.info("Contour plot generated")
+            logging.info("2D contour plot (loss levels) generated successfully")
         except Exception as e:
             logging.warning(f"Failed to generate contour plot: {e}")
 
         try:
             landscape.plot_2d_surface(surf_name='auto')
-            logging.info("Surface plot generated")
+            logging.info("3D surface plot generated successfully")
         except Exception as e:
             logging.warning(f"Failed to generate surface plot: {e}")
 
         logging.info("=" * 80)
-        logging.info(f"Loss landscape visualization complete!")
+        logging.info("Loss landscape visualization complete!")
         logging.info(f"Results saved to: {output_dir}")
         logging.info("=" * 80)
+        # ========== END: Loss Landscape Computation ==========
 
-        # Exit after plotting
-        logging.info("Exiting after loss landscape computation")
+        # Exit training loop after loss landscape computation
+        logging.info("Exiting training loop - loss landscape computation finished")
         break
 
-        
-
+    # Cleanup and finalization
     learner.call_hook('after_run')
     if cfg.policy.use_wandb:
         wandb.finish()
-    logging.info("===== Training Completed =====")
+    logging.info("===== Training with Loss Landscape Visualization Completed =====")
     return policy

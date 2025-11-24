@@ -3,7 +3,6 @@
 ## Installation
 
 ```bash
-cd /mnt/shared-storage-user/tangjia/temp/loss_landscape_core
 pip install torch torchvision h5py matplotlib scipy seaborn numpy
 ```
 
@@ -12,7 +11,7 @@ pip install torch torchvision h5py matplotlib scipy seaborn numpy
 ### 1D Loss Curve (Fastest)
 
 ```python
-from loss_landscape_core import LossLandscape
+from lzero.loss_landscape import LossLandscape
 import torch.nn as nn
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader

@@ -123,8 +123,8 @@ def main(env_id='PongNoFrameskip-v4', seed=0, ckpt=None, log_dir=None):
     else:
         main_config.exp_name = f'data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
-    from lzero.entry import plot_loss_landscape
-    plot_loss_landscape([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    from lzero.entry import train_unizero_with_loss_landscape
+    train_unizero_with_loss_landscape([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":

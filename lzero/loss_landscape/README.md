@@ -56,7 +56,7 @@ pip install torch torchvision h5py matplotlib scipy seaborn numpy
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from loss_landscape_core import LossLandscape
+from lzero.loss_landscape import LossLandscape
 
 # Setup model and data
 model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
@@ -107,7 +107,7 @@ Compute multiple custom metrics simultaneously:
 ```python
 import torch
 import torch.nn as nn
-from loss_landscape_core import LossLandscape
+from lzero.loss_landscape import LossLandscape
 
 def compute_custom_metrics(net, dataloader, use_cuda):
     """
@@ -588,8 +588,8 @@ f.close()
 For more control, use core modules directly:
 
 ```python
-from loss_landscape_core.core import direction, evaluator, perturbation
-from loss_landscape_core import utils
+from lzero.loss_landscape.core import direction, evaluator, perturbation
+from lzero.loss_landscape import utils
 
 # Create direction
 d = direction.create_random_direction(model, dir_type='weights')

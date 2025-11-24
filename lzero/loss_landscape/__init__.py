@@ -5,7 +5,7 @@ A PyTorch library for computing and visualizing loss surfaces of neural networks
 Supports 1D and 2D loss curves, contour plots, 3D surfaces, and export to ParaView.
 
 Basic Usage:
-    from loss_landscape_core import LossLandscape
+    from lzero.loss_landscape import LossLandscape
 
     landscape = LossLandscape(model, dataloader, criterion, use_cuda=True)
 
