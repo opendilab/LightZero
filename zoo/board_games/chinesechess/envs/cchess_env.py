@@ -21,6 +21,28 @@ Mode:
     - ``self_play_mode``: 自对弈模式，用于 AlphaZero/MuZero 数据生成
     - ``play_with_bot_mode``: 与内置 bot 对战模式
     - ``eval_mode``: 评估模式
+
+Observation Space:
+    字典结构，包含以下键：
+    - ``observation``: shape (N, 10, 9), float32. 
+        - N = 14 * stack_obs_num + 1 = 14 * 4 + 1 = 57
+        - 前 56 个通道为 4 帧历史观测堆叠，每一帧包含 14 个特征平面 (7种棋子 x 2种颜色)
+        - 最后一个通道为当前玩家颜色平面 (全1表示红方/先手，全0表示黑方/后手)
+        - 采用 Canonical View (规范视角)：始终以当前玩家视角观察棋盘 (自己棋子在下方/前7层)
+    - ``action_mask``: shape (8100,), int8. 合法动作掩码，1表示合法，0表示非法
+    - ``board``: shape (10, 9), int8. 棋盘可视化表示，用于调试或渲染
+    - ``to_play``: shape (1,), int32. 当前该谁走 (-1: 结束/未知, 0: 黑方, 1: 红方)
+
+Action Space:
+    - Discrete(8100). 动作是移动的索引 (from_square * 90 + to_square)
+    - 棋盘有 90 个位置 (0-89)，动作空间涵盖所有可能的起点-终点组合 (90 * 90 = 8100)
+    - 实际合法动作远小于 8100 (通常几十到一百多)
+
+Reward Space:
+    - Box(-1, 1, (1,), float32).
+    - +1: 当前玩家获胜 (Checkmate)
+    - -1: 当前玩家失败 (被Checkmate或长将违规)
+    - 0: 平局 (长闲循环、自然限招、无子可动等) 或 游戏未结束
 """
 
 import copy
@@ -206,15 +228,16 @@ class ChineseChessEnv(BaseEnv):
             done = True
             outcome = None  # 达到最大步数视为平局
         
+        # 默认 reward 为 0.0 (游戏未结束或和棋)
+        reward_scalar = 0.0
+        
         if done:
             # [DEBUG] 详细打印游戏结束原因，排查全和棋问题
             termination_reason = outcome.termination if outcome else "MaxSteps/Unknown"
-            winner_info = "None"
-            if outcome and outcome.winner is not None:
-                winner_info = "RED" if outcome.winner == cchess.RED else "BLACK"
             
             if outcome and outcome.winner is not None:
                 # 有明确的胜者，奖励从执行动作的玩家视角计算
+                winner_info = "RED" if outcome.winner == cchess.RED else "BLACK"
                 if outcome.winner == cchess.RED:
                     # 红方胜
                     reward_scalar = 1.0 if acting_player == 1 else -1.0
@@ -223,22 +246,8 @@ class ChineseChessEnv(BaseEnv):
                     reward_scalar = -1.0 if acting_player == 1 else 1.0
                 logging.info(f"[ENV_DEBUG] Game Won! Winner: {winner_info}, ActingPlayer: {acting_player}, Reward: {reward_scalar}, Reason: {termination_reason}, Steps: {self.current_step}")
             else:
-                # [修改策略] 将重复局面 (FOURFOLD_REPETITION) 判为负，强迫模型进攻
-                if termination_reason == cchess.Termination.FOURFOLD_REPETITION:
-                     # 判定当前行动方输 (-1)
-                     reward_scalar = -1.0
-                     logging.info(f"[ENV_DEBUG] Game Ended. Reason: {termination_reason}, ActingPlayer: {acting_player} LOSE (Punished), Steps: {self.current_step}")
-                elif self.current_step >= self.max_episode_steps:
-                     # [修改策略] 达到最大步数限制，视为行动方超时/无能，直接判负
-                     reward_scalar = -1.0
-                     logging.info(f"[ENV_DEBUG] Game Ended. Reason: MaxSteps({self.max_episode_steps}), ActingPlayer: {acting_player} LOSE (Punished), Steps: {self.current_step}")
-                else:
-                     # 其他和棋原因 (如 SIXTY_MOVES, STALEMATE等) 仍然是 0
-                     reward_scalar = 0.0
-                     logging.info(f"[ENV_DEBUG] Game Draw. Reward: 0.0, Reason: {termination_reason}, Steps: {self.current_step}")
-        else:
-            # 游戏未结束
-            reward_scalar = 0.0
+                # [优化策略] 统一判和逻辑：循环局面、最大步数、自然限招等均视为和棋 (0.0)
+                logging.info(f"[ENV_DEBUG] Game Ended. Reason: {termination_reason}, Game DRAW, Steps: {self.current_step}")
         
         # 对外接口仍然使用 shape (1,) 的 ndarray
         reward = np.array([reward_scalar], dtype=np.float32)
