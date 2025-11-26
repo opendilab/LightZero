@@ -344,6 +344,7 @@ class JerichoEnv(BaseEnv):
         previous_obs: Optional[str] = self.last_observation if (self.remove_stuck_actions and self.last_observation is not None) else None
 
         observation, reward, done, info = self._env.step(action_str)
+        info['action_str'] = action_str
 
         self._timestep += 1
         if not self.for_unizero:

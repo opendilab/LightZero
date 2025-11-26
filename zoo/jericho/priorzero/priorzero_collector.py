@@ -142,8 +142,9 @@ class PriorZeroCollector(OriginalCollector):
         self._profile_enabled = bool(self.profile_cfg.get('enable_cprofile', False))
         self._profile_log_interval = int(self.profile_cfg.get('log_interval', 50))
         self._profile_dir = f"./{self._exp_name}/log/profile"
-        self._profile_stats = { 'llm_prior_profile': {'count': 0, 'total': 0.0, 'max': 0.0}, 
-                                'collect_step_profile': {'count': 0, 'total': 0.0, 'max': 0.0}
+        self._profile_stats = { 'collect_get_llm_prior_profile': {'count': 0, 'total': 0.0, 'max': 0.0}, 
+                                'collect_step_profile': {'count': 0, 'total': 0.0, 'max': 0.0},
+                                'collect_forward_profile': {'count': 0, 'total': 0.0, 'max': 0.0}
                             }
         self._profile_stats_file = f'{self._profile_dir}/collector_time.log'
         if self._profile_enabled:
@@ -561,7 +562,7 @@ class PriorZeroCollector(OriginalCollector):
                             self._llm_prior_req_counter += 1
                             request_ids.append(f"collect_{self._llm_prior_req_counter}")
 
-                        with self._profile_block(name='llm_prior_profile'):
+                        with self._profile_block(name='collect_get_llm_prior_profile'):
                             llm_prior_logprob = await self._async_get_llm_prior(
                                 states=raw_obs_list,
                                 request_ids=request_ids,
@@ -584,10 +585,11 @@ class PriorZeroCollector(OriginalCollector):
 
                 if self.task_id is not None:
                     policy_kwargs_forward['task_id'] = self.task_id
-                policy_output = self._policy.forward(data=stack_obs_tensor, action_mask=action_mask,
-                                                    temperature=temperature, to_play=to_play, epsilon=epsilon,
-                                                    ready_env_id=sorted(list(ready_env_id)), timestep=timestep,
-                                                     **policy_kwargs_forward)
+                with self._profile_block(name='collect_forward_profile'):
+                    policy_output = self._policy.forward(data=stack_obs_tensor, action_mask=action_mask,
+                                                        temperature=temperature, to_play=to_play, epsilon=epsilon,
+                                                        ready_env_id=sorted(list(ready_env_id)), timestep=timestep,
+                                                        **policy_kwargs_forward)
 
                 # Extract outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -641,7 +643,11 @@ class PriorZeroCollector(OriginalCollector):
                     # [PRIORZERO-NEW] Update History Buffer
                     # ===========================================================
                     raw_obs_text = extract_raw_obs_text(obs[env_id])
-                    action = valid_actions_list[env_id][actions[env_id]]
+                    if env_id < len(valid_actions_list) and actions[env_id] < len(valid_actions_list[env_id]):  
+                        action = valid_actions_list[env_id][actions[env_id]]
+                    else:
+                        action = info.get('action_str', "go")
+                        
                     self.history_buffers[env_id].append((raw_obs_text, action, float(reward)))
                     
                     # Append transition to game segment
