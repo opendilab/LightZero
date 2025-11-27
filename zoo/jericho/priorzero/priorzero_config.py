@@ -46,10 +46,6 @@ def get_priorzero_config(
     action_space_size, max_steps = env_configurations.get(env_id, (20, 100))
     wm_encoder_option = 'legacy' 
     wm_model_name = 'BAAI/bge-base-en-v1.5'  
-
-    # LLM policy model
-    # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
-    llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
     
     collector_env_num = 4
     evaluator_env_num = 2
@@ -63,6 +59,13 @@ def get_priorzero_config(
     batch_size = 64
     collect_num_simulations=25
     eval_num_simulations=25
+    
+    ## LLM 参数
+    # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
+    llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
+    total_batch_size = 256   # Total batch size across all GPUs
+    micro_batch_size = 64    # Micro batch size per GPU
+    gradient_accumulation_steps = total_batch_size // micro_batch_size
     
 
     env_config = dict(
@@ -184,22 +187,22 @@ def get_priorzero_config(
             use_cot=False,
             enable_sft=False,
             enable_rft=True,
-            rft_loss_type='reinforce',
+            rft_loss_type='reinforce++',
             rft_clip_epsilon=0.2,
-            rft_reward='value',  # ['reward', 'value']
             
             lm_learning_rate=1e-6,
             llm_weight_decay=0.01,
             llm_loss_weight=0.5,   # Weight of SFT loss in total loss
             rft_loss_weight=0.3, 
-            llm_micro_batch_size=32,
-            llm_gradient_accumulation_steps=4,
+            llm_micro_batch_size=micro_batch_size,
+            
+            llm_gradient_accumulation_steps=gradient_accumulation_steps,
             prompt_log_interval=1000, # 隔多久step输出模型的回答和valid action进行对比
             
             prompt_max_len=2048,
             generate_max_len=256,
             vllm_tensor_parallel_size=1,
-            gpu_memory_utilization=0.3,
+            gpu_memory_utilization=0.2,
         ),
     )
     priorzero_config = dict(

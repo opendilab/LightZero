@@ -2064,7 +2064,7 @@ class WorldModel(nn.Module):
                 value_priority=value_priority,
                 intermediate_tensor_x=intermediate_tensor_x,
                 obs_embeddings=detached_obs_embeddings, # <-- 新增
-            )
+            ), inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, outputs.logits_value.shape[-1])).detach()
 
     
     # TODO: test correctness

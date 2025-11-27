@@ -307,7 +307,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         raw_obs_list: List[List[str]],
         history_obs_list: List[List[List[Tuple[str, str, float]]]],
         action_logprob_list: Optional[List[List[Any]]] = None,
-        target_values = None
+        target_values = None,
+        pred_values = None,
     ) -> List[Dict[str, Any]]:
         """
         Build prompt/target pairs (and rewards) for LLM training.
@@ -317,7 +318,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         if B == 0:
             return samples
         T = len(raw_obs_list[0])
-
+        if pred_values is not None:
+            pred_values = pred_values.reshape(B, T - 1, -1) 
+            
         for b in range(B):
             for t in range(T - 1):
                 current_obs = raw_obs_list[b][t]
@@ -327,6 +330,11 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     value = target_values[b][t].item()
                 else:
                     value = None
+                if pred_values is not None:
+                    pred_value = pred_values[b][t].item()
+                else:
+                    pred_value = None
+                
                 if isinstance(next_step_history, np.ndarray):
                     next_step_history = next_step_history.tolist()
                 if not next_step_history:
@@ -357,6 +365,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                         target=f"{true_action}{self.llm_tokenizer.eos_token}",
                         reward=float(reward_value) if reward_value is not None else 0.0,
                         value=value,
+                        pred_value=pred_value,
                         old_logprob=old_logprob
                     )
                 )
@@ -446,12 +455,13 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         raw_obs_list: List[List[str]],
         history_obs_list: List[List[List[Tuple[str, str, float]]]],
         action_logprob_list: Optional[List[List[Any]]] = None,
-        target_values: Optional[List[List[float]]] = None
+        target_values = None,
+        pred_values = None,
     ) -> torch.Tensor:
         """
         Reinforcement fine-tuning loss with in-function gradient/optimizer updates.
         """
-        samples = self._build_llm_samples(raw_obs_list, history_obs_list, action_logprob_list, target_values)
+        samples = self._build_llm_samples(raw_obs_list, history_obs_list, action_logprob_list, target_values, pred_values)
         if len(samples) == 0:
             return torch.tensor(0.0, device=self._cfg.device)
 
@@ -469,7 +479,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         full_texts = [s['prompt'] + s['target'] for s in samples]
         prompts_only = [s['prompt'] for s in samples]
         rewards_list = [s['reward'] for s in samples]
-        values_list = [s['value'] for s in samples]
+        values_list = [s['value'] for s in samples] # target_values的值（相当于G_t）， td(5)的结果，5步真实reward + 1步bootstrap的value
+        pred_values_list = [s['pred_value'] for s in samples] # pred_values的值（相当于V_phi(s_t)），world model预测的value
         old_logprob_list = [s.get('old_logprob', None) for s in samples]
         loss_type = getattr(self.llm_policy_cfg, 'rft_loss_type', 'reinforce').lower()
         clip_eps = getattr(self.llm_policy_cfg, 'rft_clip_epsilon', 0.2)
@@ -483,6 +494,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             batch_rewards = rewards_list[start_idx:end_idx]
             batch_old_logprob = old_logprob_list[start_idx:end_idx]
             batch_values = values_list[start_idx:end_idx]
+            batch_pred_values = pred_values_list[start_idx:end_idx]
 
             inputs = self.llm_tokenizer(
                 batch_full_texts,
@@ -493,12 +505,15 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             ).to(self._cfg.device)
 
             labels = inputs.input_ids.clone()
-            labels[labels == self.llm_tokenizer.pad_token_id] = -100
+            labels[inputs.attention_mask == 0] = -100
             for i, prompt_str in enumerate(batch_prompts):
+                pad_len = (inputs.attention_mask[i] == 0).sum().item()
                 prompt_tokens = self.llm_tokenizer.encode(prompt_str, add_special_tokens=False)
                 prompt_len = len(prompt_tokens)
+                real_prompt_len = pad_len + prompt_len
+                
                 if prompt_len < labels.shape[1]:
-                    labels[i, :prompt_len] = -100
+                    labels[i, :real_prompt_len] = -100
                 else:
                     labels[i, :] = -100
 
@@ -506,39 +521,33 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 input_ids=inputs.input_ids,
                 attention_mask=inputs.attention_mask
             )
-            log_probs = F.log_softmax(outputs.logits, dim=-1)
-            shifted_log_probs = log_probs[:, :-1, :].contiguous()
+            logits = outputs.logits[:, :-1, :].contiguous()
             shifted_labels = labels[:, 1:].contiguous()
-            gather_labels = shifted_labels.clone()
-            gather_labels[gather_labels == -100] = self.llm_tokenizer.pad_token_id
-
-            token_log_probs = shifted_log_probs.gather(
-                dim=-1,
-                index=gather_labels.unsqueeze(-1)
-            ).squeeze(-1)
+            token_log_probs = -F.cross_entropy(logits.transpose(1, 2), shifted_labels,reduction='none')
             mask = (shifted_labels != -100).float()
             token_log_probs = token_log_probs * mask
             sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
             
-            if self.llm_policy_cfg.rft_reward=='value':
-                rewards_tensor = torch.tensor(batch_values, device=self._cfg.device, dtype=torch.float32)
-            elif self.llm_policy_cfg.rft_reward=='reward':
-                rewards_tensor = torch.tensor(batch_rewards, device=self._cfg.device, dtype=torch.float32)
-            else:
-                pass
-            if len(batch_rewards) > 1:
-                advantage_tansor = (rewards_tensor - rewards_tensor.mean()) / (rewards_tensor.std() + 1e-8)
-
-            if loss_type == 'reinforce++' and all(lp is not None for lp in batch_old_logprob):
-                old_lp_tensor = torch.tensor(batch_old_logprob, device=self._cfg.device, dtype=torch.float32)
-                ratio = torch.exp(sequence_log_probs - old_lp_tensor)
+            batch_values_tensor = torch.tensor(batch_values, device=self._cfg.device, dtype=torch.float32)
+            batch_pred_values_tensor = torch.tensor(batch_pred_values, device=self._cfg.device, dtype=torch.float32)
+            if loss_type == 'reinforce':
+                advantage_tansor = batch_values_tensor
+                loss = -(advantage_tansor * sequence_log_probs).mean()
+            elif loss_type == 'reinforce++' or loss_type == 'reinforce++new':
+                if loss_type == 'reinforce++':
+                    advantage_tansor_norm = (batch_values_tensor - batch_values_tensor.mean()) / (batch_values_tensor.std() + 1e-8)
+                elif loss_type == 'reinforce++new':
+                    advantage_tansor = batch_values_tensor - batch_pred_values_tensor
+                    advantage_tansor_norm = (advantage_tansor - advantage_tansor.mean()) / (advantage_tansor.std() + 1e-8)
+                    
+                old_logprob_tensor = torch.tensor(batch_old_logprob, device=self._cfg.device, dtype=torch.float32)
+                ratio = torch.exp(sequence_log_probs - old_logprob_tensor)
                 clipped_ratio = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)
-                surrogate1 = ratio * advantage_tansor
-                surrogate2 = clipped_ratio * advantage_tansor
+                surrogate1 = ratio * advantage_tansor_norm
+                surrogate2 = clipped_ratio * advantage_tansor_norm
                 loss_term = torch.min(surrogate1, surrogate2)
                 loss = -loss_term.mean()
-            else:
-                loss = -(advantage_tansor * sequence_log_probs).mean()
+                
             accumulated_loss += loss.item()
             scaled_loss = loss / grad_accum_steps
             scaled_loss.backward()
@@ -628,7 +637,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         batch_for_gpt['scalar_target_value'] = target_value
 
         with self._profile_block(name="train_world_model"):
-            wm_losses = self._learn_model.world_model.compute_loss(
+            wm_losses, pred_values = self._learn_model.world_model.compute_loss(
                 batch_for_gpt,
                 self._target_model.world_model.tokenizer,
                 self.value_inverse_scalar_transform_handle,
@@ -652,6 +661,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     history_obs_list=history_obs_list,
                     action_logprob_list=action_logprob_list,
                     target_values=target_value,
+                    pred_values=pred_values,
+                    
                 )
         else:
             llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)

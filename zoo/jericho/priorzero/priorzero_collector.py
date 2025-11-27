@@ -269,7 +269,7 @@ class PriorZeroCollector(OriginalCollector):
                 actions = list(target_missing[i])
 
                 for act_idx, action in enumerate(actions):
-                    formatted_action = f"{action}"
+                    formatted_action = f"{action}{tokenizer.eos_token}"
                     full_text = context_text + formatted_action
                     unique_req_id = f"{request_ids[i]}_act_{act_idx}_retry{retry_idx}"
                     all_prompts_data.append({
