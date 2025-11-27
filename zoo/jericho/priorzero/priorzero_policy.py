@@ -473,6 +473,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         accumulated_loss = 0.0
         last_grad_norm = 0.0
+        # Stats buckets
+        logprob_means = []
+        seq_neglogprob_means = []
+        advantage_means, advantage_stds = [], []
+        ratio_used_means = []
+
         self.llm_policy_model.train()
         self._optimizer_llm.zero_grad()
 
@@ -527,11 +533,16 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             mask = (shifted_labels != -100).float()
             token_log_probs = token_log_probs * mask
             sequence_log_probs = token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
+            logprob_means.append(sequence_log_probs.mean().item())
+            seq_neglogprob_means.append((-sequence_log_probs).mean().item())
             
             batch_values_tensor = torch.tensor(batch_values, device=self._cfg.device, dtype=torch.float32)
             batch_pred_values_tensor = torch.tensor(batch_pred_values, device=self._cfg.device, dtype=torch.float32)
+            
             if loss_type == 'reinforce':
                 advantage_tansor = batch_values_tensor
+                advantage_means.append(advantage_tansor.mean().item())
+                advantage_stds.append(advantage_tansor.std().item()) 
                 loss = -(advantage_tansor * sequence_log_probs).mean()
             elif loss_type == 'reinforce++' or loss_type == 'reinforce++new':
                 if loss_type == 'reinforce++':
@@ -539,6 +550,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 elif loss_type == 'reinforce++new':
                     advantage_tansor = batch_values_tensor - batch_pred_values_tensor
                     advantage_tansor_norm = (advantage_tansor - advantage_tansor.mean()) / (advantage_tansor.std() + 1e-8)
+                advantage_means.append(advantage_tansor_norm.mean().item())
+                advantage_stds.append(advantage_tansor_norm.std().item())
                     
                 old_logprob_tensor = torch.tensor(batch_old_logprob, device=self._cfg.device, dtype=torch.float32)
                 ratio = torch.exp(sequence_log_probs - old_logprob_tensor)
@@ -547,6 +560,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 surrogate2 = clipped_ratio * advantage_tansor_norm
                 loss_term = torch.min(surrogate1, surrogate2)
                 loss = -loss_term.mean()
+                used_ratio = torch.where(surrogate1 <= surrogate2, ratio, clipped_ratio)
+                ratio_used_means.append(used_ratio.mean().item())
                 
             accumulated_loss += loss.item()
             scaled_loss = loss / grad_accum_steps
@@ -561,13 +576,22 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 self._optimizer_llm.step()
                 if self._lr_scheduler_llm is not None:
                     self._lr_scheduler_llm.step()
-                self._optimizer_llm.zero_grad(set_to_none=True)
+                self._optimizer_llm.zero_grad()
 
             del inputs, labels, outputs, loss
 
         self._last_llm_grad_norm = last_grad_norm
+        def _safe_mean(vals):
+            return float(sum(vals) / len(vals)) if len(vals) > 0 else 0.0
+        rft_stats = {
+            'rft_logprob_mean': _safe_mean(logprob_means),
+            'rft_seq_neglogprob_mean': _safe_mean(seq_neglogprob_means),
+            'rft_advantage_mean': _safe_mean(advantage_means),
+            'rft_advantage_std': _safe_mean(advantage_stds),
+            'rft_ratio_used_mean': _safe_mean(ratio_used_means),
+        }
         mean_loss = accumulated_loss / max(1, num_micro_batches)
-        return torch.tensor(mean_loss, device=self._cfg.device)
+        return torch.tensor(mean_loss, device=self._cfg.device), rft_stats
     
     
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -656,19 +680,19 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
         if self.llm_policy_cfg.enable_llm and self.llm_policy_cfg.enable_rft:
             with self._profile_block(name="train_llm_rft"):
-                llm_rft_loss = self.compute_rft_loss(
+                llm_rft_loss, rft_stats = self.compute_rft_loss(
                     raw_obs_list=raw_obs_list,
                     history_obs_list=history_obs_list,
                     action_logprob_list=action_logprob_list,
                     target_values=target_value,
                     pred_values=pred_values,
-                    
                 )
         else:
             llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
+            rft_stats = {}
 
         llm_loss = (
-            self.llm_policy_cfg.llm_loss_weight * llm_sft_loss +
+            self.llm_policy_cfg.sft_loss_weight * llm_sft_loss +
             self.llm_policy_cfg.rft_loss_weight * llm_rft_loss
         )
         total_loss = wm_total_loss + llm_loss  # For logging
@@ -798,6 +822,11 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'llm_sft_loss': llm_sft_loss.item(),
             'llm_rft_loss': llm_rft_loss.item(),
             'llm_total_loss': llm_loss.item(),
+            'rft_logprob_mean': rft_stats.get('rft_logprob_mean', 0.0),
+            'rft_seq_neglogprob_mean': rft_stats.get('rft_seq_neglogprob_mean', 0.0),
+            'rft_advantage_mean': rft_stats.get('rft_advantage_mean', 0.0),
+            'rft_advantage_std': rft_stats.get('rft_advantage_std', 0.0),
+            'rft_ratio_used_mean': rft_stats.get('rft_ratio_used_mean', 0.0),
             # 'num_sft_samples': float(num_sft_samples),
             # 'num_rft_samples': float(num_rft_samples),
             'total_loss': total_loss.item(),
@@ -823,6 +852,11 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'llm_total_loss',            # Combined LLM loss
             'llm_grad_norm',             # LLM gradient norm
             'llm_lr',                    # LLM learning rate
+            'rft_logprob_mean',
+            'rft_seq_neglogprob_mean',
+            'rft_advantage_mean',
+            'rft_advantage_std',
+            'rft_ratio_used_mean',
             # ============ LLM Training Statistics ============
             # 'num_sft_samples',           # Number of SFT samples in batch
             # 'num_rft_samples',           # Number of RFT samples in batch
@@ -835,29 +869,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'wm_policy_loss',
             'wm_reward_loss',
             'wm_obs_loss',
-
-            'analysis/dormant_ratio_encoder',
-            'analysis/dormant_ratio_transformer',
-            'analysis/dormant_ratio_head',
-            'analysis/avg_weight_mag_encoder',
-            'analysis/avg_weight_mag_transformer',
-            'analysis/avg_weight_mag_head',
-            'analysis/latent_state_l2_norms',
-
-            'analysis/first_step_loss_value',
-            'analysis/first_step_loss_policy',
-            'analysis/first_step_loss_rewards',
-            'analysis/first_step_loss_obs',
-
-            'analysis/middle_step_loss_value',
-            'analysis/middle_step_loss_policy',
-            'analysis/middle_step_loss_rewards',
-            'analysis/middle_step_loss_obs',
-
-            'analysis/last_step_loss_value',
-            'analysis/last_step_loss_policy',
-            'analysis/last_step_loss_rewards',
-            'analysis/last_step_loss_obs',
 
             'adaptive_alpha',
             "adaptive_target_entropy_ratio",

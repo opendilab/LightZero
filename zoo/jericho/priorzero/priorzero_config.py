@@ -190,10 +190,10 @@ def get_priorzero_config(
             rft_loss_type='reinforce++',
             rft_clip_epsilon=0.2,
             
-            lm_learning_rate=1e-6,
+            llm_learning_rate=1e-5,
             llm_weight_decay=0.01,
-            llm_loss_weight=0.5,   # Weight of SFT loss in total loss
-            rft_loss_weight=0.3, 
+            sft_loss_weight=1,   # Weight of SFT loss in total loss
+            rft_loss_weight=1, 
             llm_micro_batch_size=micro_batch_size,
             
             llm_gradient_accumulation_steps=gradient_accumulation_steps,
