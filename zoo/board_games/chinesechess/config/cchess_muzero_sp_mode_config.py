@@ -9,10 +9,10 @@ gpu_num = 8  # 使用的GPU数量，根据实际情况修改
 batch_size = 128
 
 collector_env_num = 4
-n_episode = 64
+n_episode = 128
 evaluator_env_num = 10
-num_simulations = 20  # 增加到 400 以提升搜索质量,目前简单测试时，先设置为20
-update_per_collect = 10
+num_simulations = 50  # 增加到 400 以提升搜索质量,目前简单测试时，先设置为50
+update_per_collect = 50
 reanalyze_ratio = 0.0  # 利用MuZero重分析优势，提升样本利用率
 max_env_step = int(1e8)  # 中国象棋需要更多训练步数
 # ==============================================================
@@ -50,7 +50,7 @@ cchess_muzero_config = dict(
         env_type='board_games',
         action_type='varied_action_space',
         mcts_ctree=True,
-        game_segment_length=100,  # 中国象棋平均步数较多
+        game_segment_length=50,  # 中国象棋平均步数较多
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',

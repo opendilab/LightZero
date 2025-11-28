@@ -154,6 +154,25 @@ class ChineseChessEnv(BaseEnv):
         # 预计算：BitBoard位索引到(row, col)的映射
         self._square_to_coord = np.array([(s // 9, s % 9) for s in range(90)], dtype=np.int32)
 
+    def _mirror_action(self, action: int) -> int:
+        """
+        将动作在镜像坐标系统中转换（用于黑方视角转换）
+        
+        当黑方观测被旋转180度时，动作空间也需要相应转换。
+        使用 cchess.square_mirror() 对起点和终点坐标进行镜像。
+        
+        Args:
+            action: 原始动作索引 (from_square * 90 + to_square)
+        
+        Returns:
+            镜像后的动作索引
+        """
+        from_square = action // 90
+        to_square = action % 90
+        from_square_mirror = cchess.square_mirror(from_square)
+        to_square_mirror = cchess.square_mirror(to_square)
+        return from_square_mirror * 90 + to_square_mirror
+
     def _get_raw_planes(self) -> np.ndarray:
         """
         获取当前棋盘的原始平面表示（固定语义：前7层红方，后7层黑方）
@@ -191,23 +210,36 @@ class ChineseChessEnv(BaseEnv):
         planes = self._get_raw_planes()
         self.obs_buffer.append(planes)
 
-    def _player_step(self, action: int, flag: str) -> BaseEnvTimestep:
+    def _player_step(self, action: int, flag: str, is_canonical_action: bool = True) -> BaseEnvTimestep:
         """
         执行一步棋
+        
+        Args:
+            action: 动作索引
+            flag: 标识字符串，用于日志记录
+            is_canonical_action: 动作是否来自规范视角（Canonical View）
+                - True: 动作来自策略网络（规范视角），黑方时需要镜像转换
+                - False: 动作来自真实棋盘（如bot），不需要转换
         """
+        # 关键修复：只有规范视角的动作在黑方时才需要转换
+        if self._current_player == 2 and is_canonical_action:  # 黑方且是规范视角动作
+            action_real = self._mirror_action(action)
+        else:  # 红方 或 非规范视角动作（如bot）
+            action_real = action
+        
         legal_actions = self.legal_actions
         
-        if action not in legal_actions:
+        if action_real not in legal_actions:
             logging.warning(
-                f"非法动作: {action}, 合法动作有 {len(legal_actions)} 个。"
-                f"标志: {flag}. 随机选择一个合法动作。"
+                f"非法动作: {action} (real: {action_real}), 合法动作有 {len(legal_actions)} 个。"
+                f"标志: {flag}, 玩家: {self._current_player}. 随机选择一个合法动作。"
             )
-            action = self.random_action()
+            action_real = self.random_action(canonical=False)  # 回退时使用真实坐标
         
         # 保存执行动作的玩家（用于奖励计算）
         acting_player = self._current_player
         
-        move = action_to_move(action)
+        move = action_to_move(action_real)  # 使用真实坐标
         self.board.push(move)
         
         # 增加步数计数
@@ -264,13 +296,14 @@ class ChineseChessEnv(BaseEnv):
         if self.battle_mode == 'self_play_mode':
             if self.prob_random_agent > 0:
                 if np.random.rand() < self.prob_random_agent:
-                    action = self.random_action()
+                    action = self.random_action(canonical=True)  # 规范视角的随机动作
             elif self.prob_expert_agent > 0:
                 if np.random.rand() < self.prob_expert_agent:
-                    action = self.random_action()  # TODO: 可以接入更强的 bot
+                    action = self.random_action(canonical=True)  # TODO: 可以接入更强的 bot
             
             flag = "agent"
-            timestep = self._player_step(action, flag)
+            # 自我对弈模式：动作来自策略网络（规范视角），需要转换
+            timestep = self._player_step(action, flag, is_canonical_action=True)
             
             if timestep.done:
                 # 【修复】在自我对弈中，使用规范视角（canonical view）
@@ -284,7 +317,7 @@ class ChineseChessEnv(BaseEnv):
         elif self.battle_mode == 'play_with_bot_mode':
             # 玩家1的回合 (agent)
             flag = "bot_agent"
-            timestep_player1 = self._player_step(action, flag)
+            timestep_player1 = self._player_step(action, flag, is_canonical_action=True)
             
             if timestep_player1.done:
                 # player 1 执行后游戏结束，reward 已经是 player 1 视角
@@ -292,10 +325,10 @@ class ChineseChessEnv(BaseEnv):
                 timestep_player1.obs['to_play'] = np.array([-1], dtype=np.int32)
                 return timestep_player1
             
-            # 玩家2（bot）的回合
+            # 玩家2（bot）的回合 - bot的动作来自真实棋盘，不需要转换
             bot_action = self.bot_action()  # 使用UCI引擎或随机策略
             flag = "bot_bot"
-            timestep_player2 = self._player_step(bot_action, flag)
+            timestep_player2 = self._player_step(bot_action, flag, is_canonical_action=False)
             
             # player 2 执行后游戏结束，reward 是 player 2 视角，需要转换为 player 1 视角
             reward_scalar = float(timestep_player2.reward[0])
@@ -310,7 +343,7 @@ class ChineseChessEnv(BaseEnv):
         elif self.battle_mode == 'eval_mode':
             # 玩家1的回合 (agent)
             flag = "eval_agent"
-            timestep_player1 = self._player_step(action, flag)
+            timestep_player1 = self._player_step(action, flag, is_canonical_action=True)
             
             if timestep_player1.done:
                 # player 1 执行后游戏结束，reward 已经是 player 1 视角
@@ -318,14 +351,14 @@ class ChineseChessEnv(BaseEnv):
                 timestep_player1.obs['to_play'] = np.array([-1], dtype=np.int32)
                 return timestep_player1
             
-            # 玩家2的回合 (bot 或 human)
+            # 玩家2的回合 (bot 或 human) - bot/human的动作来自真实棋盘，不需要转换
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
             else:
                 bot_action = self.bot_action()  # 使用UCI引擎或随机策略
             
             flag = "eval_bot"
-            timestep_player2 = self._player_step(bot_action, flag)
+            timestep_player2 = self._player_step(bot_action, flag, is_canonical_action=False)
             
             # player 2 执行后游戏结束，reward 是 player 2 视角，需要转换为 player 1 视角
             reward_scalar = float(timestep_player2.reward[0])
@@ -440,12 +473,22 @@ class ChineseChessEnv(BaseEnv):
     def observe(self) -> dict:
         """
         返回观察
+        
+        关键修复：对于黑方，需要将action_mask也进行镜像转换，
+        使其与旋转后的观测空间保持一致。
         """
         legal_actions_list = self.legal_actions
         
         action_mask = np.zeros(90 * 90, dtype=np.int8)
-        for action in legal_actions_list:
-            action_mask[action] = 1
+        
+        # 关键修复：如果是黑方，action_mask 需要镜像
+        if self._current_player == 2:  # 黑方
+            for action in legal_actions_list:
+                action_mirror = self._mirror_action(action)
+                action_mask[action_mirror] = 1
+        else:  # 红方
+            for action in legal_actions_list:
+                action_mask[action] = 1
         
         # 获取棋盘的可视化表示
         board_visual = np.zeros((10, 9), dtype=np.int8)
@@ -525,12 +568,26 @@ class ChineseChessEnv(BaseEnv):
         
         return done, reward
 
-    def random_action(self) -> int:
+    def random_action(self, canonical: bool = False) -> int:
         """
         随机选择一个合法动作
+        
+        Args:
+            canonical: 是否返回规范视角的动作
+                - False: 返回真实坐标（默认，用于bot等）
+                - True: 返回规范视角坐标（用于self_play_mode中的随机agent）
+        
+        Returns:
+            动作索引（真实坐标或规范视角坐标）
         """
-        legal_actions_list = self.legal_actions
-        return np.random.choice(legal_actions_list)
+        legal_actions_list = self.legal_actions  # 真实坐标
+        action_real = np.random.choice(legal_actions_list)
+        
+        # 如果需要规范视角且当前是黑方，转换为镜像坐标
+        if canonical and self._current_player == 2:
+            return self._mirror_action(action_real)
+        else:
+            return action_real
     
     def bot_action(self) -> int:
         """
@@ -657,14 +714,23 @@ class ChineseChessEnv(BaseEnv):
     def simulate_action(self, action: int) -> Any:
         """
         模拟执行动作并返回新的模拟环境（用于 AlphaZero/MuZero 的 MCTS）
+        
+        Args:
+            action: 动作索引。如果当前是黑方，这个动作是基于镜像坐标系统的，需要转回真实坐标
         """
-        if action not in self.legal_actions:
-            raise ValueError(f"动作 {action} 不合法")
+        # 关键修复：如果是黑方，将镜像动作转换回真实坐标
+        if self._current_player == 2:  # 黑方
+            action_real = self._mirror_action(action)
+        else:  # 红方
+            action_real = action
+        
+        if action_real not in self.legal_actions:
+            raise ValueError(f"动作 {action} (real: {action_real}) 不合法，当前玩家: {self._current_player}")
         
         # 创建新环境 (使用高效拷贝)
         new_env = self.copy()
         
-        move = action_to_move(action)
+        move = action_to_move(action_real)  # 使用真实坐标
         new_env.board.push(move)
         
         # 增加步数计数
