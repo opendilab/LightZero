@@ -544,10 +544,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 advantage_means.append(advantage_tansor.mean().item())
                 advantage_stds.append(advantage_tansor.std().item()) 
                 loss = -(advantage_tansor * sequence_log_probs).mean()
-            elif loss_type == 'reinforce++' or loss_type == 'reinforce++new':
+            elif loss_type == 'reinforce++' or loss_type == 'ppo-simple-adv':
                 if loss_type == 'reinforce++':
                     advantage_tansor_norm = (batch_values_tensor - batch_values_tensor.mean()) / (batch_values_tensor.std() + 1e-8)
-                elif loss_type == 'reinforce++new':
+                elif loss_type == 'ppo-simple-adv':
                     advantage_tansor = batch_values_tensor - batch_pred_values_tensor
                     advantage_tansor_norm = (advantage_tansor - advantage_tansor.mean()) / (advantage_tansor.std() + 1e-8)
                 advantage_means.append(advantage_tansor_norm.mean().item())

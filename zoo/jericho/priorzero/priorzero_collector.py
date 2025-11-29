@@ -1,19 +1,3 @@
-# priorzero_collector.py
-"""
-[PRIORZERO] PriorZero Collector Implementation
-
-This module implements async data collection with LLM prior integration.
-
-Key Features:
-- Async LLM inference using vLLM for efficient batch generation
-- History buffer management for context-aware prompting
-- Error handling and retry logic for robust LLM calls
-- Full alignment with UniZero collector architecture
-
-Author: PriorZero Team
-Date: 2025-01-20
-"""
-
 import asyncio
 import logging
 import sys
@@ -120,9 +104,6 @@ class PriorZeroCollector(OriginalCollector):
         # [FIX] Set policy_config in kwargs before calling super().__init__
         # because parent class needs it
         kwargs['policy_config'] = policy_config
-
-        # Extract debug_mode before passing to parent (parent doesn't accept this parameter)
-        self.debug_mode = kwargs.pop('debug_mode', False)
 
         super().__init__(**kwargs)
 

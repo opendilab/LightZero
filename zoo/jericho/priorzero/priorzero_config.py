@@ -1,18 +1,3 @@
-# priorzero_config.py
-"""
-[PRIORZERO] PriorZero Configuration
-
-This module provides complete configuration for PriorZero algorithm.
-
-Key Features:
-- Complete UniZero world model configuration
-- LLM policy configuration (ORZ-style)
-- Action space mapping for text environments
-- Flexible switches to enable/disable components
-
-Author: PriorZero Team
-"""
-
 import os
 from typing import Dict, Tuple
 from easydict import EasyDict
@@ -59,14 +44,16 @@ def get_priorzero_config(
     batch_size = 64
     collect_num_simulations=25
     eval_num_simulations=25
+    replay_buffer_size = 1e3
     
     ## LLM 参数
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
     llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
-    total_batch_size = 256   # Total batch size across all GPUs
-    micro_batch_size = 64    # Micro batch size per GPU
+    total_batch_size = 128   # Total batch size across all GPUs
+    micro_batch_size = 32    # Micro batch size per GPU
     gradient_accumulation_steps = total_batch_size // micro_batch_size
-    
+    rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
+    use_cot = False  # Whether to use chain-of-thought prompting
 
     env_config = dict(
         stop_value=int(1e6),
@@ -90,7 +77,7 @@ def get_priorzero_config(
         multi_gpu=False,  
         use_wandb=False,
         profile_cfg=dict(
-            enable_cprofile=True,  # Enable cProfile for collect/train hot paths
+            enable_cprofile=False,  # Enable cProfile for collect/train hot paths
             log_interval=100,        # Aggregate wall-time stats every N profiled sections
         ),
         learn=dict(
@@ -149,7 +136,7 @@ def get_priorzero_config(
         manual_temperature_decay=False,
         n_episode=collector_env_num,
         train_start_after_envsteps=0,
-        replay_buffer_size=int(5e5),
+        replay_buffer_size=replay_buffer_size,
         eval_freq=int(3e4),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -184,10 +171,10 @@ def get_priorzero_config(
             enable_llm=True,
             pretrain_llm_path=llm_model_name,
             history_length=5,
-            use_cot=False,
+            use_cot=use_cot,
             enable_sft=False,
             enable_rft=True,
-            rft_loss_type='reinforce++',
+            rft_loss_type=rft_loss_type,
             rft_clip_epsilon=0.2,
             
             llm_learning_rate=1e-5,
@@ -200,7 +187,7 @@ def get_priorzero_config(
             prompt_log_interval=1000, # 隔多久step输出模型的回答和valid action进行对比
             
             prompt_max_len=2048,
-            generate_max_len=256,
+            generate_max_len=128,
             vllm_tensor_parallel_size=1,
             gpu_memory_utilization=0.2,
         ),
@@ -276,3 +263,96 @@ def get_priorzero_debug_config(
     main_config.policy.eval_num_simulations = eval_num_simulations
     main_config.policy.update_per_collect = 2
     return main_config, create_config
+
+
+
+
+class HybridTrainingConfig:
+    """
+    Hybrid training configuration combining PriorZero and ORZ settings.
+    """
+    def __init__(self):
+        # self.priorzero_cfg, self.priorzero_create_cfg = get_priorzero_config(
+        #     env_id='zork1.z5',
+        #     seed=0,
+        #     exp_name='data_priorzero/priorzero_orz_complete',
+        # )
+        self.priorzero_cfg, self.priorzero_create_cfg = get_priorzero_debug_config(
+            env_id='zork1.z5',
+            seed=0,
+            exp_name='data_priorzero/debug_priorzero_orz_complete',
+        )
+        
+        self.wm_training_mode = "parallel"
+        self.wm_train_freq = 1
+        self.llm_train_freq = 1
+
+        self.orz_rollout_batch_size = 128
+        self.orz_train_batch_size = 32
+        self.orz_actor_lr = 1e-6
+        self.orz_critic_lr = 5e-6
+        self.orz_num_episodes = 10
+
+
+class ORZConfig:
+    """Simplified ORZ config for PriorZero integration"""
+    DEFAULT_CONFIG = {
+        "total_num_nodes": 1,
+        "ref_num_nodes": 1,
+        "ref_num_gpus_per_node": 1,
+        "actor_num_nodes": 1,
+        "actor_num_gpus_per_node": 1,
+        "critic_num_nodes": 1,
+        "critic_num_gpus_per_node": 1,
+        "colocate_all": True,
+        "colocate_critic_reward": True,
+        "colocate_actor_ref": True,
+        "vllm_num_engines": 1,
+        "vllm_tensor_parallel_size": 1,
+        "zero_stage": 2,
+        "adam_offload": False,
+
+        "save_interval": 50,
+
+        "num_warmup_steps": 50,
+        "prompt_max_len": 2048,
+        "enable_prefix_caching": False,
+        "update_ref_every_epoch": True,
+        "advantage_normalize": True,
+
+        "n_samples_per_prompt": 32,
+        "micro_rollout_batch_size": 2,
+        "policy_update_steps": 1,
+        "critic_update_steps": 12,
+        "micro_train_batch_size": 1,
+        "micro_forward_batch_size": 1,
+        "freezing_actor_steps": -1,
+
+        # KL
+        "init_kl_coef": 0.0,
+        "kl_loss_coef": 0.0,
+        "use_kl_loss": False,
+        "use_kl_estimator_k3": True,
+
+        "enable_eval": False,
+        "eval_interval": 100,
+
+        "packing_max_len": 8192,
+        "max_len": 4096,
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "top_k": -1,
+
+        "use_grpo": False,
+        "gamma": 1.0,
+        "lambd": 1.0,
+
+        "gpu_memory_utilization": 0.3,
+
+        "use_compute_reward_fn": True,
+        "use_orm_score": False,
+    }
+    def __init__(self, hybrid_cfg, cfg):
+        self.cfg = self.DEFAULT_CONFIG
+        self.cfg.update(cfg)
+        self.cfg.update(hybrid_cfg)
