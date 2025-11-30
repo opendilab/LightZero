@@ -124,7 +124,7 @@ def generate_configs(env_id_list, env_configurations, collector_env_num, n_episo
                      total_batch_size, num_layers, model_name, replay_ratio, norm_type):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_jericho_mt_20250513/jericho_moe8_{len(env_id_list)}games_tbs{total_batch_size}-nlayer{num_layers}-rr{replay_ratio}_not-share-head_encoder-final-ln_seed{seed}/'
+    exp_name_prefix = f'data_scalezero/jericho_mt_moe8_{len(env_id_list)}games_tbs{total_batch_size}-nlayer{num_layers}-rr{replay_ratio}_not-share-head_encoder-final-ln_seed{seed}/'
 
     action_space_size_list = [v[0] for _, v in env_configurations.items()]
     max_steps_list = [v[1] for _, v in env_configurations.items()]   
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     # Model name or path - configurable according to the predefined model paths or names
     model_name: str = 'BAAI/bge-base-en-v1.5'
     replay_ratio = 0.1
-    norm_type = 'BN'
+    norm_type = 'LN'
 
     collector_env_num = 4
     n_episode = 4
