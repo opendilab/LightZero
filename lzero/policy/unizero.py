@@ -9,7 +9,7 @@ from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
 from lzero.entry.utils import initialize_zeros_batch, initialize_pad_batch
-from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
+from lzero.mcts import UniZeroMCTSCtree_v2 as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
