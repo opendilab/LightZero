@@ -789,6 +789,49 @@ All changes are fully backward compatible:
 - Default behavior unchanged
 - New features are opt-in
 
+## Runtime Considerations
+
+### Computational Requirements
+
+The loss landscape computation is computationally intensive. Here are the estimated runtimes on modern GPUs:
+
+**For evaluating a checkpoint with UniZero models:**
+- **H200 GPU**: ~30 minutes for a 21×21 loss landscape (441 evaluations)
+- **A100 GPU**: ~45-60 minutes
+- **H100 GPU**: ~20-25 minutes
+- **Multi-GPU**: Computation is per-GPU; set up data parallel for distributed evaluation
+
+**Factors affecting runtime:**
+- Model size: Larger models require more computation
+- Grid resolution: Higher resolution (e.g., 51×51) increases evaluation count quadratically
+- Number of batches: More batches improve loss estimates but increase computation
+- Data size: Larger datasets mean longer loss evaluation per point
+
+### Memory Requirements
+
+- **H200 with 141GB HBM**: Can handle large UniZero models with 21×21 grid
+- **A100 with 40GB**: May require smaller batch sizes or lower resolution grids
+- Typical memory usage: Model size + (batch_size × data_size)
+
+### Tips for Faster Computation
+
+1. **Reduce grid resolution**: Use 11×11 or 15×15 instead of 21×21 for testing
+2. **Use fewer batches**: Reduce `num_batches` parameter (e.g., 20-50 instead of 100)
+3. **Use GPU acceleration**: Enable `use_cuda=True` for ~10-100x speedup
+4. **Reduce batch size**: Smaller batches fit in GPU memory but may require longer computation
+5. **Parallel evaluation**: Use multiple GPUs with data parallelism
+
+### Example Command
+
+```bash
+# Typical H200 setup for full landscape computation
+python train_unizero_with_loss_landscape.py \
+    --env PongNoFrameskip-v4 \
+    --seed 0 \
+    --ckpt /path/to/checkpoint.pth.tar
+# Expected runtime: ~30 minutes
+```
+
 ## Support
 
 For issues, questions, or suggestions:

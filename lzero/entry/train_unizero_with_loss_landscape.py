@@ -35,23 +35,24 @@ def train_unizero_with_loss_landscape(
 ) -> 'Policy':
     """
     Overview:
-        This function serves as the training entry point for UniZero with integrated loss landscape visualization.
-        It trains a UniZero policy as proposed in the paper "UniZero: Generalized and Efficient Planning with Scalable Latent World Models",
-        and then computes and visualizes the loss landscape. More details at https://arxiv.org/abs/2406.10667.
+        This function serves as the entry point for computing the loss landscape visualization of UniZero.
+        It loads a pre-trained checkpoint specified by model_path, collects data using that checkpoint,
+        and then visualizes the loss landscape. Unlike training, this function does NOT perform any policy
+        updates on the checkpoint - it only loads the model, collects data, and visualizes the landscape.
 
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Configuration in dictionary format.
             ``Tuple[dict, dict]`` indicates [user_config, create_cfg].
         - seed (:obj:`int`): Random seed for reproducibility.
         - model (:obj:`Optional[torch.nn.Module]`): Instance of a PyTorch model.
-        - model_path (:obj:`Optional[str]`): Path to the pretrained model, which should
-            point to the checkpoint file of the pretrained model. An absolute path is recommended.
-            In LightZero, the path typically resembles ``exp_name/ckpt/ckpt_best.pth.tar``.
+        - model_path (:obj:`Optional[str]`): Path to the checkpoint file to load for loss landscape visualization.
+            This is the default checkpoint for loss landscape computation. An absolute path is recommended.
+            The checkpoint will be loaded but NOT updated during this process.
         - max_train_iter (:obj:`Optional[int]`): Maximum number of policy update iterations during training.
         - max_env_step (:obj:`Optional[int]`): Maximum number of environment interaction steps to collect.
 
     Returns:
-        - policy (:obj:`Policy`): The trained policy after training and loss landscape computation.
+        - policy (:obj:`Policy`): The policy with the loaded checkpoint after loss landscape computation.
     """
     cfg, create_cfg = input_cfg
 
