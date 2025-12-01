@@ -6,10 +6,22 @@ Extracted and refactored from the original [loss-landscape](https://github.com/t
 - Simplified API for single GPU usage
 - Removed MPI dependencies
 - Modular architecture for easy integration
-- **⭐ NEW: Custom Metrics Function Support** - Compute multiple metrics in one pass
-- **⭐ NEW: Auto-Detection and Multi-Metric Visualization**
+- **Custom Metrics Function Support** - Compute multiple metrics in one pass
+- **Auto-Detection and Multi-Metric Visualization**
 - Full support for 1D curves, 2D contours, 3D surfaces, and ParaView export
 - Full backward compatibility with standard PyTorch losses
+
+**Table of Contents**
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start Guide](#quick-start-guide)
+- [Detailed Examples](#detailed-examples)
+- [Custom Metrics Guide](#custom-metrics-guide)
+- [API Reference](#api-reference)
+- [Key Concepts](#key-concepts)
+- [Advanced Usage](#advanced-usage)
+- [Tips for Better Results](#tips-for-better-results)
+- [Performance & Runtime Considerations](#performance--runtime-considerations)
 
 ## Features
 
@@ -22,12 +34,12 @@ Extracted and refactored from the original [loss-landscape](https://github.com/t
   - Heatmaps with color bars
   - 3D surface plots
   - ParaView-compatible VTP export
-- ✅ **⭐ Custom Metrics Function** - NEW!
+- ✅ **Custom Metrics Function**
   - Define your own metrics function
   - Compute multiple loss values and metrics simultaneously
   - Return metrics as dictionary
   - Automatic storage and visualization
-- ✅ **⭐ Auto-Metric Detection** - NEW!
+- ✅ **Auto-Metric Detection**
   - Automatically detect all computed metrics
   - Generate separate visualizations for each metric
   - Use `surf_name='auto'` to plot everything
@@ -48,7 +60,54 @@ Extracted and refactored from the original [loss-landscape](https://github.com/t
 pip install torch torchvision h5py matplotlib scipy seaborn numpy
 ```
 
-## Quick Start
+## Quick Start Guide
+
+### 2D Loss Surface
+
+```python
+# Compute 2D landscape
+result = landscape.compute_2d(
+    xrange=(-1, 1, 51),
+    yrange=(-1, 1, 51)
+)
+
+# Visualize (multiple formats)
+landscape.plot_2d_contour()      # Contour lines
+landscape.plot_2d_surface()       # 3D surface
+landscape.export_paraview()       # High-quality rendering
+```
+
+### Running Examples
+
+**Example 1: 1D Loss Curve**
+```bash
+cd examples
+python example_1d.py
+```
+
+**Example 2: 2D Loss Surface with ParaView**
+```bash
+python example_2d.py
+```
+
+**Example 3: Batch Processing Multiple Checkpoints**
+
+Use the provided batch script to process multiple checkpoints:
+```bash
+# Basic usage (process checkpoints 10K to 100K)
+bash run_loss_landscape_batch.sh --ckpt-dir ./path/to/checkpoints
+
+# Custom environment and iterations
+bash run_loss_landscape_batch.sh \
+    --ckpt-dir ./checkpoints \
+    --env PongNoFrameskip-v4 \
+    --iterations 10000,50000,100000 \
+    --log-dir ./results
+```
+
+See the [API Reference](#api-reference) section for detailed parameter descriptions.
+
+## Detailed Examples
 
 ### 1D Loss Curve (Standard Loss)
 
@@ -100,7 +159,7 @@ landscape.plot_2d_contour(vmin=0.1, vmax=10, vlevel=0.5)
 landscape.plot_2d_surface(show=True)
 ```
 
-### ⭐ Custom Metrics (NEW!)
+### Custom Metrics
 
 Compute multiple custom metrics simultaneously:
 
@@ -509,61 +568,7 @@ result = landscape.compute_1d(
 )
 ```
 
-### Multiple Custom Metrics Example
-
-```python
-def compute_comprehensive_metrics(net, dataloader, use_cuda):
-    """Compute multiple loss functions and metrics."""
-
-    criterion_ce = nn.CrossEntropyLoss()
-    criterion_smooth_l1 = nn.SmoothL1Loss()
-    criterion_mse = nn.MSELoss()
-
-    total_ce = 0.0
-    total_smooth_l1 = 0.0
-    total_mse = 0.0
-    total_correct = 0
-    total_samples = 0
-
-    net.eval()
-    with torch.no_grad():
-        for inputs, targets in dataloader:
-            if use_cuda:
-                inputs, targets = inputs.cuda(), targets.cuda()
-
-            outputs = net(inputs)
-
-            # Multiple loss functions
-            ce_loss = criterion_ce(outputs, targets)
-            targets_onehot = torch.nn.functional.one_hot(
-                targets, num_classes=outputs.size(1)).float()
-            smooth_l1_loss = criterion_smooth_l1(outputs, targets_onehot)
-            mse_loss = criterion_mse(outputs, targets_onehot)
-
-            # Accumulate
-            total_ce += ce_loss.item() * inputs.size(0)
-            total_smooth_l1 += smooth_l1_loss.item() * inputs.size(0)
-            total_mse += mse_loss.item() * inputs.size(0)
-
-            # Accuracy
-            _, pred = outputs.max(1)
-            total_correct += (pred == targets).sum().item()
-            total_samples += inputs.size(0)
-
-    return {
-        'ce_loss': total_ce / total_samples,
-        'smooth_l1': total_smooth_l1 / total_samples,
-        'mse_loss': total_mse / total_samples,
-        'accuracy': 100.0 * total_correct / total_samples
-    }
-
-landscape = LossLandscape(model, dataloader,
-                         criterion=compute_comprehensive_metrics)
-
-# Compute and visualize all metrics
-result = landscape.compute_2d(xrange=(-1, 1, 21), yrange=(-1, 1, 21))
-landscape.plot_2d_contour(surf_name='auto')  # Generates 16 PDF files!
-```
+For more comprehensive examples with multiple metrics, see the complete example in [Detailed Examples](#detailed-examples) section.
 
 ### Save and Load Surfaces
 
@@ -704,7 +709,7 @@ python test_2d_landscape_fast_multi_metrics.py
    - Use batch normalization carefully (consider `dir_type='states'`)
    - Normalize outputs before computing metrics
 
-## Performance Considerations
+## Performance & Runtime Considerations
 
 ### Computation Time
 
@@ -716,12 +721,36 @@ python test_2d_landscape_fast_multi_metrics.py
 
 - Storing 2D landscape: ~4 MB per metric (21×21 float32 array)
 - Multiple metrics add linearly
+- GPU memory needed: ~2× model + 1× batch size
 
 ### GPU Requirements
 
 - Supports any NVIDIA GPU with CUDA support
-- GPU memory needed: ~2× model + 1× batch size
 - Falls back to CPU automatically if CUDA unavailable
+
+### Computational Requirements for UniZero Models
+
+The loss landscape computation is computationally intensive for large models. Here are estimated runtimes on modern GPUs:
+
+**For evaluating a checkpoint with UniZero models:**
+- **H200 GPU**: ~30 minutes for a 21×21 loss landscape (441 evaluations)
+- **A100 GPU**: ~45-60 minutes
+- **H100 GPU**: ~20-25 minutes
+- **Multi-GPU**: Computation is per-GPU; set up data parallel for distributed evaluation
+
+**Factors affecting runtime:**
+- Model size: Larger models require more computation
+- Grid resolution: Higher resolution (e.g., 51×51) increases evaluation count quadratically
+- Number of batches: More batches improve loss estimates but increase computation
+- Data size: Larger datasets mean longer loss evaluation per point
+
+### Tips for Faster Computation
+
+1. **Reduce grid resolution**: Use 11×11 or 15×15 instead of 21×21 for testing
+2. **Use fewer batches**: Reduce `num_batches` parameter (e.g., 20-50 instead of 100)
+3. **Use GPU acceleration**: Enable `use_cuda=True` for ~10-100x speedup
+4. **Reduce batch size**: Smaller batches fit in GPU memory but may require longer computation
+5. **Parallel evaluation**: Use multiple GPUs with data parallelism
 
 ## Troubleshooting
 
@@ -789,39 +818,7 @@ All changes are fully backward compatible:
 - Default behavior unchanged
 - New features are opt-in
 
-## Runtime Considerations
-
-### Computational Requirements
-
-The loss landscape computation is computationally intensive. Here are the estimated runtimes on modern GPUs:
-
-**For evaluating a checkpoint with UniZero models:**
-- **H200 GPU**: ~30 minutes for a 21×21 loss landscape (441 evaluations)
-- **A100 GPU**: ~45-60 minutes
-- **H100 GPU**: ~20-25 minutes
-- **Multi-GPU**: Computation is per-GPU; set up data parallel for distributed evaluation
-
-**Factors affecting runtime:**
-- Model size: Larger models require more computation
-- Grid resolution: Higher resolution (e.g., 51×51) increases evaluation count quadratically
-- Number of batches: More batches improve loss estimates but increase computation
-- Data size: Larger datasets mean longer loss evaluation per point
-
-### Memory Requirements
-
-- **H200 with 141GB HBM**: Can handle large UniZero models with 21×21 grid
-- **A100 with 40GB**: May require smaller batch sizes or lower resolution grids
-- Typical memory usage: Model size + (batch_size × data_size)
-
-### Tips for Faster Computation
-
-1. **Reduce grid resolution**: Use 11×11 or 15×15 instead of 21×21 for testing
-2. **Use fewer batches**: Reduce `num_batches` parameter (e.g., 20-50 instead of 100)
-3. **Use GPU acceleration**: Enable `use_cuda=True` for ~10-100x speedup
-4. **Reduce batch size**: Smaller batches fit in GPU memory but may require longer computation
-5. **Parallel evaluation**: Use multiple GPUs with data parallelism
-
-### Example Command
+### Example Command for UniZero Loss Landscape
 
 ```bash
 # Typical H200 setup for full landscape computation

@@ -4,15 +4,12 @@ High-level API for loss landscape visualization.
 Provides a simple interface to compute and visualize loss landscapes.
 """
 
-import torch
 import torch.nn as nn
 import numpy as np
 import h5py
-import os
 
 from .core import direction, evaluator, perturbation
-from . import utils
-from . import viz
+from . import utils as viz  # Visualization functions are now in utils module
 
 
 class LossLandscape:
@@ -53,7 +50,6 @@ class LossLandscape:
         self.dataloader = dataloader
         self.use_cuda = use_cuda
 
-        # ⭐ NEW: Detect criterion type
         if criterion is None:
             criterion = nn.CrossEntropyLoss()
 
@@ -114,7 +110,6 @@ class LossLandscape:
         # Compute loss surface
         xcoords = np.linspace(xmin, xmax, int(xnum))
 
-        # ⭐ NEW: Support for custom metrics
         if self.use_custom_metrics:
             # Initialize dict of lists for each metric
             metrics_dict = {}
@@ -130,7 +125,6 @@ class LossLandscape:
             else:  # states
                 perturbation.set_states(self.net, self.states, direction_vec, x)
 
-            # ⭐ NEW: Call custom metrics if provided
             if self.use_custom_metrics:
                 metrics = self.custom_metrics(self.net, self.dataloader, self.use_cuda)
                 if i == 0:
@@ -158,7 +152,6 @@ class LossLandscape:
         else:
             perturbation.set_states(self.net, self.states)
 
-        # ⭐ NEW: Construct result dict, compatible with both modes
         if self.use_custom_metrics:
             # Convert lists to numpy arrays
             losses_result = {k: np.array(v) for k, v in metrics_dict.items()}
@@ -219,7 +212,6 @@ class LossLandscape:
         xcoords = np.linspace(xmin, xmax, int(xnum))
         ycoords = np.linspace(ymin, ymax, int(ynum))
 
-        # ⭐ NEW: Support for custom metrics
         if self.use_custom_metrics:
             # Initialize placeholder for metrics dict
             metrics_dict = None
@@ -238,7 +230,6 @@ class LossLandscape:
                     perturbation.set_states(self.net, self.states,
                                            self.directions, [x, y])
 
-                # ⭐ NEW: Call custom metrics if provided
                 if self.use_custom_metrics:
                     metrics = self.custom_metrics(self.net, self.dataloader, self.use_cuda)
                     if metrics_dict is None:
@@ -265,7 +256,6 @@ class LossLandscape:
         else:
             perturbation.set_states(self.net, self.states)
 
-        # ⭐ NEW: Construct result dict, compatible with both modes
         if self.use_custom_metrics:
             result = {
                 'losses': metrics_dict,  # Dict of 2D arrays
@@ -294,7 +284,6 @@ class LossLandscape:
         f = h5py.File(self.surf_file, 'w')
         f['xcoordinates'] = result['xcoordinates']
 
-        # ⭐ NEW: Handle both single loss and multi metrics
         if isinstance(result['losses'], dict):
             # Multiple metrics (custom)
             for metric_name, metric_values in result['losses'].items():
@@ -317,7 +306,6 @@ class LossLandscape:
         f['xcoordinates'] = result['xcoordinates']
         f['ycoordinates'] = result['ycoordinates']
 
-        # ⭐ NEW: Handle both single loss and multi metrics
         if isinstance(result['losses'], dict):
             # Multiple metrics (custom)
             for metric_name, metric_values in result['losses'].items():
@@ -339,7 +327,7 @@ class LossLandscape:
     def plot_2d_contour(self, surf_name='train_loss', vmin=0.1, vmax=10, vlevel=0.5, show=False):
         """Plot 2D contour from saved surface file.
 
-        ⭐ NEW: Supports multiple metrics with surf_name='auto'
+        Supports multiple metrics with surf_name='auto'
 
         Args:
             surf_name: Name of surface to plot (default: 'train_loss')
@@ -354,7 +342,7 @@ class LossLandscape:
     def plot_2d_surface(self, surf_name='train_loss', show=False):
         """Plot 3D surface from saved surface file.
 
-        ⭐ NEW: Supports multiple metrics with surf_name='auto'
+        Supports multiple metrics with surf_name='auto'
 
         Args:
             surf_name: Name of surface to plot (default: 'train_loss')

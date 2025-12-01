@@ -1,3 +1,48 @@
+"""
+Overview:
+    This module provides configuration and entry point for UniZero loss landscape visualization on Atari environments.
+    It serves as a tool to analyze and visualize the loss landscape of a pretrained UniZero model by:
+
+    1. Loading a pretrained checkpoint (without any training updates)
+    2. Using the loaded model to collect game data from the environment
+    3. Computing and visualizing the loss landscape based on the collected data
+
+    The loss landscape visualization helps understand the model's weight space geometry and identify
+    convergence properties, critical points, and the relationship between different loss metrics.
+
+Usage:
+    python zoo/atari/config/atari_unizero_loss_landscape.py --env <env_id> --seed <seed> --ckpt <checkpoint_path> --log_dir <output_dir>
+
+    Examples:
+        # Visualize loss landscape for PongNoFrameskip-v4
+        python atari_unizero_loss_landscape.py --env PongNoFrameskip-v4 --seed 0 --ckpt model.pth.tar
+
+        # Custom output directory
+        python atari_unizero_loss_landscape.py --env Breakout --ckpt /path/to/checkpoint.pth.tar --log_dir ./results
+        
+Process Flow:
+    1. Parse command-line arguments and load configuration
+    2. Load the pretrained checkpoint into the model
+    3. Initialize data collectors using the loaded model
+    4. Collect game data by running episodes with the checkpoint model
+    5. Compute loss landscape on multiple points in weight space
+    6. Generate visualizations (contour plots, 3D surfaces, heatmaps)
+    7. Export results to HDF5 and PDF formats
+
+Output Files:
+    - loss_landscape_*.h5           : Loss landscape data in HDF5 format
+    - *_2dcontour.pdf               : Contour line plots
+    - *_2dcontourf.pdf              : Filled contour plots
+    - *_2dheat.pdf                  : Heatmap visualizations
+    - *_3dsurface.pdf               : 3D surface plot
+    - *.vtp                         : ParaView format for professional rendering
+
+Related Papers:
+    - UniZero: "Generalized and Efficient Planning with Scalable Latent World Models" (https://arxiv.org/abs/2406.10667)
+    - Loss Landscape: "Visualizing the Loss Landscape of Neural Nets" (https://arxiv.org/abs/1712.09913)
+
+"""
+
 from easydict import EasyDict
 
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
@@ -132,7 +177,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some environment.')
     parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
-    parser.add_argument('--ckpt', type=str, help='Path to checkpoint file', default=None)
+    parser.add_argument('--ckpt', type=str, help='Path to pretrained checkpoint. The checkpoint will be loaded (NOT trained) to collect data and visualize the loss landscape.', default=None)
     parser.add_argument('--log_dir', type=str, help='Log directory for output', default=None)
     args = parser.parse_args()
 

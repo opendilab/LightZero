@@ -15,7 +15,7 @@ import seaborn as sns
 def plot_2d_contour(surf_file, surf_name='train_loss', vmin=0.1, vmax=10, vlevel=0.5, show=False):
     """Plot 2D contour map for loss landscape.
 
-    ⭐ NEW: Auto-detects and plots multiple metrics if available.
+    Auto-detects and plots multiple metrics if available.
 
     Args:
         surf_file: Path to HDF5 surface file
@@ -34,7 +34,6 @@ def plot_2d_contour(surf_file, surf_name='train_loss', vmin=0.1, vmax=10, vlevel
     y = np.array(f['ycoordinates'][:])
     X, Y = np.meshgrid(x, y)
 
-    # ⭐ NEW: Auto-detect multiple metrics
     if surf_name == 'auto':
         # Find all train_loss_* keys
         metric_keys = [k for k in f.keys() if k.startswith('train_loss_')]
@@ -56,7 +55,6 @@ def plot_2d_contour(surf_file, surf_name='train_loss', vmin=0.1, vmax=10, vlevel
         f.close()
         return
 
-    # ⭐ NEW: Plot each metric
     for key in metric_keys:
         if key not in f.keys():
             print(f"Warning: '{key}' not found, skipping")
@@ -149,7 +147,7 @@ def plot_2d_contour(surf_file, surf_name='train_loss', vmin=0.1, vmax=10, vlevel
 def plot_2d_surface(surf_file, surf_name='train_loss', show=False):
     """Plot 3D surface for loss landscape.
 
-    ⭐ NEW: Auto-detects and plots multiple metrics if available.
+    Auto-detects and plots multiple metrics if available.
 
     Args:
         surf_file: Path to HDF5 surface file
@@ -166,7 +164,6 @@ def plot_2d_surface(surf_file, surf_name='train_loss', show=False):
     y = np.array(f['ycoordinates'][:])
     X, Y = np.meshgrid(x, y)
 
-    # ⭐ NEW: Auto-detect multiple metrics
     if surf_name == 'auto':
         # Find all train_loss_* keys
         metric_keys = [k for k in f.keys() if k.startswith('train_loss_')]
@@ -183,7 +180,6 @@ def plot_2d_surface(surf_file, surf_name='train_loss', show=False):
     print(f"X range: {len(x)}, Y range: {len(y)}")
     print(f"Found {len(metric_keys)} metric(s): {metric_keys}")
 
-    # ⭐ NEW: Plot each metric
     for key in metric_keys:
         if key not in f.keys():
             print(f"Warning: '{key}' not found, skipping")
