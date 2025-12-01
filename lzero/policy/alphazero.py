@@ -218,6 +218,19 @@ class AlphaZeroPolicy(Policy):
         """
         self._get_simulation_env()
         self._collect_model = self._model
+
+        # 为batch处理创建多个独立的simulate_env实例
+        from ding.utils import import_module, ENV_REGISTRY
+        import_names = self._cfg.create_cfg.env.get('import_names', [])
+        import_module(import_names)
+        env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
+
+        # 创建env列表 (每个collector env一个)
+        self.simulate_env_list = []
+        for _ in range(self._cfg.collector_env_num):
+            env = env_cls(self._cfg.full_cfg.env)
+            self.simulate_env_list.append(env)
+
         if self._cfg.mcts_ctree:
             from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
             # Use the function to add the desired path to sys.path
@@ -257,26 +270,48 @@ class AlphaZeroPolicy(Policy):
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
         katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
-        output = {}
+
         self._policy_model = self._collect_model
+
+        # ========== Step 1: Prepare all state configurations ==========
+        state_configs = []
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
+            state_config = EasyDict(dict(
+                start_player_index=start_player_index[env_id],
+                init_state=init_state[env_id],
+                katago_policy_init=False,
+                katago_game_state=katago_game_state[env_id]
+            ))
+            state_configs.append(state_config)
+
+        # ========== Step 2: Batch MCTS call ==========
+        # 传递对应数量的env实例
+        env_list = self.simulate_env_list[:len(ready_env_id)]
+        results = self._collect_mcts.get_next_actions_batch(
+            state_configs,
+            self._policy_value_fn_batch,  # 使用batch版本的函数
+            self.collect_mcts_temperature,
+            True,
+            env_list  # 新增: 环境列表
+        )
+
+        # ========== Step 3: Process results ==========
+        output = {}
+        for idx, env_id in enumerate(ready_env_id):
+            result = results[idx]
             # Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations
-            result = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
             if len(result) == 3:
                 # ctree implementation returns: action, mcts_probs, root
                 action, mcts_probs, root = result
             else:
                 # ptree implementation returns: action, mcts_probs
                 action, mcts_probs = result
-                
+
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
             }
+
         return output
 
     def _init_eval(self) -> None:
@@ -285,6 +320,19 @@ class AlphaZeroPolicy(Policy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._get_simulation_env()
+
+        # 为batch处理创建多个独立的simulate_env实例
+        from ding.utils import import_module, ENV_REGISTRY
+        import_names = self._cfg.create_cfg.env.get('import_names', [])
+        import_module(import_names)
+        env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
+
+        # 创建env列表 (每个evaluator env一个)
+        self.simulate_env_list_eval = []
+        for _ in range(self._cfg.evaluator_env_num):
+            env = env_cls(self._cfg.full_cfg.env)
+            self.simulate_env_list_eval.append(env)
+
         if self._cfg.mcts_ctree:
             from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
             # Use the function to add the desired path to sys.path
@@ -327,27 +375,48 @@ class AlphaZeroPolicy(Policy):
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
         katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
-        output = {}
+
         self._policy_model = self._eval_model
+
+        # ========== Step 1: Prepare all state configurations ==========
+        state_configs = []
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
-            result = self._eval_mcts.get_next_action(
-                state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
-            )
+            state_config = EasyDict(dict(
+                start_player_index=start_player_index[env_id],
+                init_state=init_state[env_id],
+                katago_policy_init=False,
+                katago_game_state=katago_game_state[env_id]
+            ))
+            state_configs.append(state_config)
+
+        # ========== Step 2: Batch MCTS call ==========
+        # 传递对应数量的env实例
+        env_list = self.simulate_env_list_eval[:len(ready_env_id)]
+        results = self._eval_mcts.get_next_actions_batch(
+            state_configs,
+            self._policy_value_fn_batch,  # 使用batch版本的函数
+            1.0,
+            False,
+            env_list  # 新增: 环境列表
+        )
+
+        # ========== Step 3: Process results ==========
+        output = {}
+        for idx, env_id in enumerate(ready_env_id):
+            result = results[idx]
+            # Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations
             if len(result) == 3:
                 # ctree implementation returns: action, mcts_probs, root
                 action, mcts_probs, root = result
             else:
                 # ptree implementation returns: action, mcts_probs
                 action, mcts_probs = result
-                
+
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
             }
+
         return output
 
     def _get_simulation_env(self):
@@ -370,6 +439,15 @@ class AlphaZeroPolicy(Policy):
 
     @torch.no_grad()
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
+        """
+        Overview:
+            单个环境的策略价值函数(兼容旧接口)
+        Arguments:
+            - env: 单个环境对象
+        Returns:
+            - action_probs_dict: 动作概率字典 {action_id: probability}
+            - value: 状态价值 (float)
+        """
         legal_actions = env.legal_actions
         current_state, current_state_scale = env.current_state()
         current_state_scale = torch.from_numpy(current_state_scale).to(
@@ -379,6 +457,61 @@ class AlphaZeroPolicy(Policy):
             action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         return action_probs_dict, value.item()
+
+    @torch.no_grad()
+    def _policy_value_fn_batch(self, env_list: List['Env']) -> List[Tuple[Dict[int, np.ndarray], float]]:  # noqa
+        """
+        Overview:
+            批量环境的策略价值函数 - 支持batch推理以提升GPU利用率
+        Arguments:
+            - env_list: 环境对象列表
+        Returns:
+            - results: 结果列表,每个元素是 (action_probs_dict, value)
+        """
+        if len(env_list) == 0:
+            return []
+
+        # 如果只有一个环境,使用单个处理的方法
+        if len(env_list) == 1:
+            result = self._policy_value_fn(env_list[0])
+            return [result]
+
+        # ========== Step 1: 收集所有环境的状态和合法动作 ==========
+        legal_actions_list = []
+        state_batch_list = []
+
+        for env in env_list:
+            legal_actions = env.legal_actions
+            legal_actions_list.append(legal_actions)
+
+            current_state, current_state_scale = env.current_state()
+            state_tensor = torch.from_numpy(current_state_scale).to(
+                device=self._device, dtype=torch.float
+            )
+            state_batch_list.append(state_tensor)
+
+        # ========== Step 2: 合并为batch tensor ==========
+        state_batch = torch.stack(state_batch_list, dim=0)  # (batch_size, C, H, W)
+
+        # ========== Step 3: 批量推理 ==========
+        with torch.no_grad():
+            action_probs_batch, value_batch = self._policy_model.compute_policy_value(state_batch)
+
+        # ========== Step 4: 解析每个环境的结果 ==========
+        results = []
+        for i, legal_actions in enumerate(legal_actions_list):
+            # 提取该环境的动作概率和价值
+            action_probs = action_probs_batch[i]
+            value = value_batch[i]
+
+            # 构建动作概率字典(只包含合法动作)
+            action_probs_dict = dict(
+                zip(legal_actions, action_probs[legal_actions].detach().cpu().numpy())
+            )
+
+            results.append((action_probs_dict, value.item()))
+
+        return results
 
     def _monitor_vars_learn(self) -> List[str]:
         """
