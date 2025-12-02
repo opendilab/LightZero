@@ -48,6 +48,8 @@ from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.entry.utils import initialize_zeros_batch
 import lzero.model.unizero_model  
 
+from priorzero_utils import compute_approx_kl
+
 
 def build_llm_prompt(
     current_obs: str,
@@ -251,6 +253,13 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
         self.llm_policy_model.to(self._cfg.device)
         self.llm_policy_model.train()
+        
+        # 创建一个 reference model计算 KL 散度
+        self.llm_reference_model = copy.deepcopy(self.llm_policy_model)
+        self.llm_reference_model.eval()
+        for p in self.llm_reference_model.parameters():
+            p.requires_grad_(False)
+        self.llm_reference_model.to(self._cfg.device)
 
         # ======================================================================
         # 3. [PRIORZERO-NEW] Initialize LLM Optimizer
@@ -272,6 +281,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         logging.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
         logging.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
         logging.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
+        logging.info("✓ Frozen reference LLM initialized for KL divergence")
 
     @contextmanager
     def _profile_block(self, name: str):
@@ -478,6 +488,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         seq_neglogprob_means = []
         advantage_means, advantage_stds = [], []
         ratio_used_means = []
+        kl_means = [] 
 
         self.llm_policy_model.train()
         self._optimizer_llm.zero_grad()
@@ -490,6 +501,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         old_logprob_list = [s.get('old_logprob', None) for s in samples]
         loss_type = getattr(self.llm_policy_cfg, 'rft_loss_type', 'reinforce').lower()
         clip_eps = getattr(self.llm_policy_cfg, 'rft_clip_epsilon', 0.2)
+        kl_coef = getattr(self.llm_policy_cfg, 'rft_kl_coef', 0.0) # kl 系数
 
         for micro_batch_idx in range(num_micro_batches):
             start_idx = micro_batch_idx * micro_batch_size
@@ -552,7 +564,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     advantage_tansor_norm = (advantage_tansor - advantage_tansor.mean()) / (advantage_tansor.std() + 1e-8)
                 advantage_means.append(advantage_tansor_norm.mean().item())
                 advantage_stds.append(advantage_tansor_norm.std().item())
-                    
+                
                 old_logprob_tensor = torch.tensor(batch_old_logprob, device=self._cfg.device, dtype=torch.float32)
                 ratio = torch.exp(sequence_log_probs - old_logprob_tensor)
                 clipped_ratio = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)
@@ -562,6 +574,28 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 loss = -loss_term.mean()
                 used_ratio = torch.where(surrogate1 <= surrogate2, ratio, clipped_ratio)
                 ratio_used_means.append(used_ratio.mean().item())
+                
+                # -------------- KL(pi || ref) 部分 --------------
+                kl_loss = 0.0
+                if kl_coef > 0.0 and hasattr(self, "llm_reference_model") and self.llm_reference_model is not None:
+                    with torch.no_grad():
+                        ref_outputs = self.llm_reference_model(
+                            input_ids=inputs.input_ids,
+                            attention_mask=inputs.attention_mask
+                        )
+                        ref_logits = ref_outputs.logits[:, :-1, :].contiguous()
+                        ref_token_log_probs = -F.cross_entropy(
+                            ref_logits.transpose(1, 2),
+                            shifted_labels,
+                            reduction='none',
+                        )
+                        ref_token_log_probs = ref_token_log_probs * mask
+                        ref_sequence_log_probs = ref_token_log_probs.sum(dim=-1) / (mask.sum(dim=-1) + 1e-8)
+
+                    kl_per_seq = compute_approx_kl(sequence_log_probs, ref_sequence_log_probs, kl_estimator='k2')
+                    kl_loss = kl_per_seq.mean()
+                    kl_means.append(kl_loss.item())
+                loss = loss + kl_coef * kl_loss
                 
             accumulated_loss += loss.item()
             scaled_loss = loss / grad_accum_steps
@@ -589,6 +623,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'rft_advantage_mean': _safe_mean(advantage_means),
             'rft_advantage_std': _safe_mean(advantage_stds),
             'rft_ratio_used_mean': _safe_mean(ratio_used_means),
+            'rft_kl_mean': _safe_mean(kl_means)
         }
         mean_loss = accumulated_loss / max(1, num_micro_batches)
         return torch.tensor(mean_loss, device=self._cfg.device), rft_stats
@@ -827,6 +862,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'rft_advantage_mean': rft_stats.get('rft_advantage_mean', 0.0),
             'rft_advantage_std': rft_stats.get('rft_advantage_std', 0.0),
             'rft_ratio_used_mean': rft_stats.get('rft_ratio_used_mean', 0.0),
+            'rft_kl_mean': rft_stats.get('rft_kl_mean', 0.0),
             # 'num_sft_samples': float(num_sft_samples),
             # 'num_rft_samples': float(num_rft_samples),
             'total_loss': total_loss.item(),

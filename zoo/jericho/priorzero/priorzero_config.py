@@ -176,6 +176,7 @@ def get_priorzero_config(
             enable_rft=True,
             rft_loss_type=rft_loss_type,
             rft_clip_epsilon=0.2,
+            rft_kl_coef=0.01,
             
             llm_learning_rate=1e-5,
             llm_weight_decay=0.01,

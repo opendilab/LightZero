@@ -440,6 +440,7 @@ class PriorZeroCollector(OriginalCollector):
 
         collected_episode = 0
         collected_step = 0
+        llm_prior_entropy = [[] for _ in range(self._env_num)]
         env_nums = self._env_num
         init_obs = self._env.ready_obs
 
@@ -557,11 +558,11 @@ class PriorZeroCollector(OriginalCollector):
                                 valid_actions=valid_actions_list[0],
                             )
                     else:
-                        llm_prior_logprob = None
+                        llm_prior_logprob = [None for i in range(len(valid_actions_list))]
 
                 policy_kwargs_forward = {
                     'llm_prior_logprob': llm_prior_logprob,
-                    'valid_actions_list': valid_actions_list
+                    'valid_actions_list': valid_actions_list,
                 }
 
                 if self.task_id is not None:
@@ -697,6 +698,12 @@ class PriorZeroCollector(OriginalCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(obs_new), init_history_obs=list(self.history_buffers[env_id]), init_action_logprob=None)
 
                     self._env_info[env_id]['step'] += 1
+                    if llm_prior_logprob[env_id] is not None:
+                        llm_prior_tensor = torch.tensor([logit for k, logit in llm_prior_logprob[env_id].items()]) 
+                        llm_prior_prob = torch.softmax(llm_prior_tensor, dim=-1)
+                        llm_prior_entropy[env_id].append(-torch.sum(llm_prior_prob * torch.log(llm_prior_prob + 1e-9), dim=-1))
+                    else:
+                        llm_prior_entropy[env_id].append(0.0)
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
@@ -711,7 +718,8 @@ class PriorZeroCollector(OriginalCollector):
                     info_log = {
                         'reward': episode_timestep.info['eval_episode_return'],
                         'time': self._env_info[env_id]['time'],
-                        'step': self._env_info[env_id]['step']}
+                        'step': self._env_info[env_id]['step'],
+                        'llm_prior_entropy': sum(llm_prior_entropy[env_id])/len(llm_prior_entropy[env_id])}
                     if not collect_with_pure_policy:
                         info_log['visit_entropy'] = (
                             visit_entropies_lst[env_id] / eps_steps_lst[env_id]
@@ -800,5 +808,58 @@ class PriorZeroCollector(OriginalCollector):
         [INHERITED]
         Log collection statistics (inherited from parent).
         """
-        super()._output_log(train_iter)
+        if self._rank != 0:
+            return
+        
+        if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
+            self._last_train_iter = train_iter
+            episode_count = len(self._episode_info)
+            envstep_count = sum([d['step'] for d in self._episode_info])
+            duration = sum([d['time'] for d in self._episode_info])
+            episode_reward = [d['reward'] for d in self._episode_info]
+            episode_llm_prior_entropy = [d['llm_prior_entropy'] for d in self._episode_info]
+            
+            info = {
+                'episode_count': episode_count,
+                'envstep_count': envstep_count,
+                'avg_envstep_per_episode': envstep_count / episode_count,
+                'avg_envstep_per_sec': envstep_count / duration if duration > 0 else 0,
+                'avg_episode_per_sec': episode_count / duration if duration > 0 else 0,
+                'collect_time': duration,
+                'reward_mean': np.mean(episode_reward),
+                'reward_std': np.std(episode_reward),
+                'reward_max': np.max(episode_reward),
+                'reward_min': np.min(episode_reward),
+                'total_envstep_count': self._total_envstep_count,
+                'total_episode_count': self._total_episode_count,
+                'total_duration': self._total_duration,
+                'llm_prior_entropy_mean': np.mean(episode_llm_prior_entropy),
+                'llm_prior_entropy_max': np.max(episode_llm_prior_entropy),
+                'llm_prior_entropy_min': np.min(episode_llm_prior_entropy)
+            }
+            
+            if not self.collect_with_pure_policy:
+                visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+                info['visit_entropy_mean'] = np.mean(visit_entropy)
+            if self.policy_config.gumbel_algo:
+                completed_value = [d['completed_value'] for d in self._episode_info]
+                info['completed_value_mean'] = np.mean(completed_value)
+
+            self._episode_info.clear()
+            
+            # Log to console
+            self._logger.info("Collector Training Summary:\n{}".format('\n'.join([f'  {k}: {v}' for k, v in info.items()])))
+            
+            # Log to TensorBoard and WandB
+            for k, v in info.items():
+                if self.task_id is None:
+                    tb_prefix_iter = f'{self._instance_name}_iter/'
+                    tb_prefix_step = f'{self._instance_name}_step/'
+                else:
+                    tb_prefix_iter = f'{self._instance_name}_iter_task{self.task_id}/'
+                    tb_prefix_step = f'{self._instance_name}_step_task{self.task_id}/'
+                
+                self._tb_logger.add_scalar(tb_prefix_iter + k, v, train_iter)
+                self._tb_logger.add_scalar(tb_prefix_step + k, v, self._total_envstep_count)
+            
     
