@@ -1,6 +1,7 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-
+import os
+os.environ['HF_HOME'] = '/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg'
 
 def main(env_id, seed):
     action_space_size = atari_env_action_space_map[env_id]
@@ -177,40 +178,6 @@ def main(env_id, seed):
                     # policy_logits_clip_min=-3.0,        # STRENGTHENED: Tighter clip (was -5.0)
                     # policy_logits_clip_max=3.0,         # STRENGTHENED: Tighter clip (was 5.0)
 
-                    # ==================== [NEW] Head-Clip (Dynamic, like Encoder-Clip) ====================
-                    # 与 Encoder-Clip 原理一致的动态 Head Clipping
-                    # 监控 head 输出（logits）范围，当超过阈值时缩放整个 head 模块权重
-                    use_head_clip=True,  # 启用 Head-Clip
-                    head_clip_config=dict(
-                        enabled=True,
-                        # 指定需要 clip 的 head
-                        enabled_heads=['policy'],  # 可以添加 'value', 'rewards'
-
-                        # 每个 head 的详细配置
-                        head_configs=dict(
-                            policy=dict(
-                                use_annealing=True,     # 启用阈值退火
-                                anneal_type='cosine',   # 'cosine' 或 'linear'
-                                start_value=30.0,       # 初期宽松（允许较大的 logits 范围）
-                                end_value=15.0,         # 后期严格（收紧到合理范围）
-                                anneal_steps=650000,    # 在 650k iter 完成退火（性能下降前）
-                            ),
-                            # value=dict(
-                            #     clip_threshold=20.0,
-                            #     use_annealing=False,
-                            # ),
-                            # rewards=dict(
-                            #     clip_threshold=20.0,
-                            #     use_annealing=False,
-                            # ),
-                        ),
-
-                        # 监控配置
-                        monitor_freq=1,      # 每个 iter 都检查
-                        log_freq=1000,       # 每 1000 iter 打印日志
-                    ),
-                    # ========================================================================================
-
                     # Fix3: Re-smooth target_policy from buffer before training
                     # ⚠️ DEPRECATED: This is now handled by Fix2 in unizero.py
                     # Setting to False to avoid redundant smoothing
@@ -274,6 +241,42 @@ def main(env_id, seed):
             # encoder_clip_end_value=2.0,
             # # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
             # encoder_clip_anneal_steps=400000,  # 例如，在400k次迭代后达到最终值
+
+
+            # ==================== [NEW] Head-Clip (Dynamic, like Encoder-Clip) ====================
+            # 与 Encoder-Clip 原理一致的动态 Head Clipping
+            # 监控 head 输出（logits）范围，当超过阈值时缩放整个 head 模块权重
+            use_head_clip=True,  # 启用 Head-Clip
+            head_clip_config=dict(
+                enabled=True,
+                # 指定需要 clip 的 head
+                enabled_heads=['policy'],  # 可以添加 'value', 'rewards'
+
+                # 每个 head 的详细配置
+                head_configs=dict(
+                    policy=dict(
+                        use_annealing=True,     # 启用阈值退火
+                        anneal_type='cosine',   # 'cosine' 或 'linear'
+                        start_value=30.0,       # 初期宽松（允许较大的 logits 范围）
+                        end_value=10.0,         # 后期严格（收紧到合理范围）
+                        anneal_steps=650000,    # 在 650k iter 完成退火（性能下降前）
+                    ),
+                    # value=dict(
+                    #     clip_threshold=20.0,
+                    #     use_annealing=False,
+                    # ),
+                    # rewards=dict(
+                    #     clip_threshold=20.0,
+                    #     use_annealing=False,
+                    # ),
+                ),
+
+                # 监控配置
+                monitor_freq=1,      # 每个 iter 都检查
+                log_freq=1000,       # 每 1000 iter 打印日志
+            ),
+            # ========================================================================================
+
 
             # ==================== START: label smooth ====================
             policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
@@ -360,7 +363,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1121_worker/{env_id[3:-3]}/{env_id[3:-3]}_uz_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_refactor1202/{env_id[3:-3]}/{env_id[3:-3]}_uz_head-clip_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     
     # main_config.exp_name = f'data_unizero_st_refactor1121_worker/{env_id[3:-3]}/{env_id[3:-3]}_uz_reset-pvr-250k_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     
@@ -405,7 +408,7 @@ if __name__ == "__main__":
 
     # args.env = 'ALE/Pong-v5' # 记忆规划型环境 稀疏奖励
 
-    # args.env = 'ALE/MsPacman-v5' # 记忆规划型环境 稀疏奖励
+    args.env = 'ALE/MsPacman-v5' # 记忆规划型环境 稀疏奖励
 
 
     # args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
@@ -417,7 +420,7 @@ if __name__ == "__main__":
 
     # 下面是atari8以外的2个代表环境
     # args.env = 'QbertNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
-    args.env = 'ALE/Qbert-v5' # 记忆规划型环境 稀疏奖励
+    # args.env = 'ALE/Qbert-v5' # 记忆规划型环境 稀疏奖励
 
     # args.env = 'SpaceInvadersNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 

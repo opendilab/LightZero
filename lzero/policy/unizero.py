@@ -1094,13 +1094,13 @@ class UniZeroPolicy(MuZeroPolicy):
                     train_iter
                 )
 
-                # 将 head clip 的结果添加到日志（如果有的话）
-                if head_clip_results:
-                    for head_name, info in head_clip_results.items():
-                        return_log_dict[f'head_clip/{head_name}/max_logits'] = info['max_logits']
-                        return_log_dict[f'head_clip/{head_name}/threshold'] = info['threshold']
-                        if info['scaled']:
-                            return_log_dict[f'head_clip/{head_name}/scale_factor'] = info['scale_factor']
+                # # 将 head clip 的结果添加到日志（如果有的话）
+                # if head_clip_results:
+                #     for head_name, info in head_clip_results.items():
+                #         return_log_dict[f'head_clip/{head_name}/max_logits'] = info['max_logits']
+                #         return_log_dict[f'head_clip/{head_name}/threshold'] = info['threshold']
+                #         if info['scaled']:
+                #             return_log_dict[f'head_clip/{head_name}/scale_factor'] = info['scale_factor']
             # ===================== END: Head-Clip =====================
 
         # Check if the current iteration completes an accumulation cycle
@@ -1274,6 +1274,15 @@ class UniZeroPolicy(MuZeroPolicy):
         if self.use_encoder_clip_annealing:
             return_log_dict['current_encoder_clip_value'] = current_clip_value
         # ===================== END: 添加新日志项 =====================
+
+        if self.use_head_clip and self.head_clip_manager is not None:
+            # 将 head clip 的结果添加到日志（如果有的话）
+            if head_clip_results:
+                for head_name, info in head_clip_results.items():
+                    return_log_dict[f'head_clip/{head_name}/max_logits'] = info['max_logits']
+                    return_log_dict[f'head_clip/{head_name}/threshold'] = info['threshold']
+                    if info['scaled']:
+                        return_log_dict[f'head_clip/{head_name}/scale_factor'] = info['scale_factor']
 
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
@@ -1887,7 +1896,20 @@ class UniZeroPolicy(MuZeroPolicy):
             'embeddings/obs/norm_std',
             'embeddings/obs/norm_max',
             'embeddings/obs/norm_min',
+
         ]
+
+        # ==================== [修复] Head-Clip 监控变量自动生成 ====================
+        head_clip_vars = []
+        # 检查 head_clip 是否启用以及 manager 是否存在
+        if getattr(self, 'use_head_clip', False) and getattr(self, 'head_clip_manager', None) is not None:
+            # 遍历所有启用的 head，生成对应的监控 key
+            for head_name in self.head_clip_manager.enabled_heads:
+                head_clip_vars.append(f'head_clip/{head_name}/max_logits')
+                head_clip_vars.append(f'head_clip/{head_name}/threshold')
+                head_clip_vars.append(f'head_clip/{head_name}/scale_factor')
+        # ========================================================================
+
 
         # ==================== [NEW] Fix4: Enhanced Policy Monitoring Variables ====================
         enhanced_policy_vars = [
@@ -1916,7 +1938,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # wandb等工具可以更好地处理大量的动态指标。
         # ========================================================================
 
-        return base_vars + norm_vars + enhanced_policy_vars + stability_vars
+        return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
 
 
     def _state_dict_learn(self) -> Dict[str, Any]:
