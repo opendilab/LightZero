@@ -20,6 +20,14 @@ from .utils import configure_optimizers_nanogpt
 from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
 import torch.nn.functional as F
 
+# ==================== Head Clip Manager ====================
+from lzero.policy.head_clip_manager import (
+    HeadClipManager,
+    create_head_clip_manager_from_dict,
+    HeadClipConfig,
+)
+# ===========================================================
+
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
     使用向量化操作高效地缩放一个模块的所有权重。
@@ -232,6 +240,34 @@ class UniZeroPolicy(MuZeroPolicy):
         # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
         encoder_clip_anneal_steps=100000,  # 例如，在200k次迭代后达到最终值
         # ===================== END: Encoder-Clip Annealing Config =====================
+
+        # ==================== START: Head-Clip Annealing Config ====================
+        # (bool) 是否启用 head-clip（动态裁剪 head 输出范围）
+        use_head_clip=False,  # 默认关闭
+        # Head-Clip 详细配置
+        head_clip_config=dict(
+            enabled=False,
+            # 指定需要 clip 的 head（可选，默认为空列表）
+            enabled_heads=[],  # 例如: ['policy', 'value', 'rewards']
+            # 每个 head 的详细配置（可选）
+            head_configs={
+                # 'policy': {
+                #     'use_annealing': True,
+                #     'anneal_type': 'cosine',  # 'cosine' 或 'linear'
+                #     'start_value': 30.0,      # 初期宽松
+                #     'end_value': 10.0,        # 后期严格
+                #     'anneal_steps': 500000,
+                # },
+                # 'value': {
+                #     'clip_threshold': 20.0,
+                #     'use_annealing': False,
+                # },
+            },
+            # 监控配置
+            monitor_freq=1,   # 每个 iter 都检查
+            log_freq=1000,    # 每 1000 iter 打印日志
+        ),
+        # ===================== END: Head-Clip Annealing Config =====================
 
         # (bool) whether to use rnd model.
         use_rnd_model=False,
@@ -638,6 +674,34 @@ class UniZeroPolicy(MuZeroPolicy):
             self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0)
         # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
 
+        # ==================== START: 初始化 Head-Clip Manager ====================
+        self.use_head_clip = self._cfg.get('use_head_clip', False)
+
+        if self.use_head_clip:
+            head_clip_config_dict = self._cfg.get('head_clip_config', {})
+            # 确保 enabled 与顶层配置一致
+            head_clip_config_dict['enabled'] = self.use_head_clip
+
+            # 创建 HeadClipManager
+            self.head_clip_manager = create_head_clip_manager_from_dict(head_clip_config_dict)
+
+            print("=" * 60)
+            print(">>> Head-Clip Manager 已初始化 <<<")
+            print(f"    Enabled heads: {self.head_clip_manager.enabled_heads}")
+            for head_name in self.head_clip_manager.enabled_heads:
+                config = self.head_clip_manager.get_head_config(head_name)
+                if config.use_annealing:
+                    print(
+                        f"    {head_name}: annealing {config.start_value:.1f} → {config.end_value:.1f} "
+                        f"over {config.anneal_steps} steps ({config.anneal_type})"
+                    )
+                else:
+                    print(f"    {head_name}: fixed threshold = {config.clip_threshold:.1f}")
+            print("=" * 60)
+        else:
+            self.head_clip_manager = None
+        # ===================== END: 初始化 Head-Clip Manager =====================
+
         # --- NEW: Policy Label Smoothing Parameters ---
         self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps
         self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
@@ -1020,6 +1084,24 @@ class UniZeroPolicy(MuZeroPolicy):
                         if train_iter % 1000 == 0:
                             print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
                         scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
+
+            # ==================== START: Head-Clip ====================
+            # 与 Encoder-Clip 原理一致的动态 Head Clipping
+            if self.use_head_clip and self.head_clip_manager is not None:
+                head_clip_results = self.head_clip_manager.apply_head_clip(
+                    self._learn_model.world_model,
+                    losses,
+                    train_iter
+                )
+
+                # 将 head clip 的结果添加到日志（如果有的话）
+                if head_clip_results:
+                    for head_name, info in head_clip_results.items():
+                        return_log_dict[f'head_clip/{head_name}/max_logits'] = info['max_logits']
+                        return_log_dict[f'head_clip/{head_name}/threshold'] = info['threshold']
+                        if info['scaled']:
+                            return_log_dict[f'head_clip/{head_name}/scale_factor'] = info['scale_factor']
+            # ===================== END: Head-Clip =====================
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:

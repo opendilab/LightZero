@@ -177,6 +177,40 @@ def main(env_id, seed):
                     # policy_logits_clip_min=-3.0,        # STRENGTHENED: Tighter clip (was -5.0)
                     # policy_logits_clip_max=3.0,         # STRENGTHENED: Tighter clip (was 5.0)
 
+                    # ==================== [NEW] Head-Clip (Dynamic, like Encoder-Clip) ====================
+                    # 与 Encoder-Clip 原理一致的动态 Head Clipping
+                    # 监控 head 输出（logits）范围，当超过阈值时缩放整个 head 模块权重
+                    use_head_clip=True,  # 启用 Head-Clip
+                    head_clip_config=dict(
+                        enabled=True,
+                        # 指定需要 clip 的 head
+                        enabled_heads=['policy'],  # 可以添加 'value', 'rewards'
+
+                        # 每个 head 的详细配置
+                        head_configs=dict(
+                            policy=dict(
+                                use_annealing=True,     # 启用阈值退火
+                                anneal_type='cosine',   # 'cosine' 或 'linear'
+                                start_value=30.0,       # 初期宽松（允许较大的 logits 范围）
+                                end_value=15.0,         # 后期严格（收紧到合理范围）
+                                anneal_steps=650000,    # 在 650k iter 完成退火（性能下降前）
+                            ),
+                            # value=dict(
+                            #     clip_threshold=20.0,
+                            #     use_annealing=False,
+                            # ),
+                            # rewards=dict(
+                            #     clip_threshold=20.0,
+                            #     use_annealing=False,
+                            # ),
+                        ),
+
+                        # 监控配置
+                        monitor_freq=1,      # 每个 iter 都检查
+                        log_freq=1000,       # 每 1000 iter 打印日志
+                    ),
+                    # ========================================================================================
+
                     # Fix3: Re-smooth target_policy from buffer before training
                     # ⚠️ DEPRECATED: This is now handled by Fix2 in unizero.py
                     # Setting to False to avoid redundant smoothing
