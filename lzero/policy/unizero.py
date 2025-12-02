@@ -9,7 +9,7 @@ from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
 from lzero.entry.utils import initialize_zeros_batch, initialize_pad_batch
-from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
+from lzero.mcts import UniZeroMCTSCtree_v2 as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
@@ -229,6 +229,14 @@ class UniZeroPolicy(MuZeroPolicy):
         num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
+        # (float) The maximum change in value allowed during the backup step of the search tree update.
+        value_delta_max=0.01,
+        # (int) The number of top actions to consider in Gumbel MuZero Sequential Halving
+        max_num_considered_actions=16,
+        # (float) Gumbel MuZero exploration constant related to visit counts
+        c_visit=50.0,
+        # (float) Gumbel MuZero exploration scaling constant
+        c_scale=1.0,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -686,8 +694,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
 
-            next_latent_state_with_env = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
-            
+            first_action_latent_map = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
+
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
@@ -715,8 +723,8 @@ class UniZeroPolicy(MuZeroPolicy):
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                next_latent_state = next_latent_state_with_env[i][action]
-                
+                next_latent_state = first_action_latent_map[i][action]
+
                 if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
                     predicted_next = self._collect_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
@@ -824,7 +832,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            next_latent_state_with_env = self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
+            first_action_latent_map = self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -848,7 +856,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 # Predict the next latent state based on the selected action and policy
-                next_latent_state = next_latent_state_with_env[i][action]
+                next_latent_state = first_action_latent_map[i][action]
 
                 if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
