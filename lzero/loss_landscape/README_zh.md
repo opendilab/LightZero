@@ -1,14 +1,8 @@
 # Loss Landscape 核心库
 
+**本工具专门用于为 UniZero 模型检查点（checkpoint）绘制 loss landscape 可视化。**
+
 一个简洁、模块化的 PyTorch 库，用于神经网络 loss landscape 的可视化。
-
-## 快速开始 - 批量处理
-
-```bash
-bash run_loss_landscape_batch.sh --ckpt-dir ./path/to/checkpoints
-```
-
-详见 `run_loss_landscape_batch.sh` 了解更多选项。
 
 ## 安装
 
@@ -250,7 +244,7 @@ vtp_file = landscape.export_paraview(
 ## 参考资料
 
 - 原始论文：[Visualizing the Loss Landscape of Neural Nets](https://arxiv.org/abs/1712.09913)
-- 原始代码：https://github.com/zingyi-li/Loss-Surfaces
+- 原始代码：https://github.com/tomgoldstein/loss-landscape
 - PyTorch 文档：https://pytorch.org/docs/
 - ParaView：https://www.paraview.org/
 
@@ -269,7 +263,7 @@ vtp_file = landscape.export_paraview(
 
 ## 许可证
 
-MIT 许可证 - 参见原始 [loss-landscape](https://github.com/zingyi-li/Loss-Surfaces) 仓库
+MIT 许可证 - 参见原始 [loss-landscape](https://github.com/tomgoldstein/loss-landscape) 仓库
 
 ---
 
@@ -283,14 +277,7 @@ MIT 许可证 - 参见原始 [loss-landscape](https://github.com/zingyi-li/Loss-
 | Iteration | 2D Contour | 2D Contour Filled | 2D Heatmap | 3D Surface |
 | --- | --- | --- | --- | --- |
 | iter10K | <img src="./images/Pong/iter10K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter10K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter10K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter10K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter20K | <img src="./images/Pong/iter20K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter20K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter20K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter20K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter30K | <img src="./images/Pong/iter30K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter30K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter30K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter30K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter40K | <img src="./images/Pong/iter40K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter40K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter40K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter40K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
 | iter50K | <img src="./images/Pong/iter50K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter50K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter50K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter50K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter60K | <img src="./images/Pong/iter60K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter60K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter60K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter60K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter70K | <img src="./images/Pong/iter70K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter70K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter70K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter70K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter80K | <img src="./images/Pong/iter80K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter80K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter80K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter80K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter90K | <img src="./images/Pong/iter90K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter90K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter90K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter90K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
 | iter100K | <img src="./images/Pong/iter100K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/Pong/iter100K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/Pong/iter100K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/Pong/iter100K/loss_landscape_PongNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
 
 ### MsPacman 环境 - Total Loss
@@ -298,12 +285,5 @@ MIT 许可证 - 参见原始 [loss-landscape](https://github.com/zingyi-li/Loss-
 | Iteration | 2D Contour | 2D Contour Filled | 2D Heatmap | 3D Surface |
 | --- | --- | --- | --- | --- |
 | iter10K | <img src="./images/MsPacman/iter10K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter10K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter10K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter10K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter20K | <img src="./images/MsPacman/iter20K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter20K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter20K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter20K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter30K | <img src="./images/MsPacman/iter30K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter30K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter30K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter30K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter40K | <img src="./images/MsPacman/iter40K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter40K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter40K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter40K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
 | iter50K | <img src="./images/MsPacman/iter50K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter50K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter50K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter50K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter60K | <img src="./images/MsPacman/iter60K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter60K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter60K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter60K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter70K | <img src="./images/MsPacman/iter70K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter70K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter70K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter70K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter80K | <img src="./images/MsPacman/iter80K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter80K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter80K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter80K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
-| iter90K | <img src="./images/MsPacman/iter90K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter90K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter90K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter90K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |
 | iter100K | <img src="./images/MsPacman/iter100K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontour.png" width="200" /> | <img src="./images/MsPacman/iter100K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dcontourf.png" width="200" /> | <img src="./images/MsPacman/iter100K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_2dheat.png" width="200" /> | <img src="./images/MsPacman/iter100K/loss_landscape_MsPacmanNoFrameskip_21x21.h5_train_loss_total_loss_3dsurface.png" width="200" /> |

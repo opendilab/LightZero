@@ -249,10 +249,10 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
         buffer.reset_runtime_metrics()
 
 
-def convert_to_batch_for_gpt(batch_data, policy_cfg, reward_support, value_support):
+def convert_to_batch_for_unizero(batch_data, policy_cfg, reward_support, value_support):
     """
     Overview:
-        Convert replay buffer sample data to batch_for_gpt format for world_model.compute_loss.
+        Convert replay buffer sample data to batch_for_unizero format for world_model.compute_loss.
         This function transforms the raw data from the replay buffer into the format expected
         by the UniZero world model's compute_loss method.
 
@@ -263,7 +263,7 @@ def convert_to_batch_for_gpt(batch_data, policy_cfg, reward_support, value_suppo
         - value_support: Value support tensor for categorical distribution
 
     Returns:
-        - batch_for_gpt (:obj:`dict`): Dictionary containing formatted data for world model
+        - batch_for_unizero (:obj:`dict`): Dictionary containing formatted data for world model
     """
     from lzero.policy.utils import to_torch_float_tensor, prepare_obs, prepare_obs_stack_for_unizero
     from lzero.policy import scalar_transform, phi_transform
@@ -297,26 +297,26 @@ def convert_to_batch_for_gpt(batch_data, policy_cfg, reward_support, value_suppo
     target_reward_categorical = phi_transform(reward_support, transformed_target_reward)
     target_value_categorical = phi_transform(value_support, transformed_target_value)
 
-    # Prepare batch_for_gpt
-    batch_for_gpt = {}
+    # Prepare batch_for_unizero
+    batch_for_unizero = {}
     if isinstance(policy_cfg.model.observation_shape, int) or len(policy_cfg.model.observation_shape) == 1:
-        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+        batch_for_unizero['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
             policy_cfg.batch_size, -1, policy_cfg.model.observation_shape)
     elif len(policy_cfg.model.observation_shape) == 3:
-        batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+        batch_for_unizero['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
             policy_cfg.batch_size, -1, *policy_cfg.model.observation_shape)
 
-    batch_for_gpt['actions'] = action_batch.squeeze(-1)
-    batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
-    batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
-    batch_for_gpt['mask_padding'] = mask_batch == 1.0
-    batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
-    batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
-    batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=policy_cfg.device)
-    batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
-    batch_for_gpt['target_policy'] = target_policy[:, :-1]
+    batch_for_unizero['actions'] = action_batch.squeeze(-1)
+    batch_for_unizero['timestep'] = timestep_batch.squeeze(-1)
+    batch_for_unizero['rewards'] = target_reward_categorical[:, :-1]
+    batch_for_unizero['mask_padding'] = mask_batch == 1.0
+    batch_for_unizero['mask_padding'] = batch_for_unizero['mask_padding'][:, :-1]
+    batch_for_unizero['observations'] = batch_for_unizero['observations'][:, :-1]
+    batch_for_unizero['ends'] = torch.zeros(batch_for_unizero['mask_padding'].shape, dtype=torch.long, device=policy_cfg.device)
+    batch_for_unizero['target_value'] = target_value_categorical[:, :-1]
+    batch_for_unizero['target_policy'] = target_policy[:, :-1]
 
-    return batch_for_gpt
+    return batch_for_unizero
 
 
 def create_unizero_loss_metrics(policy):
@@ -334,7 +334,7 @@ def create_unizero_loss_metrics(policy):
     """
     import logging
 
-    # Get reward_support and value_support from policy's learn_mode
+    # Get reward_support and value_support from policy
     reward_support = policy.reward_support
     value_support = policy.value_support
 
@@ -359,8 +359,8 @@ def create_unizero_loss_metrics(policy):
         with torch.no_grad():
             for batch_data in dataloader:
                 try:
-                    # Convert replay buffer sample to batch_for_gpt format
-                    batch_for_gpt = convert_to_batch_for_gpt(
+                    # Convert replay buffer sample to batch_for_unizero format
+                    batch_for_unizero = convert_to_batch_for_unizero(
                         batch_data,
                         policy._cfg,
                         reward_support,
@@ -369,7 +369,7 @@ def create_unizero_loss_metrics(policy):
 
                     # Call world_model.compute_loss (no backward, no optimizer.step)
                     losses = net.world_model.compute_loss(
-                        batch_for_gpt,
+                        batch_for_unizero,
                         policy._target_model.world_model.tokenizer,
                         policy.value_inverse_scalar_transform_handle
                     )

@@ -1,22 +1,57 @@
 """
-1D loss landscape visualization.
+Overview:
+    1D loss landscape visualization utilities for neural network training analysis.
+    This module provides functions to plot loss and accuracy curves along single
+    directions in parameter space, useful for understanding optimization trajectories.
+
+This module provides:
+    - HDF5-based loss curve plotting with dual y-axes for loss and accuracy
+    - Simple plotting from numpy arrays without file dependencies
+    - Logarithmic scale support for loss visualization
+    - PDF export for publication-quality figures
+
+Key Functions:
+    - plot_1d_loss: Plot 1D curves from HDF5 surface file with loss and accuracy
+    - plot_1d: Simple 1D plot from numpy arrays for quick visualization
 """
 
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
+from typing import Tuple, Optional, Any
 
 
-def plot_1d_loss(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, log=False, show=False, save_dir=''):
-    """Plot 1D loss curve with accuracy from HDF5 surface file.
+def plot_1d_loss(surf_file: str, xmin: float = -1.0, xmax: float = 1.0, loss_max: float = 5, log: bool = False, show: bool = False, save_dir: str = '') -> None:
+    """
+    Overview:
+        Plot 1D loss and accuracy curves from HDF5 surface file with dual y-axes.
+        Creates publication-quality visualizations showing loss (blue) and accuracy (red)
+        on the same plot, with support for both training and test metrics.
 
-    Args:
-        surf_file: Path to HDF5 surface file
-        xmin, xmax: Range of x-axis (default: from file)
-        loss_max: Maximum loss value for y-axis
-        log: Use logarithmic scale for loss
-        show: Whether to display plot
-        save_dir: Directory to save plots (default: same directory as surf_file)
+    Arguments:
+        - surf_file (:obj:`str`): Path to HDF5 surface file containing loss and accuracy data
+        - xmin (:obj:`float`, optional): Minimum x-axis value. Default is -1.0 (auto-determined from file)
+        - xmax (:obj:`float`, optional): Maximum x-axis value. Default is 1.0 (auto-determined from file)
+        - loss_max (:obj:`float`, optional): Maximum y-axis value for loss. Default is 5
+        - log (:obj:`bool`, optional): Use logarithmic scale for loss axis. Default is False
+        - show (:obj:`bool`, optional): Whether to display plot interactively. Default is False
+        - save_dir (:obj:`str`, optional): Directory to save plots. Default is '' (same as surf_file location)
+
+    Returns:
+        - None: Saves plot as PDF file with naming format: {surf_file}_1d_loss_acc[_log].pdf
+
+    Notes:
+        - Automatically detects and plots test metrics if available in HDF5 file
+        - Uses solid lines for training metrics and dashed lines for test metrics
+        - Left y-axis (blue) shows loss values, right y-axis (red) shows accuracy percentage
+        - Output file includes '_log' suffix when logarithmic scale is used
+
+    Examples::
+        >>> # Plot loss landscape with automatic axis scaling
+        >>> plot_1d_loss('model_surface.h5')
+
+        >>> # Plot with logarithmic scale and custom range
+        >>> plot_1d_loss('model_surface.h5', xmin=-0.5, xmax=0.5, log=True, loss_max=10)
     """
     print('-' * 60)
     print('Plotting 1D loss curve')
@@ -35,15 +70,15 @@ def plot_1d_loss(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, log=False, show=Fal
     print(f"Train loss range: {train_loss.min():.3f} to {train_loss.max():.3f}")
     print(f"Train acc range: {train_acc.min():.1f} to {train_acc.max():.1f}")
 
-    # Adjust axis limits
+    # Auto-determine axis limits from data if using defaults
     xmin = xmin if xmin != -1.0 else x.min()
     xmax = xmax if xmax != 1.0 else x.max()
 
-    # Save directory
+    # Use surface file directory if save_dir not specified
     if not save_dir:
         save_dir = ''
 
-    # Plot loss and accuracy on same figure
+    # Create dual-axis figure for loss and accuracy
     fig, ax1 = plt.subplots(figsize=(10, 6))
     ax2 = ax1.twinx()
 
@@ -95,16 +130,35 @@ def plot_1d_loss(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, log=False, show=Fal
     f.close()
 
 
-def plot_1d(losses, coords, loss_type='train_loss', log=False, loss_max=5, show=False):
-    """Simple 1D plot from numpy arrays (without HDF5).
+def plot_1d(losses: np.ndarray, coords: np.ndarray, loss_type: str = 'train_loss', log: bool = False, loss_max: float = 5, show: bool = False) -> Tuple[Any, Any]:
+    """
+    Overview:
+        Create simple 1D loss plot from numpy arrays without HDF5 file dependency.
+        Useful for quick visualization during development or when data is already in memory.
 
-    Args:
-        losses: 1D numpy array of loss values
-        coords: 1D numpy array of coordinates
-        loss_type: Label for the loss curve
-        log: Use logarithmic scale
-        loss_max: Maximum loss value for y-axis
-        show: Whether to display plot
+    Arguments:
+        - losses (:obj:`numpy.ndarray`): 1D array of loss values to plot
+        - coords (:obj:`numpy.ndarray`): 1D array of coordinate values (x-axis)
+        - loss_type (:obj:`str`, optional): Label for the loss curve in legend. Default is 'train_loss'
+        - log (:obj:`bool`, optional): Use logarithmic scale for y-axis. Default is False
+        - loss_max (:obj:`float`, optional): Maximum y-axis value for loss. Default is 5
+        - show (:obj:`bool`, optional): Whether to display plot interactively. Default is False
+
+    Returns:
+        - fig (:obj:`matplotlib.figure.Figure`): Matplotlib figure object
+        - ax (:obj:`matplotlib.axes.Axes`): Matplotlib axes object for further customization
+
+    Notes:
+        - Unlike plot_1d_loss, this does not save files automatically
+        - Returns matplotlib objects for additional customization or manual saving
+        - Grid is enabled by default with 30% transparency for better readability
+
+    Examples::
+        >>> # Quick loss visualization
+        >>> losses = np.array([2.5, 2.0, 1.5, 1.2, 1.0])
+        >>> coords = np.linspace(-1, 1, 5)
+        >>> fig, ax = plot_1d(losses, coords, loss_type='validation_loss', log=True)
+        >>> fig.savefig('custom_loss_plot.png')
     """
     fig, ax = plt.subplots(figsize=(10, 6))
 

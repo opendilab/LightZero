@@ -16,6 +16,7 @@ data_*
 *.so
 *.gv
 *.png
+!lzero/loss_landscape/images/**/*.png
 *.csv
 
 pkg/

@@ -15,7 +15,7 @@ from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 from torch.utils.tensorboard import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage, convert_to_batch_for_gpt, create_unizero_loss_metrics, UniZeroDataLoader
+from lzero.entry.utils import log_buffer_memory_usage, convert_to_batch_for_unizero, create_unizero_loss_metrics, UniZeroDataLoader
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
