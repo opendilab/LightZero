@@ -132,6 +132,23 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     embed_dim=embed_dim,
                     obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),
+
+                    task_embed_option=None,
+                    use_task_embed=False,
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
+
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
+                    n_shared_experts=1,
+                    num_experts_per_tok=1,
+                    num_experts_of_moe_in_transformer=8,
+                    lora_r= 0,
+                    lora_alpha =1,
+                    lora_dropout= 0.0,
+
                     decode_loss_mode=None, # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
                     latent_recon_loss_weight=0.1
                 ),
@@ -149,7 +166,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
-            train_start_after_envsteps=0,
+            train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
             replay_buffer_size=int(5e5),
             eval_freq=int(3e4),
             collector_env_num=collector_env_num,
