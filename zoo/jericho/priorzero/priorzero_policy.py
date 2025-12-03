@@ -1,21 +1,3 @@
-# priorzero_policy.py
-"""
-[PRIORZERO] PriorZero Policy Implementation
-
-This module implements the PriorZero policy that combines:
-1. UniZero world model for planning in latent space
-2. LLM policy model for providing high-quality action priors
-
-Key Features:
-- Dual-model training: world model + LLM policy
-- LLM-guided MCTS: inject LLM priors into MCTS root node
-- SFT + RFT: supervised fine-tuning with MCTS policies + reinforcement fine-tuning with environment rewards
-- Full alignment with UniZero implementation
-
-Author: PriorZero Team
-Date: 2025-01-20
-"""
-
 import copy
 import re
 import sys
@@ -25,10 +7,6 @@ import logging
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Union, Optional
-
-# [CRITICAL] Ensure local LightZero is used
-from ensure_local_lightzero import ensure_local_lightzero
-ensure_local_lightzero()
 
 import numpy as np
 import torch
@@ -893,6 +871,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             'rft_advantage_mean',
             'rft_advantage_std',
             'rft_ratio_used_mean',
+            'rft_kl_mean',
             # ============ LLM Training Statistics ============
             # 'num_sft_samples',           # Number of SFT samples in batch
             # 'num_rft_samples',           # Number of RFT samples in batch

@@ -1,19 +1,3 @@
-"""
-PriorZero LLM Prompts Module
-
-This module provides optimized prompt templates for PriorZero's LLM policy,
-based on the successful prompt structure from Open-Reasoner-Zero.
-
-Key Features:
-- Structured reasoning with <think> and <answer> tags
-- Clear role definitions (User/Assistant paradigm)
-- Explicit format examples to guide the LLM
-- Game-specific context integration
-
-Author: PriorZero Team
-Date: 2025-10-21
-"""
-
 from jinja2 import Template
 from typing import List, Dict, Any, Optional
 

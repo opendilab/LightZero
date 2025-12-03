@@ -11,10 +11,6 @@ from easydict import EasyDict
 from dataclasses import dataclass, field
 from omegaconf.listconfig import ListConfig
 
-
-from ensure_local_lightzero import ensure_local_lightzero
-ensure_local_lightzero()
-
 import torch
 import numpy as np
 from ding.config import compile_config
@@ -174,7 +170,6 @@ async def train_priorzero_orz_entry(
                 for _ in range(update_per_collect):
                     train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
                     train_data.append(learner.train_iter)
-                    
                     log_dict = learner.train(train_data, collector.envstep)
             else:
                 logger.info(f"Skipping training - not enough data yet")

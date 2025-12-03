@@ -1,15 +1,3 @@
-# priorzero_evaluator.py
-"""
-[PRIORZERO] PriorZero Evaluator
-
-Simple evaluator that inherits from MuZeroEvaluator.
-Since the policy already integrates LLM priors in its _forward_collect method,
-the evaluator can use the parent implementation directly.
-
-Author: PriorZero Team
-Date: 2025-01-20
-"""
-
 from typing import Optional
 
 from ding.worker.collector.base_serial_evaluator import SERIAL_EVALUATOR_REGISTRY

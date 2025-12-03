@@ -8,10 +8,6 @@ from collections import deque, defaultdict
 from pathlib import Path
 from typing import Optional, Any, List, Dict, Tuple
 
-# [CRITICAL] Ensure local LightZero is used
-from ensure_local_lightzero import ensure_local_lightzero
-ensure_local_lightzero()
-
 import numpy as np
 import torch
 from ding.envs import BaseEnvManager

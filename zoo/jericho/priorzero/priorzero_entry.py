@@ -5,13 +5,6 @@ from functools import partial
 from pathlib import Path
 from typing import Tuple, Optional
 
-# ==============================================================================
-# [CRITICAL] Ensure local LightZero is used for PriorZero-specific adaptations
-# ==============================================================================
-from ensure_local_lightzero import ensure_local_lightzero
-ensure_local_lightzero()
-
-
 import ray
 import torch
 import wandb

@@ -1,20 +1,3 @@
-# game_segment_priorzero.py
-"""
-[PRIORZERO] Enhanced Game Segment for PriorZero
-
-This module extends the standard GameSegment to store additional information
-needed for LLM policy training (SFT + RFT).
-
-Key Features:
-- Store MCTS policy distributions for SFT training
-- Store raw text observations for LLM prompt construction
-- Store LLM generated priors for analysis and debugging
-- Store search values for priority calculation
-
-Author: PriorZero Team
-Date: 2025-01-20
-"""
-
 import numpy as np
 from typing import Optional, List, Any
 from lzero.mcts.buffer.game_segment import GameSegment as OriginalGameSegment

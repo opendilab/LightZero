@@ -54,6 +54,7 @@ def get_priorzero_config(
     gradient_accumulation_steps = total_batch_size // micro_batch_size
     rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
     use_cot = False  # Whether to use chain-of-thought prompting
+    history_length = 5
 
     env_config = dict(
         stop_value=int(1e6),
@@ -157,9 +158,9 @@ def get_priorzero_config(
         policy_loss_weight=1.0,
         reward_loss_weight=1.0,
 
-        use_adaptive_entropy_weight=True,
+        use_adaptive_entropy_weight=False,
         adaptive_entropy_alpha_lr=1e-4,
-        use_encoder_clip_annealing=True,
+        use_encoder_clip_annealing=False,
         encoder_clip_anneal_type='cosine',
         encoder_clip_start_value=30.0,
         encoder_clip_end_value=10.0,
@@ -170,7 +171,7 @@ def get_priorzero_config(
         llm_policy_cfg=dict(
             enable_llm=True,
             pretrain_llm_path=llm_model_name,
-            history_length=5,
+            history_length=history_length,
             use_cot=use_cot,
             enable_sft=False,
             enable_rft=True,
