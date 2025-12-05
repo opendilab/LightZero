@@ -125,18 +125,24 @@ public:
         std::shared_ptr<Node> child = nullptr;
         double best_score = -9999999;
 
+        // Get legal actions: use cached version if available, otherwise query environment
+        // (Optimization: cached legal_actions reduce C++-Python boundary calls)
+        std::vector<int> legal_actions;
+        if (node->has_legal_actions()) {
+            // Use cached legal actions from the node expansion
+            legal_actions = node->get_legal_actions();
+        } else {
+            // Fallback: query environment if not cached (shouldn't happen in normal flow)
+            py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+            for (py::handle h : legal_actions_py) {
+                legal_actions.push_back(h.cast<int>());
+            }
+        }
+
         // Iterate through all children
         for (const auto& kv : node->children) {
             int action_tmp = kv.first;
             std::shared_ptr<Node> child_tmp = kv.second;
-
-            // Get legal actions from the simulation environment
-            py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-
-            std::vector<int> legal_actions;
-            for (py::handle h : legal_actions_py) {
-                legal_actions.push_back(h.cast<int>());
-            }
 
             // Check if the action is legal and calculate UCB score
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
@@ -168,6 +174,9 @@ public:
         // Get the legal actions from the simulation environment
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
         std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+        // Cache legal actions in the node for future use (optimization: avoid repeated env queries)
+        node->set_legal_actions(legal_actions);
 
         // Add child nodes for legal actions
         for (const auto& kv : action_probs_dict) {
@@ -214,6 +223,9 @@ public:
 
             py::list legal_actions_list = env.attr("legal_actions").cast<py::list>();
             std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+            // Cache legal actions in the node for future use (optimization: avoid repeated env queries)
+            node->set_legal_actions(legal_actions);
 
             for (const auto& kv : action_probs_dict) {
                 int action = kv.first;
@@ -288,6 +300,9 @@ public:
 
             py::list legal_actions_list = env.attr("legal_actions").cast<py::list>();
             std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+            // Cache legal actions in the root node for future use (optimization: avoid repeated env queries)
+            roots[i]->set_legal_actions(legal_actions);
 
             for (const auto& kv : action_probs_dict) {
                 if (std::find(legal_actions.begin(), legal_actions.end(), kv.first) !=
