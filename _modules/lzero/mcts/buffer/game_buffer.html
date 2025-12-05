@@ -283,7 +283,7 @@
 
                 <span class="c1"># Step 4: Further adjust based on actual segment length (runtime check)</span>
                 <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="c1"># Position exceeds actual segment, resample within valid range</span>
                     <span class="k">if</span> <span class="n">segment_len</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
                         <span class="c1"># Sample from [0, segment_len-1] to allow at least 1 step forward</span>
