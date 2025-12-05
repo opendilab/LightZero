@@ -190,7 +190,7 @@ class GameBuffer(ABC, object):
 
                 # Step 4: Further adjust based on actual segment length (runtime check)
                 segment_len = len(game_segment.action_segment)
-                if pos_in_game_segment >= segment_len:
+                if pos_in_game_segment >= segment_len - 1:
                     # Position exceeds actual segment, resample within valid range
                     if segment_len > 1:
                         # Sample from [0, segment_len-1] to allow at least 1 step forward
