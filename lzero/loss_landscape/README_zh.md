@@ -1,8 +1,8 @@
 # Loss Landscape 核心库
 
-**本工具专门用于为 UniZero 模型检查点（checkpoint）绘制 loss landscape 可视化。**
-
 一个简洁、模块化的 PyTorch 库，用于神经网络 loss landscape 的可视化。
+
+本库基于 [loss-landscape](https://github.com/tomgoldstein/loss-landscape) 仓库进行抽象和重构，提供了通用的神经网络 loss landscape 可视化工具，适用于任何 PyTorch 模型。下面将展示通用示例（CIFAR-10）和专门针对 UniZero 模型的应用示例。
 
 ## 安装
 
@@ -181,7 +181,7 @@ loss_landscape/
 
 ## 引用
 
-如果在您的研究中使用此库，请引用原始工作：
+如果在您的研究中使用此库，请引用原始工作和我们的工作：[UniZero](https://openreview.net/pdf?id=Gl6dF9soQo) 和 [LightZero](https://proceedings.neurips.cc/paper_files/paper/2023/file/765043fe026f7d704c96cec027f13843-Paper-Datasets_and_Benchmarks.pdf)
 
 ```bibtex
 @inproceedings{li2018visualizing,
@@ -189,6 +189,20 @@ loss_landscape/
   author={Li, Hao and Xu, Zheng and Taylor, Gavin and Studer, Christoph and Goldstein, Tom},
   booktitle={Neural Information Processing Systems},
   year={2018}
+}
+
+@article{niu2024lightzero,
+  title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+  author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
+}
+
+@article{puunizero,
+  title={UniZero: Generalized and Efficient Planning with Scalable Latent World Models},
+  author={Pu, Yuan and Niu, Yazhe and Yang, Zhenjie and Ren, Jiyuan and Li, Hongsheng and Liu, Yu},
+  journal={Transactions on Machine Learning Research}
 }
 ```
 

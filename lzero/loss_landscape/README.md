@@ -1,8 +1,8 @@
 # Loss Landscape Core
 
-**This tool is specifically designed for visualizing loss landscapes of UniZero model checkpoints.**
-
 A clean, modular PyTorch library for visualizing neural network loss landscapes.
+
+This library is abstracted and refactored from the [loss-landscape](https://github.com/tomgoldstein/loss-landscape) repository, providing a general-purpose toolkit for neural network loss landscape visualization that works with any PyTorch model. Below we demonstrate both general examples (CIFAR-10) and specific applications to UniZero models.
 
 ## Installation
 
@@ -181,7 +181,7 @@ loss_landscape/
 
 ## Citation
 
-If you use this library in your research, please cite the original work:
+If you use this library in your research, please cite the original work and our work: [UniZero](https://openreview.net/pdf?id=Gl6dF9soQo) and [LightZero](https://proceedings.neurips.cc/paper_files/paper/2023/file/765043fe026f7d704c96cec027f13843-Paper-Datasets_and_Benchmarks.pdf)
 
 ```bibtex
 @inproceedings{li2018visualizing,
@@ -189,6 +189,20 @@ If you use this library in your research, please cite the original work:
   author={Li, Hao and Xu, Zheng and Taylor, Gavin and Studer, Christoph and Goldstein, Tom},
   booktitle={Neural Information Processing Systems},
   year={2018}
+}
+
+@article{niu2024lightzero,
+  title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+  author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
+}
+
+@article{puunizero,
+  title={UniZero: Generalized and Efficient Planning with Scalable Latent World Models},
+  author={Pu, Yuan and Niu, Yazhe and Yang, Zhenjie and Ren, Jiyuan and Li, Hongsheng and Liu, Yu},
+  journal={Transactions on Machine Learning Research}
 }
 ```
 
