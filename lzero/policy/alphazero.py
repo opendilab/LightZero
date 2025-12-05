@@ -219,13 +219,13 @@ class AlphaZeroPolicy(Policy):
         self._get_simulation_env()
         self._collect_model = self._model
 
-        # 为batch处理创建多个独立的simulate_env实例
+        # Create multiple independent simulate_env instances for batch processing
         from ding.utils import import_module, ENV_REGISTRY
         import_names = self._cfg.create_cfg.env.get('import_names', [])
         import_module(import_names)
         env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
 
-        # 创建env列表 (每个collector env一个)
+        # Create env list (one for each collector env)
         self.simulate_env_list = []
         for _ in range(self._cfg.collector_env_num):
             env = env_cls(self._cfg.full_cfg.env)
@@ -285,14 +285,14 @@ class AlphaZeroPolicy(Policy):
             state_configs.append(state_config)
 
         # ========== Step 2: Batch MCTS call ==========
-        # 传递对应数量的env实例
+        # Pass the corresponding number of env instances
         env_list = self.simulate_env_list[:len(ready_env_id)]
         results = self._collect_mcts.get_next_actions_batch(
-            state_configs,
-            self._policy_value_fn_batch,  # 使用batch版本的函数
-            self.collect_mcts_temperature,
-            True,
-            env_list  # 新增: 环境列表
+            state_configs,  # List of state configs containing start_player_index, init_state, katago_game_state
+            self._policy_value_fn_batch,  # Batch policy-value function for parallel neural network inference
+            self.collect_mcts_temperature,  # temperature: MCTS action selection temperature for exploration control
+            True,  # sample: whether to sample actions (True for exploration during data collection)
+            env_list  # List of simulation environments for batch processing
         )
 
         # ========== Step 3: Process results ==========
@@ -321,13 +321,13 @@ class AlphaZeroPolicy(Policy):
         """
         self._get_simulation_env()
 
-        # 为batch处理创建多个独立的simulate_env实例
+        # Create multiple independent simulate_env instances for batch processing
         from ding.utils import import_module, ENV_REGISTRY
         import_names = self._cfg.create_cfg.env.get('import_names', [])
         import_module(import_names)
         env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
 
-        # 创建env列表 (每个evaluator env一个)
+        # Create env list (one for each evaluator env)
         self.simulate_env_list_eval = []
         for _ in range(self._cfg.evaluator_env_num):
             env = env_cls(self._cfg.full_cfg.env)
@@ -390,14 +390,14 @@ class AlphaZeroPolicy(Policy):
             state_configs.append(state_config)
 
         # ========== Step 2: Batch MCTS call ==========
-        # 传递对应数量的env实例
+        # Pass the corresponding number of env instances
         env_list = self.simulate_env_list_eval[:len(ready_env_id)]
         results = self._eval_mcts.get_next_actions_batch(
-            state_configs,
-            self._policy_value_fn_batch,  # 使用batch版本的函数
-            1.0,
-            False,
-            env_list  # 新增: 环境列表
+            state_configs,  # List of state configs containing start_player_index, init_state, katago_game_state
+            self._policy_value_fn_batch,  # Batch policy-value function for parallel neural network inference
+            1.0,  # temperature: MCTS action selection temperature (1.0 for deterministic evaluation)
+            False,  # sample: whether to sample actions (False for greedy selection during evaluation)
+            env_list  # List of simulation environments for batch processing
         )
 
         # ========== Step 3: Process results ==========
@@ -441,12 +441,18 @@ class AlphaZeroPolicy(Policy):
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
         """
         Overview:
-            单个环境的策略价值函数(兼容旧接口)
+            Compute policy and value for a single environment. Provides backward compatibility
+            with single-environment inference interface.
+
         Arguments:
-            - env: 单个环境对象
+            - env (:obj:`Env`): Single environment object to process.
+
         Returns:
-            - action_probs_dict: 动作概率字典 {action_id: probability}
-            - value: 状态价值 (float)
+            - action_probs_dict (:obj:`Dict[int, np.ndarray]`): Dictionary mapping legal action indices to probabilities.
+            - value (:obj:`float`): Estimated state value.
+
+        Shapes:
+            - current_state_scale (:obj:`torch.Tensor`): :math:`(1, C, H, W)` after unsqueeze.
         """
         legal_actions = env.legal_actions
         current_state, current_state_scale = env.current_state()
@@ -462,53 +468,56 @@ class AlphaZeroPolicy(Policy):
     def _policy_value_fn_batch(self, env_list: List['Env']) -> List[Tuple[Dict[int, np.ndarray], float]]:  # noqa
         """
         Overview:
-            批量环境的策略价值函数 - 支持batch推理以提升GPU利用率
+            Batch inference for multiple environments to improve GPU utilization.
+            Processes multiple game states in a single forward pass instead of iterating individually.
+
         Arguments:
-            - env_list: 环境对象列表
+            - env_list (:obj:`List[Env]`): List of environment objects to process.
+
         Returns:
-            - results: 结果列表,每个元素是 (action_probs_dict, value)
+            - results (:obj:`List[Tuple[Dict[int, np.ndarray], float]]`): List of (action_probs_dict, value) tuples.
+              action_probs_dict maps legal action indices to their probabilities.
+
+        Shapes:
+            - state_batch (:obj:`torch.Tensor`): :math:`(B, C, H, W)` where B is batch size.
+            - action_probs_batch (:obj:`torch.Tensor`): :math:`(B, A)` where A is action space size.
+            - value_batch (:obj:`torch.Tensor`): :math:`(B,)`.
         """
         if len(env_list) == 0:
             return []
 
-        # 如果只有一个环境,使用单个处理的方法
+        # Fallback to single-env handler for efficiency
         if len(env_list) == 1:
             result = self._policy_value_fn(env_list[0])
             return [result]
 
-        # ========== Step 1: 收集所有环境的状态和合法动作 ==========
+        # Collect states and legal actions from all environments
         legal_actions_list = []
         state_batch_list = []
 
         for env in env_list:
-            legal_actions = env.legal_actions
-            legal_actions_list.append(legal_actions)
-
+            legal_actions_list.append(env.legal_actions)
             current_state, current_state_scale = env.current_state()
             state_tensor = torch.from_numpy(current_state_scale).to(
                 device=self._device, dtype=torch.float
             )
             state_batch_list.append(state_tensor)
 
-        # ========== Step 2: 合并为batch tensor ==========
-        state_batch = torch.stack(state_batch_list, dim=0)  # (batch_size, C, H, W)
+        # Stack states into batch tensor
+        state_batch = torch.stack(state_batch_list, dim=0)
 
-        # ========== Step 3: 批量推理 ==========
+        # Single batch forward pass
         with torch.no_grad():
             action_probs_batch, value_batch = self._policy_model.compute_policy_value(state_batch)
 
-        # ========== Step 4: 解析每个环境的结果 ==========
+        # Unpack results and build output dictionaries with legal actions only
         results = []
         for i, legal_actions in enumerate(legal_actions_list):
-            # 提取该环境的动作概率和价值
             action_probs = action_probs_batch[i]
             value = value_batch[i]
-
-            # 构建动作概率字典(只包含合法动作)
             action_probs_dict = dict(
                 zip(legal_actions, action_probs[legal_actions].detach().cpu().numpy())
             )
-
             results.append((action_probs_dict, value.item()))
 
         return results

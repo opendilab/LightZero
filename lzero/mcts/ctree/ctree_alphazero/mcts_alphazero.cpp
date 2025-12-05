@@ -1,3 +1,27 @@
+/**
+ * Overview:
+ *     This module implements Monte Carlo Tree Search (MCTS) for AlphaZero-like algorithms
+ *     with batch processing support for improved GPU utilization.
+ *
+ * Current Architecture:
+ *     - MCTS tree search implemented in C++ for performance
+ *     - Environment simulation via Python objects for modularity
+ *     - Frequent C++-Python boundary crossings for env interactions
+ *
+ * Performance Optimization Opportunity:
+ *     The frequent C++-Python environment interactions represent a potential bottleneck
+ *     in the current batch processing pipeline. Future optimization direction:
+ *     Consider moving environment simulation logic to C++ (env_cpp_ification) to reduce
+ *     cross-boundary overhead and improve overall throughput, especially for scenarios
+ *     with large batch sizes or deep MCTS trees.
+ *
+ *     Key interactions to optimize:
+ *     - State transitions and env.step() calls
+ *     - Legal action queries
+ *     - Game state serialization/deserialization
+ *     - Terminal state checks
+ */
+
 #include "node_alphazero.h"
 #include <cmath>
 #include <map>
