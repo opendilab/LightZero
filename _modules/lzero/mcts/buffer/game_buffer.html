@@ -246,22 +246,50 @@
             <span class="c1"># [0, game_segment_length - num_unroll_steps] to avoid padded data.</span>
             
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">&#39;varied_action_space&#39;</span><span class="p">:</span>
-                <span class="c1"># For some environments (e.g., Jericho), the action space size may be different.</span>
-                <span class="c1"># To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),</span>
-                <span class="c1"># we avoid sampling from the last `num_unroll_steps` steps of the game segment. </span>
-                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">td_steps</span><span class="p">:</span>
-                    <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">td_steps</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                
+                <span class="c1"># For varied action space environments (e.g., board games with short game length like TicTacToe)</span>
+                <span class="c1"># We need to handle cases where game_segment_length might be smaller than num_unroll_steps + td_steps</span>
+                <span class="c1"># Strategy: progressively relax sampling constraints to accommodate short games</span>
+
+                <span class="c1"># Step 1: Calculate ideal sampling upper bound</span>
+                <span class="c1"># Ideally, reserve space for both num_unroll_steps and td_steps to ensure complete trajectories</span>
+                <span class="n">ideal_bound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">td_steps</span>
+
+                <span class="c1"># Step 2: Handle different game length scenarios with graceful degradation</span>
+                <span class="k">if</span> <span class="n">ideal_bound</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c1"># Case A: Normal/long games - enough space for full unroll + td steps</span>
+                    <span class="c1"># This is the standard case for most Atari games</span>
+                    <span class="n">sampling_upper_bound</span> <span class="o">=</span> <span class="n">ideal_bound</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Case B: Short games - need to relax constraints</span>
+                    <span class="c1"># Try to at least reserve space for unroll steps (most critical for training)</span>
+                    <span class="n">fallback_bound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span>
+
+                    <span class="k">if</span> <span class="n">fallback_bound</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="c1"># Can still accommodate unroll steps, though td_steps might need padding</span>
+                        <span class="n">sampling_upper_bound</span> <span class="o">=</span> <span class="n">fallback_bound</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="c1"># Case C: Very short games (e.g., TicTacToe with 5-9 moves)</span>
+                        <span class="c1"># Allow sampling from entire segment length, padding will be applied during unrolling</span>
+                        <span class="c1"># This allows sampling from position 0 (beginning of game) when necessary</span>
+                        <span class="n">sampling_upper_bound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span>
+
+                        <span class="c1"># Ensure at least 1 to avoid np.random.choice errors</span>
+                        <span class="k">if</span> <span class="n">sampling_upper_bound</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                            <span class="n">sampling_upper_bound</span> <span class="o">=</span> <span class="mi">1</span>
+
+                <span class="c1"># Step 3: Resample position if it exceeds calculated bound</span>
+                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">sampling_upper_bound</span><span class="p">:</span>
+                    <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">sampling_upper_bound</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+
+                <span class="c1"># Step 4: Further adjust based on actual segment length (runtime check)</span>
                 <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
-                    <span class="c1"># If the segment is very short (length 0 or 1), we can&#39;t randomly sample a position</span>
-                    <span class="c1"># before the last one. The only safe position is 0.</span>
+                <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span><span class="p">:</span>
+                    <span class="c1"># Position exceeds actual segment, resample within valid range</span>
                     <span class="k">if</span> <span class="n">segment_len</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-                        <span class="c1"># If the segment has at least 2 actions, we can safely sample from [0, len-2].</span>
-                        <span class="c1"># The upper bound for np.random.choice is exclusive, so (segment_len - 1) is correct.</span>
+                        <span class="c1"># Sample from [0, segment_len-1] to allow at least 1 step forward</span>
                         <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
                     <span class="k">else</span><span class="p">:</span>
-                        <span class="c1"># If segment length is 0 or 1, the only valid/safe position is 0.</span>
+                        <span class="c1"># Segment has 0 or 1 actions, can only use position 0</span>
                         <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="mi">0</span>
 
             <span class="k">else</span><span class="p">:</span>
@@ -269,7 +297,7 @@
                 <span class="c1"># we can safely sample from the entire game segment range.</span>
                 <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">:</span>
                     <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                
+
                 <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="c1"># If the segment is very short (length 0 or 1), we can&#39;t randomly sample a position</span>
