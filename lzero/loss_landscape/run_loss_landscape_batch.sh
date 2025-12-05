@@ -2,15 +2,40 @@
 
 # Batch script to generate loss landscape for checkpoints from 10K to 100K
 # Usage: bash run_loss_landscape_batch.sh
+#
+# This script performs batch evaluation of loss landscapes for UniZero models.
+# It iterates through multiple checkpoint iterations and generates:
+# - HDF5 data files with loss landscape values
+# - Visualization images (contour, filled contour, heatmap, 3D surface)
+#
+# Expected input directory structure:
+# CKPT_BASE_DIR/
+# ├── iteration_10000.pth.tar
+# ├── iteration_20000.pth.tar
+# ├── iteration_30000.pth.tar
+# ├── ...
+# └── iteration_100000.pth.tar
+#
+# Expected output directory structure:
+# BASE_LOG_DIR/
+# ├── iteration_10000/
+# │   ├── loss_landscape_*.h5
+# │   ├── loss_landscape_*_2dcontour.pdf
+# │   ├── loss_landscape_*_2dcontourf.pdf
+# │   ├── loss_landscape_*_2dheat.pdf
+# │   └── loss_landscape_*_3dsurface.pdf
+# ├── iteration_20000/
+# │   └── ...
+# └── ...
 
-# Base checkpoint directory
-CKPT_BASE_DIR="/mnt/shared-storage-user/tangjia/unizero/LightZero/mnt/shared-storage-user/tangjia/rftinfra/tangjia/ckpt/MsPacman_uz_brf0.02-rbs160-rp0.75_nlayer2_numsegments-8_gsl20_rr0.25_Htrain10-Hinfer4_bs64_seed0/ckpt"
+# Base checkpoint directory (modify this path to your checkpoint location)
+CKPT_BASE_DIR="/path/to/checkpoint/directory"
 
-# Config script path
-CONFIG_SCRIPT="/mnt/shared-storage-user/tangjia/unizero/LightZero/zoo/atari/config/atari_unizero_loss_landscape.py"
+# Config script path (modify this path to your config location)
+CONFIG_SCRIPT="zoo/atari/config/atari_unizero_loss_landscape.py"
 
-# Base log directory
-BASE_LOG_DIR="data_lz/loss_landscape_batch_mspacman"
+# Base log directory (modify this to your desired output location)
+BASE_LOG_DIR="/path/to/output/directory"
 
 # Environment and seed settings
 ENV_ID="MsPacmanNoFrameskip-v4"
