@@ -257,6 +257,7 @@ For those interested in customizing environments and algorithms, we provide rele
 - [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/algos/customize_algos.md)
 - [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/config/config.md)
 - [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/logs/logs.md)
+- [Loss Landscape Visualization](https://github.com/opendilab/LightZero/blob/main/lzero/loss_landscape/README.md)
 
 Should you have any questions, feel free to contact us for support.
 

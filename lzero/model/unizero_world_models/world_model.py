@@ -1303,7 +1303,7 @@ class WorldModel(nn.Module):
         # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
 
-
+        
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
             # Calculate dormant ratio of the encoder
