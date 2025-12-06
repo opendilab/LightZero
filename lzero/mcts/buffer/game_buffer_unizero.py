@@ -630,3 +630,34 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         batch_target_values = np.asarray(batch_target_values)
 
         return batch_rewards, batch_target_values
+    
+    def update_priority(self, train_data: List[np.ndarray], batch_priorities: np.ndarray) -> None:
+        """
+        Overview:
+            Update the priority of training data.
+        Arguments:
+            - train_data (:obj:`List[np.ndarray]`): training data to be updated priority.
+            - batch_priorities (:obj:`np.ndarray`): priorities to update to.
+        NOTE:
+            train_data = [current_batch, target_batch]
+            current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        """
+        # TODO: NOTE: -4 is batch_index_list
+        indices = train_data[0][-4]
+        metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
+        # only update the priorities for data still in replay buffer
+        for i in range(len(indices)):
+            # ==================== START OF FINAL FIX ====================
+
+            # FIX 1: Handle ValueError by using the first timestamp of the segment for comparison.
+            first_transition_time = metas['make_time'][i][0]
+
+            if first_transition_time > self.clear_time:
+                # FIX 2: Handle IndexError by converting the float index to an integer before use.
+                idx = int(indices[i])
+                prio = metas['batch_priorities'][i]
+
+                # Now, idx is a valid integer index.
+                self.game_pos_priorities[idx] = prio
+
+            # ===================== END OF FINAL FIX =====================

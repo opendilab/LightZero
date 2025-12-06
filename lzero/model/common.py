@@ -641,11 +641,11 @@ class RepresentationNetworkUniZero(nn.Module):
         self.embedding_dim = embedding_dim
 
         if self.observation_shape[1] == 64:
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
 
         elif self.observation_shape[1] in [84, 96]:
-            self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
-
+            self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
+        
         self.final_norm_option_in_encoder = final_norm_option_in_encoder
         if self.final_norm_option_in_encoder == 'LayerNorm':
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
@@ -678,7 +678,6 @@ class RepresentationNetworkUniZero(nn.Module):
 
         x = x.view(-1, self.embedding_dim)
 
-        # NOTE: very important for training stability.
         x = self.final_norm(x)
 
         return x

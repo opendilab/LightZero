@@ -147,8 +147,8 @@ def random_collect(
         collector_env: 'BaseEnvManager',  # noqa
         replay_buffer: 'IBuffer',  # noqa
         postprocess_data_fn: Optional[Callable] = None
-) -> None:  # noqa
-    assert policy_cfg.random_collect_episode_num > 0
+) -> list:  # noqa
+    assert policy_cfg.random_collect_data, "random_collect_data should be True."
 
     random_policy = RandomPolicy(cfg=policy_cfg, action_space=collector_env.env_ref.action_space)
     # set the policy to random policy
@@ -159,7 +159,7 @@ def random_collect(
     collect_kwargs = {'temperature': 1, 'epsilon': 0.0}
 
     # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0,
+    new_data = collector.collect(train_iter=0,
                                  policy_kwargs=collect_kwargs)
 
     if postprocess_data_fn is not None:
@@ -172,6 +172,7 @@ def random_collect(
 
     # restore the policy
     collector.reset_policy(policy.collect_mode)
+    return new_data
 
 
 def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:

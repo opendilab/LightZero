@@ -219,11 +219,8 @@ class MuZeroCollector(ISerialCollector):
             # A small constant (1e-6) is added to the results to avoid zero priorities. This
             # is done because zero priorities could potentially cause issues in some scenarios.
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
-            search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
-                                                                                ).float().view(-1)
-            priorities = L1Loss(reduction='none'
-                                )(pred_values,
-                                  search_values).detach().cpu().numpy() + 1e-6
+            search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device).float().view(-1)
+            priorities = L1Loss(reduction='none')(pred_values, search_values).detach().cpu().numpy() + 1e-6
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
