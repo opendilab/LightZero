@@ -32,14 +32,15 @@ def main(env_id, seed):
     reanalyze_partition = 0.75
     norm_type = "LN"
     use_rnd_model= True
+    rnd_weights=0.2
     observation_shape = (3, 84, 84)
 
     # ====== only for debug =====
-    collector_env_num = 2
-    num_segments = 2
-    evaluator_env_num = 2
-    num_simulations = 10
-    batch_size = 5
+    # collector_env_num = 2
+    # num_segments = 2
+    # evaluator_env_num = 2
+    # num_simulations = 10
+    # batch_size = 5
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -157,7 +158,7 @@ def main(env_id, seed):
             reanalyze_partition=reanalyze_partition,
             # ============= RND specific settings =============
             use_rnd_model=use_rnd_model,
-            rnd_weights=0.2,
+            rnd_weights=rnd_weights,
             random_collect_data=True,
             use_momentum_representation_network=True,
             target_model_for_intrinsic_reward_update_type='assign',
@@ -231,7 +232,7 @@ def main(env_id, seed):
     input_norm = main_config.policy.reward_model.input_norm
     intrinsic_norm = main_config.policy.reward_model.intrinsic_norm
     use_intrinsic_weight_schedule = main_config.policy.reward_model.use_intrinsic_weight_schedule
-    main_config.exp_name = (f'./data_lz_rnd/atari/{env_id[:-14]}/rnd_{intrinsic_reward_type}_'
+    main_config.exp_name = (f'./data_lz_rnd/atari/{env_id[:-14]}/rnd_loss_w_{rnd_weights}_{intrinsic_reward_type}_'
                             f'{input_type}_wmax_{intrinsic_weight_max}_input_norm_{input_norm}_intrinsic_norm_{intrinsic_norm}_use_intrinsic_weight_schedule_{use_intrinsic_weight_schedule}')
     main_config.policy.reward_model.exp_name = main_config.exp_name
     train_unizero_segment_with_reward_model(

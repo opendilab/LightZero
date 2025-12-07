@@ -436,7 +436,7 @@ class RNDRewardModel(BaseRewardModel):
         p = rewards / rewards.sum()
         kl = float(np.sum(p * np.log(p * len(p))))
         if self._tb_logger:
-            self._tb_logger.add_scalar('rnd_metrics/bcs_initial_kl', kl, 0)
+            self._tb_logger.add_scalar('rnd_reward_model/bcs_initial_kl', kl, 0)
         self._initial_consistency_logged = True
         self._initial_reward_samples = []
 
@@ -451,8 +451,8 @@ class RNDRewardModel(BaseRewardModel):
         bcs_final = self._spearmanr(intrinsic_flat, inv_counts)
         pca_spearman = bcs_final
         if self._tb_logger:
-            self._tb_logger.add_scalar('rnd_metrics/bcs_final_spearman', bcs_final, step)
-            self._tb_logger.add_scalar('rnd_metrics/pca_spearman', pca_spearman, step)
+            self._tb_logger.add_scalar('rnd_reward_model/bcs_final_spearman', bcs_final, step)
+            self._tb_logger.add_scalar('rnd_reward_model/pca_spearman', pca_spearman, step)
 
     def _discount_cumsum(self, rewards: np.ndarray, gamma: float) -> np.ndarray:
         if rewards.ndim != 2:
