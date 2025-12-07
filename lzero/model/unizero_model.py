@@ -2,7 +2,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from ding.utils import MODEL_REGISTRY, SequenceType
+from ding.utils import MODEL_REGISTRY, SequenceType, ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 from easydict import EasyDict
 # from transformers import T5ForConditionalGeneration, T5Tokenizer
 
@@ -11,8 +11,6 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
     HFLanguageRepresentationNetwork, QwenNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
-from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
-
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroModel')
@@ -145,7 +143,6 @@ class UniZeroModel(nn.Module):
                 group_size=world_model_cfg.group_size,
                 final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
             )
-
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:
                 self.encoder_hook = FeatureAndGradientHook()

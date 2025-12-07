@@ -27,7 +27,6 @@ class RNDNetwork(nn.Module):
     def __init__(self, obs_shape: Union[int, SequenceType], hidden_size_list: SequenceType, output_dim: int = 512,activation_type: str = "ReLU", kernel_size_list=[8,4,3], stride_size_list=[4,2,1]) -> None:
         super(RNDNetwork, self).__init__()
         assert len(hidden_size_list) >= 1, "hidden_size_list must contain at least one element."
-        feature_dim = hidden_size_list[-1]
         if activation_type == "ReLU":
             self.activation = nn.ReLU()
         elif activation_type == "LeakyReLU":
@@ -52,23 +51,40 @@ class RNDNetwork(nn.Module):
             target_backbone.append(nn.Flatten())
             predictor_backbone.append(nn.Flatten())
             
+            target_backbone_tmp = nn.Sequential(*target_backbone)
+            predictor_backbone_tmp = nn.Sequential(*predictor_backbone)
+            with torch.no_grad():
+                dummy = torch.zeros(1, *obs_shape)   # (B=1, C, H, W)
+                feat = target_backbone_tmp(dummy)
+                last_hidden_dim = feat.shape[1]
             self.target = nn.Sequential(
-                                *target_backbone,
-                                nn.LazyLinear(output_dim)
+                                target_backbone_tmp,
+                                nn.Linear(last_hidden_dim, output_dim)
                             )
             self.predictor = nn.Sequential(
-                                *predictor_backbone,
-                                nn.LazyLinear(512),
+                                predictor_backbone_tmp,
+                                nn.Linear(last_hidden_dim, 512),
                                 nn.ReLU(),
-                                nn.LazyLinear(512),
+                                nn.Linear(512, 512),
                                 nn.ReLU(),
-                                nn.LazyLinear(output_dim)
+                                nn.Linear(512, output_dim)
                             )
         else:
             raise KeyError(
                 "not support obs_shape for pre-defined encoder: {}, please customize your own RND model".
                 format(obs_shape)
             )        
+        
+        for p in self.modules():
+            if isinstance(p, nn.Conv2d):
+                torch.nn.init.orthogonal_(p.weight, np.sqrt(2))
+                p.bias.data.zero_()
+
+            if isinstance(p, nn.Linear):
+                torch.nn.init.orthogonal_(p.weight, np.sqrt(2))
+                p.bias.data.zero_()
+
+        
         for param in self.target.parameters():
             param.requires_grad = False
     
@@ -148,7 +164,6 @@ class RNDRewardModel(BaseRewardModel):
                                                        | to registry ``REWARD_MODEL_REGISTRY``  |
         2  | ``intrinsic_``      str      add          | the intrinsic reward type              | including add, new
            | ``reward_type``                           |                                        | , or assign
-        3  | ``learning_rate``   float    0.001        | The step size of gradient descent      |
         4  | ``batch_size``      int      64           | Training batch size                    |
         5  | ``hidden``          list     [64, 64,     | the MLP layer shape                    |
            | ``_size_list``      (int)    128]         |                                        |
@@ -172,8 +187,6 @@ class RNDRewardModel(BaseRewardModel):
         type='rnd',
         # (str) The intrinsic reward type, including add, new, or assign.
         intrinsic_reward_type='add',
-        # (float) The step size of gradient descent.
-        learning_rate=1e-3,
         # (list(int)) Sequence of ``hidden_size`` of reward network.
         # If obs.shape == 1,  use MLP layers.
         # If obs.shape == 3,  use conv layer and final dense layer.
@@ -189,8 +202,6 @@ class RNDRewardModel(BaseRewardModel):
         # (float) The weight of intrinsic reward
         # r = intrinsic_reward_weight * r_i + r_e.
         # (bool) Whether to normalize extrinsic reward using running statistics.
-        # (bool) Whether to adjust target value with intrinsic reward contribution.
-        adjust_value_with_intrinsic=False,
         # (float) Discount factor used when adjusting target value.
         discount_factor=1.0,
         # 新增：图片日志总开关与可视化参数
@@ -204,10 +215,9 @@ class RNDRewardModel(BaseRewardModel):
         intrinsic_weight_ramp=5000,            # 从0升到max所需的 estimate 数
         intrinsic_weight_min=0.0,               
         intrinsic_weight_max=0.02,              
-        
     )
 
-    def __init__(self, config: EasyDict, device: str = 'cpu', tb_logger: 'SummaryWriter' = None, exp_name: str = "default_experiment",
+    def __init__(self, config: EasyDict, device: str = 'cpu', exp_name: str = "default_experiment",
                 instance_name: str = 'RNDModel', representation_network: nn.Module = None, 
                 target_representation_network: nn.Module = None, use_momentum_representation_network: bool = True, 
                 bp_update_sync: bool = True, multi_gpu: bool = False) -> None:  # noqa
@@ -220,7 +230,6 @@ class RNDRewardModel(BaseRewardModel):
         self.input_type = self.cfg.input_type
         assert self.input_type in ['obs', 'latent_state', 'obs_latent_state'], self.input_type
         self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
-        self.adjust_value_with_intrinsic = getattr(self.cfg, 'adjust_value_with_intrinsic', False)
         self.discount_factor = getattr(self.cfg, 'discount_factor', 1.0)
         
         self._exp_name = exp_name
@@ -239,24 +248,12 @@ class RNDRewardModel(BaseRewardModel):
         else:
             self._device = device
             
-        if self._rank == 0:
-            if tb_logger is not None:
-                self._logger, _ = build_logger(
-                    path='./{}/log/{}'.format(self._exp_name, self._instance_name),
-                    name=self._instance_name,
-                    need_tb=False
-                )
-                self._tb_logger = tb_logger
-            else:
-                self._logger, _ = build_logger(
-                    path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
-                )
-                self._tb_logger = None
-        else:
-            self._logger, _ = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
-            )
-            self._tb_logger = None
+        self._logger, _ = build_logger(
+            path='./{}/log/{}'.format(self._exp_name, self._instance_name),
+            name=self._instance_name,
+            need_tb=False
+        )
+        self._tb_logger = None
         
         self._logger.info(
             "[RND] device=%s | input_type=%s | hidden=%s",
@@ -292,10 +289,6 @@ class RNDRewardModel(BaseRewardModel):
             self.train_obs = []
         if self.input_type == 'latent_state':
             self.train_latent_state = []
-
-        self._optimizer_rnd = torch.optim.Adam(
-            self.reward_model.predictor.parameters(), lr=self.cfg.learning_rate, weight_decay=self.cfg.weight_decay
-        )
 
         self._running_mean_std_rnd_reward = RunningMeanStd(epsilon=1e-4)
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
@@ -486,13 +479,12 @@ class RNDRewardModel(BaseRewardModel):
         concatenated = np.concatenate(segments, axis=0)
         flattened = self._flatten_obs_batch(concatenated)
         total = flattened.shape[0]
-        self._update_visit_counts(flattened)
         inputs = self._prepare_inputs_from_obs(flattened)
         self._update_input_running_stats(inputs)
         inputs = self._normalize_inputs(inputs.clone())
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(inputs)
-            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1).detach().cpu().numpy()
+            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1).detach().cpu().numpy()
         if mse.size > 0:
             self._initial_reward_samples.append(mse)
             self._log_initial_bonus_consistency()
@@ -523,14 +515,7 @@ class RNDRewardModel(BaseRewardModel):
             synchronize()
 
 
-    def train_with_policy_batch(self, data: list, gradient_steps: Optional[int] = None) -> None:
-        """
-        Overview:
-            Update the RND predictor using the same batch of transitions sampled for the policy learner.
-        """
-        if data is None or len(data) == 0:
-            return
-        obs_batch = data[0][0]
+    def compute_loss(self, obs_batch) -> None:
         flat_obs = self._flatten_obs_batch(obs_batch)
         prepared_inputs = self._prepare_inputs_from_obs(flat_obs)
         if prepared_inputs.numel() == 0:
@@ -541,12 +526,8 @@ class RNDRewardModel(BaseRewardModel):
         loss = F.mse_loss(predict_feature, target_feature)
         if self._tb_logger:
             self._tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
-        self._optimizer_rnd.zero_grad()
-        loss.backward()
-        if self.multi_gpu:
-            self.sync_gradients(self.reward_model.predictor)
-        self._optimizer_rnd.step()
         self.train_cnt_rnd += 1
+        return loss
 
     def _intrinsic_weight(self, step: int) -> float:
         """
@@ -578,45 +559,36 @@ class RNDRewardModel(BaseRewardModel):
             w = float(self.cfg.intrinsic_weight_max) 
 
         return float(w)
-    
-    def estimate(self, data: list) -> List[Dict]:
+
+    def estimate(self, obs_batch_ori, target_reward) -> List[Dict]:
         """
         Rewrite the reward key in each row of the data.
         """
-        # current_batch, target_batch = data
-        # obs_batch_orig, action_batch, mask_batch, indices, weights, make_time = current_batch
-        # target_reward, target_value, target_policy = target_batch
-        obs_batch_orig = data[0][0]
-        target_reward = data[1][0]
-        batch_size = obs_batch_orig.shape[0]
+        batch_size = obs_batch_ori.shape[0]
         T = target_reward.shape[1]  
-        logging.info("[RND] estimate enter, batch=%s, horizon=%s", batch_size, T)
-
-        obs_batch_tmp = self._flatten_obs_batch(obs_batch_orig)
-        self._update_visit_counts(obs_batch_tmp)
-        input_data = self._prepare_inputs_from_obs(obs_batch_tmp)
 
         # NOTE: deepcopy reward part of data is very important,
         original_reward = np.reshape(np.array(target_reward, dtype=np.float32), (batch_size * T, 1))
-        input_data = self._normalize_inputs(input_data.clone())
+        obs_batch_tmp = self._flatten_obs_batch(obs_batch_ori)
+        input_data = copy.deepcopy(self._prepare_inputs_from_obs(obs_batch_tmp))
+        input_data = self._normalize_inputs(input_data)
         extrinsic_normalized = self._normalize_rewards(original_reward)
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(input_data)
-            # TODO F.mse_loss改成没有mean的结果
-            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)
+            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1)
         mse_np = mse.detach().cpu().numpy()
         self._running_mean_std_rnd_reward.update(mse_np)
         mse_tensor = torch.from_numpy(mse_np).to(self._device)
         rnd_reward_tensor = self._normalize_intrinsic_rewards(mse_tensor)
 
         rnd_reward_np = rnd_reward_tensor.detach().cpu().numpy()
-        self._log_final_metrics(rnd_reward_np, obs_batch_tmp, self.estimate_cnt_rnd)
+
         self.estimate_cnt_rnd += 1
         if self._tb_logger:
-            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward_np.max(), self.estimate_cnt_rnd)
-            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward_np.mean(), self.estimate_cnt_rnd)
-            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward_np.min(), self.estimate_cnt_rnd)
-            self._tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward_np.std(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/intrinsic_reward_max', rnd_reward_np.max(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/intrinsic_reward_mean', rnd_reward_np.mean(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/intrinsic_reward_min', rnd_reward_np.min(), self.estimate_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/intrinsic_reward_std', rnd_reward_np.std(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_max', extrinsic_normalized.max(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_mean', extrinsic_normalized.mean(), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/extrinsic_reward_min', extrinsic_normalized.min(), self.estimate_cnt_rnd)
@@ -626,7 +598,6 @@ class RNDRewardModel(BaseRewardModel):
         if self._tb_logger is not None:
             self._tb_logger.add_scalar('rnd_reward_model/intrinsic_weight', cur_w, self.estimate_cnt_rnd)
 
-            
         rnd_reward_flat = rnd_reward_np.reshape(batch_size * T, 1)
         if self.intrinsic_reward_type == 'add':
             target_reward_augmented = extrinsic_normalized + rnd_reward_flat * cur_w
@@ -636,47 +607,16 @@ class RNDRewardModel(BaseRewardModel):
             target_reward_augmented = rnd_reward_flat
         else:
             target_reward_augmented = extrinsic_normalized
-        
+
         if self._tb_logger is not None:
             self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_max', np.max(target_reward_augmented), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_mean', np.mean(target_reward_augmented),self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
             self._tb_logger.add_scalar('rnd_reward_model/augmented_reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
 
-        if self.adjust_value_with_intrinsic:
-            target_values = np.asarray(data[1][1], dtype=np.float32).reshape(batch_size, -1)
-            augmented_rewards_seq = target_reward_augmented.reshape(batch_size, T)
-            value_mask = np.asarray(data[0][3], dtype=np.float32)
-            value_mask = value_mask[:, :target_values.shape[1]]
-            if self.intrinsic_reward_type == 'add':
-                original_rewards_seq = extrinsic_normalized.reshape(batch_size, T)
-                delta_seq = augmented_rewards_seq - original_rewards_seq
-                delta_returns = self._discount_cumsum(delta_seq, self.discount_factor)
-                delta_returns = (delta_returns[:, :target_values.shape[1]] * value_mask).astype(np.float32)
-                target_values_augmented = target_values + delta_returns
-            else:
-                discounted_returns = self._discount_cumsum(augmented_rewards_seq, self.discount_factor)
-                target_values_augmented = (discounted_returns[:, :target_values.shape[1]] * value_mask).astype(np.float32)
-            data[1][1] = target_values_augmented
-            
-            if self._tb_logger is not None and self.adjust_value_with_intrinsic:
-                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_max', target_values.max(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_mean', target_values.mean(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_min', target_values.min(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/extrinsic_value_std', target_values.std(), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_max', np.max(target_values_augmented), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_mean', np.mean(target_values_augmented),self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_min', np.min(target_values_augmented), self.estimate_cnt_rnd)
-                self._tb_logger.add_scalar('rnd_reward_model/augmented_value_std', np.std(target_values_augmented), self.estimate_cnt_rnd)
-        
-        # reshape to (target_reward_augmented.shape[0], T, 1)
         target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, T, 1))
-        # TODO why? batchsizw * T -> batchsize * T * 1
-        data[1][0] = target_reward_augmented
-        train_data_augmented = data
-
-        return train_data_augmented
-
+        return target_reward_augmented.reshape(batch_size, T)
+    
     def state_dict(self) -> Dict:
         return self.reward_model.state_dict()
 
@@ -690,14 +630,7 @@ class RNDRewardModel(BaseRewardModel):
         pass
 
     def collect_data(self, data) -> None:
-        if data is None or len(data) == 0:
-            return
-        segments = [game_segment.obs_segment for game_segment in data[0] if len(game_segment.obs_segment)]
-        if not segments:
-            return
-        concatenated = np.concatenate(segments, axis=0)
-        flattened = self._flatten_obs_batch(concatenated)
-        self._update_visit_counts(flattened)
+        pass
         
     # ---------------------- 可视化辅助（新增） ---------------------- #
     def _select_peaks(self, y: np.ndarray, k: int) -> List[int]:

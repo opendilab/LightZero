@@ -94,7 +94,9 @@ def train_unizero_segment_with_reward_model(
     if get_rank() == 0:
         tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
-
+    if cfg.policy.use_rnd_model and tb_logger is not None:
+            policy.rnd._tb_logger = tb_logger
+    
     # MCTS+RL algorithms related core code
     policy_config = cfg.policy
     replay_buffer = GameBuffer(policy_config)
@@ -103,27 +105,6 @@ def train_unizero_segment_with_reward_model(
     evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
                           tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)
-
-    
-    
-    # ==============================================================
-    # 新增: 初始化 RND 奖励模型
-    # RNDRewardModel 需要策略模型中的表征网络（作为预测器）和目标表征网络（作为固定目标）
-    # 对于 UniZero，tokenizer 扮演了表征网络的功能。
-    # ==============================================================
-    reward_model = RNDRewardModel(
-        config=cfg.reward_model,
-        device=policy.collect_mode.get_attribute('device'),
-        tb_logger=tb_logger,
-        exp_name=cfg.exp_name,
-        representation_network=policy._learn_model.representation_network,
-        target_representation_network=policy._target_model_for_intrinsic_reward.representation_network,
-        use_momentum_representation_network=cfg.policy.use_momentum_representation_network,
-        bp_update_sync=cfg.policy.bp_update_sync,
-        multi_gpu=cfg.policy.multi_gpu,
-    )
-    
-    
     # Learner's before_run hook
     learner.call_hook('before_run')
 
@@ -134,7 +115,7 @@ def train_unizero_segment_with_reward_model(
     if cfg.policy.random_collect_data:
         random_data = random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
         try:
-            reward_model.warmup_with_random_segments(random_data)
+            policy.rnd.warmup_with_random_segments(random_data)
         except Exception as e:
             logging.exception(f"Failed to warm up RND normalization using random data: {e}")
             raise
@@ -232,14 +213,10 @@ def train_unizero_segment_with_reward_model(
                         logging.info(f'Buffer reanalyze time: {timer.value}')
 
                 train_data = replay_buffer.sample(batch_size, policy)
+                train_data.append(learner.train_iter)
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
-
-                train_data_augmented = reward_model.estimate(train_data)
-                train_data_augmented.append(learner.train_iter)
-                
-                log_vars = learner.train(train_data_augmented, collector.envstep)
-                reward_model.train_with_policy_batch(train_data)
+                log_vars = learner.train(train_data, collector.envstep)
                 logging.info(f'[{i}/{update_per_collect}]: learner and reward_model ended training step.')
                 
                 if cfg.policy.use_priority:

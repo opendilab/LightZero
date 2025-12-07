@@ -30,14 +30,16 @@ def main(env_id, seed):
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
-    norm_type ="LN"
+    norm_type = "LN"
+    use_rnd_model= True
+    observation_shape = (3, 84, 84)
 
     # ====== only for debug =====
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 10
-    # batch_size = 5
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 10
+    batch_size = 5
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -46,7 +48,7 @@ def main(env_id, seed):
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 96, 96),
+            observation_shape=observation_shape,
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -56,49 +58,12 @@ def main(env_id, seed):
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
         ),
-        reward_model=dict(
-            type='rnd_unizero',
-            intrinsic_reward_type='add',
-            input_type='obs',  # options: ['obs', 'latent_state', 'obs_latent_state']
-            activation_type='LeakyReLU',
-            enable_image_logging=True,
-            
-            # —— 新增：自适应权重调度 —— #
-            use_intrinsic_weight_schedule=False,     # 打开自适应权重
-            intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
-            intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
-            intrinsic_weight_ramp=20000,            # 从min升到max所需的 estimate 数
-            intrinsic_weight_min=0.0,               
-            intrinsic_weight_max=0.025, 
-            
-            obs_shape=(3, 96, 96),
-            latent_state_dim=256,
-            hidden_size_list=[128, 256, 256],
-            output_dim=512,
-            learning_rate=3e-4,
-            weight_decay=1e-4,
-            input_norm=True,
-            input_norm_clamp_max=5,
-            input_norm_clamp_min=-5,
-            
-            intrinsic_norm=True,
-            intrinsic_norm_clamp_min=-30,
-            intrinsic_norm_clamp_max=30,
-            
-            extrinsic_sign=False,
-            extrinsic_norm=False,
-            extrinsic_norm_clamp_min=-5,
-            extrinsic_norm_clamp_max=5,
-            adjust_value_with_intrinsic=False,
-            discount_factor=0.997,
-            
-        ),
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 num_channels=num_channels,
                 num_res_blocks=num_res_blocks,
-                observation_shape=(3, 96, 96),
+                observation_shape=observation_shape,
                 action_space_size=action_space_size,
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
@@ -109,7 +74,6 @@ def main(env_id, seed):
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse',
-                    # predict_latent_loss_type='cos_sim', # only for latent state layer_norm
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -127,19 +91,20 @@ def main(env_id, seed):
                     game_segment_length=game_segment_length,
                     use_priority=False,
                     rotary_emb=False,
-                    optim_type='AdamW_mix_lr_wdecay',
+                    optim_type='AdamW',
                 ),
+                
             ),
             collect_num_simulations=collect_num_simulations,
             eval_num_simulations=eval_num_simulations,
-            optim_type='AdamW_mix_lr_wdecay',
-            weight_decay=1e-2, # TODO: encoder 5*wd, transformer wd, head 0
+            optim_type='AdamW',
+            weight_decay=1e-2, 
             learning_rate=0.0001,
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             
             # (bool) 是否启用自适应策略熵权重 (alpha)
-            use_adaptive_entropy_weight=True,
+            use_adaptive_entropy_weight=False,
             # (float) 自适应alpha优化器的学习率
             adaptive_entropy_alpha_lr=1e-3,
             target_entropy_start_ratio =0.98,
@@ -162,13 +127,8 @@ def main(env_id, seed):
             policy_ls_eps_end=0.01,
             policy_ls_eps_decay_steps=0.0, # 50k
             label_smoothing_eps=0.0,  #for value
-
-            # ==================== [新增] 范数监控频率 ====================
-            # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
-            monitor_norm_freq=500000,
             
             use_augmentation=False,
-            # use_augmentation=True,
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
             use_priority=False,
@@ -196,12 +156,52 @@ def main(env_id, seed):
             # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
             reanalyze_partition=reanalyze_partition,
             # ============= RND specific settings =============
-            use_rnd_model=True,
+            use_rnd_model=use_rnd_model,
+            rnd_weights=0.2,
             random_collect_data=True,
             use_momentum_representation_network=True,
             target_model_for_intrinsic_reward_update_type='assign',
             target_update_freq_for_intrinsic_reward=1000,
             target_update_theta_for_intrinsic_reward=0.005,
+            reward_model=dict(
+                device='cuda',
+                exp_name=None,
+                type='rnd_unizero',
+                intrinsic_reward_type='add',
+                input_type='obs',  # options: ['obs', 'latent_state', 'obs_latent_state']
+                activation_type='LeakyReLU',
+                enable_image_logging=True,
+                
+                # —— 新增：自适应权重调度 —— #
+                use_intrinsic_weight_schedule=False,     # 打开自适应权重
+                intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
+                intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
+                intrinsic_weight_ramp=20000,            # 从min升到max所需的 estimate 数
+                intrinsic_weight_min=0.0,               
+                intrinsic_weight_max=0.0, 
+                
+                obs_shape=observation_shape,
+                latent_state_dim=256,
+                hidden_size_list=[32, 64, 64],
+                output_dim=512,
+                learning_rate=3e-4,
+                weight_decay=1e-4,
+                input_norm=True,
+                input_norm_clamp_max=5,
+                input_norm_clamp_min=-5,
+                
+                intrinsic_norm=True,
+                intrinsic_norm_clamp_min=-30,
+                intrinsic_norm_clamp_max=30,
+                
+                extrinsic_sign=False,
+                extrinsic_norm=False,
+                extrinsic_norm_clamp_min=-5,
+                extrinsic_norm_clamp_max=5,
+                discount_factor=0.997,
+                
+            ),
+            
             bp_update_sync=True,
             multi_gpu=False,
         ),
@@ -225,16 +225,15 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment_with_reward_model
-    main_config.exp_name = (f'./data_lz/data_unizero_atari_rnd_orig/{env_id[:-14]}_obs_latent_w_10/rnd_{main_config.reward_model.intrinsic_reward_type}_'
-                            f'{main_config.reward_model.input_type}_wmax_{main_config.reward_model.intrinsic_weight_max}_input_norm_{main_config.reward_model.input_norm}_intrinsic_norm_{main_config.reward_model.intrinsic_norm}_use_intrinsic_weight_schedule_{main_config.reward_model.use_intrinsic_weight_schedule}/'
-                            f'{main_config.policy.model.world_model_cfg.predict_latent_loss_type}_adaptive_entropy_{main_config.policy.use_adaptive_entropy_weight}_use_priority_{main_config.policy.use_priority}_encoder_clip_{main_config.policy.use_encoder_clip_annealing}_label_smoothing_{main_config.policy.label_smoothing_eps}_use_aug_{main_config.policy.use_augmentation}_ncha_{num_channels}_nres_{num_res_blocks}/') 
-    # main_config.exp_name = (
-    #     f'./data_lz/data_unizero_atari_rnd/{env_id[:-14]}/'
-    #     f'{env_id[:-14]}_rnd_w_{main_config.reward_model.intrinsic_reward_weight}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_'
-    #     f'nlayer{num_layers}_numsegments-{num_segments}_'
-    #     f'gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_'
-    #     f'bs{batch_size}_seed{seed}'
-    # )
+    intrinsic_reward_type = main_config.policy.reward_model.intrinsic_reward_type
+    input_type = main_config.policy.reward_model.input_type
+    intrinsic_weight_max = main_config.policy.reward_model.intrinsic_weight_max
+    input_norm = main_config.policy.reward_model.input_norm
+    intrinsic_norm = main_config.policy.reward_model.intrinsic_norm
+    use_intrinsic_weight_schedule = main_config.policy.reward_model.use_intrinsic_weight_schedule
+    main_config.exp_name = (f'./data_lz_rnd/atari/{env_id[:-14]}/rnd_{intrinsic_reward_type}_'
+                            f'{input_type}_wmax_{intrinsic_weight_max}_input_norm_{input_norm}_intrinsic_norm_{intrinsic_norm}_use_intrinsic_weight_schedule_{use_intrinsic_weight_schedule}')
+    main_config.policy.reward_model.exp_name = main_config.exp_name
     train_unizero_segment_with_reward_model(
         [main_config, create_config],
         seed=seed,
@@ -246,8 +245,8 @@ def main(env_id, seed):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Process different environments and seeds.')
-    # parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
-    parser.add_argument('--env', type=str, help='The environment to use', default='VentureNoFrameskip-v4')
+    parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
+    # parser.add_argument('--env', type=str, help='The environment to use', default='VentureNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 

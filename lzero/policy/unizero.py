@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Tuple, Union
 import logging
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
 import torch.nn.functional as F
 import wandb
@@ -18,6 +19,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from lzero.reward_model.rnd_reward_model import RNDRewardModel
 
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
@@ -35,7 +37,7 @@ def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float
     # 3. 将缩放后的向量复制回模块的各个参数
     vector_to_parameters(params_vec, module.parameters())
 
-def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
+def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas, rnd_model: nn.Module = None):
     """
     为UniZero模型配置带有差异化学习率的优化器。
     """
@@ -45,12 +47,11 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
     # 2. 将参数分为三组：Transformer主干、Tokenizer、Heads
     transformer_params = {pn: p for pn, p in param_dict.items() if 'transformer' in pn}
     tokenizer_params = {pn: p for pn, p in param_dict.items() if 'tokenizer' in pn}
-
     # Heads的参数是那些既不属于transformer也不属于tokenizer的
     head_params = {
         pn: p for pn, p in param_dict.items() 
         if 'transformer' not in pn and 'tokenizer' not in pn
-    }
+    }    
     # 3. 为每组设置不同的优化器参数（特别是学习率）
     #    这里我们仍然使用AdamW，但学习率设置更合理
     optim_groups = [
@@ -69,15 +70,25 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
             'params': list(head_params.values()),
             'lr': learning_rate,  
             'weight_decay': weight_decay
-        }
+        },
     ]
+    
+    if rnd_model is not None:
+        rnd_params = {pn: p for pn, p in rnd_model.named_parameters() if p.requires_grad}
+        optim_groups.append(
+            {
+            'params': list(rnd_params.values()),
+            'lr': learning_rate,  
+            'weight_decay': weight_decay
+            }
+        )
+
     print("--- Optimizer Groups ---")
     print(f"Transformer LR: {learning_rate}")
     print(f"Tokenizer/Heads LR: {learning_rate}")
 
     optimizer = torch.optim.AdamW(optim_groups, betas=betas)
     return optimizer
-
 
 @POLICY_REGISTRY.register('unizero')
 class UniZeroPolicy(MuZeroPolicy):
@@ -436,103 +447,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
         return norm_metrics
     # =================================================================
-    
-    def _monitor_gradient_norms(self) -> Dict[str, float]:
-        """
-        Overview:
-            计算并返回模型关键组件的梯度范数。
-            此函数应在梯度计算完成后、参数更新之前调用。
-        Returns:
-            - grad_metrics (:obj:`Dict[str, float]`): 包含所有梯度范数指标的字典，用于日志记录。
-        """
-        world_model = self._learn_model.world_model
-        grad_metrics = {}
-
-        # 定义要监控的模块组
-        module_groups = {
-            'encoder': world_model.tokenizer.encoder,
-            'transformer': world_model.transformer,
-            'head_value': world_model.head_value,
-            'head_reward': world_model.head_rewards,
-            'head_policy': world_model.head_policy,
-        }
-
-        for group_name, group_module in module_groups.items():
-            total_grad_norm_sq = 0.0
-            num_params_with_grad = 0
-
-            for param_name, param in group_module.named_parameters():
-                if param.requires_grad and param.grad is not None:
-                    # 计算单层参数的梯度L2范数
-                    grad_norm = param.grad.data.norm(2).item()
-                    # 替换点号，使其在TensorBoard中正确显示为层级
-                    log_name = f'grad/{group_name}/{param_name.replace(".", "/")}'
-                    grad_metrics[log_name] = grad_norm
-                    total_grad_norm_sq += grad_norm ** 2
-                    num_params_with_grad += 1
-
-            # 计算整个模块的总梯度范数
-            if num_params_with_grad > 0:
-                total_group_grad_norm = np.sqrt(total_grad_norm_sq)
-                grad_metrics[f'grad/{group_name}/_total_norm'] = total_group_grad_norm
-            else:
-                grad_metrics[f'grad/{group_name}/_total_norm'] = 0.0
-
-        return grad_metrics
-    # =================================================================
-    
     def _init_learn(self) -> None:
         """
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        if self._cfg.optim_type == 'SGD':
-            # --- 改为SGD优化器 ---
-            self._optimizer_world_model = torch.optim.SGD(
-                self._model.world_model.parameters(),
-                lr=self._cfg.learning_rate,  # 初始学习率，在配置中设为 0.2
-                momentum=self._cfg.momentum, # 在配置中设为 0.9
-                weight_decay=self._cfg.weight_decay # 在配置中设为 1e-4
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            # NOTE: nanoGPT optimizer
-            self._optimizer_world_model = configure_optimizers_nanogpt(
-                model=self._model.world_model,
-                learning_rate=self._cfg.learning_rate,
-                weight_decay=self._cfg.weight_decay,
-                device_type=self._cfg.device,
-                betas=(0.9, 0.95),
-            )
-        elif self._cfg.optim_type == 'AdamW_mix_lr_wdecay':
-            self._optimizer_world_model = configure_optimizer_unizero(
-                model=self._model.world_model,
-                learning_rate=self._cfg.learning_rate,  # 使用一个合理的AdamW基础学习率
-                weight_decay=self._cfg.weight_decay,
-                device_type=self._cfg.device,
-                betas=(0.9, 0.95),
-            )
-            
-
-        if self._cfg.cos_lr_scheduler:
-            from torch.optim.lr_scheduler import CosineAnnealingLR
-            # TODO: check the total training steps
-            total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
-            final_lr = self._cfg.get('final_learning_rate', 1e-6)
-
-            self.lr_scheduler = CosineAnnealingLR(
-                self._optimizer_world_model, 
-                T_max=total_iters, 
-                eta_min=final_lr
-            )
-            print(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
-        
-        if self._cfg.piecewise_decay_lr_scheduler:
-            from torch.optim.lr_scheduler import LambdaLR
-            max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-            self.lr_scheduler = LambdaLR(self._optimizer_world_model, lr_lambda=lr_lambda)
-
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         # Ensure that the installed torch version is greater than or equal to 2.0
@@ -557,7 +476,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
-
+        
 
         if self._cfg.use_rnd_model:
             if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
@@ -574,6 +493,69 @@ class UniZeroPolicy(MuZeroPolicy):
                     update_type='momentum',
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
+            self.rnd = RNDRewardModel(
+                config=self._cfg.reward_model,
+                device=self._cfg.reward_model.device,
+                exp_name=self._cfg.reward_model.exp_name,
+                representation_network=self._learn_model.representation_network,
+                target_representation_network=self._target_model_for_intrinsic_reward.representation_network,
+                use_momentum_representation_network=self._cfg.use_momentum_representation_network,
+                multi_gpu=self._cfg.multi_gpu,
+            )
+            
+        if self._cfg.optim_type == 'SGD':
+            # --- 改为SGD优化器 ---
+            if not self._cfg.use_rnd_model:
+                self._optimizer = torch.optim.SGD(
+                    self._model.world_model.parameters(),
+                    lr=self._cfg.learning_rate,  # 初始学习率，在配置中设为 0.2
+                    momentum=self._cfg.momentum, # 在配置中设为 0.9
+                    weight_decay=self._cfg.weight_decay # 在配置中设为 1e-4
+                )
+            else:
+                self._optimizer = torch.optim.SGD(
+                    list(self._model.world_model.parameters()) + list(self.rnd.reward_model.predictor.parameters()),
+                    lr=self._cfg.learning_rate,  # 初始学习率，在配置中设为 0.2
+                    momentum=self._cfg.momentum, # 在配置中设为 0.9
+                    weight_decay=self._cfg.weight_decay # 在配置中设为 1e-4
+                )
+        elif self._cfg.optim_type == 'AdamW':
+            # NOTE: nanoGPT optimizer
+            self._optimizer = configure_optimizers_nanogpt(
+                model=self._model.world_model,
+                learning_rate=self._cfg.learning_rate,
+                weight_decay=self._cfg.weight_decay,
+                device_type=self._cfg.device,
+                betas=(0.9, 0.95),
+                rnd_model=self.rnd.reward_model.predictor if self._cfg.use_rnd_model else None
+            )
+        elif self._cfg.optim_type == 'AdamW_mix_lr_wdecay':
+            self._optimizer = configure_optimizer_unizero(
+                model=self._model.world_model,
+                learning_rate=self._cfg.learning_rate,  # 使用一个合理的AdamW基础学习率
+                weight_decay=self._cfg.weight_decay,
+                device_type=self._cfg.device,
+                betas=(0.9, 0.95),
+                rnd_model=self.rnd.reward_model.predictor if self._cfg.use_rnd_model else None
+            )
+        if self._cfg.cos_lr_scheduler:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            # TODO: check the total training steps
+            total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
+            final_lr = self._cfg.get('final_learning_rate', 1e-6)
+
+            self.lr_scheduler = CosineAnnealingLR(
+                self._optimizer, 
+                T_max=total_iters, 
+                eta_min=final_lr
+            )
+            print(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
+        if self._cfg.piecewise_decay_lr_scheduler:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
         
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
@@ -668,12 +650,14 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.train()
         self._target_model.train()
-        if self._cfg.use_rnd_model:
-            self._target_model_for_intrinsic_reward.train()
 
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
+        
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
+            target_reward = self.rnd.estimate(obs_batch_ori=obs_batch_ori, target_reward=target_reward)
         
         # --- NEW: Calculate current epsilon for policy ---
         if self.policy_ls_eps_start > 0:
@@ -681,8 +665,6 @@ class UniZeroPolicy(MuZeroPolicy):
             current_policy_label_eps = self.policy_ls_eps_start * (1 - progress) + self.policy_ls_eps_end * progress
         else:
             current_policy_label_eps = 0.0
-
-
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
             obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
@@ -745,65 +727,8 @@ class UniZeroPolicy(MuZeroPolicy):
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
-
-        # ==================== [修改] 集成范数监控逻辑 ====================
-        norm_log_dict = {}
-        # 检查是否达到监控频率
-        if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
-            with torch.no_grad():
-                # 1. 监控模型参数范数
-                param_norm_metrics = self._monitor_model_norms()
-                norm_log_dict.update(param_norm_metrics)
-
-                # 2. 监控中间张量 x (Transformer的输出)
-                intermediate_x = losses.intermediate_losses.get('intermediate_tensor_x')
-                if intermediate_x is not None:
-                    # x 的形状为 (B, T, E)
-                    # 计算每个 token 的 L2 范数
-                    token_norms = intermediate_x.norm(p=2, dim=-1)
-
-                    # 记录这些范数的统计数据
-                    norm_log_dict['norm/x_token/mean'] = token_norms.mean().item()
-                    norm_log_dict['norm/x_token/std'] = token_norms.std().item()
-                    norm_log_dict['norm/x_token/max'] = token_norms.max().item()
-                    norm_log_dict['norm/x_token/min'] = token_norms.min().item()
-                
-                # 3. 监控 logits 的详细统计 (Value, Policy, Reward)
-                logits_value = losses.intermediate_losses.get('logits_value')
-                if logits_value is not None:
-                    norm_log_dict['logits/value/mean'] = logits_value.mean().item()
-                    norm_log_dict['logits/value/std'] = logits_value.std().item()
-                    norm_log_dict['logits/value/max'] = logits_value.max().item()
-                    norm_log_dict['logits/value/min'] = logits_value.min().item()
-                    norm_log_dict['logits/value/abs_max'] = logits_value.abs().max().item()
-
-                logits_policy = losses.intermediate_losses.get('logits_policy')
-                if logits_policy is not None:
-                    norm_log_dict['logits/policy/mean'] = logits_policy.mean().item()
-                    norm_log_dict['logits/policy/std'] = logits_policy.std().item()
-                    norm_log_dict['logits/policy/max'] = logits_policy.max().item()
-                    norm_log_dict['logits/policy/min'] = logits_policy.min().item()
-                    norm_log_dict['logits/policy/abs_max'] = logits_policy.abs().max().item()
-
-                logits_reward = losses.intermediate_losses.get('logits_reward')
-                if logits_reward is not None:
-                    norm_log_dict['logits/reward/mean'] = logits_reward.mean().item()
-                    norm_log_dict['logits/reward/std'] = logits_reward.std().item()
-                    norm_log_dict['logits/reward/max'] = logits_reward.max().item()
-                    norm_log_dict['logits/reward/min'] = logits_reward.min().item()
-                    norm_log_dict['logits/reward/abs_max'] = logits_reward.abs().max().item()
-
-                # 4. 监控 obs_embeddings (Encoder输出) 的统计
-                obs_embeddings = losses.intermediate_losses.get('obs_embeddings')
-                if obs_embeddings is not None:
-                    # 计算每个 embedding 的 L2 范数
-                    emb_norms = obs_embeddings.norm(p=2, dim=-1)
-                    norm_log_dict['embeddings/obs/norm_mean'] = emb_norms.mean().item()
-                    norm_log_dict['embeddings/obs/norm_std'] = emb_norms.std().item()
-                    norm_log_dict['embeddings/obs/norm_max'] = emb_norms.max().item()
-                    norm_log_dict['embeddings/obs/norm_min'] = emb_norms.min().item()
-        # =================================================================
-        
+        rnd_loss = self.rnd.compute_loss(obs_batch=obs_batch_ori)
+    
         # ==================== START MODIFICATION 2 ====================
         # Extract the calculated value_priority from the returned losses.
         value_priority_tensor = losses.intermediate_losses['value_priority']
@@ -811,7 +736,7 @@ class UniZeroPolicy(MuZeroPolicy):
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
         # ===================== END MODIFICATION 2 =====================
         weighted_total_loss = (weights * losses.loss_total).mean()
-        
+
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -839,7 +764,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Core learning model update step
         # Reset gradients at the start of each accumulation cycle
         if (train_iter % self.accumulation_steps) == 0:
-            self._optimizer_world_model.zero_grad()
+            self._optimizer.zero_grad()
         
         # ==================== START: 目标熵正则化更新逻辑 ====================
         alpha_loss = None
@@ -885,6 +810,8 @@ class UniZeroPolicy(MuZeroPolicy):
         # ===================== END: 目标熵正则化更新逻辑 =====================
 
         # Scale the loss by the number of accumulation steps
+        if self._cfg.use_rnd_model:
+            weighted_total_loss += self._cfg.rnd_weights * rnd_loss
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()
         
@@ -920,19 +847,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:
-            # ==================== [新增] 监控梯度范数 ====================
-            # 在梯度裁剪之前监控梯度范数，用于诊断梯度爆炸/消失问题
-            if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
-                grad_norm_metrics = self._monitor_gradient_norms()
-                norm_log_dict.update(grad_norm_metrics)
-            # =================================================================
-            # Analyze gradient norms if simulation normalization analysis is enabled
-            if self._cfg.analysis_sim_norm:
-                # Clear previous analysis results to prevent memory overflow
-                del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
-                self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-                self._target_model.encoder_hook.clear_data()
-            
             # Clip gradients to prevent exploding gradients
             total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
                 self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
@@ -941,9 +855,11 @@ class UniZeroPolicy(MuZeroPolicy):
             # Synchronize gradients across multiple GPUs if enabled
             if self._cfg.multi_gpu:
                 self.sync_gradients(self._learn_model)
+                if self._cfg.use_rnd_model:
+                    self.sync_gradients(self.rnd.reward_model.predictor)
 
             # Update model parameters
-            self._optimizer_world_model.step()
+            self._optimizer.step()
 
             # Clear CUDA cache if using gradient accumulation
             if self.accumulation_steps > 1:
@@ -990,7 +906,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self._collect_epsilon,
-            'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'cur_lr_world_model': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss.item(),
             'latent_recon_loss': latent_recon_loss.item(),
@@ -1013,16 +929,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/latent_action_l2_norms': latent_action_l2_norms,
-            'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
 
             "current_policy_label_eps":current_policy_label_eps,
         }
-        # ==================== [修改] 将范数监控结果合并到日志中 ====================
-        if norm_log_dict:
-            return_log_dict.update(norm_log_dict)
         # =======================================================================
         # ==================== START: 添加新日志项 ====================
         if self.use_adaptive_entropy_weight:
@@ -1546,56 +1458,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'alpha_loss',
             "current_encoder_clip_value",
         ]
-
-        # ==================== [新增] 范数和中间张量监控变量 ====================
-        norm_vars = [
-            # 模块总范数 (参数范数)
-            'norm/encoder/_total_norm',
-            'norm/transformer/_total_norm',
-            'norm/head_value/_total_norm',
-            'norm/head_reward/_total_norm',
-            'norm/head_policy/_total_norm',
-            # 模块总范数 (梯度范数)
-            'grad/encoder/_total_norm',
-            'grad/transformer/_total_norm',
-            'grad/head_value/_total_norm',
-            'grad/head_reward/_total_norm',
-            'grad/head_policy/_total_norm',
-
-            # 中间张量 x (Transformer输出) 的统计信息
-            'norm/x_token/mean',
-            'norm/x_token/std',
-            'norm/x_token/max',
-            'norm/x_token/min',
-            
-            # Logits 的详细统计 (Value)
-            'logits/value/mean',
-            'logits/value/std',
-            'logits/value/max',
-            'logits/value/min',
-            'logits/value/abs_max',
-
-            # Logits 的详细统计 (Policy)
-            'logits/policy/mean',
-            'logits/policy/std',
-            'logits/policy/max',
-            'logits/policy/min',
-            'logits/policy/abs_max',
-
-            # Logits 的详细统计 (Reward)
-            'logits/reward/mean',
-            'logits/reward/std',
-            'logits/reward/max',
-            'logits/reward/min',
-            'logits/reward/abs_max',
-
-            # Embeddings 的统计信息
-            'embeddings/obs/norm_mean',
-            'embeddings/obs/norm_std',
-            'embeddings/obs/norm_max',
-            'embeddings/obs/norm_min',
-        ]
-        return base_vars + norm_vars
+        return base_vars
         
 
     def _state_dict_learn(self) -> Dict[str, Any]:
@@ -1608,7 +1471,7 @@ class UniZeroPolicy(MuZeroPolicy):
         state_dict =  {
             'model': self._learn_model.state_dict(),
             'target_model': self._target_model.state_dict(),
-            'optimizer_world_model': self._optimizer_world_model.state_dict(),
+            'optimizer_world_model': self._optimizer.state_dict(),
         }
         # ==================== START: 保存Alpha优化器状态 ====================
         if self.use_adaptive_entropy_weight:
