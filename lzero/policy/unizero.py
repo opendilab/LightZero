@@ -501,7 +501,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 use_momentum_representation_network=self._cfg.use_momentum_representation_network,
                 multi_gpu=self._cfg.multi_gpu,
             )
-            
+        
         if self._cfg.optim_type == 'SGD':
             # --- 改为SGD优化器 ---
             if not self._cfg.use_rnd_model:

@@ -175,7 +175,7 @@ def random_collect(
     collector.reset_policy(policy.collect_mode)
     return new_data
 
-def random_collect_for_rnd(env, input_type='obs', rnd_model=None):
+def random_collect_for_rnd(env):
     if env is not None:
         env.launch()
     else:
@@ -197,7 +197,6 @@ def random_collect_for_rnd(env, input_type='obs', rnd_model=None):
             break
         actions = {}
         
-        
         for env_id in activate_env_ids:
             legal_actions = [i for i, x in enumerate(action_mask_dict[env_id]) if x == 1]
             actions[env_id] = int(np.random.choice(legal_actions, 1))
@@ -209,17 +208,13 @@ def random_collect_for_rnd(env, input_type='obs', rnd_model=None):
             obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
             
             action_mask_dict[env_id] = obs['action_mask']
-            
-            if input_type == 'obs':
-                episode_obs_env[env_id].append(obs['observation'])
-            elif input_type == 'obs_latent_state': # for jericho, need to be encoded.
-                episode_obs_env[env_id].append(obs['observation'])
+            episode_obs_env[env_id].append(obs['observation'])
                 
             if done:
                 activate_env_ids.remove(env_id)
                 collect_obs_list.extend(episode_obs_env[env_id])
                 episode_obs_env[env_id].clear()
-                
+        
     return collect_obs_list
 
 

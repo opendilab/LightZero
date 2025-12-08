@@ -117,7 +117,7 @@ def train_unizero_segment_with_reward_model(
     if cfg.policy.rnd_random_collect_episode_num > 0:
         random_collector_env_cfg = [collector_env_cfg[0] for _ in range(cfg.policy.rnd_random_collect_episode_num)]
         random_collect_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in random_collector_env_cfg])
-        random_data = random_collect_for_rnd(env=random_collect_env, input_type=cfg.policy.reward_model.input_type, rnd_model=policy.rnd)
+        random_data = random_collect_for_rnd(env=random_collect_env)
         policy.rnd.warmup_with_random_segments(random_data)
         
     batch_size = policy._cfg.batch_size
@@ -217,7 +217,7 @@ def train_unizero_segment_with_reward_model(
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
                 log_vars = learner.train(train_data, collector.envstep)
-                logging.info(f'[{i}/{update_per_collect}]: learner and reward_model ended training step.')
+                logging.info(f'[{i}/{update_per_collect}]: learner ended training step.')
                 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])

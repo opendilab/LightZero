@@ -518,6 +518,9 @@ class HFLanguageRepresentationNetwork(nn.Module):
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         else:
             self.tokenizer = tokenizer
+        
+        for param in self.pretrained_model.parameters():
+            param.requires_grad = False
 
         # Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).
         self.embedding_size = embedding_size

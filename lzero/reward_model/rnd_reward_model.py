@@ -35,8 +35,29 @@ class RNDNetwork(nn.Module):
             raise KeyError("not support activation_type for RND model: {}, please customize your own RND model".format(activation_type))
         
         if isinstance(obs_shape, int) or len(obs_shape) == 1:
-            target_backbone = FCEncoder(obs_shape, hidden_size_list, activation=self.activation)
-            predictor_backbone = FCEncoder(obs_shape, hidden_size_list, activation=self.activation)
+            target_backbone = []
+            predictor_backbone = []
+            input_size = obs_shape
+            for i in range(len(hidden_size_list)):
+                target_backbone.append(nn.Linear(input_size , hidden_size_list[i]))
+                target_backbone.append(self.activation)
+                
+                predictor_backbone.append(nn.Linear(input_size , hidden_size_list[i]))
+                predictor_backbone.append(self.activation)
+                input_size = hidden_size_list[i]
+            self.target = nn.Sequential(
+                            *target_backbone,
+                            nn.Linear(input_size, output_dim)
+                        )
+            self.predictor = nn.Sequential(
+                            *predictor_backbone,
+                            nn.Linear(input_size, 512),
+                            nn.ReLU(),
+                            nn.Linear(512, 512),
+                            nn.ReLU(),
+                            nn.Linear(512, output_dim)
+                        )
+            
         elif len(obs_shape) == 3:
             target_backbone = []
             predictor_backbone = []
@@ -58,17 +79,17 @@ class RNDNetwork(nn.Module):
                 feat = target_backbone_tmp(dummy)
                 last_hidden_dim = feat.shape[1]
             self.target = nn.Sequential(
-                                target_backbone_tmp,
-                                nn.Linear(last_hidden_dim, output_dim)
-                            )
+                            target_backbone_tmp,
+                            nn.Linear(last_hidden_dim, output_dim)
+                        )
             self.predictor = nn.Sequential(
-                                predictor_backbone_tmp,
-                                nn.Linear(last_hidden_dim, 512),
-                                nn.ReLU(),
-                                nn.Linear(512, 512),
-                                nn.ReLU(),
-                                nn.Linear(512, output_dim)
-                            )
+                            predictor_backbone_tmp,
+                            nn.Linear(last_hidden_dim, 512),
+                            nn.ReLU(),
+                            nn.Linear(512, 512),
+                            nn.ReLU(),
+                            nn.Linear(512, output_dim)
+                        )
         else:
             raise KeyError(
                 "not support obs_shape for pre-defined encoder: {}, please customize your own RND model".
@@ -261,15 +282,10 @@ class RNDRewardModel(BaseRewardModel):
                                                   self.representation_network, activation_type=self.activation_type).to(self._device)
 
         assert self.intrinsic_reward_type in ['add', 'new', 'assign']
-        if self.input_type in ['obs', 'obs_latent_state']:
-            self.train_obs = []
-        if self.input_type == 'latent_state':
-            self.train_latent_state = []
 
         self._running_mean_std_rnd_reward = RunningMeanStd(epsilon=1e-4)
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
         self._running_mean_std_reward = RunningMeanStd(epsilon=1e-4)
-        self._obs_shape_tuple = self._resolve_obs_shape()
         self.estimate_cnt_rnd = 0
         self.train_cnt_rnd = 0
         self._state_visit_counts = defaultdict(int)
@@ -298,18 +314,8 @@ class RNDRewardModel(BaseRewardModel):
             self._logger.info(
                 "[RND] intrinsic weight schedule: disabled | fixed_weight=%.3f", self.cfg.intrinsic_weight_max
             )
-    
-    def _resolve_obs_shape(self) -> Tuple[int, ...]:
-        """
-        Overview:
-            Convert the configured observation shape to a tuple for downstream processing.
-        """
-        obs_shape = self.cfg.obs_shape
-        if isinstance(obs_shape, int):
-            return (obs_shape,)
-        if isinstance(obs_shape, (list, tuple)):
-            return tuple(obs_shape)
-        raise TypeError(f"Unsupported obs_shape type for RND: {type(obs_shape)}")
+        self._logger.info(f"[RND] predictor: {self.reward_model.predictor}")
+        self._logger.info(f"[RND] predictor: {self.reward_model.target}")
 
     def _flatten_obs_batch(self, obs_batch: np.ndarray) -> np.ndarray:
         """
@@ -318,11 +324,31 @@ class RNDRewardModel(BaseRewardModel):
         """
         if not isinstance(obs_batch, np.ndarray):
             obs_batch = np.asarray(obs_batch)
-        feature_size = int(np.prod(self._obs_shape_tuple))
+        feature_size = int(np.prod(self.cfg.obs_shape))
         total = obs_batch.size // feature_size
-        target_shape = (total,) + self._obs_shape_tuple
+        if isinstance(self.cfg.obs_shape, int):
+            target_shape = (total, self.cfg.obs_shape)
+        elif isinstance(self.cfg.obs_shape, tuple) or isinstance(self.cfg.obs_shape, list):
+            target_shape = (total,) + tuple(self.cfg.obs_shape)
+        else:
+            raise ValueError(f'self.input_shape={type(self.input_shape)}')
         return obs_batch.reshape(target_shape)
 
+    def _get_latent_state_from_obs(self, obs_tensor, batch_size=128):
+        _pad_token = self.representation_network.tokenizer.pad_token_id
+        latent_state_list = []
+        num_transitions = obs_tensor.shape[0]
+        for start in range(0, num_transitions, batch_size):
+            end = start + batch_size
+            batch = obs_tensor[start:end]     
+            x = batch.long()
+            batch_attention_mask = x != _pad_token
+            with torch.no_grad():       
+                batch_latent = self.representation_network.pretrained_model(x, attention_mask=batch_attention_mask).last_hidden_state[:, 0, :]
+            latent_state_list.append(batch_latent.detach().cpu())
+        latent_state_tensor = torch.cat(latent_state_list, dim=0)
+        return latent_state_tensor
+    
     def _prepare_inputs_from_obs(self, obs_array: np.ndarray) -> torch.Tensor:
         """
         Overview:
@@ -331,8 +357,7 @@ class RNDRewardModel(BaseRewardModel):
         """
         obs_tensor = to_tensor(obs_array).to(self._device)
         if self.input_type == 'latent_state':
-            with torch.no_grad():
-                inputs = self.representation_network(obs_tensor)
+            inputs = self._get_latent_state_from_obs(obs_tensor=obs_tensor).to(self._device)
         else:
             inputs = obs_tensor
         return inputs
@@ -574,14 +599,12 @@ class RNDRewardModel(BaseRewardModel):
             predict_feature, target_feature = self.reward_model(input_data)
             # mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1)
             mse = F.mse_loss(predict_feature, target_feature, reduction='none').sum(dim=-1) / 2
-        mse_np = mse.detach().cpu().numpy()
-        mse_tensor = torch.from_numpy(mse_np).to(self._device)
         
-        rnd_reward_tensor = self._normalize_intrinsic_rewards(mse_tensor)
-        self._running_mean_std_rnd_reward.update(mse_np)
+        rnd_reward_tensor = self._normalize_intrinsic_rewards(mse)
+        self._running_mean_std_rnd_reward.update(mse.cpu().numpy())
         
-        rnd_reward_np = rnd_reward_tensor.detach().cpu().numpy()
-
+        rnd_reward_np = rnd_reward_tensor.cpu().numpy()
+        
         self.estimate_cnt_rnd += 1
         if self._tb_logger:
             self._tb_logger.add_scalar('rnd_reward_model/intrinsic_reward_max', rnd_reward_np.max(), self.estimate_cnt_rnd)
@@ -695,12 +718,10 @@ class RNDRewardModel(BaseRewardModel):
         # 4) 通过 RND 模型得到每一步 intrinsic reward（MSE）
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(norm_inputs)
-            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)  # (T,)
+            mse = F.mse_loss(predict_feature, target_feature, reduction='none').sum(dim=-1) / 2  # (T,)
 
-        mse_np = mse.detach().cpu().numpy()
-        mse_tensor = torch.from_numpy(mse_np).to(self._device)
-        rnd_reward_tensor = self._normalize_intrinsic_rewards(mse_tensor)
-        rnd_rewards = rnd_reward_tensor.detach().cpu().numpy().reshape(-1)  # (T,)
+        rnd_reward_tensor = self._normalize_intrinsic_rewards(mse)
+        rnd_rewards = rnd_reward_tensor.cpu().numpy().reshape(-1)  # (T,)
 
         T = rnd_rewards.shape[0]
         steps = np.arange(T, dtype=np.int32)
