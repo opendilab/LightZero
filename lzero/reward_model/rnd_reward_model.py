@@ -217,8 +217,7 @@ class RNDRewardModel(BaseRewardModel):
         intrinsic_weight_max=0.02,              
     )
 
-    def __init__(self, config: EasyDict, device: str = 'cpu', exp_name: str = "default_experiment",
-                instance_name: str = 'RNDModel', representation_network: nn.Module = None, 
+    def __init__(self, config: EasyDict, device: str = 'cpu', representation_network: nn.Module = None, 
                 target_representation_network: nn.Module = None, use_momentum_representation_network: bool = True, 
                 bp_update_sync: bool = True, multi_gpu: bool = False) -> None:  # noqa
         super(RNDRewardModel, self).__init__()
@@ -231,9 +230,8 @@ class RNDRewardModel(BaseRewardModel):
         assert self.input_type in ['obs', 'latent_state', 'obs_latent_state'], self.input_type
         self.intrinsic_reward_type = self.cfg.intrinsic_reward_type
         self.discount_factor = getattr(self.cfg, 'discount_factor', 1.0)
+        self.update_proportion = self.cfg.update_proportion
         
-        self._exp_name = exp_name
-        self._instance_name = instance_name
         self._rank = get_rank()
         self._world_size = get_world_size()
         self.multi_gpu = multi_gpu
@@ -247,28 +245,6 @@ class RNDRewardModel(BaseRewardModel):
             self._device = 'cuda:{}'.format(self._rank % torch.cuda.device_count()) if 'cuda' in device else 'cpu'
         else:
             self._device = device
-            
-        self._logger, _ = build_logger(
-            path='./{}/log/{}'.format(self._exp_name, self._instance_name),
-            name=self._instance_name,
-            need_tb=False
-        )
-        self._tb_logger = None
-        
-        self._logger.info(
-            "[RND] device=%s | input_type=%s | hidden=%s",
-            self._device, self.input_type, str(self.cfg.hidden_size_list)
-        )
-        if self.use_intrinsic_weight_schedule:
-            self._logger.info(
-                "[RND] intrinsic weight schedule: ENABLED | mode=%s | warmup=%d | ramp=%d | min=%.3f | max=%.3f",
-                self.cfg.intrinsic_weight_mode, self.cfg.intrinsic_weight_warmup, self.cfg.intrinsic_weight_ramp, 
-                self.cfg.intrinsic_weight_min, self.cfg.intrinsic_weight_max
-            )
-        else:
-            self._logger.info(
-                "[RND] intrinsic weight schedule: disabled | fixed_weight=%.3f", self.cfg.intrinsic_weight_max
-            )
         
         if self.input_type == 'obs':
             self.input_shape = self.cfg.obs_shape
@@ -300,6 +276,29 @@ class RNDRewardModel(BaseRewardModel):
         self._initial_reward_samples: List[np.ndarray] = []
         self._initial_consistency_logged = False
 
+    def _init_log(self, tb_logger, _exp_name, _instance_name: str = 'RNDModel'):
+        self._logger, _ = build_logger(
+            path='./{}/log/{}'.format(_exp_name, _instance_name),
+            name=_instance_name,
+            need_tb=False
+        )
+        self._tb_logger = tb_logger
+        
+        self._logger.info(
+            "[RND] device=%s | input_type=%s | hidden=%s",
+            self._device, self.input_type, str(self.cfg.hidden_size_list)
+        )
+        if self.use_intrinsic_weight_schedule:
+            self._logger.info(
+                "[RND] intrinsic weight schedule: ENABLED | mode=%s | warmup=%d | ramp=%d | min=%.3f | max=%.3f",
+                self.cfg.intrinsic_weight_mode, self.cfg.intrinsic_weight_warmup, self.cfg.intrinsic_weight_ramp, 
+                self.cfg.intrinsic_weight_min, self.cfg.intrinsic_weight_max
+            )
+        else:
+            self._logger.info(
+                "[RND] intrinsic weight schedule: disabled | fixed_weight=%.3f", self.cfg.intrinsic_weight_max
+            )
+    
     def _resolve_obs_shape(self) -> Tuple[int, ...]:
         """
         Overview:
@@ -359,8 +358,8 @@ class RNDRewardModel(BaseRewardModel):
             normalized = tensor / std
             return torch.clamp(
                 normalized,
-                min=getattr(self.cfg, 'intrinsic_norm_clamp_min', -5),
-                max=getattr(self.cfg, 'intrinsic_norm_clamp_max', 5)
+                min=0,
+                max=getattr(self.cfg, 'intrinsic_norm_clamp_max', 10)
             )
         return tensor
     
@@ -473,23 +472,13 @@ class RNDRewardModel(BaseRewardModel):
         """
         if data is None or len(data) == 0:
             return
-        segments = [game_segment.obs_segment for game_segment in data[0] if len(game_segment.obs_segment)]
-        if not segments:
-            return
-        concatenated = np.concatenate(segments, axis=0)
+        self._logger.info(f"[RND] for input_obs_norm, random_collect_data={len(data)}")
+
+        concatenated = np.stack(data, axis=0)
         flattened = self._flatten_obs_batch(concatenated)
-        total = flattened.shape[0]
         inputs = self._prepare_inputs_from_obs(flattened)
         self._update_input_running_stats(inputs)
-        inputs = self._normalize_inputs(inputs.clone())
-        with torch.no_grad():
-            predict_feature, target_feature = self.reward_model(inputs)
-            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1).detach().cpu().numpy()
-        if mse.size > 0:
-            self._initial_reward_samples.append(mse)
-            self._log_initial_bonus_consistency()
             
-        
     def sync_gradients(self, model: torch.nn.Module) -> None:
         """
         Overview:
@@ -520,13 +509,21 @@ class RNDRewardModel(BaseRewardModel):
         prepared_inputs = self._prepare_inputs_from_obs(flat_obs)
         if prepared_inputs.numel() == 0:
             return
-        self._update_input_running_stats(prepared_inputs)
+        
         normalized_input = self._normalize_inputs(prepared_inputs)
         predict_feature, target_feature = self.reward_model(normalized_input)
-        loss = F.mse_loss(predict_feature, target_feature)
+        forward_mse = nn.MSELoss(reduction='none')
+        forward_loss = forward_mse(predict_feature, target_feature).mean(-1)
+        
+        # Proportion of exp used for predictor update
+        mask = torch.rand(len(forward_loss)).to(self._device)
+        mask = (mask < self.update_proportion).type(torch.FloatTensor).to(self._device)
+        loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self._device))
+
         if self._tb_logger:
-            self._tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss, self.train_cnt_rnd)
+            self._tb_logger.add_scalar('rnd_reward_model/rnd_mse_loss', loss.item(), self.train_cnt_rnd)
         self.train_cnt_rnd += 1
+        self._update_input_running_stats(prepared_inputs)
         return loss
 
     def _intrinsic_weight(self, step: int) -> float:
@@ -575,12 +572,14 @@ class RNDRewardModel(BaseRewardModel):
         extrinsic_normalized = self._normalize_rewards(original_reward)
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(input_data)
-            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1)
+            # mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1)
+            mse = F.mse_loss(predict_feature, target_feature, reduction='none').sum(dim=-1) / 2
         mse_np = mse.detach().cpu().numpy()
-        self._running_mean_std_rnd_reward.update(mse_np)
         mse_tensor = torch.from_numpy(mse_np).to(self._device)
+        
         rnd_reward_tensor = self._normalize_intrinsic_rewards(mse_tensor)
-
+        self._running_mean_std_rnd_reward.update(mse_np)
+        
         rnd_reward_np = rnd_reward_tensor.detach().cpu().numpy()
 
         self.estimate_cnt_rnd += 1

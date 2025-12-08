@@ -21,8 +21,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
-from lzero.reward_model.rnd_reward_model import RNDRewardModel
-from .utils import random_collect, calculate_update_per_collect
+from .utils import random_collect, calculate_update_per_collect, random_collect_for_rnd
 
 timer = EasyTimer()
 
@@ -94,8 +93,8 @@ def train_unizero_segment_with_reward_model(
     if get_rank() == 0:
         tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial'))
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
-    if cfg.policy.use_rnd_model and tb_logger is not None:
-            policy.rnd._tb_logger = tb_logger
+    if cfg.policy.use_rnd_model:
+        policy.rnd._init_log(tb_logger=tb_logger, _exp_name=cfg.exp_name)
     
     # MCTS+RL algorithms related core code
     policy_config = cfg.policy
@@ -112,13 +111,15 @@ def train_unizero_segment_with_reward_model(
         policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     # Collect random data before training
-    if cfg.policy.random_collect_data:
-        random_data = random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
-        try:
-            policy.rnd.warmup_with_random_segments(random_data)
-        except Exception as e:
-            logging.exception(f"Failed to warm up RND normalization using random data: {e}")
-            raise
+    if cfg.policy.random_collect_episode_num > 0:
+        random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+    
+    if cfg.policy.rnd_random_collect_episode_num > 0:
+        random_collector_env_cfg = [collector_env_cfg[0] for _ in range(cfg.policy.rnd_random_collect_episode_num)]
+        random_collect_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in random_collector_env_cfg])
+        random_data = random_collect_for_rnd(env=random_collect_env, input_type=cfg.policy.reward_model.input_type, rnd_model=policy.rnd)
+        policy.rnd.warmup_with_random_segments(random_data)
+        
     batch_size = policy._cfg.batch_size
     
     buffer_reanalyze_count = 0

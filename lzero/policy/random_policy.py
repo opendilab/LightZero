@@ -254,7 +254,7 @@ class LightZeroRandomPolicy(Policy):
                         'predicted_value': pred_values[i],
                         'predicted_policy_logits': policy_logits[i],
                     }
-                else:
+                elif self._cfg.type == 'unizero':
                     # ****** sample a random action from the legal action set ********
                     random_action = int(np.random.choice(legal_actions[i], 1))
                     # all items except action are formally obtained from MCTS

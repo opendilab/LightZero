@@ -496,7 +496,6 @@ class UniZeroPolicy(MuZeroPolicy):
             self.rnd = RNDRewardModel(
                 config=self._cfg.reward_model,
                 device=self._cfg.reward_model.device,
-                exp_name=self._cfg.reward_model.exp_name,
                 representation_network=self._learn_model.representation_network,
                 target_representation_network=self._target_model_for_intrinsic_reward.representation_network,
                 use_momentum_representation_network=self._cfg.use_momentum_representation_network,
@@ -811,7 +810,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Scale the loss by the number of accumulation steps
         if self._cfg.use_rnd_model:
-            weighted_total_loss += self._cfg.rnd_weights * rnd_loss
+            weighted_total_loss = weighted_total_loss + self._cfg.rnd_weights * rnd_loss
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()
         

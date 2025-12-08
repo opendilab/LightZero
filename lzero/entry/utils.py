@@ -8,6 +8,7 @@ from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
 import torch
 import torch.distributed as dist
+import numpy as np
 
 def is_ddp_enabled():
     """
@@ -173,6 +174,53 @@ def random_collect(
     # restore the policy
     collector.reset_policy(policy.collect_mode)
     return new_data
+
+def random_collect_for_rnd(env, input_type='obs', rnd_model=None):
+    if env is not None:
+        env.launch()
+    else:
+        raise ValueError(f'env has error!')
+    init_obs = env.ready_obs
+    env_nums = len(init_obs)
+    activate_env_ids = list(range(env_nums))
+    
+    action_mask_dict = {}
+    episode_obs_env = {env_id:[] for env_id in activate_env_ids}
+    collect_obs_list = []
+    
+    for env_id in range(env_nums):
+        action_mask_dict[env_id] = init_obs[env_id]['action_mask']
+        episode_obs_env[env_id].append(init_obs[env_id]['observation'])
+    
+    while True:
+        if len(activate_env_ids) == 0:
+            break
+        actions = {}
+        
+        
+        for env_id in activate_env_ids:
+            legal_actions = [i for i, x in enumerate(action_mask_dict[env_id]) if x == 1]
+            actions[env_id] = int(np.random.choice(legal_actions, 1))
+        
+        timesteps = env.step(actions)
+        action_mask_dict.clear()
+        
+        for env_id, episode_timestep in timesteps.items():
+            obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
+            
+            action_mask_dict[env_id] = obs['action_mask']
+            
+            if input_type == 'obs':
+                episode_obs_env[env_id].append(obs['observation'])
+            elif input_type == 'obs_latent_state': # for jericho, need to be encoded.
+                episode_obs_env[env_id].append(obs['observation'])
+                
+            if done:
+                activate_env_ids.remove(env_id)
+                collect_obs_list.extend(episode_obs_env[env_id])
+                episode_obs_env[env_id].clear()
+                
+    return collect_obs_list
 
 
 def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:

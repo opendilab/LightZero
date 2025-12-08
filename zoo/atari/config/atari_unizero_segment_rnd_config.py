@@ -31,14 +31,14 @@ def main(env_id, seed):
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
     norm_type = "LN"
-    use_rnd_model= True
-    rnd_weights=0.2
+    use_rnd_model = True
+    rnd_weights = 1.0
     observation_shape = (3, 84, 84)
 
     # ====== only for debug =====
     # collector_env_num = 2
     # num_segments = 2
-    # evaluator_env_num = 2
+    # evaluator_env_num = 3
     # num_simulations = 10
     # batch_size = 5
     # ==============================================================
@@ -159,41 +159,39 @@ def main(env_id, seed):
             # ============= RND specific settings =============
             use_rnd_model=use_rnd_model,
             rnd_weights=rnd_weights,
-            random_collect_data=True,
+            rnd_random_collect_episode_num=30,
             use_momentum_representation_network=True,
             target_model_for_intrinsic_reward_update_type='assign',
             target_update_freq_for_intrinsic_reward=1000,
             target_update_theta_for_intrinsic_reward=0.005,
             reward_model=dict(
                 device='cuda',
-                exp_name=None,
                 type='rnd_unizero',
                 intrinsic_reward_type='add',
                 input_type='obs',  # options: ['obs', 'latent_state', 'obs_latent_state']
                 activation_type='LeakyReLU',
                 enable_image_logging=True,
                 
+                update_proportion=0.25, # 每次计算loss只有部分值参与计算，防止rnd网络更新太快
                 # —— 新增：自适应权重调度 —— #
                 use_intrinsic_weight_schedule=False,     # 打开自适应权重
                 intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
                 intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
                 intrinsic_weight_ramp=20000,            # 从min升到max所需的 estimate 数
                 intrinsic_weight_min=0.0,               
-                intrinsic_weight_max=0.0, 
+                intrinsic_weight_max=0.1, 
                 
                 obs_shape=observation_shape,
                 latent_state_dim=256,
                 hidden_size_list=[32, 64, 64],
                 output_dim=512,
-                learning_rate=3e-4,
-                weight_decay=1e-4,
+                
                 input_norm=True,
                 input_norm_clamp_max=5,
                 input_norm_clamp_min=-5,
                 
                 intrinsic_norm=True,
-                intrinsic_norm_clamp_min=-30,
-                intrinsic_norm_clamp_max=30,
+                intrinsic_norm_clamp_max=10,
                 
                 extrinsic_sign=False,
                 extrinsic_norm=False,
@@ -234,7 +232,6 @@ def main(env_id, seed):
     use_intrinsic_weight_schedule = main_config.policy.reward_model.use_intrinsic_weight_schedule
     main_config.exp_name = (f'./data_lz_rnd/atari/{env_id[:-14]}/rnd_loss_w_{rnd_weights}_{intrinsic_reward_type}_'
                             f'{input_type}_wmax_{intrinsic_weight_max}_input_norm_{input_norm}_intrinsic_norm_{intrinsic_norm}_use_intrinsic_weight_schedule_{use_intrinsic_weight_schedule}')
-    main_config.policy.reward_model.exp_name = main_config.exp_name
     train_unizero_segment_with_reward_model(
         [main_config, create_config],
         seed=seed,
