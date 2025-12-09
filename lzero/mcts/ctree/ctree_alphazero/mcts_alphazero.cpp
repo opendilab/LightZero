@@ -8,18 +8,11 @@
  *     - Environment simulation via Python objects for modularity
  *     - Frequent C++-Python boundary crossings for env interactions
  *
- * Performance Optimization Opportunity:
- *     The frequent C++-Python environment interactions represent a potential bottleneck
- *     in the current batch processing pipeline. Future optimization direction:
- *     Consider moving environment simulation logic to C++ (env_cpp_ification) to reduce
- *     cross-boundary overhead and improve overall throughput, especially for scenarios
- *     with large batch sizes or deep MCTS trees.
- *
- *     Key interactions to optimize:
- *     - State transitions and env.step() calls
- *     - Legal action queries
- *     - Game state serialization/deserialization
- *     - Terminal state checks
+ * Performance Bottleneck & Future Optimization:
+ *     Frequent C++-Python interactions (env.step, legal_actions, get_done_winner, etc.)
+ *     may become a bottleneck at high batch sizes. Future optimization direction:
+ *     Consider C++-ifying the environment (env_cpp_ification) to eliminate boundary
+ *     crossing overhead and enable efficient batch operations.
  */
 
 #include "node_alphazero.h"
@@ -453,7 +446,8 @@ public:
         return results;
     }
 
-    // Main function to get the next action from MCTS
+    // Non-batch version: Get the next action from MCTS for a single environment
+    // For batch processing, use get_next_actions_batch() instead
     std::tuple<int, std::vector<double>, std::shared_ptr<Node>> get_next_action(py::object state_config_for_env_reset, py::object policy_value_func, double temperature, bool sample) {
         std::shared_ptr<Node> root = std::make_shared<Node>();
 
