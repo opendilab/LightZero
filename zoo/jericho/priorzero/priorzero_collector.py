@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, allreduce_data
 from vllm import AsyncLLMEngine, SamplingParams
 import os
 
@@ -791,6 +791,16 @@ class PriorZeroCollector(OriginalCollector):
         # ==================================================================
         collected_duration = sum([d['time'] for d in self._episode_info])
 
+        if self._world_size > 1:
+            # Before allreduce
+            self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+            collected_step = allreduce_data(collected_step, 'sum')
+            collected_episode = allreduce_data(collected_episode, 'sum')
+            collected_duration = allreduce_data(collected_duration, 'sum')
+            # After allreduce
+            self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+
+        
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
         self._total_duration += collected_duration

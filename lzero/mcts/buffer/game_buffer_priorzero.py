@@ -180,3 +180,9 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
             policy_non_re_context = None
 
         return reward_value_context, policy_re_context, policy_non_re_context, current_batch
+
+    def _clear(self):
+        self.game_pos_priorities = []
+        self.game_segment_buffer = []
+        self.game_segment_game_pos_look_up = []
+        

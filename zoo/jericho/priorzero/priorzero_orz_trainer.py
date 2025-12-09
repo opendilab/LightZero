@@ -1,215 +1,177 @@
-from typing import Optional, List, Dict, Any, Callable, Awaitable, Tuple
-from loguru import logger
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import ray
+from typing import Dict, List, Any, Optional
 
-from jinja2 import Template
-
-from orz.exps.examples.ppo.ppo_base_exp import BasePPOExp
-from orz.ppo import RayPPOTrainer, PromptDataset
-from orz.exps.examples.ppo.ppo_base_exp import BasePPOExp, BasePPOExpConfig
+from orz.ppo.utils import get_strategy
+from orz.ppo.actors import Actor
 
 
-class TempExp(BasePPOExp):
-    def __init__(self, orz_cfg, orz_tokenizer, orz_strategy):
-        self.cfg = orz_cfg
-        self.tokenizer = orz_tokenizer
-        self.strategy = orz_strategy
+# ==============================================================================
+# Helper: Strategy Configuration Adapter
+# ==============================================================================
+class StrategyArgs:
+    """
+    将 dict 配置转换为对象，供 get_strategy 读取。
+    DeepSpeed 策略通常需要访问 args.local_rank, args.zero_stage 等属性。
+    """
+    def __init__(self, cfg: Dict):
+        self.seed = cfg.get('seed', 42)
+        self.local_rank = 0  # Ray Actor 内部为 0
+        self.gradient_checkpointing = cfg.get('gradient_checkpointing', True)
+        self.max_norm = cfg.get('grad_clip_value', 1.0)
+        # Batch size settings
+        self.micro_train_batch_size = cfg.get('llm_micro_batch_size', 1)
+        self.train_batch_size = cfg.get('llm_micro_batch_size', 1)
+        # DeepSpeed settings
+        self.zero_stage = cfg.get('deepspeed_zero_stage', 2)
+        self.bf16 = True 
+        self.fp16 = False
+        self.adam_offload = cfg.get('adam_offload', False)
+        self.zpg = 1
+        # LoRA settings
+        self.lora_rank = cfg.get('lora_r', 0)
+        self.lora_alpha = cfg.get('lora_alpha', 16)
+        self.lora_dropout = cfg.get('lora_dropout', 0)
+        self.target_modules = cfg.get('target_modules', ["q_proj", "v_proj", "k_proj", "o_proj"])
+        # Misc
+        self.flash_attn = True
+        self.save_path = None
+        self.save_steps = -1
+        self.ckpt_path = None
+        self.use_wandb = False
+
+# ==============================================================================
+# [MAIN ACTOR] OrzPPOTrainerActor
+# ==============================================================================
+@ray.remote(num_gpus=1)
+class OrzPPOTrainerActor:
+    """
+    Remote Trainer for PriorZero.
+    Includes explicit PPO Loss calculation (No Critic).
+    """
+    def __init__(self, cfg: Dict):
+        self.cfg = cfg
+        self.device = torch.device("cuda:0") # Ray Worker 内部视角
+        self.clip_eps = cfg.get('rft_clip_epsilon', 0.2)
         
-class JerichoPromptDataset(PromptDataset):
-    """
-    Custom dataset for Jericho text adventure games in ORZ format.
-    Adapts PriorZero game_segments to ORZ PPO training format.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def process_dialogue(self, dialogue: dict):
-        """
-        Process a single dialogue (observation + action pair) into ORZ format.
-
-        Args:
-            dialogue: Dict with 'prompt', 'final_answer', 'file_name'
-
-        Returns:
-            prompt: Formatted prompt string
-            extra: Dict with answer and metadata
-        """
-        # Template for Jericho text adventure prompts
-        prompt_template_jinja = """\
-{{bos_token}}A conversation between User and Assistant. The User is playing a text adventure game \
-and needs to decide the next action. The Assistant carefully analyzes the current game state, \
-considers the available actions, and recommends the best action to take. \
-The reasoning process is enclosed within <think> </think> tags, and the recommended action \
-is enclosed within <answer> </answer> tags. For example: \
-<think> The player is in a dark room and needs light. The lamp is available. </think> \
-<answer> take lamp </answer>. User: {{prompt}}
-Assistant: <think>\
-"""
-
-        prompt_instruction_template_jinja = """\
-Current game state:
-{{prompt}}
-
-What is the best action to take? Put your answer inside <answer> </answer> tags.
-"""
-
-        # Validate dialogue format
-        assert isinstance(dialogue, dict), "dialogue must be a dict"
-        assert "prompt" in dialogue, "dialogue must contain prompt"
-        assert "final_answer" in dialogue, "dialogue must contain final_answer"
-
-        # Build prompt
-        prompt_instruction_template = Template(prompt_instruction_template_jinja)
-        prompt_instruction = prompt_instruction_template.render(
-            prompt=dialogue["prompt"][0]["value"]
+        args = StrategyArgs(cfg)
+        self.strategy = get_strategy(args)
+        
+        self.actor = Actor(
+            cfg['pretrain_llm_path'],
+            use_flash_attention_2=args.flash_attn,
+            bf16=args.bf16,
+            lora_rank=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=args.target_modules,
+        )
+        print(f'actor={self.actor}')
+        self.actor_optim = self.strategy.create_optimizer(
+            self.actor, 
+            lr=cfg['llm_learning_rate'], 
+            betas=(0.9, 0.95),
+            weight_decay=cfg['llm_weight_decay']
+        )
+        print(f'self.actor_optim={self.actor_optim}')
+        self.actor, self.actor_optim = self.strategy.prepare(
+            self.actor, self.actor_optim, is_rlhf=True
         )
 
-        prompt_template = Template(prompt_template_jinja)
-        if self.tokenizer.bos_token_id is None:
-            bos_token = ""
-        else:
-            bos_token = self.tokenizer.decode([self.tokenizer.bos_token_id])
-
-        prompt = prompt_template.render(
-            bos_token=bos_token,
-            prompt=prompt_instruction
-        )
-
-        extra = {
-            "answer": dialogue["final_answer"],
-            "file_name": dialogue.get("file_name", "unknown")
-        }
-
-        return prompt, extra
-
-class GameSegmentToORZAdapter:
-    """
-    Convert PriorZero game_segments to ORZ-compatible format.
-    """
-
-    @staticmethod
-    def convert_segments_to_prompts(game_segments: List[Any], tokenizer) -> List[Dict]:
-        """
-        Convert game_segments to ORZ prompt format.
-
-        Args:
-            game_segments: List of GameSegment from PriorZero
-            tokenizer: HuggingFace tokenizer
-
-        Returns:
-            List of ORZ-compatible prompt dictionaries
-        """
-        prompts = []
-        for segment in game_segments:
-            if hasattr(segment, 'raw_obs_segment') and segment.raw_obs_segment:
-                for i, (obs, action) in enumerate(zip(
-                    segment.raw_obs_segment,
-                    segment.action_segment
-                )):
-                    prompt_dict = {
-                        "prompt": [{"value": obs}],
-                        "final_answer": action,
-                        "file_name": f"segment_{id(segment)}_step_{i}"
-                    }
-                    prompts.append(prompt_dict)
-
-        return prompts
-
-    @staticmethod
-    def extract_training_data(game_segments: List[Any]) -> Dict[str, List]:
-        """
-        Extract training data from game_segments for ORZ.
-
-        Returns:
-            Dictionary containing:
-            - states: List of state descriptions
-            - actions: List of actions taken
-            - rewards: List of rewards received
-            - mcts_policies: List of MCTS visit distributions
-        """
-        training_data = {
-            'states': [],
-            'actions': [],
-            'rewards': [],
-            'mcts_policies': []
-        }
-
-        for segment in game_segments:
-            # Extract raw observations (states)
-            if hasattr(segment, 'raw_obs_segment'):
-                training_data['states'].extend(segment.raw_obs_segment)
-
-            # Extract actions
-            if hasattr(segment, 'action_segment'):
-                training_data['actions'].extend(segment.action_segment)
-
-            # Extract rewards
-            if hasattr(segment, 'reward_segment'):
-                training_data['rewards'].extend(segment.reward_segment)
-
-            # Extract MCTS policies
-            if hasattr(segment, 'mcts_policy_segment'):
-                training_data['mcts_policies'].extend(segment.mcts_policy_segment)
-
-        return training_data
-
-
-class JerichoRewardTrainer(RayPPOTrainer):
-    """Custom reward trainer for Jericho text adventures"""
-
-    async def custom_reward_fn(
+    def compute_actor_loss(
         self,
-        prompts: List[str],
-        outputs: List[Any],
-        extras: List[dict],
-        reward_model_fn,
-    ):
+        log_probs: torch.Tensor,
+        old_log_probs: torch.Tensor,
+        advantages: torch.Tensor,
+        mask: torch.Tensor
+    ) -> Dict[str, torch.Tensor]:
         """
-        Compute rewards for Jericho actions.
-        Reward is 1.0 if action matches ground truth, else 0.0
+        Manually implemented PPO Policy Loss.
+        Formula: -min( ratio*A, clamp(ratio, 1-eps, 1+eps)*A )
         """
-        import torch
-        scores = []
-        responses = []
+        # 1. Calculate Ratio: pi_new / pi_old = exp(log_new - log_old)
+        # Detach old_log_probs to be safe
+        ratio = torch.exp(log_probs - old_log_probs.detach())
+        
+        # 2. Calculate Surrogate Objectives
+        surr1 = ratio * advantages
+        surr2 = torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * advantages
+        
+        # 3. Aggregate Loss
+        loss = -torch.min(surr1, surr2)
+        
+        # 4. Apply Mask (Only calculate loss for Action tokens, ignore Prompt/Padding)
+        if mask is not None:
+            loss = (loss * mask).sum() / (mask.sum() + 1e-8)
+        else:
+            loss = loss.mean()
+            
+        # 5. Optional: Calculate Approx KL for monitoring
+        # KL approx (k2 estimator): 0.5 * (logp_old - logp_new)^2
+        with torch.no_grad():
+            approx_kl = 0.5 * (old_log_probs - log_probs).pow(2)
+            if mask is not None:
+                approx_kl = (approx_kl * mask).sum() / (mask.sum() + 1e-8)
+            else:
+                approx_kl = approx_kl.mean()
 
-        for output, extra in zip(outputs, extras):
-            response = output["response"]
-            responses.append(response)
+        return {"loss": loss, "kl": approx_kl}
 
-            # Extract action from response
-            # Look for <answer>...</answer> tags
-            import re
-            pattern = re.compile(r"<answer>(.*?)</answer>", re.DOTALL)
-            matches = re.findall(pattern, response)
-            predicted_action = matches[-1].strip() if matches else ""
+    def update_weights(self, state_dict_ref):
+        """Sync: Main Process -> Actor"""
+        state_dict = state_dict_ref # Ray resolves ObjectRef automatically
+        unwrap_model = self.strategy.unwrap_model(self.actor)
+        unwrap_model.load_state_dict(state_dict, strict=False)
 
-            # Ground truth action
-            true_action = extra["answer"]
+    def get_weights(self):
+        """Sync: Actor -> Main Process"""
+        unwrap_model = self.strategy.unwrap_model(self.actor)
+        return {k: v.cpu() for k, v in unwrap_model.state_dict().items()}
 
-            # Simple exact match for now
-            # TODO: Could use fuzzy matching or LLM-based similarity
-            score = 1.0 if predicted_action.lower() == true_action.lower() else 0.0
-            scores.append(score)
+    def train_step(self, batch_data: Dict[str, Any]):
+        """
+        Execute one PPO step.
+        """
+        # --- 1. Unpack Data ---
+        input_ids = torch.tensor(batch_data['input_ids'], device=self.device, dtype=torch.long)
+        attention_mask = torch.tensor(batch_data['attention_mask'], device=self.device, dtype=torch.long)
+        old_logprobs = torch.tensor(batch_data['old_logprobs'], device=self.device, dtype=torch.float32)
+        advantages = torch.tensor(batch_data['advantages'], device=self.device, dtype=torch.float32)
+        
+        # Normalize Advantages
+        if advantages.numel() > 1:
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        # Log statistics
-        avg_score = sum(scores) / len(scores) if scores else 0.0
-        logger.info(f"    ORZ reward - avg: {avg_score:.3f}, samples: {len(scores)}")
+        # --- 2. Determine Masks ---
+        # num_actions: 用于区分 Answer 和 Prompt
+        num_actions = batch_data.get('num_actions')
+        if num_actions is None:
+            num_actions = input_ids.shape[1] # 默认全长
 
-        # Create score tensors (reward only on last token)
-        output_tokens = self._tokenize(responses, self.cfg.generate_max_len, padding=False)["input_ids"]
-        score_tensors = []
-        for score, output_token in zip(scores, output_tokens):
-            score_tensor = torch.zeros(len(output_token))
-            if len(output_token) > 0:
-                score_tensor[-1] = score
-            score_tensors.append(score_tensor)
-
-        # Remove empty responses
-        res_prompts, res_responses, res_score_tensors = [], [], []
-        for prompt, response, score_tensor in zip(prompts, responses, score_tensors):
-            if len(response) > 0:
-                res_prompts.append(prompt)
-                res_responses.append(response)
-                res_score_tensors.append(score_tensor)
-
-        return res_prompts, res_responses, res_score_tensors
+        # Construct Action Mask (1 for action tokens, 0 for prompt/padding)
+        action_mask = torch.zeros_like(input_ids, dtype=torch.float)
+        
+        # Vectorized masking if num_actions varies
+        if isinstance(num_actions, (list, tuple, torch.Tensor)):
+            for i, n in enumerate(num_actions):
+                action_mask[i, -int(n):] = 1.0
+        else:
+            # Fixed length
+            action_mask[:, -int(num_actions):] = 1.0
+        final_mask = action_mask * attention_mask
+        curr_log_probs = self.actor(input_ids, num_actions, attention_mask)
+        stats = self.compute_actor_loss(
+            log_probs=curr_log_probs,
+            old_log_probs=old_logprobs,
+            advantages=advantages,
+            mask=final_mask
+        )
+        loss = stats["loss"]
+        self.strategy.backward(loss, self.actor, self.actor_optim)
+        self.strategy.step(self.actor, self.actor_optim)
+        return {
+            'rft_loss': loss.item(),
+            'rft_kl': stats["kl"].item()
+        }

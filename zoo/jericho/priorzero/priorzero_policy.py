@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Tuple, Union, Optional
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
 from ding.utils import POLICY_REGISTRY
 from ding.model import model_wrap
@@ -25,9 +26,9 @@ from lzero.policy.utils import select_action
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.entry.utils import initialize_zeros_batch
 import lzero.model.unizero_model  
+from ding.utils import build_logger
 
 from priorzero_utils import compute_approx_kl
-
 
 def build_llm_prompt(
     current_obs: str,
@@ -97,19 +98,9 @@ def build_llm_prompt(
             "OUTPUT FORMAT:\n"
             "- First, write your detailed reasoning inside <think>...</think>.\n"
             "- Then, on a new line, output ONLY the chosen action text inside <action>...</action>.\n"
-            "- Finally, do not put any text outside the <think> and <action> tags.\n\n"
-            "Example (format only):\n"
-            "<think>your step-by-step reasoning here</think>\n"
-            "<action>the best action text here</action>\n\n"
+            "Example:\n<think>your step-by-step reasoning here</think>\n<action>the best action text here</action>\n\n"
         )
     else:
-        # 非 CoT：只要最终动作
-        # prompt_parts.append(
-        #     "\n=== Task ===\n"
-        #     "Analyze the recent history and the current situation, and decide on the SINGLE best next action.\n\n"
-        #     "Your result should be wrapped in <action></action>, and please keep the output concise, avoiding any other content."
-        #     "\nExample: <action>turn on</action>"
-        # )
         prompt_parts.append(
             "\n=== Task ===\n"
             "Analyze the recent history and the current situation, and decide on the SINGLE best next action."
@@ -165,9 +156,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
     def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None, **kwargs):
         # [PRIORZERO-NEW] Initialize LLM-related attributes BEFORE super().__init__
-        # because super().__init__ will call _init_learn which needs these attributes        self.llm_policy_model = None
+        # because super().__init__ will call _init_learn which needs these attributes       
         self.llm_tokenizer = None
-        self._optimizer_llm = None
         self._lr_scheduler_llm = None
         self._last_llm_grad_norm = 0.0
         self.llm_policy_cfg = cfg.llm_policy_cfg  # Set from cfg, not self._cfg (not set yet)
@@ -183,7 +173,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         if self._profile_enabled:
             os.makedirs(self._profile_dir, exist_ok=True)
 
-        # Call parent init (this will trigger _init_learn, _init_collect, _init_eval)
         super().__init__(cfg, model, enable_field)
 
     def _init_learn(self) -> None:
@@ -192,12 +181,20 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         Initialize both UniZero world model and LLM policy model with their optimizers.
         Align with UniZero implementation - use logging instead of self._logger.
         """
-        # ======================================================================
-        # 1. Initialize UniZero World Model (from parent class)
-        # ======================================================================
         super()._init_learn()
         logging.info("✓ UniZero World Model and optimizer initialized")
-        logging.info(f"Loading LLM from: {self.llm_policy_cfg.pretrain_llm_path}")
+
+    def _init_llm_learn(self, tb_logger, exp_name, instance_name='learner_llm') -> None:
+        if tb_logger is not None:
+            self._logger, _ = build_logger(
+                path=f'./{exp_name}/log/{instance_name}', name=instance_name, need_tb=False
+            )
+            self._tb_logger = tb_logger
+        else:
+            pass
+        
+        self._logger.info(f"Loading LLM from: {self.llm_policy_cfg.pretrain_llm_path}")
+        self.llm_train_cnt = 0
 
         # Load tokenizer
         self.llm_tokenizer = AutoTokenizer.from_pretrained(
@@ -232,35 +229,29 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         self.llm_policy_model.to(self._cfg.device)
         self.llm_policy_model.train()
         
-        # 创建一个 reference model计算 KL 散度
         self.llm_reference_model = copy.deepcopy(self.llm_policy_model)
         self.llm_reference_model.eval()
         for p in self.llm_reference_model.parameters():
             p.requires_grad_(False)
         self.llm_reference_model.to(self._cfg.device)
-
-        # ======================================================================
-        # 3. [PRIORZERO-NEW] Initialize LLM Optimizer
-        # ======================================================================
+        
         self._optimizer_llm = torch.optim.AdamW(
             self.llm_policy_model.parameters(),
             lr=self.llm_policy_cfg.llm_learning_rate,
             weight_decay=self.llm_policy_cfg.llm_weight_decay,
             betas=(0.9, 0.999),
         )
-
-        # Optional: learning rate scheduler
         self._lr_scheduler_llm = torch.optim.lr_scheduler.CosineAnnealingLR(
             self._optimizer_llm,
             T_max=100000,  # Will be set from config
             eta_min=self.llm_policy_cfg.llm_learning_rate * 0.1
         )
+        self._logger.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
+        self._logger.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
+        self._logger.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
+        self._logger.info("✓ Frozen reference LLM initialized for KL divergence")
 
-        logging.info(f"✓ LLM Policy Model ({self.llm_policy_cfg.pretrain_llm_path}) initialized")
-        logging.info(f"  - LLM learning rate: {self.llm_policy_cfg.llm_learning_rate}")
-        logging.info(f"  - LoRA enabled: {self.llm_policy_cfg.use_lora}")
-        logging.info("✓ Frozen reference LLM initialized for KL divergence")
-
+    
     @contextmanager
     def _profile_block(self, name: str):
         if not self._profile_enabled:
@@ -427,6 +418,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     self.llm_policy_model.parameters(),
                     self._cfg.grad_clip_value
                 ).item()
+                if self._cfg.multi_gpu:
+                    self._sync_llm_gradients(self.llm_policy_model)
                 self._optimizer_llm.step()
                 if self._lr_scheduler_llm is not None:
                     self._lr_scheduler_llm.step()
@@ -527,7 +520,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             seq_neglogprob_means.append((-sequence_log_probs).mean().item())
             
             batch_values_tensor = torch.tensor(batch_values, device=self._cfg.device, dtype=torch.float32)
-            batch_pred_values_tensor = torch.tensor(batch_pred_values, device=self._cfg.device, dtype=torch.float32)
             
             if loss_type == 'reinforce':
                 advantage_tansor = batch_values_tensor
@@ -538,6 +530,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 if loss_type == 'reinforce++':
                     advantage_tansor_norm = (batch_values_tensor - batch_values_tensor.mean()) / (batch_values_tensor.std() + 1e-8)
                 elif loss_type == 'ppo-simple-adv':
+                    batch_pred_values_tensor = torch.tensor(batch_pred_values, device=self._cfg.device, dtype=torch.float32)
                     advantage_tansor = batch_values_tensor - batch_pred_values_tensor
                     advantage_tansor_norm = (advantage_tansor - advantage_tansor.mean()) / (advantage_tansor.std() + 1e-8)
                 advantage_means.append(advantage_tansor_norm.mean().item())
@@ -585,6 +578,8 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                     self.llm_policy_model.parameters(),
                     self._cfg.grad_clip_value
                 ).item()
+                if self._cfg.multi_gpu:
+                    self._sync_llm_gradients(self.llm_policy_model)
                 self._optimizer_llm.step()
                 if self._lr_scheduler_llm is not None:
                     self._lr_scheduler_llm.step()
@@ -593,16 +588,20 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             del inputs, labels, outputs, loss
 
         self._last_llm_grad_norm = last_grad_norm
+        
         def _safe_mean(vals):
             return float(sum(vals) / len(vals)) if len(vals) > 0 else 0.0
+        
         rft_stats = {
             'rft_logprob_mean': _safe_mean(logprob_means),
             'rft_seq_neglogprob_mean': _safe_mean(seq_neglogprob_means),
             'rft_advantage_mean': _safe_mean(advantage_means),
             'rft_advantage_std': _safe_mean(advantage_stds),
             'rft_ratio_used_mean': _safe_mean(ratio_used_means),
-            'rft_kl_mean': _safe_mean(kl_means)
-        }
+            'rft_kl_mean': _safe_mean(kl_means),
+            'rft_kl_max': max(kl_means),
+            'rft_kl_min': min(kl_means),
+            }
         mean_loss = accumulated_loss / max(1, num_micro_batches)
         return torch.tensor(mean_loss, device=self._cfg.device), rft_stats
     
@@ -626,7 +625,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         """
         self._learn_model.train()
         self._target_model.train()
-        self.llm_policy_model.train()
 
         current_batch, target_batch, train_iter = data
 
@@ -681,34 +679,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             )
 
             wm_total_loss = (weights * wm_losses.loss_total).mean()
-
-        # ==============================================================================
-        # PRIORZERO-NEW] LLM Policy Training (SFT + RFT)
-        # ==============================================================================
-        self._last_llm_grad_norm = 0.0
-        if self.llm_policy_cfg.enable_llm and self.llm_policy_cfg.enable_sft:
-            with self._profile_block(name="train_llm_sft"):
-                llm_sft_loss = self.compute_sft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
-        else:
-            llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
-        if self.llm_policy_cfg.enable_llm and self.llm_policy_cfg.enable_rft:
-            with self._profile_block(name="train_llm_rft"):
-                llm_rft_loss, rft_stats = self.compute_rft_loss(
-                    raw_obs_list=raw_obs_list,
-                    history_obs_list=history_obs_list,
-                    action_logprob_list=action_logprob_list,
-                    target_values=target_value,
-                    pred_values=pred_values,
-                )
-        else:
-            llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
-            rft_stats = {}
-
-        llm_loss = (
-            self.llm_policy_cfg.sft_loss_weight * llm_sft_loss +
-            self.llm_policy_cfg.rft_loss_weight * llm_rft_loss
-        )
-        total_loss = wm_total_loss + llm_loss  # For logging
         
         self._optimizer_world_model.zero_grad()
         wm_total_loss.backward()
@@ -716,9 +686,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             self._learn_model.world_model.parameters(),
             self._cfg.grad_clip_value
         )
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
         self._optimizer_world_model.step()
         self._target_model.update(self._learn_model.state_dict())
-
 
         intermediate_losses = wm_losses.intermediate_losses
         obs_loss = intermediate_losses.get('loss_obs', torch.tensor(0.0))
@@ -733,15 +704,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         middle_step_losses = intermediate_losses.get('middle_step_losses', {})
         last_step_losses = intermediate_losses.get('last_step_losses', {})
 
-        # Analysis metrics (dormant ratio, weight magnitude, etc.)
-        dormant_ratio_encoder = intermediate_losses.get('dormant_ratio_encoder', 0.0)
-        dormant_ratio_transformer = intermediate_losses.get('dormant_ratio_transformer', 0.0)
-        dormant_ratio_head = intermediate_losses.get('dormant_ratio_head', 0.0)
-        avg_weight_mag_encoder = intermediate_losses.get('avg_weight_mag_encoder', 0.0)
-        avg_weight_mag_transformer = intermediate_losses.get('avg_weight_mag_transformer', 0.0)
-        avg_weight_mag_head = intermediate_losses.get('avg_weight_mag_head', 0.0)
-        e_rank_last_linear = intermediate_losses.get('e_rank_last_linear', 0.0)
-        e_rank_sim_norm = intermediate_losses.get('e_rank_sim_norm', 0.0)
         latent_state_l2_norms = intermediate_losses.get('latent_state_l2_norms', torch.tensor(0.0))
         latent_action_l2_norms = intermediate_losses.get('latent_action_l2_norms', 0.0)
 
@@ -829,25 +791,55 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
             # ============ Learning Rates ============
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
-            'llm_lr': self._optimizer_llm.param_groups[0]['lr'],
-
-            # ============ [PRIORZERO] LLM-specific Metrics ============
-            'llm_sft_loss': llm_sft_loss.item(),
-            'llm_rft_loss': llm_rft_loss.item(),
-            'llm_total_loss': llm_loss.item(),
-            'rft_logprob_mean': rft_stats.get('rft_logprob_mean', 0.0),
-            'rft_seq_neglogprob_mean': rft_stats.get('rft_seq_neglogprob_mean', 0.0),
-            'rft_advantage_mean': rft_stats.get('rft_advantage_mean', 0.0),
-            'rft_advantage_std': rft_stats.get('rft_advantage_std', 0.0),
-            'rft_ratio_used_mean': rft_stats.get('rft_ratio_used_mean', 0.0),
-            'rft_kl_mean': rft_stats.get('rft_kl_mean', 0.0),
-            # 'num_sft_samples': float(num_sft_samples),
-            # 'num_rft_samples': float(num_rft_samples),
-            'total_loss': total_loss.item(),
         }
 
         return log_dict
 
+    def _forward_llm_learn(self, data: Tuple[torch.Tensor]):
+        self.llm_policy_model.train()
+        
+        current_batch, target_batch = data
+
+        obs_batch_ori, action_batch, target_action_batch, mask_batch, batch_index_tensor, weights, make_time, timestep_batch, raw_obs_list, history_obs_list, action_logprob_list = current_batch
+        target_reward, target_value, target_policy = target_batch
+        
+        self._last_llm_grad_norm = 0.0
+        if self.llm_policy_cfg.enable_llm:
+            if self.llm_policy_cfg.enable_sft:
+                with self._profile_block(name="train_llm_sft"):
+                    llm_sft_loss = self.compute_sft_loss(raw_obs_list=raw_obs_list, history_obs_list=history_obs_list)
+            else:
+                llm_sft_loss = torch.tensor(0.0, device=self._cfg.device)
+                
+            if self.llm_policy_cfg.enable_rft:
+                with self._profile_block(name="train_llm_rft"):
+                    llm_rft_loss, rft_stats = self.compute_rft_loss(
+                        raw_obs_list=raw_obs_list,
+                        history_obs_list=history_obs_list,
+                        action_logprob_list=action_logprob_list,
+                        target_values=target_value,
+                        pred_values=None,
+                    )
+            else:
+                llm_rft_loss = torch.tensor(0.0, device=self._cfg.device)
+                rft_stats = {}
+        else:
+            return None
+
+        llm_loss = self.llm_policy_cfg.sft_loss_weight * llm_sft_loss + self.llm_policy_cfg.rft_loss_weight * llm_rft_loss
+        
+        self.llm_train_cnt += 1
+        
+        if self._tb_logger is not None:
+            self._tb_logger.add_scalar('learner_llm_iter/llm_sft_loss', llm_sft_loss.item(), self.llm_train_cnt)
+            self._tb_logger.add_scalar('learner_llm_iter/llm_rft_loss', llm_rft_loss.item(), self.llm_train_cnt)
+            self._tb_logger.add_scalar('learner_llm_iter/llm_total_loss', llm_loss.item(), self.llm_train_cnt)
+            self._tb_logger.add_scalar('learner_llm_iter/llm_lr', self._optimizer_llm.param_groups[0]['lr'], self.llm_train_cnt)
+            for k, v in rft_stats.items():
+                self._tb_logger.add_scalar(f'learner_llm_iter/{k}', v if v is not None else 0.0, self.llm_train_cnt)
+            
+        return llm_loss
+        
     def _monitor_vars_learn(self) -> List[str]:
         """
         [PRIORZERO-MODIFIED]
@@ -1068,13 +1060,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         """
         state_dict = super()._state_dict_learn()
 
-        # Add LLM model and optimizer
-        state_dict['llm_model'] = self.llm_policy_model.state_dict()
-        state_dict['optimizer_llm'] = self._optimizer_llm.state_dict()
-
-        if self._lr_scheduler_llm is not None:
-            state_dict['lr_scheduler_llm'] = self._lr_scheduler_llm.state_dict()
-
         return state_dict
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
@@ -1083,16 +1068,4 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         Load state dict for both world model and LLM.
         """
         super()._load_state_dict_learn(state_dict)
-
-        # Load LLM model and optimizer
-        if 'llm_model' in state_dict:
-            self.llm_policy_model.load_state_dict(state_dict['llm_model'])
-            logging.info("✓ LLM model state loaded")
-
-        if 'optimizer_llm' in state_dict:
-            self._optimizer_llm.load_state_dict(state_dict['optimizer_llm'])
-            logging.info("✓ LLM optimizer state loaded")
-
-        if 'lr_scheduler_llm' in state_dict and self._lr_scheduler_llm is not None:
-            self._lr_scheduler_llm.load_state_dict(state_dict['lr_scheduler_llm'])
-            logging.info("✓ LLM scheduler state loaded")
+    

@@ -11,10 +11,12 @@ import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed, get_rank
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 from ding.worker import create_buffer, BaseLearner
 from tensorboardX import SummaryWriter
 from loguru import logger
+from ding.utils import DDPContext
+from lzero.config.utils import lz_to_ddp_config
 
 os.environ.setdefault("VLLM_USE_V1", "1")
 from vllm import AsyncLLMEngine
@@ -25,6 +27,7 @@ from priorzero_collector import PriorZeroCollector
 from priorzero_evaluator import PriorZeroEvaluator
 import priorzero_policy  
 from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
+from lzero.entry.utils import calculate_update_per_collect
 
 
 async def train_priorzero(
@@ -85,6 +88,9 @@ async def train_priorzero(
     tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
     logger.info(f"✓ TensorBoard logger: ./{cfg.exp_name}/log/")
 
+    if cfg.policy.llm_policy_cfg.enable_llm:
+        policy._init_llm_learn(tb_logger=tb_logger, exp_name=cfg.exp_name)
+    
     learner = BaseLearner(
         cfg.policy.learn.learner,
         policy.learn_mode,
@@ -157,6 +163,14 @@ async def train_priorzero(
     collect_task = None
     pending_new_data = None  # Store collected data waiting to be added to buffer
     
+    
+    if cfg.policy.multi_gpu:
+        world_size = get_world_size()
+        rank = get_rank()
+    else:
+        world_size = 1
+        rank = 0
+    
     while True:
         is_sync_mode = coordinator.is_synchronous
         if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
@@ -184,11 +198,9 @@ async def train_priorzero(
                 train_iter=learner.train_iter,
                 policy_kwargs=collect_kwargs
             )
-            from lzero.entry.utils import calculate_update_per_collect
-            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)
+            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
 
             replay_buffer.push_game_segments(new_data)
-            replay_buffer.remove_oldest_data_to_fit()
             buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
             logger.info(f"  ✓ Data collected, buffer size: {buffer_size} transitions")
 
@@ -215,11 +227,9 @@ async def train_priorzero(
                 logger.info(f"  ✓ Async collect completed, data pending buffer update")
 
             if pending_new_data is not None:
-                from lzero.entry.utils import calculate_update_per_collect
-                update_per_collect = calculate_update_per_collect(cfg, pending_new_data, world_size=1)
+                update_per_collect = calculate_update_per_collect(cfg, pending_new_data, world_size=world_size)
 
                 replay_buffer.push_game_segments(pending_new_data)
-                replay_buffer.remove_oldest_data_to_fit()
                 buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
                 logger.info(f"  ✓ Buffer updated, size: {buffer_size} transitions")
 
@@ -250,7 +260,7 @@ async def train_priorzero(
                 continue
 
             logger.info(f"[Iter {learner.train_iter}] Training...")
-
+        
             async def train_one_batch():
                 train_data = replay_buffer.sample(batch_size, policy)
                 train_data.append(learner.train_iter)
@@ -263,7 +273,11 @@ async def train_priorzero(
 
             if is_sync_mode:
                 for i in range(update_per_collect):
-                    await train_one_batch()
+                    await train_one_batch()    
+                if replay_buffer.get_num_of_transitions() >= replay_buffer.replay_buffer_size:
+                    all_data = replay_buffer.sample(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
+                    replay_buffer._clear()
+                    await policy._forward_llm_learn(all_data)
             else:
                 if coordinator.can_train():
                     await coordinator.run_train(train_one_batch)
@@ -302,20 +316,31 @@ def main():
     args = parser.parse_args()
 
     
-    # args.quick_test = True
+    args.quick_test = True
     if args.quick_test:
         logger.info("Using quick test configuration")
         main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_debug_{args.env_id}_seed0')
     else:
         main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_rft_reinforce++_{args.env_id}_seed0')
 
-    # Run training
-    asyncio.run(train_priorzero(
-        main_cfg,
-        create_cfg,
-        seed=args.seed,
-        max_train_iter=args.max_iter,
-    ))
+    if main_cfg.policy.multi_gpu:
+        with DDPContext():
+            main_cfg = lz_to_ddp_config(main_cfg)
+            asyncio.run(train_priorzero(
+                main_cfg,
+                create_cfg,
+                seed=args.seed,
+                max_train_iter=args.max_iter,
+            ))
+        
+    else:
+        # Run training
+        asyncio.run(train_priorzero(
+            main_cfg,
+            create_cfg,
+            seed=args.seed,
+            max_train_iter=args.max_iter,
+        ))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Tuple
 from easydict import EasyDict
-
+import torch.distributed as dist
 
 def get_priorzero_config(
     env_id: str = 'zork1.z5',
@@ -31,9 +31,12 @@ def get_priorzero_config(
     action_space_size, max_steps = env_configurations.get(env_id, (20, 100))
     wm_encoder_option = 'legacy' 
     wm_model_name = 'BAAI/bge-base-en-v1.5'  
+    multi_gpu = False
+    GPUs = 1
     
     collector_env_num = 4
     evaluator_env_num = 2
+    n_episode = collector_env_num
     
     num_unroll_steps = 10
     infer_context_length = 4
@@ -44,18 +47,23 @@ def get_priorzero_config(
     batch_size = 64
     collect_num_simulations=25
     eval_num_simulations=25
-    replay_buffer_size = 1e3
     
+    if multi_gpu:
+        n_episode = int(GPUs * collector_env_num)
+        batch_size = int(batch_size * GPUs)
+        
     ## LLM 参数
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
     llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
     total_batch_size = 128   # Total batch size across all GPUs
-    micro_batch_size = 32    # Micro batch size per GPU
+    micro_batch_size = 16    # Micro batch size per GPU
     gradient_accumulation_steps = total_batch_size // micro_batch_size
     rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
-    use_cot = False  # Whether to use chain-of-thought prompting
+    use_cot = True  # Whether to use chain-of-thought prompting
     history_length = 5
-
+    llm_learn_num_samples = 512
+    replay_buffer_size = llm_learn_num_samples
+    
     env_config = dict(
         stop_value=int(1e6),
         max_steps=max_steps,
@@ -75,7 +83,7 @@ def get_priorzero_config(
     )
     policy_config = dict(
         type='priorzero',
-        multi_gpu=False,  
+        multi_gpu=multi_gpu,  
         use_wandb=False,
         profile_cfg=dict(
             enable_cprofile=False,  # Enable cProfile for collect/train hot paths
@@ -135,7 +143,7 @@ def get_priorzero_config(
         cos_lr_scheduler=False,
         fixed_temperature_value=0.25,
         manual_temperature_decay=False,
-        n_episode=collector_env_num,
+        n_episode=n_episode,
         train_start_after_envsteps=0,
         replay_buffer_size=replay_buffer_size,
         eval_freq=int(3e4),
@@ -173,6 +181,7 @@ def get_priorzero_config(
             pretrain_llm_path=llm_model_name,
             history_length=history_length,
             use_cot=use_cot,
+            llm_learn_num_samples=llm_learn_num_samples,
             enable_sft=False,
             enable_rft=True,
             rft_loss_type=rft_loss_type,
@@ -239,17 +248,18 @@ def get_priorzero_debug_config(
 ) -> EasyDict:
     
     main_config, create_config = get_priorzero_config(env_id=env_id, seed=seed, exp_name=exp_name)
-    collector_env_num = 2
+    collector_env_num = 4
     evaluator_env_num = 1
     max_steps=10
     
     num_unroll_steps = 5
     infer_context_length = 2
     batch_size = 16
-    collect_num_simulations=10
-    eval_num_simulations=10
+    collect_num_simulations=2
+    eval_num_simulations=2
     num_layers=1
-    
+    game_segment_length = 20
+    llm_learn_num_samples = 64
     
     create_config.collector_env_num = collector_env_num
     create_config.evaluator_env_num = evaluator_env_num
@@ -259,102 +269,17 @@ def get_priorzero_debug_config(
     main_config.policy.model.world_model_cfg.max_tokens = 2 * num_unroll_steps
     main_config.policy.model.world_model_cfg.context_length = 2 * infer_context_length
     main_config.policy.model.world_model_cfg.num_layers = num_layers
+    main_config.policy.model.world_model_cfg.game_segment_length = game_segment_length
     main_config.policy.num_unroll_steps = num_unroll_steps
     main_config.policy.batch_size = batch_size
     main_config.policy.collect_num_simulations = collect_num_simulations
     main_config.policy.eval_num_simulations = eval_num_simulations
+    main_config.policy.model.world_model_cfg.env_num = collector_env_num
+    main_config.policy.num_segments = collector_env_num
+    main_config.policy.collector_env_num = collector_env_num
     main_config.policy.update_per_collect = 2
+    main_config.policy.game_segment_length = game_segment_length
+    main_config.policy.replay_buffer_size = llm_learn_num_samples
+    main_config.policy.llm_policy_cfg.llm_learn_num_samples = llm_learn_num_samples 
+    
     return main_config, create_config
-
-
-
-
-class HybridTrainingConfig:
-    """
-    Hybrid training configuration combining PriorZero and ORZ settings.
-    """
-    def __init__(self):
-        # self.priorzero_cfg, self.priorzero_create_cfg = get_priorzero_config(
-        #     env_id='zork1.z5',
-        #     seed=0,
-        #     exp_name='data_priorzero/priorzero_orz_complete',
-        # )
-        self.priorzero_cfg, self.priorzero_create_cfg = get_priorzero_debug_config(
-            env_id='zork1.z5',
-            seed=0,
-            exp_name='data_priorzero/debug_priorzero_orz_complete',
-        )
-        
-        self.wm_training_mode = "parallel"
-        self.wm_train_freq = 1
-        self.llm_train_freq = 1
-
-        self.orz_rollout_batch_size = 128
-        self.orz_train_batch_size = 32
-        self.orz_actor_lr = 1e-6
-        self.orz_critic_lr = 5e-6
-        self.orz_num_episodes = 10
-
-
-class ORZConfig:
-    """Simplified ORZ config for PriorZero integration"""
-    DEFAULT_CONFIG = {
-        "total_num_nodes": 1,
-        "ref_num_nodes": 1,
-        "ref_num_gpus_per_node": 1,
-        "actor_num_nodes": 1,
-        "actor_num_gpus_per_node": 1,
-        "critic_num_nodes": 1,
-        "critic_num_gpus_per_node": 1,
-        "colocate_all": True,
-        "colocate_critic_reward": True,
-        "colocate_actor_ref": True,
-        "vllm_num_engines": 1,
-        "vllm_tensor_parallel_size": 1,
-        "zero_stage": 2,
-        "adam_offload": False,
-
-        "save_interval": 50,
-
-        "num_warmup_steps": 50,
-        "prompt_max_len": 2048,
-        "enable_prefix_caching": False,
-        "update_ref_every_epoch": True,
-        "advantage_normalize": True,
-
-        "n_samples_per_prompt": 32,
-        "micro_rollout_batch_size": 2,
-        "policy_update_steps": 1,
-        "critic_update_steps": 12,
-        "micro_train_batch_size": 1,
-        "micro_forward_batch_size": 1,
-        "freezing_actor_steps": -1,
-
-        # KL
-        "init_kl_coef": 0.0,
-        "kl_loss_coef": 0.0,
-        "use_kl_loss": False,
-        "use_kl_estimator_k3": True,
-
-        "enable_eval": False,
-        "eval_interval": 100,
-
-        "packing_max_len": 8192,
-        "max_len": 4096,
-        "temperature": 1.0,
-        "top_p": 1.0,
-        "top_k": -1,
-
-        "use_grpo": False,
-        "gamma": 1.0,
-        "lambd": 1.0,
-
-        "gpu_memory_utilization": 0.3,
-
-        "use_compute_reward_fn": True,
-        "use_orm_score": False,
-    }
-    def __init__(self, hybrid_cfg, cfg):
-        self.cfg = self.DEFAULT_CONFIG
-        self.cfg.update(cfg)
-        self.cfg.update(hybrid_cfg)
