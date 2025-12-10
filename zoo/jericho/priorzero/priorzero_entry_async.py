@@ -29,7 +29,6 @@ import priorzero_policy
 from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
 from lzero.entry.utils import calculate_update_per_collect
 
-
 async def train_priorzero(
     cfg: dict,
     create_cfg: dict,
@@ -53,24 +52,6 @@ async def train_priorzero(
     else:
         logger.info(f"✓ Ray not initialized - vLLM will handle initialization if needed")
 
-    logger.info("Creating vLLM engine...")
-    tensor_parallel = cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size
-    distributed_backend = "ray" if tensor_parallel > 1 else None
-
-    gpu_mem_util = cfg.policy.llm_policy_cfg.gpu_memory_utilization
-
-    engine_args = AsyncEngineArgs(
-        model=cfg.policy.llm_policy_cfg.pretrain_llm_path,
-        tensor_parallel_size=tensor_parallel,
-        gpu_memory_utilization=gpu_mem_util,
-        distributed_executor_backend=distributed_backend,
-        trust_remote_code=True,
-        enable_prefix_caching=False,
-        enforce_eager=False,
-    )
-    vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
-    logger.info(f"✓ vLLM Engine created (backend: {distributed_backend or 'default'})")
-
     logger.info("Creating environments...")
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager( cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
@@ -90,6 +71,24 @@ async def train_priorzero(
 
     if cfg.policy.llm_policy_cfg.enable_llm:
         policy._init_llm_learn(tb_logger=tb_logger, exp_name=cfg.exp_name)
+        
+        logger.info("Creating vLLM engine...")
+        tensor_parallel = cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size
+        distributed_backend = "ray" if tensor_parallel > 1 else None
+
+        gpu_mem_util = cfg.policy.llm_policy_cfg.gpu_memory_utilization
+
+        engine_args = AsyncEngineArgs(
+            model=policy.llm_ckpt_dir,
+            tensor_parallel_size=tensor_parallel,
+            gpu_memory_utilization=gpu_mem_util,
+            distributed_executor_backend=distributed_backend,
+            trust_remote_code=True,
+            enable_prefix_caching=False,
+            enforce_eager=False,
+        )
+        vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
+        logger.info(f"✓ vLLM Engine created (backend: {distributed_backend or 'default'})")
     
     learner = BaseLearner(
         cfg.policy.learn.learner,
@@ -137,7 +136,7 @@ async def train_priorzero(
         buffer_size=cfg.policy.replay_buffer_size,
         batch_size=cfg.policy.batch_size,
     )
-
+    assert not coordinator.is_synchronous, print(f'采取异步形式！')
     # ==================================================================
     # Main Training Loop
     # ==================================================================
@@ -172,7 +171,6 @@ async def train_priorzero(
         rank = 0
     
     while True:
-        is_sync_mode = coordinator.is_synchronous
         if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
             logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
 
@@ -191,51 +189,37 @@ async def train_priorzero(
             'epsilon': 0.0
         }
 
-        if is_sync_mode:
-            logger.info(f"\n[Iter {learner.train_iter}] Collecting data...")
+        if collect_task is None or collect_task.done():
+            if coordinator.can_collect():
+                logger.info(f"\n[Iter {learner.train_iter}] Starting async collect...")
 
-            new_data = await collector.collect(
-                train_iter=learner.train_iter,
-                policy_kwargs=collect_kwargs
-            )
-            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
+                async def collect_fn():
+                    return await collector.collect(
+                        train_iter=learner.train_iter,
+                        policy_kwargs=collect_kwargs
+                    )
 
-            replay_buffer.push_game_segments(new_data)
-            buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
-            logger.info(f"  ✓ Data collected, buffer size: {buffer_size} transitions")
-
-        else:
-            if collect_task is None or collect_task.done():
-                if coordinator.can_collect():
-                    logger.info(f"\n[Iter {learner.train_iter}] Starting async collect...")
-
-                    async def collect_fn():
-                        return await collector.collect(
-                            train_iter=learner.train_iter,
-                            policy_kwargs=collect_kwargs
-                        )
-
-                    collect_task = asyncio.create_task(coordinator.run_collect(collect_fn))
-                else:
-                    logger.debug(f"Collect blocked (lag={coordinator.collect_train_lag}/{coordinator.off_policy_degree})")
-
-            if collect_task is not None and collect_task.done():
-                new_data = await collect_task
-                collect_task = None
-
-                pending_new_data = new_data
-                logger.info(f"  ✓ Async collect completed, data pending buffer update")
-
-            if pending_new_data is not None:
-                update_per_collect = calculate_update_per_collect(cfg, pending_new_data, world_size=world_size)
-
-                replay_buffer.push_game_segments(pending_new_data)
-                buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
-                logger.info(f"  ✓ Buffer updated, size: {buffer_size} transitions")
-
-                pending_new_data = None
+                collect_task = asyncio.create_task(coordinator.run_collect(collect_fn))
             else:
-                update_per_collect = cfg.policy.get('update_per_collect', 10)
+                logger.debug(f"Collect blocked (lag={coordinator.collect_train_lag}/{coordinator.off_policy_degree})")
+
+        if collect_task is not None and collect_task.done():
+            new_data = await collect_task
+            collect_task = None
+
+            pending_new_data = new_data
+            logger.info(f"  ✓ Async collect completed, data pending buffer update")
+
+        if pending_new_data is not None:
+            update_per_collect = calculate_update_per_collect(cfg, pending_new_data, world_size=world_size)
+
+            replay_buffer.push_game_segments(pending_new_data)
+            buffer_size = replay_buffer.get_num_of_transitions() if hasattr(replay_buffer, 'get_num_of_transitions') else 0
+            logger.info(f"  ✓ Buffer updated, size: {buffer_size} transitions")
+
+            pending_new_data = None
+        else:
+            update_per_collect = cfg.policy.get('update_per_collect', 10)
 
         if cfg.policy.buffer_reanalyze_freq >= 1:
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
@@ -271,18 +255,10 @@ async def train_priorzero(
 
                 return log_vars
 
-            if is_sync_mode:
-                for i in range(update_per_collect):
-                    await train_one_batch()    
-                if replay_buffer.get_num_of_transitions() >= replay_buffer.replay_buffer_size:
-                    all_data = replay_buffer.sample(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
-                    replay_buffer._clear()
-                    await policy._forward_llm_learn(all_data)
+            if coordinator.can_train():
+                await coordinator.run_train(train_one_batch)
             else:
-                if coordinator.can_train():
-                    await coordinator.run_train(train_one_batch)
-                else:
-                    logger.debug(f"Train waiting for collect...")
+                logger.debug(f"Train waiting for collect...")
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 
@@ -290,8 +266,7 @@ async def train_priorzero(
             logger.info("Stopping condition met, training ends!")
             break
 
-        if not is_sync_mode:
-            await asyncio.sleep(0.001)
+        await asyncio.sleep(0.001)
 
     if cfg.policy.enable_async_eval:
         logger.info("Waiting for async eval to complete...")
@@ -319,10 +294,13 @@ def main():
     args.quick_test = True
     if args.quick_test:
         logger.info("Using quick test configuration")
-        main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_debug_{args.env_id}_seed0')
+        main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_async_debug_{args.env_id}_seed0')
     else:
         main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_rft_reinforce++_{args.env_id}_seed0')
 
+    main_cfg.policy.off_policy_degree = 1
+    main_cfg.policy.enable_async_eval = True
+    
     if main_cfg.policy.multi_gpu:
         with DDPContext():
             main_cfg = lz_to_ddp_config(main_cfg)
