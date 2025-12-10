@@ -726,7 +726,6 @@ class UniZeroPolicy(MuZeroPolicy):
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
-        rnd_loss = self.rnd.compute_loss(obs_batch=obs_batch_ori)
     
         # ==================== START MODIFICATION 2 ====================
         # Extract the calculated value_priority from the returned losses.
@@ -810,6 +809,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Scale the loss by the number of accumulation steps
         if self._cfg.use_rnd_model:
+            rnd_loss = self.rnd.compute_loss(obs_batch=obs_batch_ori)
             weighted_total_loss = weighted_total_loss + self._cfg.rnd_weights * rnd_loss
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()

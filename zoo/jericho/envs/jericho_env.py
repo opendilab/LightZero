@@ -4,6 +4,7 @@ import os
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
+from collections import OrderedDict
 
 import gym
 import numpy as np
@@ -53,7 +54,9 @@ class JerichoEnv(BaseEnv):
         'save_replay': False,
         'save_replay_path': None,
         'env_type': "zork1",
-        'collect_policy_mode': "agent"
+        'collect_policy_mode': "agent",
+        'use_cache': True,
+        'cache_size': 100000,
     }
 
     def __init__(self, cfg: Dict[str, Any]) -> None:
@@ -91,6 +94,12 @@ class JerichoEnv(BaseEnv):
         self.remove_stuck_actions: bool = self.cfg['remove_stuck_actions']
         self.add_location_and_inventory: bool = self.cfg['add_location_and_inventory']
         self.for_unizero: bool = self.cfg['for_unizero']
+        
+        self.use_cache = self.cfg['use_cache']
+        if self.use_cache:
+            self.cache_size = self.cfg['cache_size']
+            self.cache_buffer = OrderedDict()
+            print(f'[jericho]: use_cache: {self.use_cache}, cache_size={self.cache_size}')
         
         # Initialize the tokenizer once (only in rank 0 process if distributed)
         if JerichoEnv.tokenizer is None:
@@ -134,7 +143,18 @@ class JerichoEnv(BaseEnv):
               and action mask. For unizero, an additional "to_play" key is provided.
         """
         if self._action_list is None:
-            self._action_list = self._env.get_valid_actions()
+            if self.use_cache:
+                cache_key = self._env.get_world_state_hash()
+                if cache_key in self.cache_buffer:
+                    self.cache_buffer.move_to_end(cache_key)
+                    self._action_list = self.cache_buffer[cache_key]
+                else:
+                    self._action_list = self._env.get_valid_actions()
+                    self.cache_buffer[cache_key] = self._action_list
+                    if len(self.cache_buffer) > self.cache_size:
+                        self.cache_buffer.popitem(last=False)
+            else:
+                self._action_list = self._env.get_valid_actions()
 
         # Filter available actions based on whether stuck actions are removed.
         if self.remove_stuck_actions:
@@ -488,10 +508,10 @@ if __name__ == '__main__':
             for_unizero=False,
             collector_env_num=1,
             evaluator_env_num=1,
-            save_replay=True,
+            save_replay=False,
             save_replay_path=None,
             env_type=env_type,
-            collect_policy_mode='expert'    # random, human, expert
+            collect_policy_mode='random'    # random, human, expert
         )
     )
     env = JerichoEnv(env_cfg)
