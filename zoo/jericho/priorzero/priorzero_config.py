@@ -80,6 +80,8 @@ def get_priorzero_config(
         manager=dict(
             shared_memory=False,
         ),
+        use_cache=True,
+        cache_size=100000,
     )
     policy_config = dict(
         type='priorzero',
