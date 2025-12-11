@@ -1,3 +1,20 @@
+/**
+ * Overview:
+ *     This module implements Monte Carlo Tree Search (MCTS) for AlphaZero-like algorithms
+ *     with batch processing support for improved GPU utilization.
+ *
+ * Current Architecture:
+ *     - MCTS tree search implemented in C++ for performance
+ *     - Environment simulation via Python objects for modularity
+ *     - Frequent C++-Python boundary crossings for env interactions
+ *
+ * Performance Bottleneck & Future Optimization:
+ *     Frequent C++-Python interactions (env.step, legal_actions, get_done_winner, etc.)
+ *     may become a bottleneck at high batch sizes. Future optimization direction:
+ *     Consider C++-ifying the environment (env_cpp_ification) to eliminate boundary
+ *     crossing overhead and enable efficient batch operations.
+ */
+
 #include "node_alphazero.h"
 #include <cmath>
 #include <map>
@@ -101,18 +118,24 @@ public:
         std::shared_ptr<Node> child = nullptr;
         double best_score = -9999999;
 
+        // Get legal actions: use cached version if available, otherwise query environment
+        // (Optimization: cached legal_actions reduce C++-Python boundary calls)
+        std::vector<int> legal_actions;
+        if (node->has_legal_actions()) {
+            // Use cached legal actions from the node expansion
+            legal_actions = node->get_legal_actions();
+        } else {
+            // Fallback: query environment if not cached (shouldn't happen in normal flow)
+            py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+            for (py::handle h : legal_actions_py) {
+                legal_actions.push_back(h.cast<int>());
+            }
+        }
+
         // Iterate through all children
         for (const auto& kv : node->children) {
             int action_tmp = kv.first;
             std::shared_ptr<Node> child_tmp = kv.second;
-
-            // Get legal actions from the simulation environment
-            py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-
-            std::vector<int> legal_actions;
-            for (py::handle h : legal_actions_py) {
-                legal_actions.push_back(h.cast<int>());
-            }
 
             // Check if the action is legal and calculate UCB score
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
@@ -131,7 +154,7 @@ public:
         return std::make_pair(action, child);
     }
 
-    // Expand a leaf node by adding its children based on policy probabilities
+    // Expand a single leaf node for non-batch case.
     double _expand_leaf_node(std::shared_ptr<Node> node, py::object simulate_env, py::object policy_value_func) {
         std::map<int, double> action_probs_dict;
         double leaf_value;
@@ -145,6 +168,9 @@ public:
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
         std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
 
+        // Cache legal actions in the node for future use (optimization: avoid repeated env queries)
+        node->set_legal_actions(legal_actions);
+
         // Add child nodes for legal actions
         for (const auto& kv : action_probs_dict) {
             int action = kv.first;
@@ -157,7 +183,271 @@ public:
         return leaf_value;
     }
 
-    // Main function to get the next action from MCTS
+    // Batch expand multiple leaf nodes using parallel batch inference.
+    // Returns a list of leaf values for all nodes.
+    std::vector<double> _batch_expand_leaf_nodes(
+        const std::vector<std::shared_ptr<Node>>& leaf_nodes,
+        const std::vector<py::object>& simulate_envs,
+        py::object policy_value_func_batch
+    ) {
+        if (leaf_nodes.empty() || simulate_envs.empty()) {
+            return std::vector<double>();
+        }
+
+        int batch_size = leaf_nodes.size();
+        std::vector<double> leaf_values(batch_size);
+
+        py::list env_list;
+        for (int i = 0; i < batch_size; ++i) {
+            env_list.append(simulate_envs[i]);
+        }
+
+        py::list batch_results = policy_value_func_batch(env_list).cast<py::list>();
+
+        for (int i = 0; i < batch_size; ++i) {
+            py::object env = simulate_envs[i];
+            std::shared_ptr<Node> node = leaf_nodes[i];
+
+            py::tuple result = batch_results[i].cast<py::tuple>();
+            std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
+            double leaf_value = result[1].cast<double>();
+
+            leaf_values[i] = leaf_value;
+
+            py::list legal_actions_list = env.attr("legal_actions").cast<py::list>();
+            std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+            // Cache legal actions in the node for future use (optimization: avoid repeated env queries)
+            node->set_legal_actions(legal_actions);
+
+            for (const auto& kv : action_probs_dict) {
+                int action = kv.first;
+                double prior_p = kv.second;
+                if (std::find(legal_actions.begin(), legal_actions.end(), action) !=
+                    legal_actions.end()) {
+                    node->children[action] = std::make_shared<Node>(node, prior_p);
+                }
+            }
+        }
+
+        return leaf_values;
+    }
+
+    // Batch version: Get next actions for multiple environments with batch inference optimization.
+    std::vector<std::tuple<int, std::vector<double>, std::shared_ptr<Node>>> get_next_actions_batch(
+        py::list state_configs_list,
+        py::object policy_value_func_batch,
+        double temperature,
+        bool sample,
+        py::list simulate_env_list
+    ) {
+        int batch_size = py::len(state_configs_list);
+        std::vector<std::tuple<int, std::vector<double>, std::shared_ptr<Node>>> results;
+        results.reserve(batch_size);
+
+        std::vector<std::shared_ptr<Node>> roots;
+        roots.reserve(batch_size);
+
+        std::vector<py::object> init_states;
+        std::vector<py::object> katago_game_states;
+        init_states.reserve(batch_size);
+        katago_game_states.reserve(batch_size);
+
+        for (int i = 0; i < batch_size; ++i) {
+            roots.push_back(std::make_shared<Node>());
+            py::object state_config = state_configs_list[i].cast<py::object>();
+
+            py::object init_state = state_config["init_state"];
+            if (!init_state.is_none()) {
+                init_state = py::bytes(init_state.attr("tobytes")());
+            }
+            init_states.push_back(init_state);
+
+            py::object katago_game_state = state_config["katago_game_state"];
+            if (!katago_game_state.is_none()) {
+                katago_game_state = py::module::import("pickle").attr("dumps")(katago_game_state);
+            }
+            katago_game_states.push_back(katago_game_state);
+        }
+
+        py::list env_list;
+        for (int i = 0; i < batch_size; ++i) {
+            py::object state_config = state_configs_list[i].cast<py::object>();
+            py::object env = simulate_env_list[i];
+            env.attr("reset")(
+                state_config["start_player_index"].cast<int>(),
+                init_states[i],
+                state_config["katago_policy_init"].cast<bool>(),
+                katago_game_states[i]
+            );
+            env_list.append(env);
+        }
+
+        py::list batch_results = policy_value_func_batch(env_list).cast<py::list>();
+
+        for (int i = 0; i < batch_size; ++i) {
+            py::object env = simulate_env_list[i];
+
+            py::tuple result = batch_results[i].cast<py::tuple>();
+            std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
+
+            py::list legal_actions_list = env.attr("legal_actions").cast<py::list>();
+            std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+            // Cache legal actions in the root node for future use (optimization: avoid repeated env queries)
+            roots[i]->set_legal_actions(legal_actions);
+
+            for (const auto& kv : action_probs_dict) {
+                if (std::find(legal_actions.begin(), legal_actions.end(), kv.first) !=
+                    legal_actions.end()) {
+                    roots[i]->children[kv.first] = std::make_shared<Node>(roots[i], kv.second);
+                }
+            }
+
+            if (sample) {
+                _add_exploration_noise(roots[i]);
+            }
+        }
+
+        for (int n = 0; n < num_simulations; ++n) {
+            std::vector<SimulationResult> simulation_results;
+            simulation_results.reserve(batch_size);
+
+            for (int i = 0; i < batch_size; ++i) {
+                py::object state_config = state_configs_list[i].cast<py::object>();
+                py::object env = simulate_env_list[i];
+
+                env.attr("reset")(
+                    state_config["start_player_index"].cast<int>(),
+                    init_states[i],
+                    state_config["katago_policy_init"].cast<bool>(),
+                    katago_game_states[i]
+                );
+                env.attr("battle_mode") = env.attr("battle_mode_in_simulation_env");
+
+                SimulationResult sim_result = _simulate_to_leaf(roots[i], env);
+                simulation_results.push_back(sim_result);
+            }
+
+            std::vector<int> unfinished_indices;
+            std::vector<std::shared_ptr<Node>> leaf_nodes_to_expand;
+            std::vector<py::object> envs_to_infer;
+
+            for (int i = 0; i < batch_size; ++i) {
+                if (!simulation_results[i].is_done) {
+                    unfinished_indices.push_back(i);
+                    leaf_nodes_to_expand.push_back(simulation_results[i].leaf_node);
+                    envs_to_infer.push_back(simulation_results[i].simulate_env);
+                }
+            }
+
+            std::vector<double> leaf_values;
+            if (!unfinished_indices.empty()) {
+                leaf_values = _batch_expand_leaf_nodes(
+                    leaf_nodes_to_expand,
+                    envs_to_infer,
+                    policy_value_func_batch
+                );
+            }
+
+            for (int i = 0; i < batch_size; ++i) {
+                std::shared_ptr<Node> leaf_node = simulation_results[i].leaf_node;
+                py::object env = simulation_results[i].simulate_env;
+                double leaf_value;
+
+                if (simulation_results[i].is_done) {
+                    std::string battle_mode =
+                        env.attr("battle_mode_in_simulation_env").cast<std::string>();
+                    int winner = simulation_results[i].winner;
+
+                    if (battle_mode == "self_play_mode") {
+                        if (winner == -1) {
+                            leaf_value = 0;
+                        } else {
+                            leaf_value =
+                                (env.attr("current_player").cast<int>() == winner) ? 1 : -1;
+                        }
+                    }
+                    else if (battle_mode == "play_with_bot_mode") {
+                        if (winner == -1) {
+                            leaf_value = 0;
+                        }
+                        else if (winner == 1) {
+                            leaf_value = 1;
+                        }
+                        else if (winner == 2) {
+                            leaf_value = -1;
+                        }
+                    }
+                } else {
+                    auto it = std::find(unfinished_indices.begin(), unfinished_indices.end(), i);
+                    if (it != unfinished_indices.end()) {
+                        int result_idx = std::distance(unfinished_indices.begin(), it);
+                        leaf_value = leaf_values[result_idx];
+                    } else {
+                        leaf_value = 0;
+                    }
+                }
+
+                std::string battle_mode =
+                    env.attr("battle_mode_in_simulation_env").cast<std::string>();
+                if (battle_mode == "play_with_bot_mode") {
+                    leaf_node->update_recursive(leaf_value, battle_mode);
+                }
+                else if (battle_mode == "self_play_mode") {
+                    leaf_node->update_recursive(-leaf_value, battle_mode);
+                }
+            }
+        }
+
+        for (int i = 0; i < batch_size; ++i) {
+            py::object state_config = state_configs_list[i].cast<py::object>();
+            py::object env = simulate_env_list[i];
+
+            env.attr("reset")(
+                state_config["start_player_index"].cast<int>(),
+                init_states[i],
+                state_config["katago_policy_init"].cast<bool>(),
+                katago_game_states[i]
+            );
+
+            std::vector<std::pair<int, int>> action_visits;
+            int action_space_n = env.attr("action_space").attr("n").cast<int>();
+            for (int action = 0; action < action_space_n; ++action) {
+                if (roots[i]->children.count(action)) {
+                    action_visits.emplace_back(action, roots[i]->children[action]->visit_count);
+                } else {
+                    action_visits.emplace_back(action, 0);
+                }
+            }
+
+            std::vector<int> actions;
+            std::vector<int> visits;
+            for (const auto& av : action_visits) {
+                actions.emplace_back(av.first);
+                visits.emplace_back(av.second);
+            }
+
+            std::vector<double> visits_d(visits.begin(), visits.end());
+            std::vector<double> action_probs =
+                visit_count_to_action_distribution(visits_d, temperature);
+
+            int action_selected;
+            if (sample) {
+                action_selected = random_choice(actions, action_probs);
+            } else {
+                auto max_it = std::max_element(action_probs.begin(), action_probs.end());
+                action_selected = actions[std::distance(action_probs.begin(), max_it)];
+            }
+
+            results.push_back(std::make_tuple(action_selected, action_probs, roots[i]));
+        }
+
+        return results;
+    }
+
+    // Non-batch version: Get the next action from MCTS for a single environment
+    // For batch processing, use get_next_actions_batch() instead
     std::tuple<int, std::vector<double>, std::shared_ptr<Node>> get_next_action(py::object state_config_for_env_reset, py::object policy_value_func, double temperature, bool sample) {
         std::shared_ptr<Node> root = std::make_shared<Node>();
 
@@ -228,7 +518,37 @@ public:
         return std::make_tuple(action_selected, action_probs, root);
     }
 
-    // Simulate a game starting from a given node
+    // Structure to store single simulation result for parallel batch inference.
+    struct SimulationResult {
+        std::shared_ptr<Node> leaf_node;
+        bool is_done;
+        int winner;
+        py::object simulate_env;
+    };
+
+    // Single simulation from root to leaf node without inference, returns leaf node info.
+    SimulationResult _simulate_to_leaf(std::shared_ptr<Node> node, py::object simulate_env) {
+        while (!node->is_leaf()) {
+            int action;
+            std::shared_ptr<Node> child;
+            std::tie(action, child) = _select_child(node, simulate_env);
+            if (action == -1) {
+                break;
+            }
+            simulate_env.attr("step")(action);
+            node = child;
+        }
+
+        bool done;
+        int winner;
+        py::tuple result = simulate_env.attr("get_done_winner")();
+        done = result[0].cast<bool>();
+        winner = result[1].cast<int>();
+
+        return SimulationResult{node, done, winner, simulate_env};
+    }
+
+    // Legacy single environment simulation function (kept for backward compatibility).
     void _simulate(std::shared_ptr<Node> node, py::object simulate_env, py::object policy_value_func) {
         while (!node->is_leaf()) {
             int action;
@@ -372,5 +692,11 @@ PYBIND11_MODULE(mcts_alphazero, m) {
              py::arg("state_config_for_env_reset"),
              py::arg("policy_value_func"),
              py::arg("temperature"),
-             py::arg("sample"));
+             py::arg("sample"))
+        .def("get_next_actions_batch", &MCTS::get_next_actions_batch,
+             py::arg("state_configs_list"),
+             py::arg("policy_value_func_batch"),
+             py::arg("temperature"),
+             py::arg("sample"),
+             py::arg("simulate_env_list"));
 }

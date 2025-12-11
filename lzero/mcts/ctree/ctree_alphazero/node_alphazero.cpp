@@ -29,5 +29,9 @@ PYBIND11_MODULE(node_alphazero, m) {
             return nullptr;
         }
         return it->second;
-    });
+    })
+        .def("set_legal_actions", &Node::set_legal_actions)
+        .def("get_legal_actions", &Node::get_legal_actions)
+        .def("has_legal_actions", &Node::has_legal_actions)
+        .def_readwrite("is_expanded", &Node::is_expanded);
 }

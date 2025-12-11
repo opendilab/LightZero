@@ -218,6 +218,19 @@ class AlphaZeroPolicy(Policy):
         """
         self._get_simulation_env()
         self._collect_model = self._model
+
+        # Create multiple independent simulate_env instances for batch processing
+        from ding.utils import import_module, ENV_REGISTRY
+        import_names = self._cfg.create_cfg.env.get('import_names', [])
+        import_module(import_names)
+        env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
+
+        # Create env list (one for each collector env)
+        self.simulate_env_list = []
+        for _ in range(self._cfg.collector_env_num):
+            env = env_cls(self._cfg.full_cfg.env)
+            self.simulate_env_list.append(env)
+
         if self._cfg.mcts_ctree:
             from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
             # Use the function to add the desired path to sys.path
@@ -257,26 +270,48 @@ class AlphaZeroPolicy(Policy):
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
         katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
-        output = {}
+
         self._policy_model = self._collect_model
+
+        # ========== Step 1: Prepare all state configurations ==========
+        state_configs = []
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
+            state_config = EasyDict(dict(
+                start_player_index=start_player_index[env_id],
+                init_state=init_state[env_id],
+                katago_policy_init=False,
+                katago_game_state=katago_game_state[env_id]
+            ))
+            state_configs.append(state_config)
+
+        # ========== Step 2: Batch MCTS call ==========
+        # Pass the corresponding number of env instances
+        env_list = self.simulate_env_list[:len(ready_env_id)]
+        results = self._collect_mcts.get_next_actions_batch(
+            state_configs,  # List of state configs containing start_player_index, init_state, katago_game_state
+            self._policy_value_fn_batch,  # Batch policy-value function for parallel neural network inference
+            self.collect_mcts_temperature,  # temperature: MCTS action selection temperature for exploration control
+            True,  # sample: whether to sample actions (True for exploration during data collection)
+            env_list  # List of simulation environments for batch processing
+        )
+
+        # ========== Step 3: Process results ==========
+        output = {}
+        for idx, env_id in enumerate(ready_env_id):
+            result = results[idx]
             # Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations
-            result = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
             if len(result) == 3:
                 # ctree implementation returns: action, mcts_probs, root
                 action, mcts_probs, root = result
             else:
                 # ptree implementation returns: action, mcts_probs
                 action, mcts_probs = result
-                
+
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
             }
+
         return output
 
     def _init_eval(self) -> None:
@@ -285,6 +320,19 @@ class AlphaZeroPolicy(Policy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._get_simulation_env()
+
+        # Create multiple independent simulate_env instances for batch processing
+        from ding.utils import import_module, ENV_REGISTRY
+        import_names = self._cfg.create_cfg.env.get('import_names', [])
+        import_module(import_names)
+        env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
+
+        # Create env list (one for each evaluator env)
+        self.simulate_env_list_eval = []
+        for _ in range(self._cfg.evaluator_env_num):
+            env = env_cls(self._cfg.full_cfg.env)
+            self.simulate_env_list_eval.append(env)
+
         if self._cfg.mcts_ctree:
             from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
             # Use the function to add the desired path to sys.path
@@ -327,27 +375,48 @@ class AlphaZeroPolicy(Policy):
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
         katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
-        output = {}
+
         self._policy_model = self._eval_model
+
+        # ========== Step 1: Prepare all state configurations ==========
+        state_configs = []
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
-            result = self._eval_mcts.get_next_action(
-                state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
-            )
+            state_config = EasyDict(dict(
+                start_player_index=start_player_index[env_id],
+                init_state=init_state[env_id],
+                katago_policy_init=False,
+                katago_game_state=katago_game_state[env_id]
+            ))
+            state_configs.append(state_config)
+
+        # ========== Step 2: Batch MCTS call ==========
+        # Pass the corresponding number of env instances
+        env_list = self.simulate_env_list_eval[:len(ready_env_id)]
+        results = self._eval_mcts.get_next_actions_batch(
+            state_configs,  # List of state configs containing start_player_index, init_state, katago_game_state
+            self._policy_value_fn_batch,  # Batch policy-value function for parallel neural network inference
+            1.0,  # temperature: MCTS action selection temperature (1.0 for deterministic evaluation)
+            False,  # sample: whether to sample actions (False for greedy selection during evaluation)
+            env_list  # List of simulation environments for batch processing
+        )
+
+        # ========== Step 3: Process results ==========
+        output = {}
+        for idx, env_id in enumerate(ready_env_id):
+            result = results[idx]
+            # Compatible with both ctree (returns 3 values) and ptree (returns 2 values) implementations
             if len(result) == 3:
                 # ctree implementation returns: action, mcts_probs, root
                 action, mcts_probs, root = result
             else:
                 # ptree implementation returns: action, mcts_probs
                 action, mcts_probs = result
-                
+
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
             }
+
         return output
 
     def _get_simulation_env(self):
@@ -370,6 +439,21 @@ class AlphaZeroPolicy(Policy):
 
     @torch.no_grad()
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
+        """
+        Overview:
+            Compute policy and value for a single environment. Provides backward compatibility
+            with single-environment inference interface.
+
+        Arguments:
+            - env (:obj:`Env`): Single environment object to process.
+
+        Returns:
+            - action_probs_dict (:obj:`Dict[int, np.ndarray]`): Dictionary mapping legal action indices to probabilities.
+            - value (:obj:`float`): Estimated state value.
+
+        Shapes:
+            - current_state_scale (:obj:`torch.Tensor`): :math:`(1, C, H, W)` after unsqueeze.
+        """
         legal_actions = env.legal_actions
         current_state, current_state_scale = env.current_state()
         current_state_scale = torch.from_numpy(current_state_scale).to(
@@ -379,6 +463,64 @@ class AlphaZeroPolicy(Policy):
             action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
         return action_probs_dict, value.item()
+
+    @torch.no_grad()
+    def _policy_value_fn_batch(self, env_list: List['Env']) -> List[Tuple[Dict[int, np.ndarray], float]]:  # noqa
+        """
+        Overview:
+            Batch inference for multiple environments to improve GPU utilization.
+            Processes multiple game states in a single forward pass instead of iterating individually.
+
+        Arguments:
+            - env_list (:obj:`List[Env]`): List of environment objects to process.
+
+        Returns:
+            - results (:obj:`List[Tuple[Dict[int, np.ndarray], float]]`): List of (action_probs_dict, value) tuples.
+              action_probs_dict maps legal action indices to their probabilities.
+
+        Shapes:
+            - state_batch (:obj:`torch.Tensor`): :math:`(B, C, H, W)` where B is batch size.
+            - action_probs_batch (:obj:`torch.Tensor`): :math:`(B, A)` where A is action space size.
+            - value_batch (:obj:`torch.Tensor`): :math:`(B,)`.
+        """
+        if len(env_list) == 0:
+            return []
+
+        # Fallback to single-env handler for efficiency
+        if len(env_list) == 1:
+            result = self._policy_value_fn(env_list[0])
+            return [result]
+
+        # Collect states and legal actions from all environments
+        legal_actions_list = []
+        state_batch_list = []
+
+        for env in env_list:
+            legal_actions_list.append(env.legal_actions)
+            current_state, current_state_scale = env.current_state()
+            state_tensor = torch.from_numpy(current_state_scale).to(
+                device=self._device, dtype=torch.float
+            )
+            state_batch_list.append(state_tensor)
+
+        # Stack states into batch tensor
+        state_batch = torch.stack(state_batch_list, dim=0)
+
+        # Single batch forward pass
+        with torch.no_grad():
+            action_probs_batch, value_batch = self._policy_model.compute_policy_value(state_batch)
+
+        # Unpack results and build output dictionaries with legal actions only
+        results = []
+        for i, legal_actions in enumerate(legal_actions_list):
+            action_probs = action_probs_batch[i]
+            value = value_batch[i]
+            action_probs_dict = dict(
+                zip(legal_actions, action_probs[legal_actions].detach().cpu().numpy())
+            )
+            results.append((action_probs_dict, value.item()))
+
+        return results
 
     def _monitor_vars_learn(self) -> List[str]:
         """

@@ -63,8 +63,11 @@ mkdir -p build
 # Navigate into the "build" directory
 cd build || exit
 
-# Run cmake on the parent directory with the specified architecture
-cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64"
+# Get pybind11 cmake directory
+PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
+
+# Run cmake on the parent directory with the specified architecture and pybind11 path
+cmake .. -DCMAKE_OSX_ARCHITECTURES="arm64" -DCMAKE_PREFIX_PATH="$PYBIND11_CMAKE_DIR"
 
 # Run the "make" command to compile the project
 make
