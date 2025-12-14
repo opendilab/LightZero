@@ -55,11 +55,12 @@ def get_priorzero_config(
     ## LLM 参数
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
     llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
-    total_batch_size = 128   # Total batch size across all GPUs
+    train_batch_size = 128   # Total batch size across all GPUs
+    GPUS = 1
     micro_batch_size = 16    # Micro batch size per GPU
-    gradient_accumulation_steps = total_batch_size // micro_batch_size
+    gradient_accumulation_steps = train_batch_size // micro_batch_size // GPUS
     rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
-    use_cot = True  # Whether to use chain-of-thought prompting
+    use_cot = False  # Whether to use chain-of-thought prompting
     history_length = 5
     llm_learn_num_samples = 512
     replay_buffer_size = llm_learn_num_samples
@@ -179,28 +180,37 @@ def get_priorzero_config(
         priority_prob_alpha=0.6,
         priority_prob_beta=0.4,
         llm_policy_cfg=dict(
+            # 是否使用大模型的相关参数
             enable_llm=True,
+            enable_sft=False,
+            enable_rft=True,
+            sft_loss_weight=1,   # Weight of SFT loss in total loss
+            rft_loss_weight=1, 
+            prompt_log_interval=1000, # 隔多久step输出模型的回答和valid action进行对比
+            
+            # 模型相关参数
             pretrain_llm_path=llm_model_name,
             history_length=history_length,
             use_cot=use_cot,
-            llm_learn_num_samples=llm_learn_num_samples,
-            enable_sft=False,
-            enable_rft=True,
+            prompt_max_len=2048,
+            generate_max_len=128,
+            temperature = 1.0,
+            top_p = 1.0,
+            
+            # 训练相关参数
+            zero_stage=0,
+            train_batch_size=train_batch_size,
+            micro_batch_size=micro_batch_size,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            learning_rate=1e-5,
+            weight_decay=0.01,
+            
+            # loss相关参数 
             rft_loss_type=rft_loss_type,
             rft_clip_epsilon=0.2,
             rft_kl_coef=0.01,
-            
-            llm_learning_rate=1e-5,
-            llm_weight_decay=0.01,
-            sft_loss_weight=1,   # Weight of SFT loss in total loss
-            rft_loss_weight=1, 
-            llm_micro_batch_size=micro_batch_size,
-            
-            llm_gradient_accumulation_steps=gradient_accumulation_steps,
-            prompt_log_interval=1000, # 隔多久step输出模型的回答和valid action进行对比
-            
-            prompt_max_len=2048,
-            generate_max_len=128,
+        
+            # vllm 相关参数
             vllm_tensor_parallel_size=1,
             gpu_memory_utilization=0.2,
         ),

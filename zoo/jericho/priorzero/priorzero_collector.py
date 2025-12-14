@@ -13,7 +13,7 @@ import torch
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, allreduce_data
-from vllm import AsyncLLMEngine, SamplingParams
+from vllm import SamplingParams
 import os
 
 # Import from local LightZero
@@ -74,10 +74,8 @@ def extract_raw_obs_text(obs_dict: Dict[str, Any]) -> str:
 class PriorZeroCollector(OriginalCollector):
     """
     [PRIORZERO-MODIFIED]
-    Async collector that integrates LLM priors into MCTS-based data collection.
 
     Features:
-    - Async LLM inference with vLLM engine
     - History buffer for each environment (sliding window)
     - Robust error handling with retries
     - Detailed logging of LLM prior statistics
@@ -85,7 +83,7 @@ class PriorZeroCollector(OriginalCollector):
 
     def __init__(
         self,
-        vllm_engine: AsyncLLMEngine,
+        llm_prior_generator,
         policy_config: Dict,
         **kwargs
     ):
@@ -93,7 +91,7 @@ class PriorZeroCollector(OriginalCollector):
         Initialize PriorZeroCollector.
 
         Args:
-            vllm_engine: vLLM async engine for LLM inference
+            vllm_engine
             policy_config: Policy configuration (contains llm_policy_cfg)
             **kwargs: Additional arguments for parent class
         """
@@ -103,9 +101,7 @@ class PriorZeroCollector(OriginalCollector):
 
         super().__init__(**kwargs)
 
-        self.vllm_engine = vllm_engine
-        self._vllm_tokenizer = None
-        # self.policy_config already set by parent class from kwargs
+        self.llm_prior_generator = llm_prior_generator
         self.llm_policy_cfg = policy_config.llm_policy_cfg
 
         # [PRIORZERO-NEW] History buffer for each environment
@@ -195,124 +191,37 @@ class PriorZeroCollector(OriginalCollector):
         last_game_segments[i] = None
         last_game_priorities[i] = None
     
-    async def _get_tokenizer(self):
-        """
-        从 vLLM 引擎获取已加载的 tokenizer 引用。
-        只在第一次调用时会有极小的 async 开销，之后直接返回内存引用。
-        """
-        if self._vllm_tokenizer is None:
-            self._vllm_tokenizer = await self.vllm_engine.get_tokenizer()
-        return self._vllm_tokenizer
-    
-    async def _async_get_llm_prior(
+    def _get_llm_prior(
         self,
         states: List[str],
-        request_ids: List[str],
         valid_actions_list: List[List[str]], 
         histories: Optional[List[List[Tuple[str, str, float]]]] = None,
-        timeout: float = 30.0
     ) -> List[Any]:
         """
         [PRIORZERO-SEQUENCE-SCORING]
-        Async call to calculate the log-probability of full action sequences.
         Ensures every action has a logprob by retrying and falling back if needed.
         """
 
-        assert self.vllm_engine is not None, "vLLM engine is not initialized."
-        tokenizer = await self._get_tokenizer()
-
-        max_retry = 3
-        fallback_lp = -1e3
-
-        async def run_once(target_missing: List[set], retry_idx: int):
-            all_prompts_data = []
-            for i, state in enumerate(states):
-                if len(target_missing[i]) == 0:
-                    continue
-                history = histories[i]
-                instruction = build_llm_prompt(
-                    current_obs=state,
-                    history=history,
-                    use_cot=self.llm_policy_cfg.use_cot
-                )
-                context_text = tokenizer.apply_chat_template(
-                    [{"role": "user", "content": instruction}], 
-                    tokenize=False, 
-                    add_generation_prompt=True
-                )
-                context_tokens = tokenizer.encode(context_text)
-                context_len = len(context_tokens)
-
-                actions = list(target_missing[i])
-
-                for act_idx, action in enumerate(actions):
-                    formatted_action = f"{action}{tokenizer.eos_token}"
-                    full_text = context_text + formatted_action
-                    unique_req_id = f"{request_ids[i]}_act_{act_idx}_retry{retry_idx}"
-                    all_prompts_data.append({
-                        "idx": i,
-                        "action_str": action, 
-                        "full_text": full_text,
-                        "context_len": context_len,
-                        "req_id": unique_req_id
-                    })
-
-            sampling_params = SamplingParams(
-                temperature=1.0,
-                max_tokens=1,
-                prompt_logprobs=1, 
-            )
-
-            async def get_sequence_score(item):
-                results_generator = self.vllm_engine.generate(item["full_text"], sampling_params, item["req_id"])
-                final_output = None
-                async for request_output in results_generator:
-                    final_output = request_output
-
-                action_logprobs_list = final_output.prompt_logprobs[item["context_len"]:]
-                total_score, valid_tokens = 0.0, 0
-                for token_dict in action_logprobs_list:
-                    if token_dict:
-                        lp_obj = next(iter(token_dict.values()))
-                        total_score += lp_obj.logprob
-                        valid_tokens += 1
-                if valid_tokens == 0:
-                    return item["idx"], item["action_str"], None
-                return item["idx"], item["action_str"], total_score / valid_tokens
-
-            tasks = [get_sequence_score(item) for item in all_prompts_data]
-            results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=timeout)
-            final_priors = [{} for _ in range(len(states))]
-            for i, action_str, score in results:
-                if score is not None:
-                    final_priors[i][action_str] = score
-            return final_priors
-
-        priors = [{} for _ in range(len(states))]
-        missing = [set(actions) for actions in valid_actions_list]
-
-        for retry_idx in range(max_retry + 1):
-            try:
-                new_priors = await run_once(missing, retry_idx)
-            except Exception as e:
-                self._logger.error(f"Batch LLM critical error (retry {retry_idx}): {e}")
-                new_priors = [{} for _ in range(len(states))]
-
-            for i in range(len(states)):
-                priors[i].update(new_priors[i])
-                missing[i] -= set(new_priors[i].keys())
-
-            if all(len(m) == 0 for m in missing):
-                break
-
-        # Fill any remaining missing actions with fallback
-        for i, remaining in enumerate(missing):
-            if remaining:
-                self._logger.warning(f"[LLM prior] missing actions after retries, fill fallback: {remaining}")
-                for act in remaining:
-                    priors[i][act] = fallback_lp
-
-        return priors
+        assert self.llm_prior_generator is not None, "llm_prior_generator is None."
+        all_prompts = []
+        all_labels = []
+        for i, actions in enumerate(valid_actions_list):    
+            state = states[i]
+            history = histories[i]
+            prompt = build_llm_prompt(current_obs=state, history=history, use_cot=self.llm_policy_cfg.use_cot)
+            for action in actions:
+                all_prompts.append(prompt)
+                all_labels.append(action)
+                
+        all_prior_scores = self.llm_prior_generator._generate_vllm(all_prompts, all_labels, reduction='mean')
+        llm_prior, idx = [], 0
+        for env_id in range(len(states)):
+            tmp_dict = {}
+            for action in valid_actions_list[env_id]:
+                tmp_dict[action] = all_prior_scores[idx]
+                idx = idx + 1
+            llm_prior.append(tmp_dict)
+        return llm_prior
 
     @contextmanager
     def _profile_block(self, name: str):
@@ -341,59 +250,8 @@ class PriorZeroCollector(OriginalCollector):
                     f"{time.time():.3f}\tname={name}\tcount={self._profile_stats[name]['count']}\t"
                     f"total_s={self._profile_stats[name]['total']:.4f}\tavg_s={avg:.4f}\tmax_s={self._profile_stats[name]['max']:.4f}\n"
                 )
-
-    async def _log_llm_response(
-        self,
-        raw_obs_text: str,
-        history: List[Tuple[str, str, float]],
-        valid_actions: List[str],
-    ) -> None:
-        """
-        Periodically log LLM output for a debug prompt and current valid actions.
-        """
-        self._llm_call_count += 1
-        if self._llm_call_count != 1 and (self._llm_call_count % self.prompt_log_interval != 0):
-            return 
-        tokenizer = await self._get_tokenizer()
-        instruction = build_llm_prompt(
-            current_obs=raw_obs_text,
-            history=history,
-            use_cot=self.llm_policy_cfg.use_cot,
-        )
-        prompt_text = tokenizer.apply_chat_template(
-            [{"role": "user", "content": instruction}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        sampling_params = SamplingParams(
-            temperature=0.0,
-            max_tokens=self.llm_policy_cfg.generate_max_len,
-            top_p=1.0,
-        )
-        try:
-            result_gen = self.vllm_engine.generate(
-                prompt_text,
-                sampling_params,
-                request_id=f"llm_call_count_{self._llm_call_count}",
-            )
-            async for request_output in result_gen:
-                if request_output.finished:
-                    llm_output_text = request_output.outputs[0].text or ""
-                    break
-        except Exception as e:
-            llm_output_text = f"[LLM logging error: {repr(e)}]"         
-        llm_output_text = llm_output_text.strip()
-
-        with open(self._llm_output_log_path, mode='a', encoding='utf-8') as f:
-            f.write(
-                f"llm_call_count={self._llm_call_count}\t"
-                f"valid_actions={valid_actions}\n"
-                f"llm_input={prompt_text}\n"
-                f"llm_output={llm_output_text}\n"
-                "----\n"
-            )
-
-    async def collect(
+                
+    def collect(
         self,
         num_segments: Optional[int] = None,
         train_iter: int = 0,
@@ -406,9 +264,8 @@ class PriorZeroCollector(OriginalCollector):
 
         Main changes from parent:
         1. Extract text observations from environment
-        2. Async call to LLM to get action priors
-        3. Pass LLM priors to policy forward pass
-        4. Update history buffers after each step
+        2. Pass LLM priors to policy forward pass
+        3. Update history buffers after each step
 
         Args:
             num_segments: Number of segments to collect
@@ -535,23 +392,11 @@ class PriorZeroCollector(OriginalCollector):
                         valid_actions_list.append(valid_actions)
 
                     if self.policy_config.llm_policy_cfg.enable_llm:
-                        request_ids = []
-                        for _ in range(len(raw_obs_list)):
-                            self._llm_prior_req_counter += 1
-                            request_ids.append(f"collect_{self._llm_prior_req_counter}")
-
                         with self._profile_block(name='collect_get_llm_prior_profile'):
-                            llm_prior_logprob = await self._async_get_llm_prior(
+                            llm_prior_logprob = self._get_llm_prior(
                                 states=raw_obs_list,
-                                request_ids=request_ids,
                                 valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
                                 histories=histories_list
-                            )
-                        if raw_obs_list:
-                            await self._log_llm_response(
-                                raw_obs_text=raw_obs_list[0],
-                                history=histories_list[0],
-                                valid_actions=valid_actions_list[0],
                             )
                     else:
                         llm_prior_logprob = [None for i in range(len(valid_actions_list))]

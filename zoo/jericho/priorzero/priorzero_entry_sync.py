@@ -25,9 +25,11 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from priorzero_config import get_priorzero_config, get_priorzero_debug_config
 from priorzero_collector import PriorZeroCollector
 from priorzero_evaluator import PriorZeroEvaluator
-import priorzero_policy  
+from priorzero_policy import *
 from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
 from lzero.entry.utils import calculate_update_per_collect
+from priorzero_llm_modules import PriorZeroOpenRLHFLLMConfig, PriorZeroOpenRLHFLLMTrainer
+
 
 def train_priorzero(
     cfg: dict,
@@ -69,26 +71,34 @@ def train_priorzero(
     tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
     logger.info(f"✓ TensorBoard logger: ./{cfg.exp_name}/log/")
 
+    vllm_engine = None
     if cfg.policy.llm_policy_cfg.enable_llm:
-        policy._init_llm_learn(tb_logger=tb_logger, exp_name=cfg.exp_name)
-        
-        logger.info("Creating vLLM engine...")
-        tensor_parallel = cfg.policy.llm_policy_cfg.vllm_tensor_parallel_size
-        distributed_backend = "ray" if tensor_parallel > 1 else None
-
-        gpu_mem_util = cfg.policy.llm_policy_cfg.gpu_memory_utilization
-
-        engine_args = AsyncEngineArgs(
-            model=policy.llm_ckpt_dir,
-            tensor_parallel_size=tensor_parallel,
-            gpu_memory_utilization=gpu_mem_util,
-            distributed_executor_backend=distributed_backend,
-            trust_remote_code=True,
-            enable_prefix_caching=False,
-            enforce_eager=False,
+        llm_cfg = PriorZeroOpenRLHFLLMConfig(
+            model_name_or_path=policy.llm_policy_cfg.pretrain_llm_path,
+            zero_stage=policy.llm_policy_cfg.zero_stage,  # 你传 zero_stage2.json 
+            lr=policy.llm_policy_cfg.learning_rate,
+            weight_decay=policy.llm_policy_cfg.weight_decay,
+            prompt_max_len=policy.llm_policy_cfg.prompt_max_len,
+            generate_max_len=policy.llm_policy_cfg.generate_max_len,
+            use_cot=policy.llm_policy_cfg.use_cot,
+            rft_loss_type=policy.llm_policy_cfg.rft_loss_type,
+            rft_clip_epsilon=policy.llm_policy_cfg.rft_clip_epsilon,
+            rft_kl_coef=policy.llm_policy_cfg.rft_kl_coef,
+            train_batch_size=policy.llm_policy_cfg.train_batch_size,
+            micro_train_batch_size=policy.llm_policy_cfg.micro_batch_size,
+            gradient_accumulation_steps=policy.llm_policy_cfg.gradient_accumulation_steps,
+            bf16=True,
+            enable_vllm=True,
+            vllm_num_engines=1,
+            vllm_tensor_parallel_size=policy.llm_policy_cfg.vllm_tensor_parallel_size,
+            gpu_memory_utilization=policy.llm_policy_cfg.gpu_memory_utilization,
+            seed=seed,
+            temperature=policy.llm_policy_cfg.temperature,
+            top_p=policy.llm_policy_cfg.top_p,
         )
-        vllm_engine = AsyncLLMEngine.from_engine_args(engine_args)
-        logger.info(f"✓ vLLM Engine created (backend: {distributed_backend or 'default'})")
+        trainer = PriorZeroOpenRLHFLLMTrainer(llm_cfg, tb_logger=tb_logger, exp_name=cfg.exp_name)
+        llm_prior_generator = trainer.llm_prior_generator
+        # policy._init_llm_learn(tb_logger=tb_logger, exp_name=cfg.exp_name, vllm_engine=vllm_engine)
     
     learner = BaseLearner(
         cfg.policy.learn.learner,
@@ -108,7 +118,7 @@ def train_priorzero(
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        vllm_engine=vllm_engine,
+        llm_prior_generator=llm_prior_generator,
         policy_config=cfg.policy,
     )
     logger.info("✓ Collector created")
@@ -158,10 +168,10 @@ def train_priorzero(
         if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
             logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
             stop, reward = evaluator.eval(
-                    save_ckpt_fn=learner.save_checkpoint,
-                    train_iter=learner.train_iter,
-                    envstep=collector.envstep
-                )
+                save_ckpt_fn=learner.save_checkpoint,
+                train_iter=learner.train_iter,
+                envstep=collector.envstep
+            )
             if stop:
                 break
 
@@ -171,8 +181,8 @@ def train_priorzero(
         }
 
         new_data = collector.collect(
-            train_iter=learner.train_iter,
-            policy_kwargs=collect_kwargs
+                train_iter=learner.train_iter,
+                policy_kwargs=collect_kwargs
         )
         update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
 
@@ -216,7 +226,7 @@ def train_priorzero(
         if num_of_transitions >= replay_buffer.replay_buffer_size:
             all_data = replay_buffer.sample(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
             replay_buffer._clear()
-            policy._forward_llm_learn(all_data)
+            trainer.train_rft_from_priorzero_batch(all_data)
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
@@ -224,6 +234,7 @@ def train_priorzero(
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             logger.info("Stopping condition met, training ends!")
             break
+
 
     return policy
 
