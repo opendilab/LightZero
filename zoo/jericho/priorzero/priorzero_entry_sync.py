@@ -224,7 +224,7 @@ def train_priorzero(
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if num_of_transitions >= replay_buffer.replay_buffer_size:
-            all_data = replay_buffer.sample(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
+            all_data = replay_buffer.sample(batch_size=replay_buffer.replay_buffer_size, policy=policy)
             replay_buffer._clear()
             trainer.train_rft_from_priorzero_batch(all_data)
 
@@ -256,7 +256,7 @@ def main():
     args = parser.parse_args()
 
     
-    args.quick_test = True
+    # args.quick_test = True
     if args.quick_test:
         logger.info("Using quick test configuration")
         main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_sync_debug_{args.env_id}_seed0')

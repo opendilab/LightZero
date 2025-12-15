@@ -57,12 +57,12 @@ def get_priorzero_config(
     llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
     train_batch_size = 128   # Total batch size across all GPUs
     GPUS = 1
-    micro_batch_size = 16    # Micro batch size per GPU
+    micro_batch_size = 8    # Micro batch size per GPU
     gradient_accumulation_steps = train_batch_size // micro_batch_size // GPUS
     rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
     use_cot = False  # Whether to use chain-of-thought prompting
     history_length = 5
-    llm_learn_num_samples = 512
+    llm_learn_num_samples = 256
     replay_buffer_size = llm_learn_num_samples
     
     env_config = dict(
