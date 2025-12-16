@@ -230,10 +230,10 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
 
         # 主要改动： 由sample改成了确定的取最后batch_size个样本
         if batch_size == -1:
-            batch_index_list = list(range(num_of_transitions))[self.last_pos_in_transition:]
-            self.last_pos_in_transition = num_of_transitions
+            batch_index_list = list(range(num_of_transitions))[self.last_pos_in_transition:]  
         else:
             batch_index_list = list(range(num_of_transitions))[-batch_size:]
+        self.last_pos_in_transition = num_of_transitions 
             
         if self._cfg.reanalyze_outdated:
             batch_index_list.sort()

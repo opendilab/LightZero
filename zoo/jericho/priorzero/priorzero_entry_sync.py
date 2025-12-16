@@ -180,15 +180,13 @@ def train_priorzero(
             'epsilon': 0.0
         }
 
-        new_data = collector.collect(
-                train_iter=learner.train_iter,
-                policy_kwargs=collect_kwargs
-        )
+        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
 
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
         num_of_transitions = replay_buffer.get_num_of_transitions() 
+        new_num_of_transitions = replay_buffer.get_num_of_transitions() - replay_buffer.last_pos_in_transition
         logger.info(f"  ✓ Data collected, num_of_transitions: {num_of_transitions} transitions")
 
         if cfg.policy.buffer_reanalyze_freq >= 1:
@@ -224,8 +222,8 @@ def train_priorzero(
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-        if num_of_transitions >= replay_buffer.replay_buffer_size:
-            all_data = replay_buffer.fetch_latest_batch(batch_size=replay_buffer.replay_buffer_size, policy=policy)
+        if new_num_of_transitions >= cfg.policy.llm_policy_cfg.llm_learn_num_samples:
+            all_data = replay_buffer.fetch_latest_batch(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
             trainer.train_rft_from_priorzero_batch(all_data)
 
         train_epoch += 1

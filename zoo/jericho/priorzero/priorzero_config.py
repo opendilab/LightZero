@@ -63,7 +63,7 @@ def get_priorzero_config(
     use_cot = False  # Whether to use chain-of-thought prompting
     history_length = 5
     llm_learn_num_samples = 256
-    replay_buffer_size = llm_learn_num_samples
+    replay_buffer_size = int(1e5)
     
     env_config = dict(
         stop_value=int(1e6),
@@ -198,6 +198,7 @@ def get_priorzero_config(
             top_p = 1.0,
             
             # 训练相关参数
+            llm_learn_num_samples=llm_learn_num_samples,
             zero_stage=0,
             train_batch_size=train_batch_size,
             micro_batch_size=micro_batch_size,
@@ -291,7 +292,6 @@ def get_priorzero_debug_config(
     main_config.policy.collector_env_num = collector_env_num
     main_config.policy.update_per_collect = 2
     main_config.policy.game_segment_length = game_segment_length
-    main_config.policy.replay_buffer_size = llm_learn_num_samples
     main_config.policy.llm_policy_cfg.llm_learn_num_samples = llm_learn_num_samples 
     
     return main_config, create_config
