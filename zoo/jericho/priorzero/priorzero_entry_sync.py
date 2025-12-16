@@ -187,6 +187,7 @@ def train_priorzero(
         update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
 
         replay_buffer.push_game_segments(new_data)
+        replay_buffer.remove_oldest_data_to_fit()
         num_of_transitions = replay_buffer.get_num_of_transitions() 
         logger.info(f"  ✓ Data collected, num_of_transitions: {num_of_transitions} transitions")
 
@@ -224,8 +225,7 @@ def train_priorzero(
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if num_of_transitions >= replay_buffer.replay_buffer_size:
-            all_data = replay_buffer.sample(batch_size=replay_buffer.replay_buffer_size, policy=policy)
-            replay_buffer._clear()
+            all_data = replay_buffer.fetch_latest_batch(batch_size=replay_buffer.replay_buffer_size, policy=policy)
             trainer.train_rft_from_priorzero_batch(all_data)
 
         train_epoch += 1

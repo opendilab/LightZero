@@ -205,7 +205,8 @@ class PriorZeroCollector(OriginalCollector):
         assert self.llm_prior_generator is not None, "llm_prior_generator is None."
         all_prompts = []
         all_labels = []
-        for i, actions in enumerate(valid_actions_list):    
+        for i, actions in enumerate(valid_actions_list):  
+            actions.append('go')   # 确保环境使用的动作都在valid actions里有对应的logprob
             state = states[i]
             history = histories[i]
             prompt = build_llm_prompt(current_obs=state, history=history, use_cot=self.llm_policy_cfg.use_cot)
