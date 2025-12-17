@@ -36,7 +36,7 @@ class PriorZeroOpenRLHFLLMConfig:
     model_name_or_path: str
     bf16: bool = True
 
-    prompt_max_len: int = 2048
+    prompt_max_len: int = 8192
     generate_max_len: int = 128
     use_cot: bool = True
 
@@ -195,8 +195,9 @@ class PriorZeroOpenRLHFLLMTrainer:
 
                 samples.append(
                     {
+                        "instruction": instruction,
                         "prompt": prompt,
-                        "target": f"{true_action}{self.tokenizer.eos_token}",
+                        "target": true_action,
                         "reward": float(reward_value) if reward_value is not None else 0.0,
                         "target_value": target_value,           
                         "old_logprob": old_logprob,  # Reinforce++ ratio 需要
@@ -230,6 +231,12 @@ class PriorZeroOpenRLHFLLMTrainer:
         if len(samples) == 0:
             return {"rft_loss": 0.0}
 
+        if self.cfg.use_cot:
+            all_instructions = [s["instruction"] for s in samples]
+            all_prefix_cot = self.llm_prior_generator._build_cot_prefix_texts(all_instructions)
+            for i, s in enumerate(samples):
+                s["prefix_cot"] = all_prefix_cot[i]
+        
         micro_train_batch_size = self.strategy.micro_train_batch_size
         gradient_accumulation_steps = self.strategy.accumulated_gradient
         clip_eps = self.cfg.rft_clip_epsilon
@@ -241,24 +248,35 @@ class PriorZeroOpenRLHFLLMTrainer:
 
         for i in range(0, len(samples), micro_train_batch_size):
             chunk = samples[i:i + micro_train_batch_size]
-            full_texts = [s["prompt"] + s["target"] for s in chunk]
-            prompts_only = [s["prompt"] for s in chunk]
+            if self.cfg.use_cot:
+                prompts_only = [s["prompt"] + s["prefix_cot"] + " " for s in chunk]
+            else:
+                prompts_only = [s["prompt"] for s in chunk]
 
-            inputs = self.tokenizer(
-                full_texts,
-                padding=True,
+            targets_only = [s["target"] + self.tokenizer.eos_token for s in chunk]
+            
+            prompts_ids_list = self.tokenizer(
+                prompts_only,
+                add_special_tokens=False,
                 truncation=True,
-                max_length=self.cfg.prompt_max_len,
-                return_tensors="pt",
-            ).to(self.model_engine.device)
+                max_length=self.cfg.prompt_max_len - 20,
+            )["input_ids"]
+            
+            tgt_ids_list = self.tokenizer(
+                targets_only,
+                add_special_tokens=False,
+                truncation=True,
+            )["input_ids"]
+            
+            full_ids_list = [c + t for c, t in zip(prompts_ids_list, tgt_ids_list)]
+            inputs = self.tokenizer.pad({"input_ids": full_ids_list}, padding=True, return_tensors="pt").to(self.model_engine.device)
 
             labels = inputs.input_ids.clone()
             labels[inputs.attention_mask == 0] = -100
 
-            for row, ptxt in enumerate(prompts_only):
+            for row, prompts_ids in enumerate(prompts_ids_list):
                 pad_len = int((inputs.attention_mask[row] == 0).sum().item())
-                p_ids = self.tokenizer.encode(ptxt, add_special_tokens=False)
-                p_len = len(p_ids)
+                p_len = len(prompts_ids)
                 real_prompt_len = pad_len + p_len
                 labels[row, :real_prompt_len] = -100
 

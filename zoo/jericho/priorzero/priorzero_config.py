@@ -7,6 +7,7 @@ def get_priorzero_config(
     env_id: str = 'zork1.z5',
     seed: int = 0,
     exp_name: str = None,
+    use_cot: bool = False,
 ) -> Tuple[EasyDict, EasyDict]:
     """
     Generate complete PriorZero configuration.
@@ -60,7 +61,6 @@ def get_priorzero_config(
     micro_batch_size = 8    # Micro batch size per GPU
     gradient_accumulation_steps = train_batch_size // micro_batch_size // GPUS
     rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
-    use_cot = False  # Whether to use chain-of-thought prompting
     history_length = 5
     llm_learn_num_samples = 256
     replay_buffer_size = int(1e5)
@@ -192,7 +192,7 @@ def get_priorzero_config(
             pretrain_llm_path=llm_model_name,
             history_length=history_length,
             use_cot=use_cot,
-            prompt_max_len=2048,
+            prompt_max_len=8192,
             generate_max_len=128,
             temperature = 1.0,
             top_p = 1.0,
@@ -258,6 +258,7 @@ def get_priorzero_debug_config(
     env_id: str = 'zork1.z5',
     seed: int = 0,
     exp_name: str = None,
+    use_cot: bool = False,
 ) -> EasyDict:
     
     main_config, create_config = get_priorzero_config(env_id=env_id, seed=seed, exp_name=exp_name)
@@ -292,6 +293,7 @@ def get_priorzero_debug_config(
     main_config.policy.collector_env_num = collector_env_num
     main_config.policy.update_per_collect = 2
     main_config.policy.game_segment_length = game_segment_length
-    main_config.policy.llm_policy_cfg.llm_learn_num_samples = llm_learn_num_samples 
+    main_config.policy.llm_policy_cfg.llm_learn_num_samples = llm_learn_num_samples
+    main_config.policy.llm_policy_cfg.use_cot = use_cot 
     
     return main_config, create_config

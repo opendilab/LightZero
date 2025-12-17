@@ -93,14 +93,18 @@ def build_llm_prompt(
 
     # Task + output format
     if use_cot:
-        # CoT 模式：先 <think>，再 <action>
         prompt_parts.append(
             "\n=== Task ===\n"
-            "Analyze the recent history and the current situation, and decide on the SINGLE best next action.\n\n"
-            "OUTPUT FORMAT:\n"
-            "- First, write your detailed reasoning inside <think>...</think>.\n"
-            "- Then, on a new line, output ONLY the chosen action text inside <action>...</action>.\n"
-            "Example:\n<think>your step-by-step reasoning here</think>\n<action>the best action text here</action>\n\n"
+            "You must produce TWO parts in order: (1) Reasoning, then (2) Action.\n\n"
+            "1) Reasoning:\n"
+            "- Perform a detailed reasoning process based ONLY on the current state and the recent interaction history.\n"
+            "- Analyze what environment or situation you are currently in.\n"
+            "- Identify what actions are available or valid at this step, and the relevant constraints.\n"
+            "- You may discuss observations, uncertainties, and implications of different possibilities.\n"
+            "- IMPORTANT: Do NOT state, imply, or reveal which action will be chosen, and the reasoning section MUST output exactly in the following format: Reasoning:<REASONING>.\n\n"
+            "2) Action:\n"
+            "- After finishing the reasoning, output exactly ONE line in the following format:\nAction: <ACTION>\n"
+            "Your output MUST strictly follow this format: \nReasoning: <your reasoning content>\nAction: <the chosen action>"
         )
     else:
         prompt_parts.append(

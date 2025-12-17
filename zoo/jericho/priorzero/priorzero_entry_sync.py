@@ -254,12 +254,13 @@ def main():
     args = parser.parse_args()
 
     
-    # args.quick_test = True
+    args.quick_test = False
+    use_cot=True
     if args.quick_test:
         logger.info("Using quick test configuration")
-        main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_sync_debug_{args.env_id}_seed0')
+        main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_debug_{args.env_id}_seed0')
     else:
-        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, exp_name=f'data_priorzero/priorzero_sync_rft_reinforce++_{args.env_id}_seed0')
+        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_rft_reinforce++_{args.env_id}_seed0')
 
     if main_cfg.policy.multi_gpu:
         with DDPContext():
