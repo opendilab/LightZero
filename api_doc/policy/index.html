@@ -88,6 +88,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._load_state_dict_learn"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._load_state_dict_learn()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._monitor_vars_learn"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._monitor_vars_learn()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._policy_value_fn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn_batch"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._policy_value_fn_batch()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._process_transition"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._process_transition()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._reset_collect"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._reset_collect()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.policy.alphazero.AlphaZeroPolicy._reset_eval"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy._reset_eval()</span></code></a></li>
@@ -916,7 +917,69 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn">
 <span class="sig-name descname"><span class="pre">_policy_value_fn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Env</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/lzero/policy/alphazero.html#AlphaZeroPolicy._policy_value_fn"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn" title="Permalink to this definition"></a></dt>
-<dd></dd></dl>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Compute policy and value for a single environment. Provides backward compatibility
+with single-environment inference interface.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>env</strong> (<em>-</em>) – Single environment object to process.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary mapping legal action indices to probabilities.
+- value (<code class="xref py py-obj docutils literal notranslate"><span class="pre">float</span></code>): Estimated state value.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>action_probs_dict (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Dict[int,</span> <span class="pre">np.ndarray]</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Shapes:</dt><dd><ul class="simple">
+<li><p>current_state_scale (<code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.Tensor</span></code>): <span class="math notranslate nohighlight">\((1, C, H, W)\)</span> after unsqueeze.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn_batch">
+<span class="sig-name descname"><span class="pre">_policy_value_fn_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Env</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/lzero/policy/alphazero.html#AlphaZeroPolicy._policy_value_fn_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn_batch" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Batch inference for multiple environments to improve GPU utilization.
+Processes multiple game states in a single forward pass instead of iterating individually.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>env_list</strong> (<em>-</em>) – List of environment objects to process.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>List of (action_probs_dict, value) tuples.</dt><dd><p>action_probs_dict maps legal action indices to their probabilities.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>results (<code class="xref py py-obj docutils literal notranslate"><span class="pre">List[Tuple[Dict[int,</span> <span class="pre">np.ndarray],</span> <span class="pre">float]]</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Shapes:</dt><dd><ul class="simple">
+<li><p>state_batch (<code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.Tensor</span></code>): <span class="math notranslate nohighlight">\((B, C, H, W)\)</span> where B is batch size.</p></li>
+<li><p>action_probs_batch (<code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.Tensor</span></code>): <span class="math notranslate nohighlight">\((B, A)\)</span> where A is action space size.</p></li>
+<li><p>value_batch (<code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.Tensor</span></code>): <span class="math notranslate nohighlight">\((B,)\)</span>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.policy.alphazero.AlphaZeroPolicy._process_transition">
