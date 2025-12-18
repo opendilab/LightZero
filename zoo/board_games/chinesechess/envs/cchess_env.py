@@ -315,25 +315,33 @@ class ChineseChessEnv(BaseEnv):
                 # 不需要转换为 player 1 视角，因为观察也是规范视角
                 reward_scalar = float(timestep.reward[0])
                 timestep.info['eval_episode_return'] = reward_scalar
-            
+
+            # 收集SVG帧用于后续保存
+            if self.replay_path:
+                self.render(mode='image_savefile_mode')
+
             return timestep
         
         elif self.battle_mode == 'play_with_bot_mode':
             # 玩家1的回合 (agent)
             flag = "bot_agent"
             timestep_player1 = self._player_step(action, flag, is_canonical_action=True)
-            
+
+            # 收集SVG帧：玩家1走棋后的棋盘状态
+            if self.replay_path:
+                self.render(mode='image_savefile_mode')
+
             if timestep_player1.done:
                 # player 1 执行后游戏结束，reward 已经是 player 1 视角
                 timestep_player1.info['eval_episode_return'] = float(timestep_player1.reward[0])
                 timestep_player1.obs['to_play'] = np.array([-1], dtype=np.int32)
                 return timestep_player1
-            
+
             # 玩家2（bot）的回合 - bot的动作来自真实棋盘，不需要转换
             bot_action = self.bot_action()  # 使用UCI引擎或随机策略
             flag = "bot_bot"
             timestep_player2 = self._player_step(bot_action, flag, is_canonical_action=False)
-            
+
             # player 2 执行后游戏结束，reward 是 player 2 视角，需要转换为 player 1 视角
             reward_scalar = float(timestep_player2.reward[0])
             timestep_player2.info['eval_episode_return'] = -reward_scalar
@@ -341,29 +349,37 @@ class ChineseChessEnv(BaseEnv):
             # [修正] 在 eval_mode 下，返回给 agent 的 observation 应该是轮到 agent (Player 1) 走
             # 所以 to_play 应该是 1 (RED)，而不是 -1
             timestep_player2.obs['to_play'] = np.array([1], dtype=np.int32)
-            
+
+            # 收集SVG帧：玩家2（bot）走棋后的棋盘状态
+            if self.replay_path:
+                self.render(mode='image_savefile_mode')
+
             return timestep_player2
-        
+
         elif self.battle_mode == 'eval_mode':
             # 玩家1的回合 (agent)
             flag = "eval_agent"
             timestep_player1 = self._player_step(action, flag, is_canonical_action=True)
-            
+
+            # 收集SVG帧：玩家1走棋后的棋盘状态
+            if self.replay_path:
+                self.render(mode='image_savefile_mode')
+
             if timestep_player1.done:
                 # player 1 执行后游戏结束，reward 已经是 player 1 视角
                 timestep_player1.info['eval_episode_return'] = float(timestep_player1.reward[0])
                 timestep_player1.obs['to_play'] = np.array([-1], dtype=np.int32)
                 return timestep_player1
-            
+
             # 玩家2的回合 (bot 或 human) - bot/human的动作来自真实棋盘，不需要转换
             if self.agent_vs_human:
                 bot_action = self.human_to_action()
             else:
                 bot_action = self.bot_action()  # 使用UCI引擎或随机策略
-            
+
             flag = "eval_bot"
             timestep_player2 = self._player_step(bot_action, flag, is_canonical_action=False)
-            
+
             # player 2 执行后游戏结束，reward 是 player 2 视角，需要转换为 player 1 视角
             reward_scalar = float(timestep_player2.reward[0])
             timestep_player2.info['eval_episode_return'] = -reward_scalar
@@ -371,7 +387,11 @@ class ChineseChessEnv(BaseEnv):
             # [修正] 在 eval_mode 下，返回给 agent 的 observation 应该是轮到 agent (Player 1) 走
             # 所以 to_play 应该是 1 (RED)，而不是 -1
             timestep_player2.obs['to_play'] = np.array([1], dtype=np.int32)
-            
+
+            # 收集SVG帧：玩家2（bot/human）走棋后的棋盘状态
+            if self.replay_path:
+                self.render(mode='image_savefile_mode')
+
             return timestep_player2
 
     def reset(self, start_player_index: int = 0, init_state: Optional[str] = None) -> dict:
@@ -837,7 +857,7 @@ class ChineseChessEnv(BaseEnv):
     def save_render_output(self, replay_path: str = None, format: str = 'svg') -> None:
         """
         保存渲染输出到文件
-        
+
         Args:
             replay_path: 保存路径，如果为None则使用self.replay_path
             format: 保存格式，目前支持'svg'
@@ -845,27 +865,36 @@ class ChineseChessEnv(BaseEnv):
         if not self.frames:
             logging.warning("没有可保存的渲染帧")
             return
-        
+
         save_path = replay_path or self.replay_path
         if save_path is None:
             save_path = './replay_output'
-        
+
         os.makedirs(save_path, exist_ok=True)
-        
+
         if format == 'svg':
             for i, svg_str in enumerate(self.frames):
                 file_path = os.path.join(save_path, f'step_{i:04d}.svg')
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(svg_str)
             logging.info(f"已保存 {len(self.frames)} 个SVG文件到 {save_path}")
+
+            # 自动生成HTML播放器
+            self._generate_html_player(save_path, len(self.frames))
         else:
             logging.warning(f"不支持的保存格式: {format}")
-        
+
         # 清空frames
         self.frames = []
+
     
     def close(self) -> None:
         """关闭环境，释放资源"""
+        # 自动保存SVG可视化对局记录
+        if self.frames and self.replay_path:
+            self.save_render_output(self.replay_path, format='svg')
+            logging.info(f"对局SVG已自动保存至: {self.replay_path}")
+
         if self.engine is not None:
             try:
                 self.engine.quit()
@@ -874,3 +903,144 @@ class ChineseChessEnv(BaseEnv):
                 logging.warning(f"关闭引擎时出错: {e}")
             finally:
                 self.engine = None
+                
+    def _generate_html_player(self, save_path: str, total_frames: int) -> None:
+        """
+        生成HTML对局回放播放器
+
+        Args:
+            save_path: SVG文件所在目录
+            total_frames: 总帧数
+        """
+        html_content = f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国象棋对局回放</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }}
+        h1 {{ margin-bottom: 20px; font-size: 24px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }}
+        .board-container {{
+            background: #2d2d44;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+        }}
+        #board {{ width: 450px; height: 450px; border-radius: 10px; overflow: hidden; }}
+        #board img {{ width: 100%; height: 100%; }}
+        .controls {{
+            background: #2d2d44;
+            border-radius: 15px;
+            padding: 20px 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            width: 490px;
+        }}
+        .step-info {{ text-align: center; margin-bottom: 15px; font-size: 18px; }}
+        .step-info span {{ color: #ffd700; font-weight: bold; }}
+        .player-info {{ font-size: 14px; color: #aaa; }}
+        .slider-container {{ margin-bottom: 15px; }}
+        #slider {{
+            width: 100%; height: 8px;
+            -webkit-appearance: none;
+            background: #444; border-radius: 4px;
+            outline: none; cursor: pointer;
+        }}
+        #slider::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            width: 20px; height: 20px;
+            background: #ffd700; border-radius: 50%;
+            cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }}
+        .buttons {{ display: flex; justify-content: center; gap: 10px; }}
+        button {{
+            padding: 10px 20px; font-size: 16px;
+            border: none; border-radius: 8px;
+            cursor: pointer; transition: all 0.2s;
+        }}
+        button:hover {{ transform: translateY(-2px); }}
+        .btn-primary {{ background: #ffd700; color: #1a1a2e; font-weight: bold; }}
+        .btn-secondary {{ background: #444; color: #fff; }}
+        .speed-control {{ margin-top: 15px; text-align: center; }}
+        .speed-control label {{ margin-right: 10px; color: #aaa; }}
+        #speed {{ padding: 5px 10px; border-radius: 5px; border: none; background: #444; color: #fff; }}
+        .keyboard-hints {{ margin-top: 15px; font-size: 12px; color: #666; text-align: center; }}
+    </style>
+</head>
+<body>
+    <h1>中国象棋对局回放</h1>
+    <div class="board-container">
+        <div id="board"><img id="boardImg" src="step_0000.svg" alt="棋盘"></div>
+    </div>
+    <div class="controls">
+        <div class="step-info">
+            第 <span id="currentStep">0</span> / <span id="totalSteps">{total_frames - 1}</span> 步
+            <div class="player-info" id="playerInfo">初始局面</div>
+        </div>
+        <div class="slider-container">
+            <input type="range" id="slider" min="0" max="{total_frames - 1}" value="0">
+        </div>
+        <div class="buttons">
+            <button class="btn-secondary" onclick="goToStart()">开始</button>
+            <button class="btn-secondary" onclick="prevStep()">上一步</button>
+            <button class="btn-primary" id="playBtn" onclick="togglePlay()">播放</button>
+            <button class="btn-secondary" onclick="nextStep()">下一步</button>
+            <button class="btn-secondary" onclick="goToEnd()">结束</button>
+        </div>
+        <div class="speed-control">
+            <label>播放速度:</label>
+            <select id="speed" onchange="updateSpeed()">
+                <option value="2000">慢速</option>
+                <option value="1000" selected>正常</option>
+                <option value="500">快速</option>
+            </select>
+        </div>
+        <div class="keyboard-hints">快捷键: ← 上一步 | → 下一步 | 空格 播放/暂停</div>
+    </div>
+    <script>
+        let currentStep = 0, totalSteps = {total_frames - 1}, isPlaying = false, playInterval = null, speed = 1000;
+        function updateDisplay() {{
+            document.getElementById('boardImg').src = `step_${{String(currentStep).padStart(4, '0')}}.svg`;
+            document.getElementById('currentStep').textContent = currentStep;
+            document.getElementById('slider').value = currentStep;
+            const info = document.getElementById('playerInfo');
+            if (currentStep === 0) {{ info.textContent = '初始局面'; info.style.color = '#aaa'; }}
+            else {{ info.textContent = currentStep % 2 === 1 ? '红方走棋后' : '黑方走棋后'; info.style.color = currentStep % 2 === 1 ? '#ff6b6b' : '#4ecdc4'; }}
+        }}
+        function nextStep() {{ if (currentStep < totalSteps) {{ currentStep++; updateDisplay(); }} else if (isPlaying) togglePlay(); }}
+        function prevStep() {{ if (currentStep > 0) {{ currentStep--; updateDisplay(); }} }}
+        function goToStart() {{ currentStep = 0; updateDisplay(); }}
+        function goToEnd() {{ currentStep = totalSteps; updateDisplay(); }}
+        function togglePlay() {{
+            isPlaying = !isPlaying;
+            document.getElementById('playBtn').textContent = isPlaying ? '暂停' : '播放';
+            if (isPlaying) playInterval = setInterval(nextStep, speed);
+            else clearInterval(playInterval);
+        }}
+        function updateSpeed() {{ speed = parseInt(document.getElementById('speed').value); if (isPlaying) {{ clearInterval(playInterval); playInterval = setInterval(nextStep, speed); }} }}
+        document.getElementById('slider').addEventListener('input', function() {{ currentStep = parseInt(this.value); updateDisplay(); }});
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'ArrowLeft') prevStep();
+            else if (e.key === 'ArrowRight') nextStep();
+            else if (e.key === ' ') {{ e.preventDefault(); togglePlay(); }}
+        }});
+    </script>
+</body>
+</html>'''
+
+        html_path = os.path.join(save_path, 'player.html')
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        logging.info(f"已生成HTML播放器: {html_path}")
+    

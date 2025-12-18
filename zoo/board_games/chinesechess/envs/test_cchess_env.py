@@ -1,4 +1,6 @@
 import pytest
+import os
+from datetime import datetime
 from easydict import EasyDict
 from zoo.board_games.chinesechess.envs.cchess_env import ChineseChessEnv
 
@@ -268,10 +270,16 @@ def play_human_vs_bot(engine_path: str = None):
     """
     人类 vs Bot 对战
     人类执红先手，Bot 执黑后手
-    
+
     Args:
         engine_path: UCI 引擎路径，如 pikafish。为 None 则 Bot 使用随机策略。
     """
+    # 生成replay目录路径（SVG会保存在此目录下）
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    bot_name = "uci" if engine_path else "random"
+    replay_dir = os.path.join(os.path.dirname(__file__), 'replay_log')
+    replay_path = os.path.join(replay_dir, f'human_vs_{bot_name}_{timestamp}')
+
     cfg = EasyDict(
         battle_mode='eval_mode',
         channel_last=False,
@@ -280,7 +288,7 @@ def play_human_vs_bot(engine_path: str = None):
         prob_random_agent=0,
         prob_expert_agent=0,
         render_mode=None,
-        replay_path=None,
+        replay_path=replay_path,
         uci_engine_path=engine_path,  # 设置为 pikafish 路径以使用更强的 Bot
         engine_depth=10,
         max_episode_steps=500,
@@ -319,6 +327,7 @@ def play_human_vs_bot(engine_path: str = None):
             break
 
     print(f'\n游戏结束，共 {step_count} 步')
+    print(f'对局已保存至: {replay_path}')
     env.close()
 
 
@@ -326,6 +335,11 @@ def play_bot_vs_bot():
     """
     Bot vs Bot 对战 (观战模式)
     """
+    # 生成replay目录路径（SVG会保存在此目录下）
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    replay_dir = os.path.join(os.path.dirname(__file__), 'replay_log')
+    replay_path = os.path.join(replay_dir, f'bot_vs_bot_{timestamp}')
+
     cfg = EasyDict(
         battle_mode='self_play_mode',
         channel_last=False,
@@ -334,7 +348,7 @@ def play_bot_vs_bot():
         prob_random_agent=0,
         prob_expert_agent=0,
         render_mode=None,
-        replay_path=None,
+        replay_path=replay_path,
         uci_engine_path=None,
         engine_depth=10,
         max_episode_steps=500,
@@ -382,6 +396,7 @@ def play_bot_vs_bot():
             break
 
     print(f'\n游戏结束，共 {step_count} 步')
+    print(f'对局已保存至: {replay_path}')
     env.close()
 
 
@@ -395,6 +410,11 @@ def play_uci_vs_random(engine_path: str = "/mnt/shared-storage-user/tangjia/ches
         engine_path: UCI引擎路径，默认为 pikafish
         depth: 引擎搜索深度（1-20，默认5）
     """
+    # 生成replay目录路径（SVG会保存在此目录下）
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    replay_dir = os.path.join(os.path.dirname(__file__), 'replay_log')
+    replay_path = os.path.join(replay_dir, f'uci_vs_random_depth{depth}_{timestamp}')
+
     cfg = EasyDict(
         battle_mode='play_with_bot_mode',
         channel_last=False,
@@ -403,7 +423,7 @@ def play_uci_vs_random(engine_path: str = "/mnt/shared-storage-user/tangjia/ches
         prob_random_agent=0,
         prob_expert_agent=0,
         render_mode=None,
-        replay_path=None,
+        replay_path=replay_path,
         uci_engine_path=engine_path,  # 传给环境处理
         engine_depth=depth,
         max_episode_steps=1000,
@@ -439,6 +459,7 @@ def play_uci_vs_random(engine_path: str = "/mnt/shared-storage-user/tangjia/ches
             break
 
     print(f'\n游戏结束，共 {step_count} 步')
+    print(f'对局已保存至: {replay_path}')
     env.close()
 
 
@@ -459,6 +480,11 @@ def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/P
     # 或者可以使用depth_red作为主要深度，depth_black作为参考
     # 为了简洁起见，采用play_with_bot_mode，黑方Bot深度为depth_black
 
+    # 生成replay目录路径（SVG会保存在此目录下）
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    replay_dir = os.path.join(os.path.dirname(__file__), 'replay_log')
+    replay_path = os.path.join(replay_dir, f'uci_vs_uci_red{depth_red}_black{depth_black}_{timestamp}')
+
     cfg = EasyDict(
         battle_mode='play_with_bot_mode',
         channel_last=False,
@@ -467,7 +493,7 @@ def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/P
         prob_random_agent=0,
         prob_expert_agent=0,
         render_mode=None,
-        replay_path=None,
+        replay_path=replay_path,
         uci_engine_path=engine_path,  # 黑方Bot使用这个引擎
         engine_depth=depth_black,      # 黑方Bot使用这个深度
         max_episode_steps=1000,
@@ -503,6 +529,7 @@ def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/P
             break
 
     print(f'\n游戏结束，共 {step_count} 步')
+    print(f'对局已保存至: {replay_path}')
     env.close()
 
 
