@@ -385,6 +385,127 @@ def play_bot_vs_bot():
     env.close()
 
 
+def play_uci_vs_random(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish",
+                       depth: int = 5):
+    """
+    UCI引擎 vs 随机Bot对战（红方引擎 vs 黑方随机）
+    采用和 play_human_vs_bot 相同的设计模式
+
+    Args:
+        engine_path: UCI引擎路径，默认为 pikafish
+        depth: 引擎搜索深度（1-20，默认5）
+    """
+    cfg = EasyDict(
+        battle_mode='play_with_bot_mode',
+        channel_last=False,
+        scale=False,
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        render_mode=None,
+        replay_path=None,
+        uci_engine_path=engine_path,  # 传给环境处理
+        engine_depth=depth,
+        max_episode_steps=1000,
+    )
+    env = ChineseChessEnv(cfg)
+    env.reset()
+
+    engine_name = "UCI引擎" if engine_path else "随机Bot"
+    print('=' * 60)
+    print(f'UCI vs Random 对战')
+    print(f'红方: {engine_name} (深度{depth})')
+    print('黑方: 随机Bot')
+    print('=' * 60)
+    env.render(mode='human')
+
+    step_count = 0
+    while True:
+        # Agent (红方) 走棋，step()内部自动调用bot_action()
+        action = env.random_action()
+        print(f'\n第 {step_count + 1} 步 - 红方 ({engine_name}深度{depth}) 走棋')
+        obs, reward, done, info = env.step(action)
+        env.render(mode='human')
+        step_count += 2
+
+        if done:
+            eval_return = info.get('eval_episode_return', reward)
+            if eval_return > 0:
+                print(f'\n红方 ({engine_name}) 获胜!')
+            elif eval_return < 0:
+                print('\n黑方 (随机Bot) 获胜!')
+            else:
+                print('\n和棋!')
+            break
+
+    print(f'\n游戏结束，共 {step_count} 步')
+    env.close()
+
+
+def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish",
+                    depth_red: int = 5,
+                    depth_black: int = 5):
+    """
+    两个UCI引擎对战（红 vs 黑）
+    采用和 play_human_vs_bot 相同的设计模式，使用环境管理引擎
+    注：此模式下红方使用指定深度，黑方使用engine_depth（自动降级支持）
+
+    Args:
+        engine_path: UCI引擎路径，默认为 pikafish
+        depth_red: 红方搜索深度（1-20，默认5）
+        depth_black: 黑方搜索深度（1-20，默认5）
+    """
+    # 对于两个不同深度的UCI vs UCI，目前通过两次运行实现
+    # 或者可以使用depth_red作为主要深度，depth_black作为参考
+    # 为了简洁起见，采用play_with_bot_mode，黑方Bot深度为depth_black
+
+    cfg = EasyDict(
+        battle_mode='play_with_bot_mode',
+        channel_last=False,
+        scale=False,
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        render_mode=None,
+        replay_path=None,
+        uci_engine_path=engine_path,  # 黑方Bot使用这个引擎
+        engine_depth=depth_black,      # 黑方Bot使用这个深度
+        max_episode_steps=1000,
+    )
+    env = ChineseChessEnv(cfg)
+    env.reset()
+
+    engine_name = "UCI引擎" if engine_path else "随机Bot"
+    print('=' * 60)
+    print(f'UCI vs UCI 对战')
+    print(f'红方: {engine_name} (深度{depth_red})')
+    print(f'黑方: {engine_name} (深度{depth_black})')
+    print('=' * 60)
+    env.render(mode='human')
+
+    step_count = 0
+    while True:
+        # Agent (红方) 走棋，step()内部自动调用bot_action()（黑方）
+        action = env.random_action()
+        print(f'\n第 {step_count + 1} 步 - 红方 ({engine_name}深度{depth_red}) 走棋')
+        obs, reward, done, info = env.step(action)
+        env.render(mode='human')
+        step_count += 2
+
+        if done:
+            eval_return = info.get('eval_episode_return', reward)
+            if eval_return > 0:
+                print(f'\n红方 ({engine_name}深度{depth_red}) 获胜!')
+            elif eval_return < 0:
+                print(f'\n黑方 ({engine_name}深度{depth_black}) 获胜!')
+            else:
+                print('\n和棋!')
+            break
+
+    print(f'\n游戏结束，共 {step_count} 步')
+    env.close()
+
+
 if __name__ == '__main__':
     import sys
 
@@ -395,9 +516,11 @@ if __name__ == '__main__':
     print('2. 人类 vs 随机Bot 对战')
     print('3. 人类 vs UCI引擎 对战 (需要输入引擎路径)')
     print('4. Bot vs Bot 观战')
+    print('5. UCI vs Random 对战 (UCI引擎 vs 随机Bot)')
+    print('6. UCI vs UCI 对战 (pikafish vs pikafish)')
     print('=' * 60)
 
-    choice = input('请选择 (1/2/3/4): ').strip()
+    choice = input('请选择 (1/2/3/4/5/6): ').strip()
 
     if choice == '1':
         test = TestChineseChessEnv()
@@ -428,7 +551,48 @@ if __name__ == '__main__':
     elif choice == '4':
         play_bot_vs_bot()
 
+    elif choice == '5':
+        # UCI vs Random 对战
+        engine_path = input('请输入 UCI 引擎路径 (默认: /mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish): ').strip()
+        if not engine_path:
+            engine_path = "/mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish"
+
+        depth_str = input('请输入引擎搜索深度 (1-20, 默认: 5): ').strip()
+        depth = int(depth_str) if depth_str.isdigit() else 5
+        depth = max(1, min(20, depth))  # 限制在1-20之间
+
+        play_uci_vs_random(engine_path=engine_path, depth=depth)
+
+    elif choice == '6':
+        # UCI vs UCI 对战
+        engine_path = input('请输入 UCI 引擎路径 (默认: /mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish): ').strip()
+        if not engine_path:
+            engine_path = "/mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish"
+
+        depth_red_str = input('请输入红方搜索深度 (1-20, 默认: 5): ').strip()
+        depth_red = int(depth_red_str) if depth_red_str.isdigit() else 5
+        depth_red = max(1, min(20, depth_red))  # 限制在1-20之间
+
+        depth_black_str = input('请输入黑方搜索深度 (1-20, 默认: 5): ').strip()
+        depth_black = int(depth_black_str) if depth_black_str.isdigit() else 5
+        depth_black = max(1, min(20, depth_black))  # 限制在1-20之间
+
+        play_uci_vs_uci(engine_path=engine_path, depth_red=depth_red, depth_black=depth_black)
+
     else:
         print('无效选择，退出')
         sys.exit(1)
+    
+    # count=0
+    # try:
+    #     play_uci_vs_random(engine_path="/mnt/shared-storage-user/tangjia/chess/Pikafish/src/pikafish")
+    #     # for i in range(1):
+
+    #     #     count+=1
+    # except:
+    #     pass
+    # finally:
+    #     print("count")
+    #     print(count)
+
 

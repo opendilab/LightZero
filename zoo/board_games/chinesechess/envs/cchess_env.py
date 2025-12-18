@@ -118,6 +118,7 @@ class ChineseChessEnv(BaseEnv):
         self.engine_depth = cfg.get('engine_depth', 5)
         self.engine = None
         
+        # import pudb;pudb.set_trace()
         # 初始化UCI引擎（如果配置了）
         if self.uci_engine_path:
             try:
@@ -125,7 +126,10 @@ class ChineseChessEnv(BaseEnv):
                 self.engine = engine.SimpleEngine.popen_uci(self.uci_engine_path)
                 logging.info(f"UCI引擎加载成功: {self.uci_engine_path}")
             except Exception as e:
+                # logging.warning(e)
                 logging.warning(f"UCI引擎加载失败: {e}，将使用随机策略")
+                # traceback.print_exc()
+                exit(1)
                 self.engine = None
         
         # 最大步数限制
@@ -602,6 +606,8 @@ class ChineseChessEnv(BaseEnv):
                 return move_to_action(result.move)
             except Exception as e:
                 logging.warning(f"引擎调用失败: {e}，使用随机策略")
+                logging.warning(e)
+                exit()
                 return self.random_action()
         else:
             return self.random_action()

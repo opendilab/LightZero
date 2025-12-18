@@ -1,0 +1,74 @@
+{
+  "uci_vs_random": {
+    "3": {
+      "wins": 119,
+      "losses": 1,
+      "draws": 0,
+      "win_rate": 0.9916666666666667
+    },
+    "5": {
+      "wins": 119,
+      "losses": 1,
+      "draws": 0,
+      "win_rate": 0.9916666666666667
+    },
+    "7": {
+      "wins": 120,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0
+    }
+  },
+  "uci_vs_uci": {
+    "depth3_vs_depth5": {
+      "wins": 0,
+      "losses": 48,
+      "draws": 12,
+      "win_rate": 0.0,
+      "depth1": 3,
+      "depth2": 5
+    },
+    "depth3_vs_depth7": {
+      "wins": 0,
+      "losses": 60,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 3,
+      "depth2": 7
+    },
+    "depth5_vs_depth3": {
+      "wins": 48,
+      "losses": 6,
+      "draws": 6,
+      "win_rate": 0.8,
+      "depth1": 5,
+      "depth2": 3
+    },
+    "depth5_vs_depth7": {
+      "wins": 0,
+      "losses": 60,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 5,
+      "depth2": 7
+    },
+    "depth7_vs_depth3": {
+      "wins": 60,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 7,
+      "depth2": 3
+    },
+    "depth7_vs_depth5": {
+      "wins": 60,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 7,
+      "depth2": 5
+    }
+  },
+  "rounds": 6,
+  "last_updated": "2025-12-03T01:04:55.182494"
+}

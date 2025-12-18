@@ -540,8 +540,19 @@ def select_action(visit_counts: np.ndarray,
         - visit_count_distribution_entropy (:obj:`np.ndarray`): The entropy of the visit count distribution.
     """
     action_probs = [visit_count_i ** (1 / temperature) for visit_count_i in visit_counts]
-    action_probs = [x / sum(action_probs) for x in action_probs]
+    # action_probs = [x / sum(action_probs) for x in action_probs]
 
+    
+    
+    probs_sum = sum(action_probs)
+
+    if probs_sum > 0:
+        action_probs = [x / probs_sum for x in action_probs]
+    else:
+        # If all visit counts are zero, use uniform distribution
+        logging.warning(f"All visit counts are zero, using uniform distribution. visit_counts: {visit_counts}")
+        action_probs = [1.0 / len(action_probs) for _ in action_probs]
+        
     if deterministic:
         action_pos = np.argmax([v for v in visit_counts])
     else:
