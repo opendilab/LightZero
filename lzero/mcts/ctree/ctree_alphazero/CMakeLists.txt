@@ -9,10 +9,8 @@ project(mcts_alphazero VERSION 1.0)
 # This is required for embedding Python in the project
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
-# Add pybind11 as a subdirectory,
-# so that its build files are generated alongside the current project.
-# This is necessary because the current project depends on pybind11
-add_subdirectory(pybind11)
+# Find pybind11 package installed via pip
+find_package(pybind11 CONFIG REQUIRED)
 
 # Add two .cpp files to the mcts_alphazero module
 # These files are compiled and linked into the module
