@@ -29,6 +29,10 @@ from priorzero_policy import *
 from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
 from lzero.entry.utils import calculate_update_per_collect
 from priorzero_llm_modules import PriorZeroOpenRLHFLLMConfig, PriorZeroOpenRLHFLLMTrainer
+# [OOM-FIX] Import memory monitoring tools
+from priorzero_memory_monitor import MemoryMonitor, MemoryProfiler, quick_memory_check
+# [MULTI-INSTANCE-FIX] Import port manager for running multiple training instances
+from priorzero_port_manager import auto_setup_ports_for_training
 
 
 def train_priorzero(
@@ -37,6 +41,7 @@ def train_priorzero(
     seed: int = 0,
     max_train_iter: int = int(1e6),
     max_env_step: Optional[int] = int(1e10),
+    instance_id: Optional[int] = None,
 ):
     """
     [PRIORZERO-MODIFIED]
@@ -47,7 +52,12 @@ def train_priorzero(
         create_cfg: Creation configuration for DI-engine components
         seed: Random seed
         max_train_iter: Maximum training iterations
+        max_env_step: Maximum environment steps
+        instance_id: Instance ID for multi-instance training (ports already configured in main())
     """
+    # Note: Ports are configured in main() before this function is called
+    # to ensure environment variables are set before any library imports
+
     cfg = compile_config(cfg, seed=seed, auto=True, create_cfg=create_cfg)
     if ray.is_initialized():
         logger.info(f"✓ Ray already initialized (connected to existing cluster)")
@@ -137,6 +147,14 @@ def train_priorzero(
     )
     logger.info("✓ Evaluator created")
     learner.call_hook('before_run')
+
+    # ==================================================================
+    # [OOM-FIX] Initialize Memory Monitor
+    # ==================================================================
+    memory_monitor = MemoryMonitor(enable=True, log_interval=1)
+    logger.info("✓ Memory monitor initialized")
+    logger.info(f"  Initial memory: {quick_memory_check()}")
+
     # ==================================================================
     # Main Training Loop
     # ==================================================================
@@ -163,8 +181,17 @@ def train_priorzero(
     else:
         world_size = 1
         rank = 0
-    
+
     while True:
+        # ==================================================================
+        # [OOM-FIX] Monitor and reset peak memory at start of iteration
+        # ==================================================================
+        memory_monitor.reset_peak_memory()
+        memory_monitor.log_memory(f"Iter {learner.train_iter} - Start", logger)
+
+        # ==================================================================
+        # Evaluation Phase
+        # ==================================================================
         if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
             logger.info(f"\n[Iter {learner.train_iter}] Evaluating...")
             stop, reward = evaluator.eval(
@@ -174,7 +201,31 @@ def train_priorzero(
             )
             if stop:
                 break
+            memory_monitor.log_memory(f"Iter {learner.train_iter} - After Eval", logger)
 
+        # ==================================================================
+        # [OOM-FIX] Wake up vLLM engines before collection
+        # ==================================================================
+        # vLLM engines were put to sleep after previous collection to save memory.
+        # Now we need to wake them up for the next collection phase.
+        if cfg.policy.llm_policy_cfg.enable_llm and llm_prior_generator is not None:
+            if hasattr(llm_prior_generator, 'vllm_engines') and llm_prior_generator.vllm_engines is not None:
+                try:
+                    wakeup_refs = []
+                    for engine in llm_prior_generator.vllm_engines:
+                        wakeup_refs.append(engine.wake_up.remote())
+
+                    # Wait for all engines to wake up (~1-2 seconds)
+                    ray.get(wakeup_refs)
+                    logger.info("✓ vLLM engines woken up for collection (~4.6GB GPU memory allocated)")
+                    memory_monitor.log_memory(f"Iter {learner.train_iter} - After vLLM Wake", logger)
+                except Exception as e:
+                    logger.warning(f"⚠ Failed to wake up vLLM engines: {e}")
+                    logger.warning("  Continuing without vLLM wake-up. LLM priors may not work correctly.")
+
+        # ==================================================================
+        # Collection Phase
+        # ==================================================================
         collect_kwargs = {
             'temperature': 0.25,
             'epsilon': 0.0
@@ -183,11 +234,22 @@ def train_priorzero(
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
 
+        # [OOM-FIX] Monitor memory after collection (vLLM should be asleep now)
+        memory_monitor.log_memory(f"Iter {learner.train_iter} - After Collect", logger)
+        memory_monitor.compare_stages(
+            f"Iter {learner.train_iter} - After vLLM Wake",
+            f"Iter {learner.train_iter} - After Collect",
+            logger, threshold_gb=0.5
+        )
+
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
-        num_of_transitions = replay_buffer.get_num_of_transitions() 
+        num_of_transitions = replay_buffer.get_num_of_transitions()
         new_num_of_transitions = replay_buffer.get_num_of_transitions() - replay_buffer.last_pos_in_transition
         logger.info(f"  ✓ Data collected, num_of_transitions: {num_of_transitions} transitions")
+
+        # [OOM-FIX] Monitor after buffer operations
+        memory_monitor.log_memory(f"Iter {learner.train_iter} - After Buffer Push", logger)
 
         if cfg.policy.buffer_reanalyze_freq >= 1:
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
@@ -215,6 +277,7 @@ def train_priorzero(
 
         logger.info(f"[Iter {learner.train_iter}] Training...")
         for i in range(update_per_collect):
+            logger.info(f"[Iter {learner.train_iter}] Training...")
             train_data = replay_buffer.sample(batch_size, policy)
             train_data.append(learner.train_iter)
 
@@ -222,12 +285,76 @@ def train_priorzero(
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+        # [OOM-FIX] Monitor after World Model training
+        memory_monitor.log_memory(f"Iter {learner.train_iter} - After WM Train", logger)
+        memory_monitor.compare_stages(
+            f"Iter {learner.train_iter} - After Collect",
+            f"Iter {learner.train_iter} - After WM Train",
+            logger, threshold_gb=0.5
+        )
+
+        # ==================================================================
+        # LLM RFT Training Phase (if enough samples collected)
+        # ==================================================================
         if new_num_of_transitions >= cfg.policy.llm_policy_cfg.llm_learn_num_samples:
-            all_data = replay_buffer.fetch_latest_batch(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
+            logger.info(f"[Iter {learner.train_iter}] Starting LLM RFT training...")
+            logger.info(f"  → Training on {cfg.policy.llm_policy_cfg.llm_learn_num_samples} latest samples")
+
+            # [CUDA-FIX] Wake up vLLM if CoT is enabled (needed for prefix generation)
+            # Without this, vLLM is asleep and calling _build_cot_prefix_texts() causes CUDA error
+            vllm_woken_for_llm_training = False
+            if cfg.policy.llm_policy_cfg.use_cot and cfg.policy.llm_policy_cfg.enable_llm:
+                if llm_prior_generator is not None:
+                    if hasattr(llm_prior_generator, 'vllm_engines') and llm_prior_generator.vllm_engines is not None:
+                        try:
+                            logger.info(f"  → Waking up vLLM for CoT prefix generation...")
+                            wakeup_refs = []
+                            for engine in llm_prior_generator.vllm_engines:
+                                wakeup_refs.append(engine.wake_up.remote())
+                            ray.get(wakeup_refs)
+                            vllm_woken_for_llm_training = True
+                            logger.info("  ✓ vLLM engines woken up for LLM training (~4.6GB GPU memory allocated)")
+                            memory_monitor.log_memory(f"Iter {learner.train_iter} - Before LLM Train (vLLM awake)", logger)
+                        except Exception as e:
+                            logger.warning(f"⚠ Failed to wake up vLLM: {e}")
+                            logger.warning("  LLM training may fail if CoT prefix generation is needed")
+            else:
+                logger.info(f"  → vLLM stays asleep (CoT disabled or LLM disabled)")
+
+            all_data = replay_buffer.fetch_latest_batch(
+                batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples,
+                policy=policy
+            )
             trainer.train_rft_from_priorzero_batch(all_data)
+
+            # [CUDA-FIX] Put vLLM back to sleep after LLM training
+            if vllm_woken_for_llm_training:
+                if llm_prior_generator is not None:
+                    if hasattr(llm_prior_generator, 'vllm_engines') and llm_prior_generator.vllm_engines is not None:
+                        try:
+                            sleep_refs = []
+                            for engine in llm_prior_generator.vllm_engines:
+                                sleep_refs.append(engine.sleep.remote(level=1))
+                            ray.get(sleep_refs)
+                            logger.info("  ✓ vLLM engines put back to sleep after LLM training (~4.6GB GPU memory freed)")
+                        except Exception as e:
+                            logger.warning(f"⚠ Failed to sleep vLLM: {e}")
+                            logger.warning("  vLLM may continue to occupy GPU memory")
+
+            # [OOM-FIX] Monitor after LLM training (this is the OOM hotspot!)
+            memory_monitor.log_memory(f"Iter {learner.train_iter} - After LLM Train", logger)
+            memory_monitor.compare_stages(
+                f"Iter {learner.train_iter} - After WM Train",
+                f"Iter {learner.train_iter} - After LLM Train",
+                logger, threshold_gb=0.5
+            )
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
+
+        # [OOM-FIX] End of iteration summary
+        memory_monitor.log_memory(f"Iter {learner.train_iter} - End", logger)
+        logger.info(f"[Iter {learner.train_iter}] Iteration complete. Peak memory: {quick_memory_check()}")
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             logger.info("Stopping condition met, training ends!")
@@ -243,19 +370,37 @@ def main():
     """
     import argparse
 
-    parser = argparse.ArgumentParser(description='PriorZero Training')
-    parser.add_argument('--env_id', type=str, default='zork1.z5', help='Jericho game ID')
+    parser = argparse.ArgumentParser(
+        description='PriorZero Training - Supports multiple instances on same machine',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Single instance training
+  python priorzero_entry_sync.py --env_id detective.z5 --seed 0
+
+  # Multiple instances on same machine (use different instance_id for each)
+  python priorzero_entry_sync.py --env_id detective.z5 --instance_id 0 &
+  python priorzero_entry_sync.py --env_id zork1.z5 --instance_id 1 &
+        """
+    )
+    parser.add_argument('--env_id', type=str, default='detective.z5', help='Jericho game ID')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--max_iter', type=int, default=int(1e6), help='Max training iterations')
+    parser.add_argument('--instance_id', type=int, default=None,
+                        help='Instance ID for multi-instance training (0, 1, 2, ...). '
+                             'If not specified, will auto-find available ports.')
     parser.add_argument('--quick_test', action='store_true', help='Use quick test config')
     parser.add_argument('--no_save', action='store_true', help='Disable checkpoint saving')
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug logging (obs, action, LLM output)')
 
     args = parser.parse_args()
 
-    
+    # Note: Ports are already configured in __main__ block
+    # before any imports, so we don't need to configure them again here
+
     args.quick_test = False
     use_cot=True
+
     if args.quick_test:
         logger.info("Using quick test configuration")
         main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_debug_{args.env_id}_seed0')
@@ -270,8 +415,9 @@ def main():
                 create_cfg,
                 seed=args.seed,
                 max_train_iter=args.max_iter,
+                instance_id=args.instance_id,  # [MULTI-INSTANCE-FIX] Pass instance_id
             ))
-        
+
     else:
         # Run training
         asyncio.run(train_priorzero(
@@ -279,9 +425,37 @@ def main():
             create_cfg,
             seed=args.seed,
             max_train_iter=args.max_iter,
+            instance_id=args.instance_id,  # [MULTI-INSTANCE-FIX] Pass instance_id
         ))
 
 
 if __name__ == "__main__":
+    # ==================================================================
+    # [CRITICAL] Setup ports BEFORE any other code
+    # ==================================================================
+    # This MUST be the FIRST thing to run to avoid port conflicts
+    # Some libraries cache MASTER_PORT during module import!
+
+    import argparse
+    import sys
+
+    # Quick argument parsing BEFORE any imports
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--instance_id', type=int, default=None)
+    args, _ = parser.parse_known_args()
+
+    # Setup ports immediately
+    sys.path.insert(0, os.path.dirname(__file__))
+    from priorzero_port_manager import auto_setup_ports_for_training
+
+    port_config = auto_setup_ports_for_training(
+        instance_id=args.instance_id,
+        verbose=True
+    )
+    print(f"[CRITICAL] Ports configured at startup: DeepSpeed={port_config['master_port']}, Ray={port_config['ray_port']}")
+
+    # Now set tokenizers env var
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
+    # Finally, run main
     main()

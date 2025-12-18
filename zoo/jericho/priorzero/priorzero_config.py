@@ -4,7 +4,7 @@ from easydict import EasyDict
 import torch.distributed as dist
 
 def get_priorzero_config(
-    env_id: str = 'zork1.z5',
+    env_id: str = 'detective.z5',
     seed: int = 0,
     exp_name: str = None,
     use_cot: bool = False,
@@ -31,7 +31,8 @@ def get_priorzero_config(
     }
     action_space_size, max_steps = env_configurations.get(env_id, (20, 100))
     wm_encoder_option = 'legacy' 
-    wm_model_name = 'BAAI/bge-base-en-v1.5'  
+    # wm_model_name = 'BAAI/bge-base-en-v1.5'  
+    wm_model_name = "/mnt/shared-storage-user/puyuan/model/e5-base-v2"
     multi_gpu = False
     GPUs = 1
     
@@ -54,23 +55,45 @@ def get_priorzero_config(
         batch_size = int(batch_size * GPUs)
         
     ## LLM 参数
+    llm_learn_num_samples = 256
+    # [OOM-FIX] Reduce replay buffer size to save memory (~0.5GB saved)
+    # Original: int(1e5) = 100,000 transitions → ~1GB
+    # Optimized: int(5e4) = 50,000 transitions → ~0.5GB
+    replay_buffer_size = int(5e4)
     # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"  # Smaller model for faster iteration
-    llm_model_name = "/mnt/afs/wanzunian/niuyazhe/xiongjyu/models/Qwen2.5-0.5B-Instruct"
+    llm_model_name = "/mnt/shared-storage-user/puyuan/xiongjyu/models/Qwen2.5-0.5B-Instruct"
     train_batch_size = 128   # Total batch size across all GPUs
+
+    # ==========================
+    # TODO: ONLY FOR DEBUG
+    num_unroll_steps = 4
+    infer_context_length = 2
+    game_segment_length = 20
+    num_layers = 1
+    embed_dim = 32
+    replay_ratio = 0.1
+    batch_size = 16
+    collect_num_simulations=5
+    eval_num_simulations=5
+    # ==========================
+
+
+
     GPUS = 1
     micro_batch_size = 8    # Micro batch size per GPU
     gradient_accumulation_steps = train_batch_size // micro_batch_size // GPUS
     rft_loss_type = 'reinforce++'  # 'reinforce' | 'reinforce++' | 'ppo-simple-adv'
     history_length = 5
-    llm_learn_num_samples = 256
-    replay_buffer_size = int(1e5)
+
+
+
     
     env_config = dict(
         stop_value=int(1e6),
         max_steps=max_steps,
         observation_shape=512,  
         env_id=env_id,
-        game_path=f"/mnt/afs/wanzunian/niuyazhe/xiongjyu/jericho/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+        game_path=f"/mnt/shared-storage-user/puyuan/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
         for_unizero=True,
         tokenizer_path=wm_model_name,
         max_action_num=action_space_size,
@@ -120,7 +143,8 @@ def get_priorzero_config(
                 device="cuda",
                 action_space_size=action_space_size,
                 num_layers=num_layers,
-                num_heads=24,
+                # num_heads=24,
+                num_heads=16,
                 embed_dim=embed_dim,
                 obs_type="text",
                 env_num=max(collector_env_num, evaluator_env_num),
@@ -193,7 +217,7 @@ def get_priorzero_config(
             history_length=history_length,
             use_cot=use_cot,
             prompt_max_len=8192,
-            generate_max_len=128,
+            generate_max_len=128, # TODO
             temperature = 1.0,
             top_p = 1.0,
             
@@ -203,17 +227,21 @@ def get_priorzero_config(
             train_batch_size=train_batch_size,
             micro_batch_size=micro_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
-            learning_rate=1e-5,
+            learning_rate=1e-6,
             weight_decay=0.01,
             
             # loss相关参数 
             rft_loss_type=rft_loss_type,
             rft_clip_epsilon=0.2,
-            rft_kl_coef=0.01,
-        
+            rft_kl_coef=0.001,
+
             # vllm 相关参数
             vllm_tensor_parallel_size=1,
-            gpu_memory_utilization=0.2,
+            # [OOM-FIX] Reduce GPU memory utilization for vLLM (~1.2GB saved)
+            # Original: 0.2 → ~4.8GB allocated
+            # Optimized: 0.15 → ~3.6GB allocated
+            # Note: With sleep mode enabled, this will drop to ~0.2GB when asleep
+            gpu_memory_utilization=0.15,
         ),
     )
     priorzero_config = dict(

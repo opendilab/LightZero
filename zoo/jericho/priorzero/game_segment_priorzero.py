@@ -136,50 +136,71 @@ class GameSegment(OriginalGameSegment):
         for lp in next_segment_action_logprob:
             self.action_logprob_segment.append(copy.deepcopy(lp))
 
-    def get_unroll_raw_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+    def get_unroll_raw_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> List[str]:
         """
+        [FIX] Return list of raw observation strings (no numpy conversion).
+
         Overview:
             Get an observation of the correct format: o[t, t + stack frames + num_unroll_steps].
         Arguments:
             - timestep (int): The time step.
             - num_unroll_steps (int): The extra length of the observation frames.
             - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
+        Returns:
+            List[str]: List of raw observation strings (no numpy array conversion)
         """
         stacked_raw_obs = self.raw_obs_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps]
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_raw_obs)
             if pad_len > 0:
-                pad_frames = np.array([stacked_raw_obs[-1] for _ in range(pad_len)])
-                stacked_raw_obs = np.concatenate((stacked_raw_obs, pad_frames))
+                # [FIX] Use Python list concatenation instead of numpy
+                pad_frames = [stacked_raw_obs[-1] for _ in range(pad_len)]
+                stacked_raw_obs = stacked_raw_obs + pad_frames
         return stacked_raw_obs
 
-    def get_unroll_histroy_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+    def get_unroll_histroy_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> List[List[str]]:
         """
+        [FIX] Return list of history observation lists (no numpy conversion).
+
         Overview:
             Get an observation of the correct format: o[t, t + stack frames + num_unroll_steps].
         Arguments:
             - timestep (int): The time step.
             - num_unroll_steps (int): The extra length of the observation frames.
             - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
+        Returns:
+            List[List[str]]: List of history observation lists (no numpy array conversion)
         """
         stacked_histroy_obs = self.history_obs_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps]
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_histroy_obs)
             if pad_len > 0:
-                pad_frames = np.array([stacked_histroy_obs[-1] for _ in range(pad_len)])
-                stacked_histroy_obs = np.concatenate((stacked_histroy_obs, pad_frames))
+                # [FIX] Use Python list concatenation instead of numpy
+                # This fixes "ValueError: inhomogeneous shape" error when history_obs have different lengths
+                pad_frames = [stacked_histroy_obs[-1] for _ in range(pad_len)]
+                stacked_histroy_obs = stacked_histroy_obs + pad_frames
         return stacked_histroy_obs
 
-    def get_unroll_action_logprob(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
+    def get_unroll_action_logprob(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> List[float]:
         """
+        [FIX] Return list of action log probabilities (no numpy conversion).
+
         Return action logprobs aligned with actions for unroll window.
+
+        Arguments:
+            - timestep (int): The time step.
+            - num_unroll_steps (int): The extra length of the logprob frames.
+            - padding (bool): If True, pad frames if (t + stack frames) is outside of the trajectory.
+        Returns:
+            List[float]: List of action log probabilities (no numpy array conversion)
         """
         stacked_logprob = list(self.action_logprob_segment[timestep:timestep + self.frame_stack_num + num_unroll_steps])
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_logprob)
             if pad_len > 0:
-                pad_frames = np.array([stacked_logprob[-1] for _ in range(pad_len)])
-                stacked_logprob = np.concatenate((stacked_logprob, pad_frames))
+                # [FIX] Use Python list concatenation instead of numpy
+                pad_frames = [stacked_logprob[-1] for _ in range(pad_len)]
+                stacked_logprob = stacked_logprob + pad_frames
         return stacked_logprob
 
 # ==============================================================================

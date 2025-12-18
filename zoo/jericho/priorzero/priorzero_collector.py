@@ -646,12 +646,33 @@ class PriorZeroCollector(OriginalCollector):
             # After allreduce
             self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
 
-        
+
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
         self._total_duration += collected_duration
 
         self._output_log(train_iter)
+
+        # ==================================================================
+        # [OOM-FIX] Put vLLM engines to sleep to release GPU memory
+        # ==================================================================
+        # After collection is done, we don't need vLLM until next collect iteration.
+        # Put vLLM engines to sleep to free GPU memory for World Model and LLM training.
+        # This saves approximately 4.6GB of GPU memory.
+        if self.llm_prior_generator is not None and hasattr(self.llm_prior_generator, 'vllm_engines'):
+            if self.llm_prior_generator.vllm_engines is not None:
+                try:
+                    import ray
+                    sleep_refs = []
+                    for engine in self.llm_prior_generator.vllm_engines:
+                        sleep_refs.append(engine.sleep.remote(level=1))
+
+                    # Wait for all engines to complete sleep (non-blocking, fast operation ~0.5s)
+                    ray.get(sleep_refs)
+                    self._logger.info("✓ vLLM engines put to sleep to release GPU memory (~4.6GB freed)")
+                except Exception as e:
+                    self._logger.warning(f"⚠ Failed to put vLLM engines to sleep: {e}")
+                    self._logger.warning("  This may cause OOM issues during training. Check vLLM sleep mode support.")
 
         return return_data
 

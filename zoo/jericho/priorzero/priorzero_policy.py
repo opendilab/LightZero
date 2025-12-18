@@ -558,6 +558,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                 prior.append(llm_prior_logprob[idx][action])
             policy_priors.append(prior)
         policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
+        
         # ======================================================================
         # World Model Initial Inference
         # ======================================================================

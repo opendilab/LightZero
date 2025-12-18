@@ -130,7 +130,9 @@ class PriorZeroOpenRLHFLLMTrainer:
                 p.requires_grad_(False)
 
         self.vllm_engines = None
-        if cfg.enable_vllm: 
+        if cfg.enable_vllm:
+            # [OOM-FIX] Enable vLLM sleep mode to release GPU memory when not in use
+            # This is critical to avoid OOM during LLM training phase
             self.vllm_engines = create_vllm_engines(
                 num_engines=cfg.vllm_num_engines,
                 tensor_parallel_size=cfg.vllm_tensor_parallel_size,
@@ -141,6 +143,7 @@ class PriorZeroOpenRLHFLLMTrainer:
                 enforce_eager=False,
                 gpu_memory_utilization=cfg.gpu_memory_utilization,
                 max_model_len=cfg.prompt_max_len + cfg.generate_max_len,
+                vllm_enable_sleep=True,  # [OOM-FIX] Enable sleep mode (saves ~4.6GB GPU memory)
             )
             self.llm_prior_generator = SamplesGenerator(vllm_engines=self.vllm_engines,
                                                         strategy=self.strategy,
