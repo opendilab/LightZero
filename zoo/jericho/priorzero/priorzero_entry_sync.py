@@ -457,5 +457,10 @@ if __name__ == "__main__":
     # Now set tokenizers env var
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
+    # [LOG-FIX] Reduce vLLM logging verbosity to avoid flooding logs with progress bars
+    # This suppresses the frequent "Processed prompts: XX%" messages from vLLM
+    os.environ['VLLM_LOGGING_LEVEL'] = 'WARNING'  # Suppress INFO level logs from vLLM
+    os.environ['VLLM_CONFIGURE_LOGGING'] = '0'    # Disable vLLM's logging configuration
+
     # Finally, run main
     main()
