@@ -291,7 +291,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.
         random_collect_episode_num=0,
-
+        
         # ****** Explore by eps greedy ******
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.

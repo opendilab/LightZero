@@ -16,6 +16,7 @@ data_*
 *.so
 *.gv
 *.png
+!lzero/loss_landscape/images/**/*.png
 *.csv
 
 pkg/
@@ -46,6 +47,8 @@ bin/
 bc/
 *.tmp
 *.bak
+*.bak/
+.bak/
 *.swp
 *~.nib
 local.properties
