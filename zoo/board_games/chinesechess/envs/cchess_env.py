@@ -29,14 +29,18 @@ Observation Space:
         - 前 56 个通道为 4 帧历史观测堆叠，每一帧包含 14 个特征平面 (7种棋子 x 2种颜色)
         - 最后一个通道为当前玩家颜色平面 (全1表示红方/先手，全0表示黑方/后手)
         - 采用 Canonical View (规范视角)：始终以当前玩家视角观察棋盘 (自己棋子在下方/前7层)
-    - ``action_mask``: shape (8100,), int8. 合法动作掩码，1表示合法，0表示非法
+    - ``action_mask``: shape (action_space_size,), int8. 合法动作掩码，1表示合法，0表示非法
     - ``board``: shape (10, 9), int8. 棋盘可视化表示，用于调试或渲染
     - ``to_play``: shape (1,), int32. 当前该谁走 (-1: 结束/未知, 0: 黑方, 1: 红方)
 
 Action Space:
-    - Discrete(8100). 动作是移动的索引 (from_square * 90 + to_square)
-    - 棋盘有 90 个位置 (0-89)，动作空间涵盖所有可能的起点-终点组合 (90 * 90 = 8100)
-    - 实际合法动作远小于 8100 (通常几十到一百多)
+    支持两种动作空间（通过 action_space_size 配置）：
+    - Discrete(2086): 紧凑动作空间（默认），只包含合理走法
+        - 基础走法(2038): 车/炮/兵/将的直线移动 + 马的日字跳跃
+        - 士的斜角移动(16): 红方8个 + 黑方8个
+        - 象的田字移动(32): 红方16个 + 黑方16个
+    - Discrete(8100): 全连接空间 (from_square * 90 + to_square)
+    - 实际合法动作远小于动作空间大小 (通常几十到一百多)
 
 Reward Space:
     - Box(-1, 1, (1,), float32).
@@ -58,18 +62,7 @@ from easydict import EasyDict
 from gymnasium import spaces
 
 from . import cchess
-
-
-def move_to_action(move: cchess.Move) -> int:
-    """将 Move 对象转换为动作索引"""
-    return move.from_square * 90 + move.to_square
-
-
-def action_to_move(action: int) -> cchess.Move:
-    """将动作索引转换为 Move 对象"""
-    from_square = action // 90
-    to_square = action % 90
-    return cchess.Move(from_square, to_square)
+from .action_space import action_to_move, move_to_action, ActionSpaceConverter
 
 
 @ENV_REGISTRY.register('cchess')
@@ -89,6 +82,7 @@ class ChineseChessEnv(BaseEnv):
         scale=False,
         stop_value=2,
         max_episode_steps=500,  # 最大回合数限制，防止无限回合
+        action_space_size=2086,  # 动作空间大小：2086（紧凑）或 8100（全连接）
     )
 
     @classmethod
@@ -101,6 +95,10 @@ class ChineseChessEnv(BaseEnv):
         self.cfg = cfg
         self.channel_last = cfg.channel_last
         self.scale = cfg.scale
+
+        # 动作空间配置
+        self.action_space_size = cfg.get('action_space_size', 2086)
+        assert self.action_space_size in [2086, 8100], "action_space_size must be 2086 or 8100"
         
         self.render_mode = cfg.render_mode
         self.replay_path = cfg.replay_path
@@ -161,21 +159,23 @@ class ChineseChessEnv(BaseEnv):
     def _mirror_action(self, action: int) -> int:
         """
         将动作在镜像坐标系统中转换（用于黑方视角转换）
-        
+
         当黑方观测被旋转180度时，动作空间也需要相应转换。
-        使用 cchess.square_mirror() 对起点和终点坐标进行镜像。
-        
+
         Args:
-            action: 原始动作索引 (from_square * 90 + to_square)
-        
+            action: 原始动作索引
+
         Returns:
             镜像后的动作索引
         """
-        from_square = action // 90
-        to_square = action % 90
-        from_square_mirror = cchess.square_mirror(from_square)
-        to_square_mirror = cchess.square_mirror(to_square)
-        return from_square_mirror * 90 + to_square_mirror
+        if self.action_space_size == 8100:
+            from_square = action // 90
+            to_square = action % 90
+            from_square_mirror = cchess.square_mirror(from_square)
+            to_square_mirror = cchess.square_mirror(to_square)
+            return from_square_mirror * 90 + to_square_mirror
+        else:  # 2086
+            return ActionSpaceConverter.mirror_2086_index(action)
 
     def _get_raw_planes(self) -> np.ndarray:
         """
@@ -243,7 +243,7 @@ class ChineseChessEnv(BaseEnv):
         # 保存执行动作的玩家（用于奖励计算）
         acting_player = self._current_player
         
-        move = action_to_move(action_real)  # 使用真实坐标
+        move = action_to_move(action_real, self.action_space_size)  # 使用真实坐标
         self.board.push(move)
         
         # 增加步数计数
@@ -424,15 +424,15 @@ class ChineseChessEnv(BaseEnv):
             self.obs_buffer.append(init_planes)
         
         # 设置动作空间和观察空间
-        self._action_space = spaces.Discrete(90 * 90)  # 8100 个可能的动作
+        self._action_space = spaces.Discrete(self.action_space_size)
         self._reward_space = spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32)
-        
+
         # 计算Observation Shape: (14 * stack + 1, 10, 9)
         obs_channels = 14 * self.stack_obs_num + 1
         self._observation_space = spaces.Dict(
             {
                 "observation": spaces.Box(low=0, high=1, shape=(obs_channels, 10, 9), dtype=np.float32),
-                "action_mask": spaces.Box(low=0, high=1, shape=(90 * 90,), dtype=np.int8),
+                "action_mask": spaces.Box(low=0, high=1, shape=(self.action_space_size,), dtype=np.int8),
                 "board": spaces.Box(low=0, high=7, shape=(10, 9), dtype=np.int8),
                 "current_player_index": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),  # 0 或 1
                 "to_play": spaces.Box(low=-1, high=2, shape=(1,), dtype=np.int32),  # -1, 1, 或 2
@@ -497,22 +497,24 @@ class ChineseChessEnv(BaseEnv):
     def observe(self) -> dict:
         """
         返回观察
-        
+
         关键修复：对于黑方，需要将action_mask也进行镜像转换，
         使其与旋转后的观测空间保持一致。
         """
         legal_actions_list = self.legal_actions
-        
-        action_mask = np.zeros(90 * 90, dtype=np.int8)
-        
+
+        action_mask = np.zeros(self.action_space_size, dtype=np.int8)
+
         # 关键修复：如果是黑方，action_mask 需要镜像
         if self._current_player == 2:  # 黑方
             for action in legal_actions_list:
                 action_mirror = self._mirror_action(action)
-                action_mask[action_mirror] = 1
+                if action_mirror >= 0:  # 2086空间可能返回-1
+                    action_mask[action_mirror] = 1
         else:  # 红方
             for action in legal_actions_list:
-                action_mask[action] = 1
+                if action >= 0:  # 2086空间可能返回-1
+                    action_mask[action] = 1
         
         # 获取棋盘的可视化表示
         board_visual = np.zeros((10, 9), dtype=np.int8)
@@ -547,7 +549,8 @@ class ChineseChessEnv(BaseEnv):
         返回所有合法动作的索引列表
         """
         legal_moves = list(self.board.legal_moves)
-        return [move_to_action(move) for move in legal_moves]
+        actions = [move_to_action(move, self.action_space_size) for move in legal_moves]
+        return [a for a in actions if a >= 0]  # 过滤2086空间中不存在的动作
 
     def get_done_winner(self) -> Tuple[bool, int]:
         """
@@ -623,7 +626,7 @@ class ChineseChessEnv(BaseEnv):
                 # 使用引擎计算最佳走法，按深度限制
                 limit = engine_module.Limit(depth=self.engine_depth)
                 result = self.engine.play(self.board, limit)
-                return move_to_action(result.move)
+                return move_to_action(result.move, self.action_space_size)
             except Exception as e:
                 logging.warning(f"引擎调用失败: {e}，使用随机策略")
                 logging.warning(e)
@@ -641,7 +644,7 @@ class ChineseChessEnv(BaseEnv):
             try:
                 uci = input(f"请输入走法（UCI格式，如 h2e2）: ")
                 move = cchess.Move.from_uci(uci)
-                action = move_to_action(move)
+                action = move_to_action(move, self.action_space_size)
                 if action in self.legal_actions:
                     return action
                 else:
@@ -707,6 +710,7 @@ class ChineseChessEnv(BaseEnv):
         new_env.uci_engine_path = self.uci_engine_path
         new_env.engine_depth = self.engine_depth
         new_env.max_episode_steps = self.max_episode_steps
+        new_env.action_space_size = self.action_space_size
         new_env.players = self.players
         new_env.start_player_index = self.start_player_index
         
@@ -755,8 +759,8 @@ class ChineseChessEnv(BaseEnv):
         
         # 创建新环境 (使用高效拷贝)
         new_env = self.copy()
-        
-        move = action_to_move(action_real)  # 使用真实坐标
+
+        move = action_to_move(action_real, self.action_space_size)  # 使用真实坐标
         new_env.board.push(move)
         
         # 增加步数计数

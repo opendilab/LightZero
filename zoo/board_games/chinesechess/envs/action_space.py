@@ -364,6 +364,63 @@ def fast_create_action_mask_2086(legal_actions_8100: List[int]) -> np.ndarray:
     return mask
 
 
+# ========== 预计算：2086索引 → (from_square, to_square) ==========
+_ACTION_2086_TO_SQUARES = []
+for _label in ACTION_LABELS_2086:
+    _col1, _row1, _col2, _row2 = int(_label[0]), int(_label[1]), int(_label[2]), int(_label[3])
+    _from_sq = _row1 * 9 + _col1
+    _to_sq = _row2 * 9 + _col2
+    _ACTION_2086_TO_SQUARES.append((_from_sq, _to_sq))
+
+# ========== 预计算：(from_square, to_square) → 2086索引 ==========
+_SQUARES_TO_ACTION_2086 = {}
+for _idx, (_from_sq, _to_sq) in enumerate(_ACTION_2086_TO_SQUARES):
+    _SQUARES_TO_ACTION_2086[(_from_sq, _to_sq)] = _idx
+
+
+# ========== 统一转换函数（支持配置化） ==========
+def action_to_move(action: int, action_space_size: int = 2086):
+    """
+    动作索引 → cchess.Move（统一接口）
+
+    Args:
+        action: 动作索引
+        action_space_size: 2086 或 8100
+
+    Returns:
+        cchess.Move 对象
+    """
+    from . import cchess
+
+    if action_space_size == 2086:
+        from_sq, to_sq = _ACTION_2086_TO_SQUARES[action]
+    else:  # 8100
+        from_sq = action // 90
+        to_sq = action % 90
+
+    return cchess.Move(from_sq, to_sq)
+
+
+def move_to_action(move, action_space_size: int = 2086) -> int:
+    """
+    cchess.Move → 动作索引（统一接口）
+
+    Args:
+        move: cchess.Move 对象
+        action_space_size: 2086 或 8100
+
+    Returns:
+        动作索引，2086空间中不存在返回-1
+    """
+    from_sq = move.from_square
+    to_sq = move.to_square
+
+    if action_space_size == 2086:
+        return _SQUARES_TO_ACTION_2086.get((from_sq, to_sq), -1)
+    else:  # 8100
+        return from_sq * 90 + to_sq
+
+
 if __name__ == "__main__":
     # 测试代码
     print(f"2086动作空间大小: {len(ACTION_LABELS_2086)}")
@@ -388,3 +445,18 @@ if __name__ == "__main__":
     print(f"\n快速转换验证:")
     print(f"  8100->2086: {fast_8100_to_2086(idx_8100)}")
     print(f"  2086->8100: {fast_2086_to_8100(idx_2086)}")
+
+    # 验证直接转换函数
+    print(f"\n直接转换函数测试:")
+    from . import cchess
+    move = action_to_move(idx_2086, 2086)
+    print(f"  action_to_move({idx_2086}, 2086) -> Move({move.from_square}, {move.to_square}) -> UCI: {move.uci()}")
+
+    move_8100 = action_to_move(idx_8100, 8100)
+    print(f"  action_to_move({idx_8100}, 8100) -> Move({move_8100.from_square}, {move_8100.to_square}) -> UCI: {move_8100.uci()}")
+
+    # 反向转换
+    action_back_2086 = move_to_action(move, 2086)
+    action_back_8100 = move_to_action(move, 8100)
+    print(f"  move_to_action(Move, 2086) -> {action_back_2086}")
+    print(f"  move_to_action(Move, 8100) -> {action_back_8100}")
