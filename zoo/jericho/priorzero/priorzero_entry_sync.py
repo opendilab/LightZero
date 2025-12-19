@@ -462,5 +462,10 @@ if __name__ == "__main__":
     os.environ['VLLM_LOGGING_LEVEL'] = 'WARNING'  # Suppress INFO level logs from vLLM
     os.environ['VLLM_CONFIGURE_LOGGING'] = '0'    # Disable vLLM's logging configuration
 
+    # [OOM-FIX] PyTorch memory optimization to reduce fragmentation
+    # expandable_segments:True - Allows PyTorch to expand memory segments dynamically
+    # max_split_size_mb:128 - Limits memory block splitting to reduce fragmentation
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:128'
+
     # Finally, run main
     main()

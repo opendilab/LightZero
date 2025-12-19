@@ -236,9 +236,37 @@ class PriorZeroOpenRLHFLLMTrainer:
 
         if self.cfg.use_cot:
             all_instructions = [s["instruction"] for s in samples]
-            all_prefix_cot = self.llm_prior_generator._build_cot_prefix_texts(all_instructions)
+
+            # [OOM-FIX] Generate CoT prefixes in batches to avoid OOM
+            # Original: Process all samples at once (e.g., 2560 prompts → 15GB peak memory)
+            # Fixed: Process 256 prompts at a time (1.5GB peak memory per batch)
+            cot_batch_size = 256
+            all_prefix_cot = []
+
+            num_batches = (len(all_instructions) + cot_batch_size - 1) // cot_batch_size
+            logger.info(f"  → Generating CoT prefixes for {len(all_instructions)} samples in {num_batches} batches")
+
+            for batch_idx in range(0, len(all_instructions), cot_batch_size):
+                batch_end = min(batch_idx + cot_batch_size, len(all_instructions))
+                batch_instructions = all_instructions[batch_idx:batch_end]
+
+                # Generate CoT prefix for this batch
+                batch_prefix_cot = self.llm_prior_generator._build_cot_prefix_texts(batch_instructions)
+                all_prefix_cot.extend(batch_prefix_cot)
+
+                current_batch_num = (batch_idx // cot_batch_size) + 1
+                logger.info(f"  → Batch {current_batch_num}/{num_batches}: Generated {len(all_prefix_cot)}/{len(all_instructions)} CoT prefixes")
+
+                # [OOM-FIX] Clear CUDA cache between batches to reduce memory fragmentation
+                if current_batch_num < num_batches:  # Don't clear after last batch
+                    import torch
+                    torch.cuda.empty_cache()
+
+            # Assign CoT prefixes to samples
             for i, s in enumerate(samples):
                 s["prefix_cot"] = all_prefix_cot[i]
+
+            logger.info(f"  ✓ CoT prefix generation complete for {len(samples)} samples")
         
         micro_train_batch_size = self.strategy.micro_train_batch_size
         gradient_accumulation_steps = self.strategy.accumulated_gradient

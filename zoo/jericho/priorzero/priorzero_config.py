@@ -66,15 +66,15 @@ def get_priorzero_config(
 
     # ==========================
     # TODO: ONLY FOR DEBUG
-    num_unroll_steps = 4
-    infer_context_length = 2
-    game_segment_length = 20
-    num_layers = 1
-    embed_dim = 32
-    replay_ratio = 0.1
-    batch_size = 16
-    collect_num_simulations=5
-    eval_num_simulations=5
+    # num_unroll_steps = 4
+    # infer_context_length = 2
+    # game_segment_length = 20
+    # num_layers = 1
+    # embed_dim = 32
+    # replay_ratio = 0.1
+    # batch_size = 16
+    # collect_num_simulations=5
+    # eval_num_simulations=5
     # ==========================
 
 
