@@ -16,8 +16,6 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from ding.utils import POLICY_REGISTRY
 from ding.model import model_wrap
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import get_peft_model, LoraConfig, TaskType
 import os
 
 # Import from local LightZero
@@ -28,166 +26,21 @@ from lzero.policy.utils import select_action
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.entry.utils import initialize_zeros_batch
 import lzero.model.unizero_model  
-from ding.utils import build_logger
-
-from priorzero_utils import compute_approx_kl
-
-def build_llm_prompt(
-    current_obs: str,
-    history: Optional[List[Tuple[str, str, float]]] = None,
-    action_descriptions: Optional[Dict[str, str]] = None,
-    use_cot: bool = True
-) -> str:
-    """
-    [PRIORZERO-NEW]
-    Build a high-quality prompt for LLM to generate the next action.
-
-    When use_cot is True, the model should:
-        - First output its reasoning inside <think></think>
-        - Then output the SINGLE best next action inside <action></action>
-
-    When use_cot is False, the model should:
-        - Output ONLY the SINGLE best next action inside <action></action>
-
-    Args:
-        current_obs: Current observation text
-        history: List of (observation, action, reward) tuples
-        action_descriptions: Optional descriptions for each action
-        use_cot: Whether to encourage chain-of-thought reasoning
-
-    Returns:
-        Formatted prompt string
-    """
-    prompt_parts = []
-
-    prompt_parts.append(
-        "You are an expert player in a text-based adventure game. "
-        "Your goal is to maximize the score by choosing the best possible next action. "
-        "You must choose exactly ONE best next action."
-    )
-    if history is not None and len(history) > 0:
-        history = list(history)
-        prompt_parts.append("\n=== Recent History ===")
-
-        for i, (obs, action, reward) in enumerate(history, start=1):  
-            obs_str = obs
-            prompt_parts.append(f"Step {i}:")
-            prompt_parts.append(f"  Observation: {obs_str}")
-            prompt_parts.append(f"  Action: {action}")
-            prompt_parts.append(f"  Reward: {reward}")
-
-    # Current observation
-    prompt_parts.append("\n=== Current Situation ===")
-    prompt_parts.append(current_obs)
-
-    # Available actions (if provided)
-    if action_descriptions:
-        prompt_parts.append("\n=== Available Actions ===")
-        prompt_parts.append(
-            "You MUST choose the best action from the list below. "
-            "Do not invent actions that are not in this list."
-        )
-        for action_text, desc in action_descriptions.items():
-            # action_text: should match exactly the string we want inside <action>...</action>
-            prompt_parts.append(f"- {action_text}: {desc}")
-
-    # Task + output format
-    if use_cot:
-        prompt_parts.append(
-            "\n=== Task ===\n"
-            "You must produce TWO parts in order: (1) Reasoning, then (2) Action.\n\n"
-            "1) Reasoning:\n"
-            "- Perform a detailed reasoning process based ONLY on the current state and the recent interaction history.\n"
-            "- Analyze what environment or situation you are currently in.\n"
-            "- Identify what actions are available or valid at this step, and the relevant constraints.\n"
-            "- You may discuss observations, uncertainties, and implications of different possibilities.\n"
-            "- IMPORTANT: Do NOT state, imply, or reveal which action will be chosen, and the reasoning section MUST output exactly in the following format: Reasoning:<REASONING>.\n\n"
-            "2) Action:\n"
-            "- After finishing the reasoning, output exactly ONE line in the following format:\nAction: <ACTION>\n"
-            "Your output MUST strictly follow this format: \nReasoning: <your reasoning content>\nAction: <the chosen action>"
-        )
-    else:
-        prompt_parts.append(
-            "\n=== Task ===\n"
-            "Analyze the recent history and the current situation, and decide on the SINGLE best next action."
-            "Please keep the output concise, avoiding any other content.\n\n"
-        )
-    return "\n".join(prompt_parts)
-
-# ==============================================================================
-# PriorZero Policy Class
-# ==============================================================================
 
 @POLICY_REGISTRY.register('priorzero', force_overwrite=True)
 class PriorZeroPolicy(OriginalUniZeroPolicy):
-    """
-    [PRIORZERO-MODIFIED]
-    PriorZero policy that combines UniZero world model with LLM policy.
-
-    Architecture:
-        - UniZero World Model: Learns latent dynamics, value, and policy in latent space
-        - LLM Policy Model: Provides high-quality action priors based on language understanding
-
-    Training:
-        - World Model: Trained with standard UniZero losses (value, policy, reward, latent)
-        - LLM: Trained with SFT (using MCTS policies) + RFT (using environment rewards)
-
-    Inference:
-        - LLM generates action ranking → converted to policy prior
-        - Policy prior injected into MCTS root node
-        - MCTS search refines the policy → selects best action
-    """
-
-    config = dict(
-        **OriginalUniZeroPolicy.config,
-        # LLM-specific config
-        llm_policy_cfg=dict(
-            pretrain_llm_path="Qwen/Qwen1.5-1.8B-Chat",
-            use_lora=False,  # Whether to use LoRA for efficient fine-tuning
-            lora_r=8,
-            lora_alpha=16,
-            lora_dropout=0.05,
-            llm_learning_rate=1e-6,
-            llm_weight_decay=0.01,
-            llm_loss_weight=0.5,  # Weight of LLM loss in total loss
-            rft_loss_weight=0.3,  # Weight of RFT loss in total loss
-            prompt_max_len=2048,
-            generate_max_len=128,
-            history_length=5,  # Number of recent steps to include in prompt
-            use_cot=True,  # Whether to use chain-of-thought prompting
-            sft_target='mcts_policy',  # 'mcts_policy' or 'oracle_policy'
-            enable_rft=True,  # Whether to enable RFT training
-        ),
-    )
-
-    def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None, **kwargs):
-        # [PRIORZERO-NEW] Initialize LLM-related attributes BEFORE super().__init__
-        # because super().__init__ will call _init_learn which needs these attributes       
-        self.llm_tokenizer = None
-        self._lr_scheduler_llm = None
-        self._last_llm_grad_norm = 0.0
-        self.llm_policy_cfg = cfg.llm_policy_cfg  # Set from cfg, not self._cfg (not set yet)
+    def __init__(self, cfg: Dict, model: torch.nn.Module = None, enable_field: List[str] = None, **kwargs): 
         self.profile_cfg = getattr(cfg, 'profile_cfg', {})
         self._profile_enabled = bool(self.profile_cfg.get('enable_cprofile', False))
         self._profile_dir = f"./{kwargs['exp_name']}/log/profile"
         self._profile_log_interval = int(self.profile_cfg.get('log_interval', 50))
-        self._profile_stats = { 'train_world_model': {'count': 0, 'total': 0.0, 'max': 0.0}, 
-                                'train_llm_sft': {'count': 0, 'total': 0.0, 'max': 0.0},
-                                'train_llm_rft': {'count': 0, 'total': 0.0, 'max': 0.0}
-                            }
+        self._profile_stats = { 'train_world_model': {'count': 0, 'total': 0.0, 'max': 0.0}}
         self._profile_stats_file = f'{self._profile_dir}/train_time.log'
         if self._profile_enabled:
-            os.makedirs(self._profile_dir, exist_ok=True)
-        self.vllm_engine = None
-
+            os.makedirs(self._profile_dir, exist_ok=True)   
         super().__init__(cfg, model, enable_field)
 
     def _init_learn(self) -> None:
-        """
-        [PRIORZERO-MODIFIED]
-        Initialize both UniZero world model and LLM policy model with their optimizers.
-        Align with UniZero implementation - use logging instead of self._logger.
-        """
         super()._init_learn()
         logging.info("✓ UniZero World Model and optimizer initialized")
 
@@ -221,22 +74,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
-        """
-        [PRIORZERO-MODIFIED]
-        Dual-model training: UniZero world model + LLM policy.
-
-        Training process:
-        1. Train UniZero world model with standard losses (value, policy, reward, latent)
-        2. Train LLM with SFT (supervised by MCTS policies)
-        3. Optionally train LLM with RFT (reinforced by environment rewards)
-        4. Joint optimization with combined loss
-
-        Args:
-            data: Tuple containing (current_batch, target_batch, train_iter, game_segments)
-
-        Returns:
-            log_dict: Dictionary of training metrics
-        """
         self._learn_model.train()
         self._target_model.train()
 
@@ -401,7 +238,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
 
             # ============ Gradient Norms ============
             'wm_grad_norm': wm_grad_norm.item(),
-            'llm_grad_norm': self._last_llm_grad_norm,
 
             # ============ Learning Rates ============
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
@@ -421,23 +257,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         """
 
         return [
-            # ============ LLM Loss Metrics ============
-            'llm_sft_loss',              # Supervised fine-tuning loss
-            'llm_rft_loss',              # Reinforcement fine-tuning loss
-            'llm_total_loss',            # Combined LLM loss
-            'llm_grad_norm',             # LLM gradient norm
-            'llm_lr',                    # LLM learning rate
-            'rft_logprob_mean',
-            'rft_seq_neglogprob_mean',
-            'rft_advantage_mean',
-            'rft_advantage_std',
-            'rft_ratio_used_mean',
-            'rft_kl_mean',
-            # ============ LLM Training Statistics ============
-            # 'num_sft_samples',           # Number of SFT samples in batch
-            # 'num_rft_samples',           # Number of RFT samples in batch
             # ============ Combined Metrics ============
-            'total_loss',                # Total loss (WM + LLM)
             'wm_total_loss',             # World model total loss
             'wm_grad_norm',              # World model gradient norm
             # ============ World Model Component Losses ============
@@ -515,58 +335,39 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         timestep: List = [0],
         **kwargs
     ) -> Dict[int, Dict[str, Any]]:
-        """
-        [PRIORZERO-MODIFIED]
-        Forward pass for data collection with LLM-guided MCTS.
-
-        Process:
-        1. Get LLM prior outputs from kwargs
-        2. Parse LLM outputs into policy priors
-        3. Run world model initial inference
-        4. Inject LLM priors into MCTS root node (replace policy logits)
-        5. Run MCTS search with LLM-guided priors
-        6. Return best action and statistics
-
-        Args:
-            data: Stacked observations (tensor)
-            action_mask: Action masks for each environment
-            temperature: Temperature for action selection
-            to_play: Player IDs (for multi-agent)
-            epsilon: Epsilon for epsilon-greedy exploration
-            ready_env_id: List of ready environment IDs
-            **kwargs: Additional arguments, including 'llm_prior_outputs'
-
-        Returns:
-            output_dict: Dictionary mapping env_id to action and search statistics
-        """
         self._collect_model.eval()
 
         llm_prior_logprob = kwargs.pop('llm_prior_logprob', None)
         valid_actions_list = kwargs.get('valid_actions_list', None)
-
-        if llm_prior_logprob is None:
+        if not any(llm_prior_logprob):
             logging.debug("No LLM priors provided, using standard UniZero MCTS")
             return super()._forward_collect(
                 data, action_mask, temperature, to_play, epsilon,
                 ready_env_id=ready_env_id, timestep=timestep
             )
-            
-        policy_priors = []
-        for idx, actions in enumerate(valid_actions_list):
-            prior = []
-            for action in actions:
-                prior.append(llm_prior_logprob[idx][action])
-            policy_priors.append(prior)
-        policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
-        # ======================================================================
-        # World Model Initial Inference
-        # ======================================================================
         self._collect_mcts_temperature = temperature
         self._collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         if ready_env_id is None:
             ready_env_id = np.arange(active_collect_env_num)
         output = {i: None for i in ready_env_id}
+        
+        policy_priors = []
+        for env_id in range(active_collect_env_num):
+            actions = valid_actions_list[env_id]
+            prior = []
+            if len(actions) == 1:
+                assert actions[0] == 'go', "When only one valid action, it must be 'go'"
+                prior.append(llm_prior_logprob[env_id]['go'])
+            else:
+                for action in actions:
+                    if action == 'go':
+                        continue
+                    prior.append(llm_prior_logprob[env_id][action])
+            policy_priors.append(prior)
+        policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
+        
+        
         with torch.no_grad():
             network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
@@ -621,20 +422,4 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             self.last_batch_obs = data
             self.last_batch_action = batch_action
         return output
-
-    def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        [PRIORZERO-MODIFIED]
-        Save state dict for both world model and LLM.
-        """
-        state_dict = super()._state_dict_learn()
-
-        return state_dict
-
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        [PRIORZERO-MODIFIED]
-        Load state dict for both world model and LLM.
-        """
-        super()._load_state_dict_learn(state_dict)
     

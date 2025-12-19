@@ -20,7 +20,7 @@ import os
 from lzero.worker.muzero_segment_collector import MuZeroSegmentCollector as OriginalCollector
 from lzero.mcts.utils import prepare_observation
 from game_segment_priorzero import GameSegment
-from priorzero_policy import build_llm_prompt
+from priorzero_utils import build_llm_prompt
 
 # ==============================================================================
 # Helper Functions
@@ -83,8 +83,9 @@ class PriorZeroCollector(OriginalCollector):
 
     def __init__(
         self,
-        llm_prior_generator,
+        llm_prior_generator: None,
         policy_config: Dict,
+        llm_config: Dict,
         **kwargs
     ):
         """
@@ -92,24 +93,21 @@ class PriorZeroCollector(OriginalCollector):
 
         Args:
             vllm_engine
-            policy_config: Policy configuration (contains llm_policy_cfg)
+            policy_config: Policy configuration
+            llm_config: llm configuration
             **kwargs: Additional arguments for parent class
         """
-        # [FIX] Set policy_config in kwargs before calling super().__init__
-        # because parent class needs it
         kwargs['policy_config'] = policy_config
 
         super().__init__(**kwargs)
 
         self.llm_prior_generator = llm_prior_generator
-        self.llm_policy_cfg = policy_config.llm_policy_cfg
+        self.llm_cfg = llm_config
 
-        # [PRIORZERO-NEW] History buffer for each environment
-        # Format: {env_id: deque([(obs_text, action_text, reward), ...])}
         self.history_buffers = defaultdict(
-            lambda: deque(maxlen=self.llm_policy_cfg.history_length)
+            lambda: deque(maxlen=self.llm_cfg.history_length)
         )
-        self.prompt_log_interval = getattr(self.llm_policy_cfg, 'prompt_log_interval', 0)
+        self.prompt_log_interval = getattr(self.llm_cfg, 'prompt_log_interval', 0)
 
         self.profile_cfg = getattr(self.policy_config, 'profile_cfg', {})
         self._profile_enabled = bool(self.profile_cfg.get('enable_cprofile', False))
@@ -129,8 +127,8 @@ class PriorZeroCollector(OriginalCollector):
         self._llm_prior_req_counter = 0
 
         self._logger.info("✓ PriorZeroCollector initialized with vLLM engine")
-        self._logger.info(f"  - History length: {self.llm_policy_cfg.history_length}")
-        self._logger.info(f"  - Generate max length: {self.llm_policy_cfg.generate_max_len}")
+        self._logger.info(f"  - History length: {self.llm_cfg.history_length}")
+        self._logger.info(f"  - Generate max length: {self.llm_cfg.generate_max_len}")
 
     def pad_and_save_last_trajectory(
             self, i: int, last_game_segments: List[GameSegment], last_game_priorities: List[np.ndarray],
@@ -209,7 +207,7 @@ class PriorZeroCollector(OriginalCollector):
             actions.append('go')   # 确保环境使用的动作都在valid actions里有对应的logprob
             state = states[i]
             history = histories[i]
-            prompt = build_llm_prompt(current_obs=state, history=history, use_cot=self.llm_policy_cfg.use_cot)
+            prompt = build_llm_prompt(current_obs=state, history=history, use_cot=self.llm_cfg.use_cot)
             for action in actions:
                 all_prompts.append(prompt)
                 all_labels.append(action)
@@ -392,7 +390,7 @@ class PriorZeroCollector(OriginalCollector):
                         valid_actions = obs[env_id].get('valid_actions', [])
                         valid_actions_list.append(valid_actions)
 
-                    if self.policy_config.llm_policy_cfg.enable_llm:
+                    if self.llm_cfg.enable_llm:
                         with self._profile_block(name='collect_get_llm_prior_profile'):
                             llm_prior_logprob = self._get_llm_prior(
                                 states=raw_obs_list,

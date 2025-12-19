@@ -5,7 +5,6 @@ from functools import partial
 from pathlib import Path
 from typing import Tuple, Optional
 
-import ray
 import torch
 import wandb
 from ding.config import compile_config
@@ -15,12 +14,7 @@ from ding.utils import set_pkg_seed, get_rank, get_world_size
 from ding.worker import create_buffer, BaseLearner
 from tensorboardX import SummaryWriter
 from loguru import logger
-from ding.utils import DDPContext
 from lzero.config.utils import lz_to_ddp_config
-
-os.environ.setdefault("VLLM_USE_V1", "1")
-from vllm import AsyncLLMEngine
-from vllm.engine.arg_utils import AsyncEngineArgs
 
 from priorzero_config import get_priorzero_config, get_priorzero_debug_config
 from priorzero_collector import PriorZeroCollector
@@ -28,12 +22,13 @@ from priorzero_evaluator import PriorZeroEvaluator
 from priorzero_policy import *
 from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
 from lzero.entry.utils import calculate_update_per_collect
-from priorzero_llm_modules import PriorZeroOpenRLHFLLMConfig, PriorZeroOpenRLHFLLMTrainer
+from priorzero_llm_modules import PriorZeroLLMTrainer
 
 
 def train_priorzero(
     cfg: dict,
     create_cfg: dict,
+    llm_cfg,
     seed: int = 0,
     max_train_iter: int = int(1e6),
     max_env_step: Optional[int] = int(1e10),
@@ -49,10 +44,6 @@ def train_priorzero(
         max_train_iter: Maximum training iterations
     """
     cfg = compile_config(cfg, seed=seed, auto=True, create_cfg=create_cfg)
-    if ray.is_initialized():
-        logger.info(f"✓ Ray already initialized (connected to existing cluster)")
-    else:
-        logger.info(f"✓ Ray not initialized - vLLM will handle initialization if needed")
 
     logger.info("Creating environments...")
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -72,31 +63,14 @@ def train_priorzero(
     logger.info(f"✓ TensorBoard logger: ./{cfg.exp_name}/log/")
 
     vllm_engine = None
-    if cfg.policy.llm_policy_cfg.enable_llm:
-        llm_cfg = PriorZeroOpenRLHFLLMConfig(
-            model_name_or_path=policy.llm_policy_cfg.pretrain_llm_path,
-            zero_stage=policy.llm_policy_cfg.zero_stage,  # 你传 zero_stage2.json 
-            lr=policy.llm_policy_cfg.learning_rate,
-            weight_decay=policy.llm_policy_cfg.weight_decay,
-            prompt_max_len=policy.llm_policy_cfg.prompt_max_len,
-            generate_max_len=policy.llm_policy_cfg.generate_max_len,
-            use_cot=policy.llm_policy_cfg.use_cot,
-            rft_loss_type=policy.llm_policy_cfg.rft_loss_type,
-            rft_clip_epsilon=policy.llm_policy_cfg.rft_clip_epsilon,
-            rft_kl_coef=policy.llm_policy_cfg.rft_kl_coef,
-            train_batch_size=policy.llm_policy_cfg.train_batch_size,
-            micro_train_batch_size=policy.llm_policy_cfg.micro_batch_size,
-            gradient_accumulation_steps=policy.llm_policy_cfg.gradient_accumulation_steps,
-            bf16=True,
-            enable_vllm=True,
-            vllm_num_engines=1,
-            vllm_tensor_parallel_size=policy.llm_policy_cfg.vllm_tensor_parallel_size,
-            gpu_memory_utilization=policy.llm_policy_cfg.gpu_memory_utilization,
-            seed=seed,
-            temperature=policy.llm_policy_cfg.temperature,
-            top_p=policy.llm_policy_cfg.top_p,
-        )
-        trainer = PriorZeroOpenRLHFLLMTrainer(llm_cfg, tb_logger=tb_logger, exp_name=cfg.exp_name)
+    if llm_cfg.enable_llm:
+        import ray
+        from ray.util.placement_group import placement_group
+        
+        if not ray.is_initialized():
+            ray.init(runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "false", "NCCL_DEBUG": "WARN"}})
+        
+        trainer = PriorZeroLLMTrainer(llm_cfg, tb_logger=tb_logger, exp_name=cfg.exp_name)
         llm_prior_generator = trainer.llm_prior_generator
         # policy._init_llm_learn(tb_logger=tb_logger, exp_name=cfg.exp_name, vllm_engine=vllm_engine)
     
@@ -116,9 +90,10 @@ def train_priorzero(
     collector = PriorZeroCollector(
         env=collector_env,
         policy=policy.collect_mode,
+        llm_config=llm_cfg,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        llm_prior_generator=llm_prior_generator,
+        llm_prior_generator=llm_prior_generator if llm_cfg.enable_llm else None,
         policy_config=cfg.policy,
     )
     logger.info("✓ Collector created")
@@ -137,20 +112,6 @@ def train_priorzero(
     )
     logger.info("✓ Evaluator created")
     learner.call_hook('before_run')
-    # ==================================================================
-    # Main Training Loop
-    # ==================================================================
-    logger.info("="*80)
-    logger.info("Starting PriorZero Training")
-    logger.info("="*80)
-    logger.info(f"Experiment: {cfg.exp_name}")
-    logger.info(f"Max iterations: {max_train_iter}")
-    logger.info(f"Batch size: {cfg.policy.batch_size}")
-    logger.info(f"LLM model: {cfg.policy.llm_policy_cfg.pretrain_llm_path}")
-    logger.info(f"World model layers: {cfg.policy.model.world_model_cfg.num_layers}")
-    logger.info(f"Off-policy degree: {cfg.policy.off_policy_degree} ({'SYNC' if cfg.policy.off_policy_degree == 0 else 'ASYNC'})")
-    logger.info(f"Async eval: {cfg.policy.enable_async_eval}")
-    logger.info("="*80)
 
     buffer_reanalyze_count = 0
     train_epoch = 0
@@ -222,8 +183,8 @@ def train_priorzero(
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-        if new_num_of_transitions >= cfg.policy.llm_policy_cfg.llm_learn_num_samples:
-            all_data = replay_buffer.fetch_latest_batch(batch_size=cfg.policy.llm_policy_cfg.llm_learn_num_samples, policy=policy)
+        if llm_cfg.enable_llm and new_num_of_transitions >= llm_cfg.llm_learn_num_samples:
+            all_data = replay_buffer.fetch_latest_batch(batch_size=llm_cfg.llm_learn_num_samples, policy=policy)
             trainer.train_rft_from_priorzero_batch(all_data)
 
         train_epoch += 1
@@ -252,34 +213,22 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug logging (obs, action, LLM output)')
 
     args = parser.parse_args()
-
     
-    args.quick_test = False
-    use_cot=True
+    args.quick_test = True
+    use_cot=False
     if args.quick_test:
         logger.info("Using quick test configuration")
-        main_cfg, create_cfg = get_priorzero_debug_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_debug_{args.env_id}_seed0')
+        main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_debug_{args.env_id}_seed0')
     else:
-        main_cfg, create_cfg = get_priorzero_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_rft_reinforce++_{args.env_id}_seed0')
+        main_cfg, create_cfg, llm_cfg = get_priorzero_config(args.env_id, args.seed, use_cot=use_cot, exp_name=f'data_priorzero/priorzero_sync_rft_reinforce++_{args.env_id}_seed0')
 
-    if main_cfg.policy.multi_gpu:
-        with DDPContext():
-            main_cfg = lz_to_ddp_config(main_cfg)
-            asyncio.run(train_priorzero(
-                main_cfg,
-                create_cfg,
-                seed=args.seed,
-                max_train_iter=args.max_iter,
-            ))
-        
-    else:
-        # Run training
-        asyncio.run(train_priorzero(
-            main_cfg,
-            create_cfg,
-            seed=args.seed,
-            max_train_iter=args.max_iter,
-        ))
+    train_priorzero(
+        main_cfg,
+        create_cfg,
+        llm_cfg,
+        seed=args.seed,
+        max_train_iter=args.max_iter,
+    )
 
 
 if __name__ == "__main__":

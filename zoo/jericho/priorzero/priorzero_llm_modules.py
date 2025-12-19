@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 import copy
 import json
-from dataclasses import dataclass
+
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -15,11 +15,10 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from ding.utils import build_logger
 from utils.vllm_engine import create_vllm_engines, batch_vllm_engine_call  
 from utils.generator import SamplesGenerator
-from priorzero_policy import build_llm_prompt
 from openrlhf.utils import get_strategy
 from openrlhf.trainer.ray.utils import get_physical_gpu_id
-from priorzero_utils import compute_approx_kl
-
+from priorzero_utils import compute_approx_kl, build_llm_prompt
+from priorzero_config import PriorZeroLLMConfig
 
 def torch_dist_barrier_and_cuda_sync():
     """Synchronize distributed training and CUDA operations.
@@ -31,40 +30,7 @@ def torch_dist_barrier_and_cuda_sync():
     torch.distributed.barrier()
     torch.cuda.synchronize()
 
-@dataclass
-class PriorZeroOpenRLHFLLMConfig:
-    model_name_or_path: str
-    bf16: bool = True
-
-    prompt_max_len: int = 8192
-    generate_max_len: int = 128
-    use_cot: bool = True
-
-    rft_loss_type: str = "reinforce++"   # "reinforce" | "reinforce++"
-    rft_clip_epsilon: float = 0.2
-    rft_kl_coef: float = 0.0
-
-    # DeepSpeed
-    zero_stage: int = 0  # 只提供 zero_optimization
-    lr: float = 1e-6
-    weight_decay: float = 0.01
-    grad_clip: float = 1.0
-    micro_train_batch_size: int = 1
-    train_batch_size: int=128
-    gradient_accumulation_steps: int = 1
-    ds_tensor_parallel_size: int = 1
-
-    # vLLM engines (OpenRLHF)
-    enable_vllm: bool = True
-    enable_prefix_caching: bool = True
-    vllm_num_engines: int = 1
-    vllm_tensor_parallel_size: int = 1
-    gpu_memory_utilization: float = 0.90
-    temperature: float = 1.0
-    top_p: float = 1.0
-    seed: int = 0
-
-class PriorZeroOpenRLHFLLMTrainer:
+class PriorZeroLLMTrainer:
     """
     目标：
       - 复用 OpenRLHF 的 vLLM RayActor 引擎与 weight update RPC 
@@ -72,9 +38,9 @@ class PriorZeroOpenRLHFLLMTrainer:
       - 权重同步走 update_weight_cuda_ipc（同机同卡多进程最直接）
     """
 
-    def __init__(self, cfg: PriorZeroOpenRLHFLLMConfig, tb_logger, exp_name, instance_name='rft_llm'):
+    def __init__(self, cfg: PriorZeroLLMConfig, tb_logger, exp_name, instance_name='rft_llm'):
         self.cfg = cfg
-        self.lr = cfg.lr
+        self.learning_rate = cfg.learning_rate
         self.weight_decay = cfg.weight_decay
         self.cfg.local_rank = int(os.environ.get("LOCAL_RANK", -1))
         if tb_logger is not None:
@@ -86,9 +52,6 @@ class PriorZeroOpenRLHFLLMTrainer:
             pass
         self.rft_log = {}
         self.train_samples_cnt = 0
-        
-        if not ray.is_initialized():
-            ray.init()
 
         self.use_cuda_ipc = True   
 
@@ -108,7 +71,7 @@ class PriorZeroOpenRLHFLLMTrainer:
 
         optim = self.strategy.create_optimizer(
             model,
-            lr=self.lr,
+            lr=self.learning_rate,
             betas=(0.9, 0.999),
             eps=1e-8,
             weight_decay=self.weight_decay,
@@ -116,7 +79,7 @@ class PriorZeroOpenRLHFLLMTrainer:
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optim,
             T_max=100000,  
-            eta_min=self.lr * 0.1
+            eta_min=self.learning_rate * 0.1
         )
         self.model_engine, self.optim, self.scheduler = self.strategy.prepare(
             (model, optim, scheduler),
