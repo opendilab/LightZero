@@ -468,17 +468,15 @@ def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/P
                     depth_black: int = 5):
     """
     两个UCI引擎对战（红 vs 黑）
-    采用和 play_human_vs_bot 相同的设计模式，使用环境管理引擎
-    注：此模式下红方使用指定深度，黑方使用engine_depth（自动降级支持）
+    红方和黑方分别使用独立的UCI引擎实例，支持不同搜索深度
 
     Args:
         engine_path: UCI引擎路径，默认为 pikafish
         depth_red: 红方搜索深度（1-20，默认5）
         depth_black: 黑方搜索深度（1-20，默认5）
     """
-    # 对于两个不同深度的UCI vs UCI，目前通过两次运行实现
-    # 或者可以使用depth_red作为主要深度，depth_black作为参考
-    # 为了简洁起见，采用play_with_bot_mode，黑方Bot深度为depth_black
+    from zoo.board_games.chinesechess.envs.cchess import engine as engine_module
+    from zoo.board_games.chinesechess.envs.cchess_env import move_to_action
 
     # 生成replay目录路径（SVG会保存在此目录下）
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -501,6 +499,15 @@ def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/P
     env = ChineseChessEnv(cfg)
     env.reset()
 
+    # 为红方创建独立的UCI引擎实例
+    red_engine = None
+    try:
+        red_engine = engine_module.SimpleEngine.popen_uci(engine_path)
+        print(f"红方UCI引擎加载成功: {engine_path}")
+    except Exception as e:
+        print(f"红方UCI引擎加载失败: {e}，将使用随机策略")
+        red_engine = None
+
     engine_name = "UCI引擎" if engine_path else "随机Bot"
     print('=' * 60)
     print(f'UCI vs UCI 对战')
@@ -510,23 +517,38 @@ def play_uci_vs_uci(engine_path: str = "/mnt/shared-storage-user/tangjia/chess/P
     env.render(mode='human')
 
     step_count = 0
-    while True:
-        # Agent (红方) 走棋，step()内部自动调用bot_action()（黑方）
-        action = env.random_action()
-        print(f'\n第 {step_count + 1} 步 - 红方 ({engine_name}深度{depth_red}) 走棋')
-        obs, reward, done, info = env.step(action)
-        env.render(mode='human')
-        step_count += 2
-
-        if done:
-            eval_return = info.get('eval_episode_return', reward)
-            if eval_return > 0:
-                print(f'\n红方 ({engine_name}深度{depth_red}) 获胜!')
-            elif eval_return < 0:
-                print(f'\n黑方 ({engine_name}深度{depth_black}) 获胜!')
+    try:
+        while True:
+            # 红方使用UCI引擎计算最佳走法
+            if red_engine is not None:
+                limit = engine_module.Limit(depth=depth_red)
+                result = red_engine.play(env.board, limit)
+                action = move_to_action(result.move)
             else:
-                print('\n和棋!')
-            break
+                action = env.random_action()
+
+            print(f'\n第 {step_count + 1} 步 - 红方 ({engine_name}深度{depth_red}) 走棋')
+            obs, reward, done, info = env.step(action)
+            env.render(mode='human')
+            step_count += 2
+
+            if done:
+                eval_return = info.get('eval_episode_return', reward)
+                if eval_return > 0:
+                    print(f'\n红方 ({engine_name}深度{depth_red}) 获胜!')
+                elif eval_return < 0:
+                    print(f'\n黑方 ({engine_name}深度{depth_black}) 获胜!')
+                else:
+                    print('\n和棋!')
+                break
+    finally:
+        # 确保红方引擎被正确关闭
+        if red_engine is not None:
+            try:
+                red_engine.quit()
+                print("红方UCI引擎已关闭")
+            except:
+                pass
 
     print(f'\n游戏结束，共 {step_count} 步')
     print(f'对局已保存至: {replay_path}')
