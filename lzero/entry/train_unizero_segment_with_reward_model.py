@@ -100,7 +100,7 @@ def train_unizero_segment_with_reward_model(
     policy_config = cfg.policy
     replay_buffer = GameBuffer(policy_config)
     collector = Collector(env=collector_env, policy=policy.collect_mode, tb_logger=tb_logger, exp_name=cfg.exp_name,
-                          policy_config=policy_config)
+                          policy_config=policy_config, rnd_model=policy.rnd if cfg.policy.use_rnd_model else None)
     evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
                           tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)

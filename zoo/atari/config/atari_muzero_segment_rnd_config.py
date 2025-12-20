@@ -141,7 +141,10 @@ def main(env_id, seed):
                 input_norm_clamp_min=-5,
                 
                 intrinsic_norm=True,
-                intrinsic_norm_clamp_max=10,
+                intrinsic_norm_type='return', # 'reward | 'return'
+                instrinsic_gamma=0.99,
+                
+                intrinsic_norm_reward_clamp_max=10, # 只有在reward的情况下生效
                 
                 extrinsic_sign=False,
                 extrinsic_norm=False,

@@ -181,6 +181,7 @@ def main(env_id, seed):
                 intrinsic_weight_min=0.0,               
                 intrinsic_weight_max=0.1, 
                 
+                
                 obs_shape=observation_shape,
                 latent_state_dim=256,
                 hidden_size_list=[32, 64, 64],
@@ -191,7 +192,9 @@ def main(env_id, seed):
                 input_norm_clamp_min=-5,
                 
                 intrinsic_norm=True,
-                intrinsic_norm_clamp_max=10,
+                intrinsic_norm_type='return', # 'reward | 'return'
+                instrinsic_gamma=0.99,
+                intrinsic_norm_reward_clamp_max=10, 
                 
                 extrinsic_sign=False,
                 extrinsic_norm=False,

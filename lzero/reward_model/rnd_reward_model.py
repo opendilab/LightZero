@@ -22,6 +22,28 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 
+class RewardForwardFilter:
+    """
+    Forward discounted return filter for intrinsic reward normalization.
+    Time must advance EXACTLY once per real env step.
+    """
+
+    def __init__(self, gamma: float):
+        self.gamma = gamma
+        self.rewems = None  # running discounted return
+
+    def update(self, reward):
+        """
+        reward: scalar or np.ndarray / torch.Tensor
+                shape: [num_env] or []
+        """
+        if self.rewems is None:
+            self.rewems = reward
+        else:
+            self.rewems = self.rewems * self.gamma + reward
+        return self.rewems
+
+
 class RNDNetwork(nn.Module):
 
     def __init__(self, obs_shape: Union[int, SequenceType], hidden_size_list: SequenceType, output_dim: int = 512,activation_type: str = "ReLU", kernel_size_list=[8,4,3], stride_size_list=[4,2,1]) -> None:
@@ -235,7 +257,10 @@ class RNDRewardModel(BaseRewardModel):
         intrinsic_weight_warmup=1000,           # 前多少次 estimate 权重=0
         intrinsic_weight_ramp=5000,            # 从0升到max所需的 estimate 数
         intrinsic_weight_min=0.0,               
-        intrinsic_weight_max=0.02,              
+        intrinsic_weight_max=0.02,        
+        intrinsic_norm=True,
+        intrinsic_norm_type='return', # 'reward | 'return'
+        instrinsic_gamma=0.99,      
     )
 
     def __init__(self, config: EasyDict, device: str = 'cpu', representation_network: nn.Module = None, 
@@ -283,9 +308,11 @@ class RNDRewardModel(BaseRewardModel):
 
         assert self.intrinsic_reward_type in ['add', 'new', 'assign']
 
+        self.rnd_return_rms = RunningMeanStd(epsilon=1e-4) 
         self._running_mean_std_rnd_reward = RunningMeanStd(epsilon=1e-4)
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
-        self._running_mean_std_reward = RunningMeanStd(epsilon=1e-4)
+        self._running_mean_std_ext_reward = RunningMeanStd(epsilon=1e-4)
+
         self.estimate_cnt_rnd = 0
         self.train_cnt_rnd = 0
         self._state_visit_counts = defaultdict(int)
@@ -317,6 +344,9 @@ class RNDRewardModel(BaseRewardModel):
         self._logger.info(f"[RND] predictor: {self.reward_model.predictor}")
         self._logger.info(f"[RND] predictor: {self.reward_model.target}")
 
+    def reset_discounted_reward(self, _env_num):
+        self.discount_reward_env_ids = {env_id:  RewardForwardFilter(gamma=self.cfg.instrinsic_gamma) for env_id in range(_env_num)}
+    
     def _flatten_obs_batch(self, obs_batch: np.ndarray) -> np.ndarray:
         """
         Overview:
@@ -362,7 +392,6 @@ class RNDRewardModel(BaseRewardModel):
             inputs = obs_tensor
         return inputs
 
-
     def _update_input_running_stats(self, tensor: torch.Tensor) -> None:
         """
         Overview:
@@ -371,22 +400,68 @@ class RNDRewardModel(BaseRewardModel):
         if not self.cfg.input_norm or tensor.numel() == 0:
             return
         self._running_mean_std_rnd_obs.update(tensor.detach().cpu().numpy())
+        
 
+    def _update_rnd_return_rms(self, rnd_next_obs_seq: Dict[int, List[np.ndarray]]):
+        obs_list = []
+        env_slices = [] 
+
+        cursor = 0
+        for env_id, seq in rnd_next_obs_seq.items():
+            if seq is None or len(seq) == 0:
+                continue
+            obs_list.extend(seq)
+            start, end = cursor, cursor + len(seq)
+            env_slices.append((env_id, start, end))
+            cursor = end
+        if cursor == 0:
+            return
+
+        obs_batch = np.stack(obs_list, axis=0)
+        flat_obs = self._flatten_obs_batch(obs_batch)
+        inputs = self._prepare_inputs_from_obs(flat_obs) 
+        inputs = self._normalize_inputs(inputs)   
+
+        with torch.no_grad():
+            pred_f, tgt_f = self.reward_model(inputs)
+            raw_int = F.mse_loss(pred_f, tgt_f, reduction='none').sum(dim=-1) / 2.0  
+        raw_int = raw_int.detach().cpu().numpy().astype(np.float32)
+        
+        returns = []
+        for env_id, s, e in env_slices:
+            forward_filter = self.discount_reward_env_ids[env_id]
+            for r in raw_int[s:e]:
+                ret = forward_filter.update(float(r))   
+                returns.append(float(ret))
+
+        self.rnd_return_rms.update(np.asarray(returns, dtype=np.float32))
+
+        
     def _normalize_intrinsic_rewards(self, tensor: torch.Tensor) -> torch.Tensor:
         """
         Overview:
             Normalize intrinsic rewards with the running std statistics.
         """
-        if getattr(self.cfg, 'intrinsic_norm', False):
-            std = to_tensor(self._running_mean_std_rnd_reward.std).to(self._device)
-            std = torch.clamp(std, min=1e-6)
-            normalized = tensor / std
-            return torch.clamp(
-                normalized,
-                min=0,
-                max=getattr(self.cfg, 'intrinsic_norm_clamp_max', 10)
-            )
-        return tensor
+        if self.cfg.intrinsic_norm:
+            if self.cfg.intrinsic_norm_type == 'reward': 
+                std = to_tensor(self._running_mean_std_rnd_reward.std).to(self._device)
+                std = torch.clamp(std, min=1e-6)
+                normalized = tensor / std
+                
+                return torch.clamp(
+                    normalized,
+                    min=0,
+                    max=getattr(self.cfg, 'intrinsic_norm_reward_clamp_max', 10)
+                )
+            elif self.cfg.intrinsic_norm_type == 'return':
+                std = to_tensor(self.rnd_return_rms.std).to(self._device)
+                std = torch.clamp(std, min=1e-6)
+                normalized = tensor / std
+                return normalized   
+            else:
+                return tensor
+        else:
+            return tensor
     
     def _normalize_inputs(self, tensor: torch.Tensor) -> torch.Tensor:
         """
@@ -403,7 +478,7 @@ class RNDRewardModel(BaseRewardModel):
             return torch.clamp(normalized, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max)
         return tensor
 
-    def _normalize_rewards(self, rewards: np.ndarray) -> np.ndarray:
+    def _normalize_ext_rewards(self, rewards: np.ndarray) -> np.ndarray:
         """
         Overview:
             Normalize extrinsic rewards using running statistics when enabled.
@@ -412,9 +487,9 @@ class RNDRewardModel(BaseRewardModel):
             return rewards
         normalized = np.asarray(rewards, dtype=np.float32)
         if getattr(self.cfg, 'extrinsic_norm', False):
-            self._running_mean_std_reward.update(normalized)
-            mean = np.asarray(self._running_mean_std_reward.mean, dtype=np.float32)
-            std = np.asarray(self._running_mean_std_reward.std, dtype=np.float32) + 1e-6
+            self._running_mean_std_ext_reward.update(normalized)
+            mean = np.asarray(self._running_mean_std_ext_reward.mean, dtype=np.float32)
+            std = np.asarray(self._running_mean_std_ext_reward.std, dtype=np.float32) + 1e-6
             normalized = (normalized - mean) / std
             normalized = np.clip(
                 normalized,
@@ -594,7 +669,7 @@ class RNDRewardModel(BaseRewardModel):
         obs_batch_tmp = self._flatten_obs_batch(obs_batch_ori)
         input_data = copy.deepcopy(self._prepare_inputs_from_obs(obs_batch_tmp))
         input_data = self._normalize_inputs(input_data)
-        extrinsic_normalized = self._normalize_rewards(original_reward)
+        extrinsic_normalized = self._normalize_ext_rewards(original_reward)
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(input_data)
             # mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1)
