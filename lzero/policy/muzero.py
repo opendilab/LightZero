@@ -19,6 +19,7 @@ from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
+from lzero.reward_model.rnd_reward_model import RNDRewardModel
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -275,29 +276,6 @@ class MuZeroPolicy(Policy):
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
-        if self._cfg.optim_type == 'SGD':
-            self._optimizer = optim.SGD(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                momentum=self._cfg.momentum,
-                weight_decay=self._cfg.weight_decay,
-            )
-        elif self._cfg.optim_type == 'Adam':
-            self._optimizer = optim.Adam(
-                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay,
-                                                   learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
-
-        if self._cfg.piecewise_decay_lr_scheduler:
-            from torch.optim.lr_scheduler import LambdaLR
-            max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
-
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         self._target_model = model_wrap(
@@ -346,7 +324,45 @@ class MuZeroPolicy(Policy):
                     update_type='momentum',
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
+            self.rnd = RNDRewardModel(
+                config=self._cfg.reward_model,
+                device=self._cfg.reward_model.device,
+                representation_network=self._learn_model.representation_network,
+                target_representation_network=self._target_model_for_intrinsic_reward.representation_network,
+                use_momentum_representation_network=self._cfg.use_momentum_representation_network,
+                multi_gpu=self._cfg.multi_gpu,
+            )
 
+        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
+        if self._cfg.optim_type == 'SGD':
+            self._optimizer = optim.SGD(
+                self._model.parameters() if not self._cfg.use_rnd_model  else list(self._model.parameters()) + list(self.rnd.reward_model.predictor.parameters()),
+                lr=self._cfg.learning_rate,
+                momentum=self._cfg.momentum,
+                weight_decay=self._cfg.weight_decay,
+            )
+
+        elif self._cfg.optim_type == 'Adam':
+            self._optimizer = optim.Adam(
+                self._model.parameters() if not self._cfg.use_rnd_model  else list(self._model.parameters()) + list(self.rnd.reward_model.predictor.parameters()),
+                lr=self._cfg.learning_rate, 
+                weight_decay=self._cfg.weight_decay,
+
+            )
+        elif self._cfg.optim_type == 'AdamW':
+            if not self._cfg.use_rnd_model :
+                self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay,
+                                                   learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+            else:
+                raise ValueError("AdamW optimizer for RND model is not supported yet.")
+        if self._cfg.piecewise_decay_lr_scheduler:
+            from torch.optim.lr_scheduler import LambdaLR
+            max_step = self._cfg.threshold_training_steps_for_final_lr
+            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
+            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
+
+        
         # ========= logging for analysis =========
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
@@ -374,13 +390,15 @@ class MuZeroPolicy(Policy):
         """
         self._learn_model.train()
         self._target_model.train()
-        if self._cfg.use_rnd_model:
-            self._target_model_for_intrinsic_reward.train()
 
         current_batch, target_batch = data
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
+            target_reward = self.rnd.estimate(obs_batch_ori=obs_batch_ori, target_reward=target_reward)
+        
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
         # do augmentations
@@ -581,7 +599,9 @@ class MuZeroPolicy(Policy):
                     self._cfg.policy_entropy_weight * policy_entropy_loss
             )
             weighted_total_loss = (weights * loss).mean()
-
+        if self._cfg.use_rnd_model:
+            rnd_loss = self.rnd.compute_loss(obs_batch=obs_batch_ori)
+            weighted_total_loss = weighted_total_loss + self._cfg.rnd_weights * rnd_loss
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
@@ -599,6 +619,8 @@ class MuZeroPolicy(Policy):
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
+            if self._cfg.use_rnd_model:
+                self.sync_gradients(self.rnd.reward_model.predictor)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(),
                                                                      self._cfg.grad_clip_value)
         self._optimizer.step()
