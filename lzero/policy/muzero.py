@@ -413,8 +413,7 @@ class MuZeroPolicy(Policy):
         data_list = [mask_batch, target_reward,
             target_value, target_policy, weights
         ]
-        [mask_batch, target_reward, target_value, target_policy,
-         weights] = to_torch_float_tensor(data_list, self._cfg.device)
+        [mask_batch, target_reward, target_value, target_policy, weights] = to_torch_float_tensor(data_list, self._cfg.device)
 
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)

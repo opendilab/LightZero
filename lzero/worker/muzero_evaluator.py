@@ -228,7 +228,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             # initializations
             init_obs = self._env.ready_obs
-            if self.policy_config.use_rnd_model and self.policy_config.model.world_model_cfg.obs_type == 'image':
+            if self.policy_config.use_rnd_model:
                 obs_for_rnd = [[] for i in range(env_nums)]
                 
             retry_waiting_time = 0.001
@@ -309,7 +309,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-                    if self.policy_config.use_rnd_model and self.policy_config.model.world_model_cfg.obs_type == 'image':
+                    if self.policy_config.use_rnd_model:
                         for idx, env_id in enumerate(ready_env_id):
                             obs_for_rnd[env_id].append(stack_obs[idx])
                     
@@ -466,7 +466,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
-            if self.policy_config.use_rnd_model and self.policy_config.model.world_model_cfg.obs_type == 'image':
+            if self.policy_config.use_rnd_model:
                 max_return = max(episode_return)
                 max_idx = episode_return.index(max_return)
                 obs_for_rnd_res = obs_for_rnd[max_idx]

@@ -14,11 +14,11 @@ def main(env_id, seed):
     evaluator_env_num = 3
     num_simulations = 50
     update_per_collect = None
-    replay_ratio = 0.25
+    replay_ratio = 0.1
 
     num_unroll_steps = 5
     batch_size = 256
-    max_env_step = int(5e5)
+    max_env_step = int(5e6)
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
@@ -29,7 +29,13 @@ def main(env_id, seed):
     reanalyze_partition=0.75
     use_rnd_model = True
     rnd_weights = 1.0
-    observation_shape = (3, 96, 96)
+    use_intrinsic_weight_schedule = True
+    intrinsic_weight_max = 0.2
+    intrinsic_norm_type = 'return'
+    observation_shape = (4, 96, 96)
+    frame_stack_num = 4
+    gray_scale = True
+    image_channel = 1
 
     # =========== for debug ===========
     # collector_env_num = 2
@@ -47,8 +53,8 @@ def main(env_id, seed):
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=observation_shape,
-            # frame_stack_num=4,
-            gray_scale=False,
+            frame_stack_num=frame_stack_num,
+            gray_scale=gray_scale,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
@@ -63,9 +69,9 @@ def main(env_id, seed):
             cal_dormant_ratio=False,
             model=dict(
                 observation_shape=observation_shape,
-                image_channel=observation_shape[0],
-                # frame_stack_num=4,
-                gray_scale=False,
+                image_channel=image_channel,
+                frame_stack_num=frame_stack_num,
+                gray_scale=gray_scale,
                 action_space_size=action_space_size,
                 downsample=True,
                 self_supervised_learning_loss=True,  # default is False
@@ -121,17 +127,19 @@ def main(env_id, seed):
                 input_type='obs',  # options: ['obs', 'latent_state', 'obs_latent_state']
                 activation_type='LeakyReLU',
                 enable_image_logging=True,
+                frame_stack_num=frame_stack_num,
                 
                 update_proportion=0.25, # 每次计算loss只有部分值参与计算，防止rnd网络更新太快
                 # —— 新增：自适应权重调度 —— #
-                use_intrinsic_weight_schedule=False,     # 打开自适应权重
+                use_intrinsic_weight_schedule=use_intrinsic_weight_schedule,     # 打开自适应权重
                 intrinsic_weight_mode='cosine',         # 'cosine' | 'linear' | 'constant'
                 intrinsic_weight_warmup=10000,           # 前多少次 estimate 权重=0
                 intrinsic_weight_ramp=20000,            # 从min升到max所需的 estimate 数
                 intrinsic_weight_min=0.0,               
-                intrinsic_weight_max=0.1, 
+                intrinsic_weight_max=intrinsic_weight_max, 
                 
-                obs_shape=observation_shape,
+                obs_shape=(1, 96, 96),
+                # obs_shape=observation_shape,
                 latent_state_dim=256,
                 hidden_size_list=[32, 64, 64],
                 output_dim=512,
@@ -141,7 +149,7 @@ def main(env_id, seed):
                 input_norm_clamp_min=-5,
                 
                 intrinsic_norm=True,
-                intrinsic_norm_type='return', # 'reward | 'return'
+                intrinsic_norm_type=intrinsic_norm_type, # 'reward | 'return'
                 instrinsic_gamma=0.99,
                 
                 intrinsic_norm_reward_clamp_max=10, # 只有在reward的情况下生效
@@ -184,7 +192,7 @@ def main(env_id, seed):
     input_norm = main_config.policy.reward_model.input_norm
     intrinsic_norm = main_config.policy.reward_model.intrinsic_norm
     use_intrinsic_weight_schedule = main_config.policy.reward_model.use_intrinsic_weight_schedule
-    main_config.exp_name = f'./data_muzero_rnd/atari/{env_id[:-14]}/rnd_loss_w_{rnd_weights}_{intrinsic_reward_type}_{input_type}_wmax_{intrinsic_weight_max}_input_norm_{input_norm}_intrinsic_norm_{intrinsic_norm}_use_intrinsic_weight_schedule_{use_intrinsic_weight_schedule}'
+    main_config.exp_name = f'./data_muzero_rnd/atari/{env_id[:-14]}/rnd_{intrinsic_norm_type}_loss_w_{rnd_weights}_{intrinsic_reward_type}_{input_type}_wmax_{intrinsic_weight_max}_input_norm_{input_norm}_intrinsic_norm_{intrinsic_norm}_use_intrinsic_weight_schedule_{use_intrinsic_weight_schedule}'
     train_muzero_segment_with_reward_model([main_config, create_config], 
                                             seed=seed, 
                                             max_env_step=max_env_step)

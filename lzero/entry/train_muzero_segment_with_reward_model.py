@@ -186,7 +186,7 @@ def train_muzero_segment_with_reward_model(
                 eval_train_iter_list.append(learner.train_iter)
                 eval_train_envstep_list.append(collector.envstep)
             else:
-                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep, reward_model=policy.rnd)
                 if stop:
                     break
 
