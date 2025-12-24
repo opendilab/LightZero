@@ -1,6 +1,7 @@
 DI-engine>=0.5.3
 # gymnasium[atari]==0.28.0
 numpy>=1.24.1,<2
+transformers
 pympler
 minigrid
 moviepy
@@ -11,3 +12,5 @@ simple_parsing
 einops
 openai
 nltk
+pyecharts
+numba

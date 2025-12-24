@@ -93,7 +93,7 @@ def train_unizero(
             save_code=True,
         )
         logging.info("wandb initialization completed!")
-
+    
     # Create policy
     logging.info("Creating policy...")
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
@@ -220,7 +220,15 @@ def train_unizero(
 
                 train_data.append(learner.train_iter)
 
+                if os.environ.get('DEBUG', '').lower() == 'true':
+                    import pudb; pudb.set_trace()
+
+
                 log_vars = learner.train(train_data, collector.envstep)
+                
+                
+                
+                
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 

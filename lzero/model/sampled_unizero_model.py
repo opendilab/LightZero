@@ -77,6 +77,7 @@ class SampledUniZeroModel(nn.Module):
                 activation=self.activation,
                 norm_type=norm_type,
                 group_size=world_model_cfg.group_size,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
             )
             # TODO: only for MemoryEnv now
             # self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25, norm_type=norm_type)
@@ -99,6 +100,7 @@ class SampledUniZeroModel(nn.Module):
                 norm_type=norm_type,
                 embedding_dim=world_model_cfg.embed_dim,
                 group_size=world_model_cfg.group_size,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
             )
             # TODO: we should change the output_shape to the real observation shape
             self.decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
@@ -128,6 +130,7 @@ class SampledUniZeroModel(nn.Module):
                 strides=[1, 1, 1],
                 activation=self.activation,
                 group_size=world_model_cfg.group_size,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
             )
             self.decoder_network = LatentDecoderForMemoryEnv(
                 image_shape=(3, 5, 5),

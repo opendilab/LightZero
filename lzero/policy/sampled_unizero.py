@@ -121,8 +121,17 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=5e-3,
-                # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
-                predict_latent_loss_type='group_kl',
+                # (str) The normalization type for the final layer in both the head and the encoder.
+                # This option must be the same for both 'final_norm_option_in_head' and 'final_norm_option_in_encoder'.
+                # Valid options are 'LayerNorm' and 'SimNorm'.
+                # When set to 'LayerNorm', the 'predict_latent_loss_type' should be 'mse'.
+                # When set to 'SimNorm', the 'predict_latent_loss_type' should be 'group_kl'.
+                final_norm_option_in_head="LayerNorm",
+                final_norm_option_in_encoder="LayerNorm",
+                # (str) The type of loss function for predicting latent variables.
+                # Options are 'mse' (Mean Squared Error) or 'group_kl' (Group Kullback-Leibler divergence).
+                # This choice is dependent on the normalization method selected above.
+                predict_latent_loss_type='mse',
                 # (str) The type of observation. Options are ['image', 'vector'].
                 obs_type='image',
                 # (float) The discount factor for future rewards.
@@ -360,8 +369,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        # assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        # assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
@@ -370,6 +377,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+        self.pad_token_id = 0 # for compatibility
+
 
         encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
         self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
@@ -853,11 +862,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.model.continuous_action_space is True:
                 # when the action space of the environment is continuous, action_mask[:] is None.
@@ -888,8 +896,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
