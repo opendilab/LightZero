@@ -32,10 +32,10 @@ def main(env_id, seed):
     use_intrinsic_weight_schedule = True
     intrinsic_weight_max = 0.2
     intrinsic_norm_type = 'return'
-    observation_shape = (4, 96, 96)
-    frame_stack_num = 4
-    gray_scale = True
-    image_channel = 1
+    observation_shape = (3, 96, 96)
+    frame_stack_num = 1
+    gray_scale = False
+    image_channel = 3
 
     # =========== for debug ===========
     # collector_env_num = 2
@@ -138,7 +138,7 @@ def main(env_id, seed):
                 intrinsic_weight_min=0.0,               
                 intrinsic_weight_max=intrinsic_weight_max, 
                 
-                obs_shape=(1, 96, 96),
+                obs_shape=(3, 96, 96),
                 # obs_shape=observation_shape,
                 latent_state_dim=256,
                 hidden_size_list=[32, 64, 64],

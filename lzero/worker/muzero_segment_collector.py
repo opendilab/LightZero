@@ -96,6 +96,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             self.rnd_model = rnd_model
             self.rnd_model.reset_discounted_reward(self._env_num)
             self.rnd_next_obs_seq = {env_id: [] for env_id in range(self._env_num)}
+            self.obs_per_env = {env_id: deque([], maxlen=self.policy_config.model.frame_stack_num) for env_id in range(self._env_num)}
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -560,7 +561,12 @@ class MuZeroSegmentCollector(ISerialCollector):
                     obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
                     
                     if self.policy_config.use_rnd_model:
-                        self.rnd_next_obs_seq[env_id].append(obs['observation'])
+                        self.obs_per_env[env_id].append(obs['observation'])
+                        if obs['timestep'] == 1:
+                            for _ in range(self.policy_config.model.frame_stack_num):
+                                self.obs_per_env[env_id].append(obs['observation'])
+                        self.rnd_next_obs_seq[env_id].append(np.concatenate(list(self.obs_per_env[env_id]), axis=0))
+                        
                     
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)

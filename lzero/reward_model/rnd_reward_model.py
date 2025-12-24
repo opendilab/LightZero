@@ -349,23 +349,6 @@ class RNDRewardModel(BaseRewardModel):
 
     def reset_discounted_reward(self, _env_num):
         self.discount_reward_env_ids = {env_id:  RewardForwardFilter(gamma=self.cfg.instrinsic_gamma) for env_id in range(_env_num)}
-    
-    def _flatten_obs_batch(self, obs_batch: np.ndarray) -> np.ndarray:
-        """
-        Overview:
-            Flatten time/batch dimensions while keeping the per-observation shape intact.
-        """
-        if not isinstance(obs_batch, np.ndarray):
-            obs_batch = np.asarray(obs_batch)
-        feature_size = int(np.prod(self.cfg.obs_shape))
-        total = obs_batch.size // feature_size
-        if isinstance(self.cfg.obs_shape, int):
-            target_shape = (total, self.cfg.obs_shape)
-        elif isinstance(self.cfg.obs_shape, tuple) or isinstance(self.cfg.obs_shape, list):
-            target_shape = (total,) + tuple(self.cfg.obs_shape)
-        else:
-            raise ValueError(f'self.input_shape={type(self.input_shape)}')
-        return obs_batch.reshape(target_shape)
 
     def _get_latent_state_from_obs(self, obs_tensor, batch_size=128):
         _pad_token = self.representation_network.tokenizer.pad_token_id
@@ -402,26 +385,13 @@ class RNDRewardModel(BaseRewardModel):
         """
         if not self.cfg.input_norm or tensor.numel() == 0:
             return
-        self._running_mean_std_rnd_obs.update(tensor.detach().cpu().numpy())
+        if self._running_mean_std_rnd_obs._count < 1:
+            self._running_mean_std_rnd_obs.update(tensor.detach().cpu().numpy())
+        else:
+            feat_shape = self._running_mean_std_rnd_obs.mean.shape
+            tensor_re = tensor.reshape(-1, *feat_shape)
+            self._running_mean_std_rnd_obs.update(tensor_re.detach().cpu().numpy())
         
-
-    def _stack_frames_after_norm(self, x: torch.Tensor) -> torch.Tensor:
-        """
-            x: (L, 1, H, W)  # 已 normalize
-            return: (L, k, H, W)  # 用首帧 padding，逐步形成 k 帧堆叠
-        """
-        if x.dim() != 4 or self.frame_stack_num <= 1:
-            return x
-        frame_stack_num = self.frame_stack_num
-
-        L, C, H, W = x.shape
-        out = torch.zeros((L, C * frame_stack_num, H, W), device=x.device, dtype=x.dtype)
-        buf = deque([x[0]] * frame_stack_num, maxlen=frame_stack_num)  
-        for t in range(L):
-            buf.append(x[t])
-            out[t] = torch.cat(list(buf), dim=0)  
-
-        return out
     
     def _update_rnd_return_rms(self, rnd_next_obs_seq: Dict[int, List[np.ndarray]]):
         returns = []
@@ -431,11 +401,8 @@ class RNDRewardModel(BaseRewardModel):
                 continue
             
             obs_batch = np.stack(seq, axis=0)
-            flat_obs = self._flatten_obs_batch(obs_batch)
-            inputs = self._prepare_inputs_from_obs(flat_obs) 
+            inputs = self._prepare_inputs_from_obs(obs_batch) 
             inputs = self._normalize_inputs(inputs)   
-            
-            inputs = self._stack_frames_after_norm(inputs)
             
             with torch.no_grad():
                 pred_f, tgt_f = self.reward_model(inputs)
@@ -588,8 +555,7 @@ class RNDRewardModel(BaseRewardModel):
         self._logger.info(f"[RND] for input_obs_norm, random_collect_data={len(data)}")
 
         concatenated = np.stack(data, axis=0)
-        flattened = self._flatten_obs_batch(concatenated)
-        inputs = self._prepare_inputs_from_obs(flattened)
+        inputs = self._prepare_inputs_from_obs(concatenated)
         self._update_input_running_stats(inputs)
             
     def sync_gradients(self, model: torch.nn.Module) -> None:
@@ -620,20 +586,19 @@ class RNDRewardModel(BaseRewardModel):
     def compute_loss(self, obs_batch) -> None:
         batch_size = obs_batch.shape[0]
         T = obs_batch.shape[1] if self.frame_stack_num == 1 else obs_batch.shape[1] - self.frame_stack_num + 1
-        flat_obs = self._flatten_obs_batch(obs_batch)
-        prepared_inputs = self._prepare_inputs_from_obs(flat_obs)
+        prepared_inputs = self._prepare_inputs_from_obs(obs_batch)
         if prepared_inputs.numel() == 0:
             return
         
-        normalized_input = self._normalize_inputs(prepared_inputs)
         if self.frame_stack_num > 1:
+            normalized_input = self._normalize_inputs(prepared_inputs)
             inputs = torch.zeros((batch_size, T, self.frame_stack_num, *self.input_shape[1:]), device=normalized_input.device, dtype=normalized_input.dtype)
-            normalized_input = normalized_input.reshape(batch_size, -1, normalized_input.shape[-2], normalized_input.shape[-1])
             for j in range(T):
                 inputs[:,j] = normalized_input[:, j:j+self.frame_stack_num]
             inputs = inputs.reshape(batch_size*T, *inputs.shape[2:])
         else:
-            inputs = normalized_input
+            input_data_re = prepared_inputs.reshape(-1, *self.input_shape)
+            inputs = self._normalize_inputs(input_data_re)
         
         predict_feature, target_feature = self.reward_model(inputs)
         forward_mse = nn.MSELoss(reduction='none')
@@ -690,18 +655,18 @@ class RNDRewardModel(BaseRewardModel):
 
         # NOTE: deepcopy reward part of data is very important,
         original_reward = np.reshape(np.array(target_reward, dtype=np.float32), (batch_size * T, 1))
-        obs_batch_tmp = self._flatten_obs_batch(obs_batch_ori)
-        input_data = copy.deepcopy(self._prepare_inputs_from_obs(obs_batch_tmp))
-        input_data = self._normalize_inputs(input_data)
+        input_data = copy.deepcopy(self._prepare_inputs_from_obs(obs_batch_ori))
         extrinsic_normalized = self._normalize_ext_rewards(original_reward)
+        
         if self.frame_stack_num > 1:
+            input_data = self._normalize_inputs(input_data)
             inputs = torch.zeros((batch_size, T, self.frame_stack_num, *self.input_shape[1:]), device=input_data.device, dtype=input_data.dtype)
-            input_data = input_data.reshape(batch_size, -1, input_data.shape[-2], input_data.shape[-1])
             for j in range(T):
                 inputs[:,j] = input_data[:, j:j+self.frame_stack_num]
             inputs = inputs.reshape(batch_size*T, *inputs.shape[2:])
         else:
-            inputs = input_data
+            input_data_re = input_data.reshape(-1, *self.input_shape)
+            inputs = self._normalize_inputs(input_data_re)
         with torch.no_grad():
             predict_feature, target_feature = self.reward_model(inputs)
             # mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=-1)
@@ -799,18 +764,14 @@ class RNDRewardModel(BaseRewardModel):
             return      
 
         obs_array = np.stack(all_obs_per_episode, axis=0)  # (T, C, H, W) 或 (T, H, W, C)
-        flat_obs = self._flatten_obs_batch(obs_array)  # (T, *obs_shape)
-        if flat_obs.size == 0:
-            return
         # 3) 准备输入 + 归一化（与 estimate 中逻辑一致）
-        inputs = self._prepare_inputs_from_obs(flat_obs)
+        inputs = self._prepare_inputs_from_obs(obs_array)
 
         # 更新输入 running mean/std，再做标准化
         norm_inputs = self._normalize_inputs(inputs.clone())
-        inputs = norm_inputs.reshape(*obs_array.shape)
         # 4) 通过 RND 模型得到每一步 intrinsic reward（MSE）
         with torch.no_grad():
-            predict_feature, target_feature = self.reward_model(inputs)
+            predict_feature, target_feature = self.reward_model(norm_inputs)
             mse = F.mse_loss(predict_feature, target_feature, reduction='none').sum(dim=-1) / 2  # (T,)
 
         rnd_reward_tensor = self._normalize_intrinsic_rewards(mse)
@@ -828,7 +789,7 @@ class RNDRewardModel(BaseRewardModel):
             if self.frame_stack_num > 1:
                 frames.append(self._obs_to_rgb(obs_array[idx][-1]))
             else:
-                frames.append(self._obs_to_rgb(flat_obs[idx]))
+                frames.append(self._obs_to_rgb(obs_array[idx]))
             
         # 7) 画图：上方一行 key frames，下方一行 reward 曲线
         ncols = k
