@@ -30,59 +30,59 @@ from lzero.policy.head_clip_manager import (
 
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
-    使用向量化操作高效地缩放一个模块的所有权重。
+    Efficiently scale all weights of a module using vectorized operations.
     """
     if not (0.0 < scale_factor < 1.0):
-        return # 如果缩放因子无效，则不执行任何操作
+        return  # Do nothing if the scaling factor is invalid
 
-    # 1. 将模块的所有参数展平成一个单一向量
+    # 1. Flatten all parameters of the module into a single vector
     params_vec = parameters_to_vector(module.parameters())
 
-    # 2. 在这个向量上执行一次乘法操作
+    # 2. Perform multiplication operation on this vector
     params_vec.data.mul_(scale_factor)
 
-    # 3. 将缩放后的向量复制回模块的各个参数
+    # 3. Copy the scaled vector back to the individual parameters of the module
     vector_to_parameters(params_vec, module.parameters())
 
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
-    为UniZero模型配置带有差异化学习率的优化器。
+    Configure optimizer with differentiated learning rates for UniZero model.
     """
-    # 1. 定义需要特殊处理的参数
+    # 1. Define parameters that need special handling
     param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
 
-    # 2. 将参数分为三组：Transformer主干、Tokenizer、Heads
+    # 2. Divide parameters into three groups: Transformer backbone, Tokenizer, and Heads
     transformer_params = {pn: p for pn, p in param_dict.items() if 'transformer' in pn}
     tokenizer_params = {pn: p for pn, p in param_dict.items() if 'tokenizer' in pn}
 
-    # Heads的参数是那些既不属于transformer也不属于tokenizer的
+    # Head parameters are those that belong to neither transformer nor tokenizer
     head_params = {
-        pn: p for pn, p in param_dict.items() 
+        pn: p for pn, p in param_dict.items()
         if 'transformer' not in pn and 'tokenizer' not in pn
     }
 
-    # 3. 为每组设置不同的优化器参数（特别是学习率）
-    #    这里我们仍然使用AdamW，但学习率设置更合理
+    # 3. Set different optimizer parameters for each group (especially learning rate)
+    #    We still use AdamW here, but with more reasonable learning rate settings
     optim_groups = [
         {
             'params': list(tokenizer_params.values()),
-            'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
-            # 'lr': learning_rate * 0.1,  # 为encoder设置一个较小的学习率，例如 1e-5
-            # 'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
-            'weight_decay': weight_decay  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+            'lr': learning_rate,  # Tokenizer uses base learning rate, e.g., 1e-4
+            # 'lr': learning_rate * 0.1,  # Set a smaller learning rate for encoder, e.g., 1e-5
+            # 'weight_decay': weight_decay * 5.0  # <-- Set 5x weight decay for Encoder! This is a strong regularization
+            'weight_decay': weight_decay  # <-- Set 5x weight decay for Encoder! This is a strong regularization
         },
         {
             'params': list(transformer_params.values()),
             'lr': learning_rate,  # 1e-4
-            # 'lr': learning_rate * 0.2,  # 为Transformer主干设置一个较小的学习率，例如 1e-5
+            # 'lr': learning_rate * 0.2,  # Set a smaller learning rate for Transformer backbone, e.g., 1e-5
             'weight_decay': weight_decay
-            # 'weight_decay': weight_decay * 5.0 
+            # 'weight_decay': weight_decay * 5.0
         },
         {
             'params': list(head_params.values()),
-            'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
-            # 'weight_decay': 0.0  # 通常Heads的权重不做衰减
+            'lr': learning_rate,  # Heads also use base learning rate, e.g., 1e-4
+            # 'weight_decay': 0.0  # Usually Heads' weights are not decayed
             'weight_decay': weight_decay
 
         }
@@ -224,38 +224,38 @@ class UniZeroPolicy(MuZeroPolicy):
             ),
         ),
         # ****** common ******
-        # (bool) 是否启用自适应策略熵权重 (alpha)
+        # (bool) Whether to enable adaptive policy entropy weight (alpha)
         use_adaptive_entropy_weight=True,
-        # (float) 自适应alpha优化器的学习率
+        # (float) Learning rate for adaptive alpha optimizer
         adaptive_entropy_alpha_lr=1e-4,
         # ==================== START: Encoder-Clip Annealing Config ====================
-        # (bool) 是否启用 encoder-clip 值的退火。
+        # (bool) Whether to enable annealing for encoder-clip values.
         use_encoder_clip_annealing=True,
-        # (str) 退火类型。可选 'linear' 或 'cosine'。
+        # (str) Annealing type. Options: 'linear' or 'cosine'.
         encoder_clip_anneal_type='cosine',
-        # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+        # (float) Starting clip value for annealing (looser in early training).
         encoder_clip_start_value=30.0,
-        # (float) 退火的结束 clip 值 (训练后期，较严格)。
+        # (float) Ending clip value for annealing (stricter in later training).
         encoder_clip_end_value=10.0,
-        # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
-        encoder_clip_anneal_steps=100000,  # 例如，在200k次迭代后达到最终值
+        # (int) Training iteration steps required to complete annealing from start to end value.
+        encoder_clip_anneal_steps=100000,  # e.g., reach final value after 200k iterations
         # ===================== END: Encoder-Clip Annealing Config =====================
 
         # ==================== START: Head-Clip Annealing Config ====================
-        # (bool) 是否启用 head-clip（动态裁剪 head 输出范围）
-        use_head_clip=False,  # 默认关闭
-        # Head-Clip 详细配置
+        # (bool) Whether to enable head-clip (dynamically clip head output range)
+        use_head_clip=False,  # Disabled by default
+        # Detailed Head-Clip configuration
         head_clip_config=dict(
             enabled=False,
-            # 指定需要 clip 的 head（可选，默认为空列表）
-            enabled_heads=[],  # 例如: ['policy', 'value', 'rewards']
-            # 每个 head 的详细配置（可选）
+            # Specify heads that need clipping (optional, defaults to empty list)
+            enabled_heads=[],  # Example: ['policy', 'value', 'rewards']
+            # Detailed configuration for each head (optional)
             head_configs={
                 # 'policy': {
                 #     'use_annealing': True,
-                #     'anneal_type': 'cosine',  # 'cosine' 或 'linear'
-                #     'start_value': 30.0,      # 初期宽松
-                #     'end_value': 10.0,        # 后期严格
+                #     'anneal_type': 'cosine',  # 'cosine' or 'linear'
+                #     'start_value': 30.0,      # Loose in early phase
+                #     'end_value': 10.0,        # Strict in later phase
                 #     'anneal_steps': 500000,
                 # },
                 # 'value': {
@@ -263,9 +263,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 #     'use_annealing': False,
                 # },
             },
-            # 监控配置
-            monitor_freq=1,   # 每个 iter 都检查
-            log_freq=1000,    # 每 1000 iter 打印日志
+            # Monitoring configuration
+            monitor_freq=1,   # Check every iteration
+            log_freq=1000,    # Print log every 1000 iterations
         ),
         # ===================== END: Head-Clip Annealing Config =====================
 
@@ -334,10 +334,10 @@ class UniZeroPolicy(MuZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
-        # ==================== [新增] 范数监控频率 ====================
-        # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+        # ==================== Norm Monitoring Frequency ====================
+        # How often (in training iteration steps) to monitor model parameter norms. Set to 0 to disable.
         monitor_norm_freq=5000,
-        # ============================================================
+        # ====================================================================
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -445,19 +445,19 @@ class UniZeroPolicy(MuZeroPolicy):
         return 'UniZeroModel', ['lzero.model.unizero_model']
 
 
-    # ==================== [新增] 模型范数监控函数 ====================
+    # ==================== Model Norm Monitoring Function ====================
     def _monitor_model_norms(self) -> Dict[str, float]:
         """
         Overview:
-            计算并返回模型关键组件（Encoder, Transformer, Heads）的参数矩阵范数。
-            此函数应在 torch.no_grad() 环境下调用，以提高效率。
+            Calculate and return parameter matrix norms for key model components (Encoder, Transformer, Heads).
+            This function should be called within a torch.no_grad() context for efficiency.
         Returns:
-            - norm_metrics (:obj:`Dict[str, float]`): 包含所有范数指标的字典，用于日志记录。
+            - norm_metrics (:obj:`Dict[str, float]`): Dictionary containing all norm metrics for logging.
         """
         world_model = self._learn_model.world_model
         norm_metrics = {}
 
-        # 定义要监控的模块组
+        # Define module groups to monitor
         module_groups = {
             'encoder': world_model.tokenizer.encoder,
             'transformer': world_model.transformer,
@@ -470,14 +470,14 @@ class UniZeroPolicy(MuZeroPolicy):
             total_norm_sq = 0.0
             for param_name, param in group_module.named_parameters():
                 if param.requires_grad:
-                    # 计算单层参数的L2范数
+                    # Calculate L2 norm for single layer parameters
                     param_norm = param.data.norm(2).item()
-                    # 替换点号，使其在TensorBoard中正确显示为层级
+                    # Replace dots to display correctly as hierarchy in TensorBoard
                     log_name = f'norm/{group_name}/{param_name.replace(".", "/")}'
                     norm_metrics[log_name] = param_norm
                     total_norm_sq += param_norm ** 2
 
-            # 计算整个模块的总范数
+            # Calculate total norm for entire module
             total_group_norm = np.sqrt(total_norm_sq)
             norm_metrics[f'norm/{group_name}/_total_norm'] = total_group_norm
 
@@ -486,15 +486,15 @@ class UniZeroPolicy(MuZeroPolicy):
     def _monitor_gradient_norms(self) -> Dict[str, float]:
         """
         Overview:
-            计算并返回模型关键组件的梯度范数。
-            此函数应在梯度计算完成后、参数更新之前调用。
+            Calculate and return gradient norms for key model components.
+            This function should be called after gradient computation and before parameter updates.
         Returns:
-            - grad_metrics (:obj:`Dict[str, float]`): 包含所有梯度范数指标的字典，用于日志记录。
+            - grad_metrics (:obj:`Dict[str, float]`): Dictionary containing all gradient norm metrics for logging.
         """
         world_model = self._learn_model.world_model
         grad_metrics = {}
 
-        # 定义要监控的模块组
+        # Define module groups to monitor
         module_groups = {
             'encoder': world_model.tokenizer.encoder,
             'transformer': world_model.transformer,
@@ -509,15 +509,15 @@ class UniZeroPolicy(MuZeroPolicy):
 
             for param_name, param in group_module.named_parameters():
                 if param.requires_grad and param.grad is not None:
-                    # 计算单层参数的梯度L2范数
+                    # Calculate L2 norm for single layer parameter gradients
                     grad_norm = param.grad.data.norm(2).item()
-                    # 替换点号，使其在TensorBoard中正确显示为层级
+                    # Replace dots to display correctly as hierarchy in TensorBoard
                     log_name = f'grad/{group_name}/{param_name.replace(".", "/")}'
                     grad_metrics[log_name] = grad_norm
                     total_grad_norm_sq += grad_norm ** 2
                     num_params_with_grad += 1
 
-            # 计算整个模块的总梯度范数
+            # Calculate total gradient norm for entire module
             if num_params_with_grad > 0:
                 total_group_grad_norm = np.sqrt(total_grad_norm_sq)
                 grad_metrics[f'grad/{group_name}/_total_norm'] = total_group_grad_norm
@@ -627,40 +627,41 @@ class UniZeroPolicy(MuZeroPolicy):
 
         self.accumulation_steps = self._cfg.accumulation_steps
 
-        # ==================== START: 目标熵正则化初始化 ====================
-        # 从配置中读取是否启用自适应alpha，并提供一个默认值
+        # ==================== START: Target Entropy Regularization Initialization ====================
+        # Read whether to enable adaptive alpha from config, and provide a default value
         self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
 
-        # 在 _init_learn 中增加配置
+        # Add configuration in _init_learn
         self.target_entropy_start_ratio = self._cfg.get('target_entropy_start_ratio', 0.98)
         self.target_entropy_end_ratio = self._cfg.get('target_entropy_end_ratio', 0.7)
-        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000) # 例如，在200k步内完成退火 2M envsteps
+        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000)  # e.g., complete annealing within 200k steps (2M envsteps)
 
         if self.use_adaptive_entropy_weight:
-            # 1. 设置目标熵。对于离散动作空间，一个常见的启发式设置是动作空间维度的负对数乘以一个系数。
-            #    这个系数（例如0.98）可以作为一个超参数。
+            # 1. Set target entropy. For discrete action spaces, a common heuristic is the negative logarithm
+            #    of action space dimension multiplied by a coefficient.
+            #    This coefficient (e.g., 0.98) can be used as a hyperparameter.
             action_space_size = self._cfg.model.action_space_size
             self.target_entropy = -np.log(1.0 / action_space_size) * 0.98
 
-            # 2. 初始化一个可学习的 log_alpha 参数。
-            #    初始化为0，意味着初始的 alpha = exp(0) = 1.0。
+            # 2. Initialize a learnable log_alpha parameter.
+            #    Initialized to 0, meaning initial alpha = exp(0) = 1.0.
             self.log_alpha = torch.nn.Parameter(torch.zeros(1, device=self._cfg.device), requires_grad=True)
 
-            # 3. 为 log_alpha 创建一个专属的优化器。
-            #    使用与主优化器不同的、较小的学习率（例如1e-4）通常更稳定。
+            # 3. Create a dedicated optimizer for log_alpha.
+            #    Using a smaller learning rate (e.g., 1e-4) different from the main optimizer is usually more stable.
             alpha_lr = self._cfg.get('adaptive_entropy_alpha_lr', 1e-4)
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
 
             print("="*20)
-            print(">>> 目标熵正则化 (自适应Alpha) 已启用 <<<")
-            print(f"    目标熵 (Target Entropy): {self.target_entropy:.4f}")
-            print(f"    Alpha 优化器学习率: {alpha_lr:.2e}")
+            print(">>> Target Entropy Regularization (Adaptive Alpha) Enabled <<<")
+            print(f"    Target Entropy: {self.target_entropy:.4f}")
+            print(f"    Alpha Optimizer Learning Rate: {alpha_lr:.2e}")
             print("="*20)
-        # ===================== END: 目标熵正则化初始化 =====================
+        # ===================== END: Target Entropy Regularization Initialization =====================
 
-        # ==================== START: 初始化 Encoder-Clip Annealing 参数 ====================
+        # ==================== START: Initialize Encoder-Clip Annealing Parameters ====================
         self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
-        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0) # TODO
+        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0)  # TODO
         if self.use_encoder_clip_annealing:
             self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
             self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
@@ -668,29 +669,29 @@ class UniZeroPolicy(MuZeroPolicy):
             self.encoder_clip_anneal_steps = self._cfg.get('encoder_clip_anneal_steps', 200000)
 
             print("="*20)
-            print(">>> Encoder-Clip 退火已启用 <<<")
-            print(f"    类型: {self.encoder_clip_anneal_type}")
-            print(f"    范围: {self.encoder_clip_start} -> {self.encoder_clip_end}")
-            print(f"    步数: {self.encoder_clip_anneal_steps}")
+            print(">>> Encoder-Clip Annealing Enabled <<<")
+            print(f"    Type: {self.encoder_clip_anneal_type}")
+            print(f"    Range: {self.encoder_clip_start} -> {self.encoder_clip_end}")
+            print(f"    Steps: {self.encoder_clip_anneal_steps}")
             print("="*20)
         else:
-            # 如果不启用退火，则使用固定的 clip 阈值
+            # If annealing is not enabled, use a fixed clip threshold
             self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0)
-        # ===================== END: 初始化 Encoder-Clip Annealing 参数 =====================
+        # ===================== END: Initialize Encoder-Clip Annealing Parameters =====================
 
-        # ==================== START: 初始化 Head-Clip Manager ====================
+        # ==================== START: Initialize Head-Clip Manager ====================
         self.use_head_clip = self._cfg.get('use_head_clip', False)
 
         if self.use_head_clip:
             head_clip_config_dict = self._cfg.get('head_clip_config', {})
-            # 确保 enabled 与顶层配置一致
+            # Ensure enabled is consistent with top-level configuration
             head_clip_config_dict['enabled'] = self.use_head_clip
 
-            # 创建 HeadClipManager
+            # Create HeadClipManager
             self.head_clip_manager = create_head_clip_manager_from_dict(head_clip_config_dict)
 
             print("=" * 60)
-            print(">>> Head-Clip Manager 已初始化 <<<")
+            print(">>> Head-Clip Manager Initialized <<<")
             print(f"    Enabled heads: {self.head_clip_manager.enabled_heads}")
             for head_name in self.head_clip_manager.enabled_heads:
                 config = self.head_clip_manager.get_head_config(head_name)
@@ -704,7 +705,7 @@ class UniZeroPolicy(MuZeroPolicy):
             print("=" * 60)
         else:
             self.head_clip_manager = None
-        # ===================== END: 初始化 Head-Clip Manager =====================
+        # ===================== END: Initialize Head-Clip Manager =====================
 
         # --- NEW: Policy Label Smoothing Parameters ---
         self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps

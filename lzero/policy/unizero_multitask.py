@@ -71,10 +71,10 @@ def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]],
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
 
-# # 修改后的函数:
+# # Modified function:
 # def generate_task_loss_dict(
-#     multi_task_losses: List[Union[torch.Tensor, float]], 
-#     task_name_template: str, 
+#     multi_task_losses: List[Union[torch.Tensor, float]],
+#     task_name_template: str,
 #     global_task_ids: List[int]
 # ) -> Dict[str, float]:
 #     """
@@ -88,7 +88,7 @@ def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]],
 #         - task_loss_dict (:obj:`Dict[str, float]`): A dictionary where keys are formatted task names and values are the corresponding losses.
 #     """
 #     task_loss_dict = {}
-#     # 使用 zip 将每个损失与其正确的全局ID配对
+#     # Use zip to pair each loss with its correct global ID
 #     for task_loss, global_id in zip(multi_task_losses, global_task_ids):
 #         task_name = task_name_template.format(global_id)
 #         try:
@@ -271,15 +271,15 @@ class WrappedModelV3:
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
-    为UniZero模型配置带有差异化学习率的优化器。
-    (修正版，确保参数组互斥)
+    Configure optimizer with differentiated learning rates for UniZero model.
+    (Corrected version ensuring parameter groups are mutually exclusive)
     """
-    # 1. 创建空的参数列表用于分组
+    # 1. Create empty parameter lists for grouping
     transformer_params = []
     tokenizer_params = []
     head_params = []
 
-    # 2. 遍历所有可训练参数，并使用 if/elif/else 结构确保每个参数只被分配到一个组
+    # 2. Iterate through all trainable parameters, using if/elif/else structure to ensure each parameter is assigned to only one group
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
@@ -290,9 +290,9 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
             tokenizer_params.append(param)
         else:
             head_params.append(param)
-            
-    # 3. 为每组设置不同的优化器参数
-    #    这里我们仍然使用AdamW，但学习率设置更合理
+
+    # 3. Set different optimizer parameters for each group
+    #    We still use AdamW here, but with more reasonable learning rate settings
     optim_groups = [
         {
             'params': transformer_params,
@@ -301,21 +301,21 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         },
         {
             'params': tokenizer_params,
-            'lr': learning_rate,  # Tokenizer使用基础学习率，例如 1e-4
-            # 'weight_decay': weight_decay * 5.0  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
-            'weight_decay': weight_decay  # <-- 为Encoder设置5倍的权重衰减！这是一个强力正则化
+            'lr': learning_rate,  # Tokenizer uses base learning rate, e.g., 1e-4
+            # 'weight_decay': weight_decay * 5.0  # <-- Set 5x weight decay for Encoder! This is a strong regularization
+            'weight_decay': weight_decay  # <-- Set 5x weight decay for Encoder! This is a strong regularization
         },
         {
             'params': head_params,
-            'lr': learning_rate,  # Heads也使用基础学习率率，例如 1e-4
-            # 'weight_decay': 0.0  # 通常Heads的权重不做衰减
-            'weight_decay': weight_decay 
+            'lr': learning_rate,  # Heads also use base learning rate, e.g., 1e-4
+            # 'weight_decay': 0.0  # Usually Heads' weights are not decayed
+            'weight_decay': weight_decay
 
         }
     ]
 
     print("--- Optimizer Groups ---")
-    # 打印每个组的参数数量以供调试
+    # Print parameter count for each group for debugging
     print(f"Transformer params: {len(transformer_params)}")
     print(f"Tokenizer params: {len(tokenizer_params)}")
     print(f"Head params: {len(head_params)}")

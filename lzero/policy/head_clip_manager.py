@@ -1,15 +1,15 @@
 """
-Head Clip Manager - 与 Encoder-Clip 原理一致的动态 Head Clipping 实现
+Head Clip Manager - Dynamic Head Clipping implementation consistent with Encoder-Clip principles
 
-该模块提供了类似 Encoder-Clip 的动态 Head Clipping 功能：
-1. 监控 head 输出（logits）的范围
-2. 当超过阈值时，缩放整个 head 模块的所有权重
-3. 支持 annealing（阈值从宽松逐渐变严格）
-4. 支持多个 head 独立配置
+This module provides dynamic Head Clipping functionality similar to Encoder-Clip:
+1. Monitor the range of head outputs (logits)
+2. Scale all weights of the entire head module when exceeding the threshold
+3. Support annealing (threshold gradually becomes stricter from loose)
+4. Support independent configuration for multiple heads
 
-与之前 Head Weight Scaling 的区别：
-- 之前：在初始化时静态缩放一次
-- 现在：在训练过程中动态监控和缩放（与 Encoder-Clip 一致）
+Differences from previous Head Weight Scaling:
+- Before: Static scaling once during initialization
+- Now: Dynamic monitoring and scaling during training (consistent with Encoder-Clip)
 
 """
 
@@ -26,21 +26,21 @@ logging.getLogger().setLevel(logging.INFO)
 
 @dataclass
 class HeadClipConfig:
-    """单个 Head 的 Clip 配置"""
-    # 固定阈值（如果不启用 annealing）
+    """Clip configuration for a single Head"""
+    # Fixed threshold (if annealing is not enabled)
     clip_threshold: float = 15.0
 
-    # 是否启用 annealing
+    # Whether to enable annealing
     use_annealing: bool = True
 
-    # Annealing 配置
-    anneal_type: str = 'cosine'  # 'cosine' 或 'linear'
-    start_value: float = 30.0    # 初期宽松
-    end_value: float = 10.0      # 后期严格
+    # Annealing configuration
+    anneal_type: str = 'cosine'  # 'cosine' or 'linear'
+    start_value: float = 30.0    # Loose in the early phase
+    end_value: float = 10.0      # Strict in the later phase
     anneal_steps: int = 500000
 
     def __post_init__(self):
-        """验证配置"""
+        """Validate configuration"""
         if self.clip_threshold <= 0:
             raise ValueError(f"clip_threshold must be positive, got {self.clip_threshold}")
         if self.use_annealing:
@@ -54,13 +54,13 @@ class HeadClipConfig:
 
 class HeadClipManager:
     """
-    Head Clip Manager - 动态监控和裁剪 Head 输出
+    Head Clip Manager - Dynamically monitor and clip Head outputs
 
-    工作原理（与 Encoder-Clip 一致）：
-    1. 每次训练迭代后，监控各个 head 的输出（logits）
-    2. 计算 max(|logits|)
-    3. 如果超过当前阈值，缩放整个 head 模块的权重
-    4. 阈值支持 annealing（从宽松到严格）
+    Working principle (consistent with Encoder-Clip):
+    1. After each training iteration, monitor the outputs (logits) of each head
+    2. Calculate max(|logits|)
+    3. If exceeding the current threshold, scale the weights of the entire head module
+    4. Threshold supports annealing (from loose to strict)
     """
 
     def __init__(
@@ -72,18 +72,18 @@ class HeadClipManager:
         log_freq: int = 1000,
     ):
         """
-        初始化 Head Clip Manager
+        Initialize Head Clip Manager
 
         Args:
-            enabled (bool): 是否启用 Head Clip
-            enabled_heads (List[str], optional): 需要 clip 的 head 列表
-                例如: ['policy', 'value', 'rewards']
-                如果为 None，则不启用任何 head
-            head_configs (Dict[str, HeadClipConfig], optional): 每个 head 的配置
-                例如: {'policy': HeadClipConfig(...), 'value': HeadClipConfig(...)}
-                如果某个 head 不在此字典中，使用默认配置
-            monitor_freq (int): 监控频率（每隔多少个 iter 检查一次）
-            log_freq (int): 日志打印频率
+            enabled (bool): Whether to enable Head Clip
+            enabled_heads (List[str], optional): List of heads that need clipping
+                Example: ['policy', 'value', 'rewards']
+                If None, no head will be enabled
+            head_configs (Dict[str, HeadClipConfig], optional): Configuration for each head
+                Example: {'policy': HeadClipConfig(...), 'value': HeadClipConfig(...)}
+                If a head is not in this dictionary, use default configuration
+            monitor_freq (int): Monitoring frequency (check every N iterations)
+            log_freq (int): Log printing frequency
         """
         self.enabled = enabled
         self.enabled_heads = enabled_heads or []
@@ -91,16 +91,16 @@ class HeadClipManager:
         self.monitor_freq = monitor_freq
         self.log_freq = log_freq
 
-        # 统计信息
+        # Statistical information
         self.scaling_history = {head: [] for head in self.enabled_heads}
         self.iteration_count = 0
 
-        # 日志映射
+        # Log mapping
         self.logits_key_mapping = {
             'policy': 'logits_policy',
             'value': 'logits_value',
             'reward': 'logits_reward',
-            'rewards': 'logits_reward',  # 兼容两种命名
+            'rewards': 'logits_reward',  # Compatible with both naming conventions
             'observations': 'logits_observations',
         }
 
@@ -114,7 +114,7 @@ class HeadClipManager:
 
         if self.enabled and self.enabled_heads:
             logging.info("=" * 60)
-            logging.info(">>> Head Clip Manager 已启用 <<<")
+            logging.info(">>> Head Clip Manager Enabled <<<")
             logging.info(f"    Enabled heads: {self.enabled_heads}")
             logging.info(f"    Monitor freq: {self.monitor_freq}")
             logging.info(f"    Log freq: {self.log_freq}")
@@ -131,18 +131,18 @@ class HeadClipManager:
 
     def get_head_config(self, head_name: str) -> HeadClipConfig:
         """
-        获取指定 head 的配置，如果不存在则返回默认配置
+        Get the configuration for the specified head. If it doesn't exist, return the default configuration
 
         Args:
-            head_name (str): Head 名称
+            head_name (str): Name of the head
 
         Returns:
-            HeadClipConfig: 配置对象
+            HeadClipConfig: Configuration object
         """
         if head_name in self.head_configs:
             return self.head_configs[head_name]
         else:
-            # 返回默认配置
+            # Return default configuration
             return HeadClipConfig()
 
     def compute_current_threshold(
@@ -151,25 +151,25 @@ class HeadClipManager:
         train_iter: int
     ) -> float:
         """
-        计算当前训练步的阈值（考虑 annealing）
+        Compute the threshold for the current training step (considering annealing)
 
         Args:
-            head_name (str): Head 名称
-            train_iter (int): 当前训练迭代次数
+            head_name (str): Name of the head
+            train_iter (int): Current training iteration count
 
         Returns:
-            float: 当前阈值
+            float: Current threshold
         """
         config = self.get_head_config(head_name)
 
         if not config.use_annealing:
             return config.clip_threshold
 
-        # 计算 annealing 进度
+        # Calculate annealing progress
         progress = min(1.0, train_iter / config.anneal_steps)
 
         if config.anneal_type == 'cosine':
-            # 余弦调度: 从1平滑过渡到0
+            # Cosine schedule: smooth transition from 1 to 0
             cosine_progress = 0.5 * (1.0 + np.cos(np.pi * progress))
             current_value = config.end_value + \
                           (config.start_value - config.end_value) * cosine_progress
@@ -186,22 +186,22 @@ class HeadClipManager:
         train_iter: int
     ) -> Dict[str, Dict]:
         """
-        应用 Head Clip（主函数）
+        Apply Head Clip (main function)
 
-        工作流程：
-        1. 遍历所有启用的 head
-        2. 获取 head 的输出（logits）
-        3. 计算 max(|logits|)
-        4. 如果超过当前阈值，缩放整个 head 模块
+        Workflow:
+        1. Iterate through all enabled heads
+        2. Get the output (logits) of each head
+        3. Calculate max(|logits|)
+        4. If exceeding the current threshold, scale the entire head module
 
         Args:
-            world_model (nn.Module): WorldModel 实例
-            losses (LossWithIntermediateLosses): 包含中间输出的损失对象
-            train_iter (int): 当前训练迭代次数
+            world_model (nn.Module): WorldModel instance
+            losses (LossWithIntermediateLosses): Loss object containing intermediate outputs
+            train_iter (int): Current training iteration count
 
         Returns:
-            Dict[str, Dict]: 每个 head 的缩放信息
-                例如: {
+            Dict[str, Dict]: Scaling information for each head
+                Example: {
                     'policy': {
                         'max_logits': 25.5,
                         'threshold': 15.0,
@@ -213,7 +213,7 @@ class HeadClipManager:
         if not self.enabled:
             return {}
 
-        # 只在指定频率检查
+        # Only check at specified frequency
         if train_iter % self.monitor_freq != 0:
             return {}
 
@@ -221,33 +221,33 @@ class HeadClipManager:
         results = {}
 
         for head_name in self.enabled_heads:
-            # 1. 获取 logits
+            # 1. Get logits
             logits = self._get_head_logits(losses, head_name)
             if logits is None:
                 continue
 
-            # 2. 计算当前阈值
+            # 2. Calculate current threshold
             current_threshold = self.compute_current_threshold(head_name, train_iter)
 
-            # 3. 计算 logits 的最大绝对值
+            # 3. Calculate maximum absolute value of logits
             max_logits = logits.abs().max().item()
 
-            # 4. 判断是否需要缩放
+            # 4. Determine if scaling is needed
             scaled = False
             scale_factor = 1.0
 
             if max_logits > current_threshold:
                 scale_factor = current_threshold / max_logits
 
-                # 获取 head 模块
+                # Get head module
                 head_module = self._get_head_module(world_model, head_name)
                 if head_module is not None:
-                    # 缩放整个 head 模块的所有权重
+                    # Scale all weights of the entire head module
                     success = self._scale_module_weights(head_module, scale_factor)
                     scaled = success
 
                     if success:
-                        # 记录历史
+                        # Record history
                         self.scaling_history[head_name].append({
                             'iteration': train_iter,
                             'max_logits': max_logits,
@@ -255,7 +255,7 @@ class HeadClipManager:
                             'scale_factor': scale_factor,
                         })
 
-            # 5. 记录结果
+            # 5. Record results
             results[head_name] = {
                 'max_logits': max_logits,
                 'threshold': current_threshold,
@@ -263,7 +263,7 @@ class HeadClipManager:
                 'scaled': scaled,
             }
 
-            # 6. 打印日志
+            # 6. Print log
             if scaled and train_iter % self.log_freq == 0:
                 logging.info(
                     f"[Head-Clip] Iter {train_iter}: {head_name} head - "
@@ -279,14 +279,14 @@ class HeadClipManager:
         head_name: str
     ) -> Optional[torch.Tensor]:
         """
-        从 losses 对象中获取指定 head 的 logits
+        Get the logits of the specified head from the losses object
 
         Args:
-            losses (LossWithIntermediateLosses): 损失对象
-            head_name (str): Head 名称
+            losses (LossWithIntermediateLosses): Loss object
+            head_name (str): Name of the head
 
         Returns:
-            Optional[torch.Tensor]: logits 张量，如果未找到则返回 None
+            Optional[torch.Tensor]: Logits tensor, returns None if not found
         """
         if not hasattr(losses, 'intermediate_losses'):
             return None
@@ -303,14 +303,14 @@ class HeadClipManager:
         head_name: str
     ) -> Optional[nn.Module]:
         """
-        获取指定 head 的模块
+        Get the module of the specified head
 
         Args:
-            world_model (nn.Module): WorldModel 实例
-            head_name (str): Head 名称
+            world_model (nn.Module): WorldModel instance
+            head_name (str): Name of the head
 
         Returns:
-            Optional[nn.Module]: Head 模块，如果未找到则返回 None
+            Optional[nn.Module]: Head module, returns None if not found
         """
         module_name = self.head_module_mapping.get(head_name)
         if module_name is None:
@@ -327,26 +327,26 @@ class HeadClipManager:
         scale_factor: float
     ) -> bool:
         """
-        缩放模块的所有权重（与 scale_module_weights_vectorized 一致）
+        Scale all weights of the module (consistent with scale_module_weights_vectorized)
 
         Args:
-            module (nn.Module): 要缩放的模块
-            scale_factor (float): 缩放因子
+            module (nn.Module): Module to be scaled
+            scale_factor (float): Scaling factor
 
         Returns:
-            bool: 是否成功
+            bool: Whether the operation was successful
         """
         if not (0.0 < scale_factor < 1.0):
             return False
 
         try:
-            # 1. 将模块的所有参数展平成一个单一向量
+            # 1. Flatten all parameters of the module into a single vector
             params_vec = parameters_to_vector(module.parameters())
 
-            # 2. 在这个向量上执行一次乘法操作
+            # 2. Perform multiplication operation on this vector
             params_vec.data.mul_(scale_factor)
 
-            # 3. 将缩放后的向量复制回模块的各个参数
+            # 3. Copy the scaled vector back to the individual parameters of the module
             vector_to_parameters(params_vec, module.parameters())
 
             return True
@@ -356,10 +356,10 @@ class HeadClipManager:
 
     def get_statistics(self) -> Dict:
         """
-        获取统计信息
+        Get statistical information
 
         Returns:
-            Dict: 统计信息
+            Dict: Statistical information
         """
         stats = {
             'enabled': self.enabled,
@@ -382,15 +382,15 @@ class HeadClipManager:
 
 def create_head_clip_manager_from_dict(config_dict: Dict) -> HeadClipManager:
     """
-    从配置字典创建 HeadClipManager
+    Create HeadClipManager from a configuration dictionary
 
     Args:
-        config_dict (Dict): 配置字典
+        config_dict (Dict): Configuration dictionary
 
     Returns:
-        HeadClipManager: 管理器实例
+        HeadClipManager: Manager instance
 
-    示例:
+    Example:
         config_dict = {
             'enabled': True,
             'enabled_heads': ['policy', 'value'],
@@ -416,7 +416,7 @@ def create_head_clip_manager_from_dict(config_dict: Dict) -> HeadClipManager:
     monitor_freq = config_dict.get('monitor_freq', 1)
     log_freq = config_dict.get('log_freq', 1000)
 
-    # 解析 head_configs
+    # Parse head_configs
     head_configs = {}
     head_configs_dict = config_dict.get('head_configs', {})
     for head_name, head_config_dict in head_configs_dict.items():
@@ -432,13 +432,13 @@ def create_head_clip_manager_from_dict(config_dict: Dict) -> HeadClipManager:
 
 
 if __name__ == "__main__":
-    # 使用示例
+    # Usage example
     print("=" * 60)
-    print("Head Clip Manager 使用示例")
+    print("Head Clip Manager Usage Example")
     print("=" * 60)
 
-    # 示例 1: 基本配置
-    print("\n示例 1: 基本配置")
+    # Example 1: Basic configuration
+    print("\nExample 1: Basic configuration")
     config_dict = {
         'enabled': True,
         'enabled_heads': ['policy'],
@@ -456,14 +456,14 @@ if __name__ == "__main__":
     }
 
     manager = create_head_clip_manager_from_dict(config_dict)
-    print(f"Manager 创建成功，启用的 head: {manager.enabled_heads}")
+    print(f"Manager created successfully, enabled heads: {manager.enabled_heads}")
 
-    # 示例 2: 计算当前阈值
-    print("\n示例 2: 计算当前阈值")
+    # Example 2: Compute current threshold
+    print("\nExample 2: Compute current threshold")
     for iter in [0, 100000, 250000, 500000]:
         threshold = manager.compute_current_threshold('policy', iter)
         print(f"  Iter {iter}: threshold = {threshold:.2f}")
 
     print("\n" + "=" * 60)
-    print("所有示例运行成功！")
+    print("All examples ran successfully!")
     print("=" * 60)
