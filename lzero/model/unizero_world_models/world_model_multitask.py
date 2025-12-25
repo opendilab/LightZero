@@ -58,15 +58,6 @@ class WorldModelMT(WorldModel):
         self.task_num = config.task_num
         self.env_num = self.config.env_num
 
-        # TODO: Investigate sharing the encoder across all 26 games and scaling its gradient.
-        # if not self.continuous_action_space:
-        #     # Share encoder for Atari games.
-        #     encoder_index = 0
-        #     encoder = self.tokenizer.encoder[encoder_index]
-        #     # Register a hook for all parameters of the encoder to scale gradients.
-        #     for p in encoder.parameters():
-        #         p.register_hook(self._scale_grad)
-
         # Whether to share prediction heads across tasks.
         self.share_head = config.share_head
 
@@ -235,8 +226,8 @@ class WorldModelMT(WorldModel):
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
-        # 先设置为game_segment_length，以保持self.shared_pool_init_infer都是有效的kv
-        # TODO: 非常重要，应该改为和segment_length一样
+        #  Initially set to game_segment_length to ensure all KVs in self.shared_pool_init_infer are valid.
+        # TODO: Critical. This should be changed to match segment_length.
         self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
 
         self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
@@ -335,9 +326,9 @@ class WorldModelMT(WorldModel):
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer: Optional[nn.Module] = None) -> Head:
         """Creates a standard prediction head."""
         modules = [
-            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
+            nn.LayerNorm(self.config.embed_dim), # TODO
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
+            nn.LayerNorm(self.config.embed_dim),
             nn.GELU(approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim)
         ]
@@ -352,7 +343,7 @@ class WorldModelMT(WorldModel):
     def _create_head_moe(self, block_mask: torch.Tensor, output_dim: int, norm_layer: Optional[nn.Module] = None, moe: Optional[nn.Module] = None) -> Head:
         """Creates a prediction head with a Mixture-of-Experts (MoE) layer."""
         modules = [
-            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
+            nn.LayerNorm(self.config.embed_dim), # TODO
             moe,
             nn.Linear(self.config.embed_dim, output_dim)
         ]
@@ -440,13 +431,11 @@ class WorldModelMT(WorldModel):
 
     def _initialize_cache_structures(self) -> None:
         """Initializes cache structures for storing past keys and values during inference."""
-        # self.past_kv_cache_recurrent_infer = collections.OrderedDict()
-        # self.past_kv_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num)]
         
         self.past_kv_cache_recurrent_infer = {}
         self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
         self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
-        # 辅助数据结构，用于反向查找：pool_index -> key
+        # Auxiliary data structure for reverse lookup: pool_index -> key
         self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         
         self.keys_values_wm_list = []
@@ -1291,43 +1280,43 @@ class WorldModelMT(WorldModel):
             #     cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
             #     self.past_kv_cache_recurrent_infer[cache_key] = cache_index
 
-
             if is_init_infer:
                 # TODO
-                # ==================== 主动淘汰修复逻辑 ====================
-                # 1. 获取即将被覆写的物理索引
+                # ==================== Active Eviction Logic ====================
+                # 1. Retrieve the physical index that is about to be overwritten.
                 index_to_write = self.shared_pool_index_init_envs[i]
-                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                # 2. Use the auxiliary map to identify the old key stored at this index.
                 old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
-                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                # 3. If an old key exists, remove it from the main cache map.
                 if old_key_to_evict is not None:
-                    # 确保要删除的键确实存在，避免意外错误
+                    # Ensure the key to be deleted actually exists to avoid unexpected errors.
                     if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
                         del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
 
-                # 现在可以安全地写入新数据了
+                # Now it is safe to write the new data.
                 cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
 
-                # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
+                # 4. Update the new mapping in both the main cache map and the auxiliary map.
                 self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
                 self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
             else:
                 # ==================== RECURRENT INFER FIX ====================
-                # 1. 获取即将被覆写的物理索引
+                # 1. Retrieve the physical index that is about to be overwritten.
                 index_to_write = self.shared_pool_index
-                # 2. 使用辅助列表查找该索引上存储的旧的 key
+                # 2. Use the auxiliary map to identify the old key stored at this index.
                 old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
-                # 3. 如果存在旧 key，就从主 cache map 中删除它
+                # 3. If an old key exists, remove it from the main cache map.
                 if old_key_to_evict is not None:
                     if old_key_to_evict in self.past_kv_cache_recurrent_infer:
                         del self.past_kv_cache_recurrent_infer[old_key_to_evict]
 
-                # 4. 现在可以安全地写入新数据了
+                # 4. Now it is safe to write the new data.
                 cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
 
-                # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
+                # 5. Update the new mapping in both the main cache map and the auxiliary map.
                 self.past_kv_cache_recurrent_infer[cache_key] = cache_index
                 self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
+
 
     #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -1362,22 +1351,18 @@ class WorldModelMT(WorldModel):
                 else:
                     matched_value = None
 
-                # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                # if matched_value is None:
-                #     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
-
-                # ==================== TODO ====================
-                # 步骤 2: 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
+                # Only try to find from recurrent_infer cache if not found in init_infer
                 if matched_value is None:
-                    # 2.1 安全地从字典中获取索引，它可能返回 None
+                    # Safely get the index from dictionary, it may return None
                     recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
-                    # 2.2 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
+                    # Only use it to retrieve value from physical pool if the index is valid (not None)
                     if recur_cache_index is not None:
                         matched_value = self.shared_pool_recur_infer[recur_cache_index]
 
                     if recur_cache_index is None:
-                        print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
+                        logging.debug(f"[OLD CACHE MISS] Not found for key={cache_key} in recurrent infer. Generating new cache.")
 
+              
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
@@ -1899,8 +1884,6 @@ class WorldModelMT(WorldModel):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
 
-        # 为了让外部的训练循环能够获取encoder的输出，我们将其加入返回字典
-        # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
         detached_obs_embeddings = obs_embeddings.detach()
 
         if self.continuous_action_space:
@@ -1933,14 +1916,8 @@ class WorldModelMT(WorldModel):
                 target_sampled_actions=target_sampled_actions,
 
                 value_priority=value_priority,
-                obs_embeddings=detached_obs_embeddings, # <-- 新增
-                #                 logits_value_mean=outputs.logits_value.mean(),
-                # logits_value_max=outputs.logits_value.max(),
-                # logits_value_min=outputs.logits_value.min(),
-                # logits_policy_mean=outputs.logits_policy.mean(),
-                # logits_policy_max=outputs.logits_policy.max(),
-                # logits_policy_min=outputs.logits_policy.min(),
-                logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+                obs_embeddings=detached_obs_embeddings,
+                logits_value=outputs.logits_value.detach(),
                 logits_reward=outputs.logits_rewards.detach(),
                 logits_policy=outputs.logits_policy.detach(),
 
@@ -1972,14 +1949,9 @@ class WorldModelMT(WorldModel):
                 latent_state_l2_norms=latent_state_l2_norms,
                 
                 value_priority=value_priority,
-                obs_embeddings=detached_obs_embeddings, # <-- 新增
-                # logits_value_mean=outputs.logits_value.mean(),
-                # logits_value_max=outputs.logits_value.max(),
-                # logits_value_min=outputs.logits_value.min(),
-                # logits_policy_mean=outputs.logits_policy.mean(),
-                # logits_policy_max=outputs.logits_policy.max(),
-                # logits_policy_min=outputs.logits_policy.min(),
-                logits_value=outputs.logits_value.detach(),  # 使用detach()，因为它仅用于分析和裁剪，不参与梯度计算
+                obs_embeddings=detached_obs_embeddings,
+
+                logits_value=outputs.logits_value.detach(),
                 logits_reward=outputs.logits_rewards.detach(),
                 logits_policy=outputs.logits_policy.detach(),
 

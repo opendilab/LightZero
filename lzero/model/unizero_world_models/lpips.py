@@ -14,17 +14,16 @@ from torchvision import models
 from tqdm import tqdm
 
 # ==================================================================================
-# ================================ 核心修改部分 ====================================
+# ================================ Core Configuration ==============================
 # ==================================================================================
-# 在导入 torch 和 torchvision 之后，但在实例化任何模型之前，设置 TORCH_HOME 环境变量。
-# 这会告诉 PyTorch 将所有通过 torch.hub 下载的模型（包括 torchvision.models 中的预训练模型）
-# 存放到您指定的目录下。
-# PyTorch 会自动在此目录下创建 'hub/checkpoints' 子文件夹。
-custom_torch_home = "/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg"
+# Set TORCH_HOME environment variable after importing torch and torchvision,
+# but before instantiating any models. This tells PyTorch where to store all
+# models downloaded via torch.hub (including pretrained models from torchvision.models).
+# PyTorch will automatically create the 'hub/checkpoints' subdirectory.
+custom_torch_home = "./LightZero/tokenizer_pretrained_vgg"
 os.environ['TORCH_HOME'] = custom_torch_home
-# 确保目录存在，虽然 torch.hub 也会尝试创建，但提前创建更稳妥
+# Ensure the directory exists (although torch.hub will also try to create it)
 os.makedirs(os.path.join(custom_torch_home, 'hub', 'checkpoints'), exist_ok=True)
-# ==================================================================================
 # ==================================================================================
 
 
@@ -36,7 +35,7 @@ class LPIPS(nn.Module):
         self.chns = [64, 128, 256, 512, 512]  # vg16 features
 
         # Comment out the following line if you don't need perceptual loss
-        # 现在，这一行将自动使用 TORCH_HOME 指定的路径
+        # This line will now automatically use the path specified by TORCH_HOME
         self.net = vgg16(pretrained=True, requires_grad=False)
         self.lin0 = NetLinLayer(self.chns[0], use_dropout=use_dropout)
         self.lin1 = NetLinLayer(self.chns[1], use_dropout=use_dropout)
@@ -48,8 +47,8 @@ class LPIPS(nn.Module):
             param.requires_grad = False
 
     def load_from_pretrained(self) -> None:
-        # 这一部分您已经修改正确，它用于加载 LPIPS 的线性层权重 (vgg.pth)
-        # 我们让它和 TORCH_HOME 使用相同的根目录，以保持一致性。
+        # Load LPIPS linear layer weights (vgg.pth) using the same root directory
+        # as TORCH_HOME for consistency
         ckpt = get_ckpt_path(name="vgg_lpips", root=custom_torch_home)
         self.load_state_dict(torch.load(ckpt, map_location=torch.device("cpu")), strict=False)
         print(f"Loaded LPIPS pretrained weights from: {ckpt}")
@@ -92,7 +91,7 @@ class NetLinLayer(nn.Module):
 class vgg16(torch.nn.Module):
     def __init__(self, requires_grad: bool = False, pretrained: bool = True) -> None:
         super(vgg16, self).__init__()
-        # 由于设置了 TORCH_HOME，这里的 pretrained=True 会在指定目录中查找或下载模型
+        # With TORCH_HOME set, pretrained=True will search or download the model in the specified directory
         print("Loading vgg16 backbone...")
         vgg_pretrained_features = models.vgg16(pretrained=pretrained).features
         print("vgg16 backbone loaded.")
@@ -181,7 +180,7 @@ def md5_hash(path: str) -> str:
 
 def get_ckpt_path(name: str, root: str, check: bool = False) -> str:
     assert name in URL_MAP
-    # 这个函数现在只为 vgg.pth 服务，路径是正确的
+    # This function is used for loading vgg.pth, and the path is correct
     path = os.path.join(root, CKPT_MAP[name])
     if not os.path.exists(path) or (check and not md5_hash(path) == MD5_MAP[name]):
         print("Downloading {} model from {} to {}".format(name, URL_MAP[name], path))
@@ -190,17 +189,17 @@ def get_ckpt_path(name: str, root: str, check: bool = False) -> str:
         assert md5 == MD5_MAP[name], md5
     return path
 
-# =======================
-# =====  运行示例  ======
-# =======================
+# ===============================
+# ===== Usage Example =====
+# ===============================
 if __name__ == '__main__':
     print(f"PyTorch Hub directory set to: {os.environ['TORCH_HOME']}")
-    
-    # 第一次运行时，你会看到两个下载过程：
-    # 1. 下载 vgg16-397923af.pth 到 /mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg/hub/checkpoints/
-    # 2. 下载 vgg.pth 到 /mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg/
-    # 之后再次运行，将不会有任何下载提示，直接从指定目录加载。
-    
+
+    # On the first run, you will see two download processes:
+    # 1. Download vgg16-397923af.pth to /mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg/hub/checkpoints/
+    # 2. Download vgg.pth to /mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg/
+    # After that, subsequent runs will load directly from the specified directory without any downloads.
+
     print("\nInitializing LPIPS model...")
     model = LPIPS()
     print("\nLPIPS model initialized successfully.")

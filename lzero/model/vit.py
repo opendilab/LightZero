@@ -7,8 +7,6 @@ It includes improvements in code structure, clarity, and adherence to modern Pyt
 including comprehensive type hinting and documentation. The implementation also supports
 integration with Low-Rank Adaptation (LoRA) through a flexible configuration system.
 
-Author: [Your Name/Team Name]
-Date: [Current Date]
 """
 
 import torch

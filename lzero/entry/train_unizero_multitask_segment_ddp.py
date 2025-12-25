@@ -29,47 +29,11 @@ from collections import defaultdict
 
 
 # ====================================================================================================================
-# Note: The following global benchmark score definitions are for reference.
-# The active implementation for score initialization is located within the `train_unizero_multitask_segment_ddp` function
-# to ensure scores are correctly set based on the `benchmark_name` argument passed to the function.
+# Note: Benchmark score definitions are initialized dynamically within the `train_unizero_multitask_segment_ddp`
+# function based on the `benchmark_name` argument to ensure correct score assignment.
 # ====================================================================================================================
-# global BENCHMARK_NAME
-# # BENCHMARK_NAME = "atari"
-# BENCHMARK_NAME = "dmc" # TODO
-# if BENCHMARK_NAME == "atari":
-#     RANDOM_SCORES = np.array([
-#         227.8, 5.8, 222.4, 210.0, 14.2, 2360.0, 0.1, 1.7, 811.0, 10780.5,
-#         152.1, 0.0, 65.2, 257.6, 1027.0, 29.0, 52.0, 1598.0, 258.5, 307.3,
-#         -20.7, 24.9, 163.9, 11.5, 68.4, 533.4
-#     ])
-#     HUMAN_SCORES = np.array([
-#         7127.7, 1719.5, 742.0, 8503.3, 753.1, 37187.5, 12.1, 30.5, 7387.8, 35829.4,
-#         1971.0, 29.6, 4334.7, 2412.5, 30826.4, 302.8, 3035.0, 2665.5, 22736.3, 6951.6,
-#         14.6, 69571.3, 13455.0, 7845.0, 42054.7, 11693.2
-#     ])
-# elif BENCHMARK_NAME == "dmc":
-#     RANDOM_SCORES = np.array([0]*26)
-#     HUMAN_SCORES = np.array([1000]*26)
-#
-# # New order to original index mapping
-# # New order: [Pong, MsPacman, Seaquest, Boxing, Alien, ChopperCommand, Hero, RoadRunner,
-# #            Amidar, Assault, Asterix, BankHeist, BattleZone, CrazyClimber, DemonAttack,
-# #            Freeway, Frostbite, Gopher, Jamesbond, Kangaroo, Krull, KungFuMaster,
-# #            PrivateEye, UpNDown, Qbert, Breakout]
-# # Mapping to indices in the original array (0-based)
-# new_order = [
-#     20, 19, 24, 6, 0, 8, 14, 23, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 15, 16, 17, 18, 21, 25, 22, 7
-# ]
-#
-# # Generate new arrays based on new_order
-# new_RANDOM_SCORES = RANDOM_SCORES[new_order]
-# new_HUMAN_SCORES = HUMAN_SCORES[new_order]
 
 
-# ------------------------------------------------------------
-# 1. Add a dedicated process-group for the learner.
-#    (This should be called once during main/learner initialization)
-# ------------------------------------------------------------
 def build_learner_group(learner_ranks: list[int]) -> "dist.ProcessGroup":
     """
     Overview:
@@ -148,7 +112,7 @@ def safe_eval(
                                                            otherwise (None, None).
     """
     try:
-        print(f"=========评估开始 Rank {rank}/{world_size}===========")
+        print(f"========= Evaluation starting on Rank {rank}/{world_size} =========")
         # Reset the stop_event to ensure it is not set before each evaluation.
         evaluator.stop_event.clear()
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -159,13 +123,13 @@ def safe_eval(
             except concurrent.futures.TimeoutError:
                 # If a timeout occurs, set the stop_event.
                 evaluator.stop_event.set()
-                print(f"评估操作在 Rank {rank}/{world_size} 上超时，耗时 {TIMEOUT} 秒。")
+                print(f"Evaluation timed out on Rank {rank}/{world_size} after {TIMEOUT} seconds.")
                 return None, None
 
-        print(f"======评估结束 Rank {rank}/{world_size}======")
+        print(f"====== Evaluation finished on Rank {rank}/{world_size} ======")
         return stop, reward
     except Exception as e:
-        print(f"Rank {rank}/{world_size} 评估过程中发生错误: {e}")
+        print(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}")
         return None, None
 
 
@@ -203,7 +167,7 @@ def allocate_batch_size(
         episode for sublist in all_task_num_of_collected_episodes for episode in sublist
     ]
     if rank == 0:
-        print(f'所有任务的 collected episodes: {all_task_num_of_collected_episodes}')
+        print(f'Collected episodes for all tasks: {all_task_num_of_collected_episodes}')
 
     # Calculate the inverse proportional weights for each task.
     inv_episodes = np.array([1.0 / (episodes + 1) for episodes in all_task_num_of_collected_episodes])
@@ -411,9 +375,9 @@ def train_unizero_multitask_segment_ddp(
     new_RANDOM_SCORES = RANDOM_SCORES[new_order]
     new_HUMAN_SCORES = HUMAN_SCORES[new_order]
     # Log the reordered results
-    print("重排后的 RANDOM_SCORES:")
+    print("Reordered RANDOM_SCORES:")
     print(new_RANDOM_SCORES)
-    print("\n重排后的 HUMAN_SCORES:")
+    print("\nReordered HUMAN_SCORES:")
     print(new_HUMAN_SCORES)
     # ------------------------------------------------------------------------------------
 
@@ -437,8 +401,8 @@ def train_unizero_multitask_segment_ddp(
     tasks_per_rank = total_tasks // world_size
     remainder = total_tasks % world_size
 
-    # ==================== START: 关键修复 ====================
-    # 1. 精确计算当前Rank负责的任务数量
+    # ==================== START: Critical Fix ====================
+    # 1. Precisely calculate the number of tasks assigned to the current rank.
     if rank < remainder:
         start_idx = rank * (tasks_per_rank + 1)
         end_idx = start_idx + tasks_per_rank + 1
@@ -447,7 +411,7 @@ def train_unizero_multitask_segment_ddp(
         start_idx = rank * tasks_per_rank + remainder
         end_idx = start_idx + tasks_per_rank
         num_tasks_for_this_rank = tasks_per_rank
-    # ==================== END: 关键修复 ====================
+    # ==================== END: Critical Fix ====================
 
     tasks_for_this_rank = input_cfg_list[start_idx:end_idx]
 
@@ -457,7 +421,7 @@ def train_unizero_multitask_segment_ddp(
         # Initialize empty lists to avoid errors later.
         cfgs, game_buffers, collector_envs, evaluator_envs, collectors, evaluators = [], [], [], [], [], []
     else:
-        print(f"Rank {rank}/{world_size}, 处理任务 {start_idx} 到 {end_idx - 1}")
+        print(f"Rank {rank}/{world_size} processing tasks {start_idx} to {end_idx - 1}")
 
     cfgs = []
     game_buffers = []
@@ -470,16 +434,16 @@ def train_unizero_multitask_segment_ddp(
         # Use the config of the first task to create a shared policy.
         task_id, [cfg, create_cfg] = tasks_for_this_rank[0]
 
-        # ==================== START: 关键修复 ====================
-        # 2. 将正确的任务数量设置到 *所有* 相关配置中
-        #    在创建Policy实例之前，必须确保配置是正确的
+        # ==================== START: Critical Fix ====================
+        # 2. Set the correct task count to *all* related configurations.
+        #    Configuration must be correct before creating the Policy instance.
         for config_tuple in tasks_for_this_rank:
             # config_tuple is (task_id, [cfg_obj, create_cfg_obj])
             config_tuple[1][0].policy.task_num = num_tasks_for_this_rank
-        
-        # 3. 确保用于创建Policy的那个cfg对象也拥有正确的task_num
+
+        # 3. Ensure the cfg object used to create the Policy also has the correct task_num.
         cfg.policy.task_num = num_tasks_for_this_rank
-        # ==================== END: 关键修复 ====================
+        # ==================== END: Critical Fix ====================
 
         # Ensure the specified policy type is supported.
         assert create_cfg.policy.type in ['unizero_multitask', 'sampled_unizero_multitask'], \
@@ -492,7 +456,7 @@ def train_unizero_multitask_segment_ddp(
 
         # Set device based on CUDA availability.
         cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
-        logging.info(f'配置的设备: {cfg.policy.device}')
+        logging.info(f'Configured device: {cfg.policy.device}')
 
         # Compile the configuration.
         cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
@@ -501,9 +465,9 @@ def train_unizero_multitask_segment_ddp(
 
         # Load a pre-trained model if a path is provided.
         if model_path is not None:
-            logging.info(f'开始加载模型: {model_path}')
+            logging.info(f'Starting to load model: {model_path}')
             policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-            logging.info(f'完成加载模型: {model_path}')
+            logging.info(f'Finished loading model: {model_path}')
 
         # Create a TensorBoard logger.
         log_dir = os.path.join('./{}/log'.format(cfg.exp_name), f'serial_rank_{rank}')
@@ -588,7 +552,7 @@ def train_unizero_multitask_segment_ddp(
             clip_scale = np.clip(1 + (3 * train_epoch / 1000), 1, 4)
             allocated_batch_sizes = allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=clip_scale)
             if rank == 0:
-                print("分配后的 batch_sizes: ", allocated_batch_sizes)
+                print("Allocated batch_sizes: ", allocated_batch_sizes)
             # Assign the corresponding batch size to each task config
             for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                     zip(cfgs, collectors, evaluators, game_buffers)):
@@ -631,10 +595,10 @@ def train_unizero_multitask_segment_ddp(
 
             # Check if it's time for evaluation.
             if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
-            # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # only for debug TODO
-            
+            # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # TODO: Only for debug
+
                 print('=' * 20)
-                print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
+                print(f'Rank {rank} evaluating task_id: {cfg.policy.task_id}...')
 
                 # TODO: Ensure policy reset logic is optimal for multi-task settings.
                 evaluator._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
@@ -643,20 +607,20 @@ def train_unizero_multitask_segment_ddp(
                 stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
                 # Check if evaluation was successful.
                 if stop is None or reward is None:
-                    print(f"Rank {rank} 在评估过程中遇到问题，继续训练...")
+                    print(f"Rank {rank} encountered issues during evaluation, continuing training...")
                     task_returns[cfg.policy.task_id] = float('inf')  # Set task difficulty to max if evaluation fails.
                 else:
                     # Extract 'eval_episode_return_mean' from the reward dictionary.
                     try:
                         eval_mean_reward = reward.get('eval_episode_return_mean', float('inf'))
-                        print(f"任务 {cfg.policy.task_id} 的评估奖励: {eval_mean_reward}")
+                        print(f"Task {cfg.policy.task_id} evaluation reward: {eval_mean_reward}")
                         task_returns[cfg.policy.task_id] = eval_mean_reward
                     except Exception as e:
-                        print(f"提取评估奖励时发生错误: {e}")
+                        print(f"Error extracting evaluation reward: {e}")
                         task_returns[cfg.policy.task_id] = float('inf')  # Set reward to max on error.
 
             print('=' * 20)
-            print(f'开始收集 Rank {rank} 的任务_id: {cfg.policy.task_id}...')
+            print(f'Starting collection for Rank {rank} task_id: {cfg.policy.task_id}...')
             print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
 
             # Reset initial data before each collection, crucial for multi-task settings.
@@ -668,15 +632,6 @@ def train_unizero_multitask_segment_ddp(
             replay_buffer.push_game_segments(new_data)
             replay_buffer.remove_oldest_data_to_fit()
 
-            # ===== For debugging purposes only =====
-            # if train_epoch > 2:
-            #     with timer:
-            #         replay_buffer.reanalyze_buffer(2, policy)
-            #     buffer_reanalyze_count += 1
-            #     logging.info(f'缓冲区重新分析次数: {buffer_reanalyze_count}')
-            #     logging.info(f'缓冲区重新分析耗时: {timer.value}')
-            # ====================================
-
             # Periodically reanalyze the buffer.
             if cfg.policy.buffer_reanalyze_freq >= 1:
                 reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
@@ -687,11 +642,11 @@ def train_unizero_multitask_segment_ddp(
                     with timer:
                         replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                     buffer_reanalyze_count += 1
-                    logging.info(f'缓冲区重新分析次数: {buffer_reanalyze_count}')
-                    logging.info(f'缓冲区重新分析耗时: {timer.value}')
+                    logging.info(f'Buffer reanalysis count: {buffer_reanalyze_count}')
+                    logging.info(f'Buffer reanalysis time: {timer.value}')
 
             # Log after data collection.
-            logging.info(f'Rank {rank}: 完成任务 {cfg.policy.task_id} 的数据收集')
+            logging.info(f'Rank {rank}: Completed data collection for task {cfg.policy.task_id}')
 
         # Check if there is enough data for training.
         not_enough_data = any(
@@ -734,12 +689,12 @@ def train_unizero_multitask_segment_ddp(
                         tb_logger.add_scalar('UniZero-MT/NormalizedMedian', uni_median, global_step=learner.train_iter)
                     logging.info(f"Rank {rank}: UniZero-MT Norm Mean={uni_mean:.4f}, Median={uni_median:.4f}")
                 else:
-                    logging.info(f"Rank {rank}: 暂无数据计算 UniZero-MT 归一化指标")
+                    logging.info(f"Rank {rank}: No data available to compute UniZero-MT normalized metrics")
 
                 # Synchronize task weights.
                 dist.broadcast_object_list([task_weights], src=0)
             except Exception as e:
-                logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
+                logging.error(f'Rank {rank}: Failed to synchronize task weights, error: {e}')
                 break
 
         # ---------------- Sampling done, preparing for backward pass ----------------
@@ -768,15 +723,15 @@ def train_unizero_multitask_segment_ddp(
                                 with timer:
                                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                                 buffer_reanalyze_count += 1
-                                logging.info(f'缓冲区重新分析次数: {buffer_reanalyze_count}')
-                                logging.info(f'缓冲区重新分析耗时: {timer.value}')
+                                logging.info(f'Buffer reanalysis count: {buffer_reanalyze_count}')
+                                logging.info(f'Buffer reanalysis time: {timer.value}')
 
                         train_data = replay_buffer.sample(batch_size, policy)
                         train_data.append(cfg.policy.task_id)  # Append task_id to differentiate tasks.
                         train_data_multi_task.append(train_data)
                     else:
                         logging.warning(
-                            f'重放缓冲区中的数据不足以采样mini-batch: '
+                            f'Insufficient data in replay buffer to sample mini-batch: '
                             f'batch_size: {batch_size}, replay_buffer: {replay_buffer}'
                         )
                         break
@@ -820,57 +775,26 @@ def train_unizero_multitask_segment_ddp(
                                     # Broadcast task weights to all processes.
                                     dist.broadcast_object_list([task_exploitation_weight], src=0)
                                     print(
-                                        f"rank{rank}, task_exploitation_weight (按 task_id 排列): {task_exploitation_weight}")
+                                        f"rank{rank}, task_exploitation_weight (sorted by task_id): {task_exploitation_weight}")
                                 else:
-                                    logging.warning(f"Rank {rank}: 未能计算全局 obs_loss 任务权重，obs_loss 数据为空。")
+                                    logging.warning(f"Rank {rank}: Unable to compute global obs_loss task weights, obs_loss data is empty.")
                                     task_exploitation_weight = None
                             else:
                                 task_exploitation_weight = None
                             # Update training parameters to include the calculated task weights.
                             learn_kwargs['task_weight'] = task_exploitation_weight
                         except Exception as e:
-                            logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
+                            logging.error(f'Rank {rank}: Failed to synchronize task weights, error: {e}')
                             raise e  # Re-raise the exception for external capture and analysis.
 
                     if cfg.policy.use_priority:
                         for idx, (cfg, replay_buffer) in enumerate(zip(cfgs, game_buffers)):
                             # Update task-specific replay buffer priorities.
                             task_id = cfg.policy.task_id
-                            # replay_buffer.update_priority(
-                            #     train_data_multi_task[idx],
-                            #     log_vars[0][f'value_priority_task{task_id}']
-                            # )
                             replay_buffer.update_priority(
                                 train_data_multi_task[idx],
                                 log_vars[0][f'noreduce_value_priority_task{task_id}']
                             )
-
-                            # current_priorities = log_vars[0][f'value_priority_task{task_id}']
-                            # mean_priority = np.mean(current_priorities)
-                            # std_priority = np.std(current_priorities)
-
-                            # alpha = 0.1  # Smoothing factor
-                            # if f'running_mean_priority_task{task_id}' not in value_priority_tasks:
-                            #     value_priority_tasks[f'running_mean_priority_task{task_id}'] = mean_priority
-                            # else:
-                            #     value_priority_tasks[f'running_mean_priority_task{task_id}'] = (
-                            #             alpha * mean_priority +
-                            #             (1 - alpha) * value_priority_tasks[f'running_mean_priority_task{task_id}']
-                            #     )
-
-                            # # Use running mean to calculate normalized priorities.
-                            # running_mean_priority = value_priority_tasks[f'running_mean_priority_task{task_id}']
-                            # normalized_priorities = (current_priorities - running_mean_priority) / (
-                            #             std_priority + 1e-6)
-
-                            # # If needed, update the replay buffer with normalized priorities.
-                            # # replay_buffer.update_priority(train_data_multi_task[idx], normalized_priorities)
-
-                            # # Log priority statistics.
-                            # if cfg.policy.print_task_priority_logs:
-                            #     print(f"任务 {task_id} - 平均优先级: {mean_priority:.8f}, "
-                            #           f"运行平均优先级: {running_mean_priority:.8f}, "
-                            #           f"标准差: {std_priority:.8f}")
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
@@ -878,9 +802,9 @@ def train_unizero_multitask_segment_ddp(
         # Synchronize all ranks to ensure they have completed training.
         try:
             dist.barrier()
-            logging.info(f'Rank {rank}: 通过训练后的同步障碍')
+            logging.info(f'Rank {rank}: Passed synchronization barrier after training')
         except Exception as e:
-            logging.error(f'Rank {rank}: 同步障碍失败，错误: {e}')
+            logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
             break
 
         # Check for termination conditions.
@@ -900,11 +824,11 @@ def train_unizero_multitask_segment_ddp(
             max_train_iter_reached = torch.any(torch.stack(all_train_iters) >= max_train_iter)
 
             if max_envstep_reached.item() or max_train_iter_reached.item():
-                logging.info(f'Rank {rank}: 达到终止条件')
+                logging.info(f'Rank {rank}: Termination condition reached')
                 dist.barrier()  # Ensure all processes synchronize before exiting.
                 break
         except Exception as e:
-            logging.error(f'Rank {rank}: 终止检查失败，错误: {e}')
+            logging.error(f'Rank {rank}: Termination check failed, error: {e}')
             break
 
     # Call the learner's after_run hook.

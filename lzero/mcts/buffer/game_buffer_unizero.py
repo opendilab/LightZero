@@ -446,6 +446,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
 
             if self.task_id is not None:
+                # TODO: support RoPE
                 # m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
                 m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
 
@@ -455,7 +456,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =======================================================================
 
             # if not in training, obtain the scalars of the value/reward
-            # FIXED: Use self.value_support instead of non-existent self._cfg.model.support_scale
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
                     m_output.latent_state,
@@ -677,17 +677,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
-            # ==================== START OF FINAL FIX ====================
 
-            # FIX 1: Handle ValueError by using the first timestamp of the segment for comparison.
+            # Handle ValueError by using the first timestamp of the segment for comparison.
             first_transition_time = metas['make_time'][i][0]
 
             if first_transition_time > self.clear_time:
-                # FIX 2: Handle IndexError by converting the float index to an integer before use.
+                # Handle IndexError by converting the float index to an integer before use.
                 idx = int(indices[i])
                 prio = metas['batch_priorities'][i]
 
                 # Now, idx is a valid integer index.
                 self.game_pos_priorities[idx] = prio
 
-            # ===================== END OF FINAL FIX =====================

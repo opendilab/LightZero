@@ -54,9 +54,6 @@ def custom_copy_kv_cache_to_dict_speed(src_kv: KeysValues, dst_dict: dict, cache
     print(f"Cache copy time: {copy_time:.6f} seconds")
     print(f"Total time: {shape_time + copy_time:.6f} seconds")
 
-    # print(f"Cache key '{cache_key}' has been copied to the destination dictionary.")
-    # print(f"Dictionary size: {len(dst_dict)}")
-
 
 def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: str, reuse_cache: bool = True) -> None:
     """
@@ -106,8 +103,7 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
         len(src_kv),  # num_layers
         src_kv._keys_values[0]._k_cache._cache.device,  # device
     )
-    
-    # with torch.no_grad():
+
     for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
         # Copy the key and value caches using torch.copy_()
         dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
@@ -179,17 +175,6 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     total_memory_gb = total_memory_bytes / (1024 ** 3)
     return total_memory_gb
 
-# def hash_state(state):
-#     """
-#     Hash the state vector.
-
-#     Arguments:
-#         state: The state vector to be hashed.
-#     Returns:
-#         The hash value of the state vector.
-#     """
-#     # Use xxhash for faster hashing
-#     return xxhash.xxh64(state).hexdigest()
 
 def hash_state(state: np.ndarray) -> int:
     """
@@ -238,12 +223,12 @@ def init_weights(module, norm_type='BN',liner_weight_zero=False):
     if isinstance(module, nn.Embedding):
         module.weight.data.normal_(mean=0.0, std=0.02)
     elif isinstance(module, nn.Linear):
-        # 现在这个分支可以被正确执行了
+        # Now this branch can be executed correctly
         if norm_type == 'BN':
             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
             print("Init Linear using kaiming normal for BN")
         elif norm_type == 'LN':
-            # 对于Transformer结构，Xavier/Glorot更常见
+            # For Transformer structures, Xavier/Glorot initialization is more common
             nn.init.xavier_uniform_(module.weight)
             print("Init Linear using xavier uniform for LN")
 
@@ -269,47 +254,6 @@ def init_weights(module, norm_type='BN',liner_weight_zero=False):
         elif norm_type == 'LN':
             nn.init.xavier_uniform_(module.weight)
             print(f"Init nn.Conv2d using xavier uniform for LN")
-
-# def init_weights(module, norm_type='BN'):
-#     """
-#     Initialize the weights of the module based on the specified normalization type.
-
-#     Arguments:
-#         module (nn.Module): The module to initialize.
-#         norm_type (str): The type of normalization to use ('BN' for BatchNorm, 'LN' for LayerNorm).
-#     """
-#     if isinstance(module, (nn.Linear, nn.Embedding)):
-#         module.weight.data.normal_(mean=0.0, std=0.02)
-#         if isinstance(module, nn.Linear) and module.bias is not None:
-#             module.bias.data.zero_()
-#     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
-#         print(f"Init {module} using zero bias, 1 weight")
-#         try:
-#             module.bias.data.zero_()
-#         except Exception as e:
-#             print(e)
-#         try:
-#              module.weight.data.fill_(1.0)
-#         except Exception as e:
-#             print(e)
-#     elif isinstance(module, nn.BatchNorm2d):
-#         print(f"Init nn.BatchNorm2d using zero bias, 1 weight")
-#         module.weight.data.fill_(1.0)
-#         module.bias.data.zero_()
-#     elif isinstance(module, nn.Conv2d):
-#         if norm_type == 'BN':
-#             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-#             print(f"Init nn.Conv2d using kaiming normal for BN")
-#         elif norm_type == 'LN':
-#             nn.init.xavier_uniform_(module.weight)
-#             print(f"Init nn.Conv2d using xavier uniform for LN")
-#     elif isinstance(module, nn.Linear):
-#         if norm_type == 'BN':
-#             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-#             print("Init Linear using kaiming normal for BN")
-#         elif norm_type == 'LN':
-#             nn.init.xavier_uniform_(module.weight)
-#             print("Init Linear using xavier uniform for LN")
 
 
 class LossWithIntermediateLosses:

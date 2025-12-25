@@ -511,7 +511,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
 
-        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":
@@ -626,18 +626,18 @@ class RepresentationNetworkUniZero(nn.Module):
         self.activation = activation
         self.embedding_dim = embedding_dim
 
-        # ==================== 修改开始 ====================
+        # ==================== Modification Start ====================
         if self.observation_shape[1] == 64:
-            # 修复：将硬编码的 64 替换为 num_channels
+            # Fix: Replace hardcoded 64 with num_channels
             self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
 
         elif self.observation_shape[1] in [84, 96]:
-            # 修复：将硬编码的 64 替换为 num_channels
+            # Fix: Replace hardcoded 64 with num_channels
             self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
-        # ==================== 修改结束 ====================
+        # ==================== Modification End ====================
 
-        self.final_norm_option_in_encoder=final_norm_option_in_encoder 
-        # 2. 在 __init__ 中统一初始化 final_norm
+        self.final_norm_option_in_encoder=final_norm_option_in_encoder
+        # Initialize final_norm uniformly in __init__
         if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
         elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
@@ -645,13 +645,13 @@ class RepresentationNetworkUniZero(nn.Module):
                 self.embedding_dim, eps=1e-5, elementwise_affine=False
             )
         elif self.final_norm_option_in_encoder == 'SimNorm':
-            # 确保 SimNorm 已被定义
+            # Ensure SimNorm is defined
             self.final_norm = SimNorm(simnorm_dim=group_size)
         elif self.final_norm_option_in_encoder == 'L2Norm':
-            # 直接实例化我们自定义的 L2Norm 模块
+            # Directly instantiate our custom L2Norm module
             self.final_norm = L2Norm(eps=1e-6)
         elif self.final_norm_option_in_encoder is None:
-            # 如果不需要归一化，可以设置为 nn.Identity() 或 None
+            # If no normalization is needed, set to nn.Identity() or None
             self.final_norm = nn.Identity()
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
@@ -683,12 +683,12 @@ class RepresentationNetworkUniZero(nn.Module):
         # NOTE: very important for training stability.
         # x = self.final_norm(x)
 
-        # 3. 在 forward 中统一调用 self.final_norm
-        # 这种结构更加清晰和可扩展
+        # Uniformly call self.final_norm in forward
+        # This structure is clearer and more extensible
         if self.final_norm is not None:
             x = self.final_norm(x)
 
-        # 针对 LayerNorm_Tanh 的特殊处理
+        # Special handling for LayerNorm_Tanh
         if self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
             x = torch.tanh(x)
 
@@ -810,7 +810,7 @@ class RepresentationNetworkMLP(nn.Module):
             last_linear_layer_init_zero=True,
         )
 
-        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":

@@ -3,7 +3,6 @@ from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY, EasyTimer
-# from line_profiler import line_profiler
 
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
@@ -487,9 +486,7 @@ class MuZeroGameBuffer(GameBuffer):
                     m_output = model.initial_inference(m_obs)
                 
 
-                # if not model.training:
                 # if not in training, obtain the scalars of the value/reward
-                # FIXED: Use self.value_support instead of non-existent self._cfg.model.support_scale
                 [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                     [
                         m_output.latent_state,
@@ -616,9 +613,7 @@ class MuZeroGameBuffer(GameBuffer):
                 else:
                     m_output = model.initial_inference(m_obs)
 
-                # if not model.training:
                 # if not in training, obtain the scalars of the value/reward
-                # FIXED: Use self.value_support instead of non-existent self._cfg.model.support_scale
                 [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                     [
                         m_output.latent_state,

@@ -76,7 +76,6 @@ def train_unizero_segment(
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
     collector_env.seed(cfg.seed)
-    # collector_env.seed(cfg.seed, dynamic_seed=False)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
@@ -155,8 +154,6 @@ def train_unizero_segment(
 
         # Evaluate policy performance
         if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        # if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
-        
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
@@ -219,15 +216,6 @@ def train_unizero_segment(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-                # if learner.train_iter ==0 or  learner.train_iter==1 or learner.train_iter % 250000 ==0: # 300k iter, 1.2M envsteps # TODO
-                # # if learner.train_iter ==10000 or learner.train_iter % 300000 ==0: # 300k iter, 1.2M envsteps # TODO
-
-                #     if hasattr(policy.learn_mode.get_attribute("learn_model").world_model,  'reinit_prediction_heads'):
-                #         policy.learn_mode.get_attribute("learn_model").world_model.reinit_prediction_heads(heads_to_reinit= ['value',"reward","policy"])
-                #         logging.info("Value/reward policy head 已成功重新初始化。")
-                #     else:
-                #         logging.warning("未能找到 'reinit_prediction_heads' 方法。请检查模型结构。跳过重新初始化步骤。")
-                
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 

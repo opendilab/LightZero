@@ -614,210 +614,6 @@ def random_collect(
     collector.reset_policy(policy.collect_mode)
 
 
-# ==============================================================================
-# Logging Utilities
-# ==============================================================================
-
-def log_module_trainable_status(
-    module: nn.Module,
-    module_name: str,
-    logger: logging.Logger
-) -> None:
-    """
-    Overview:
-        Logs the detailed trainable/frozen status of all parameters within a given module.
-
-    Arguments:
-        - module (:obj:`nn.Module`): The module to inspect (e.g., a ViT Encoder).
-        - module_name (:obj:`str`): The name of the module for logging purposes.
-        - logger (:obj:`logging.Logger`): The logger instance to use for output.
-    """
-    logger.info(f"--- Parameter Status Details for Module: '{module_name}' ---")
-
-    total_params = 0
-    trainable_params = 0
-
-    param_list = list(module.named_parameters())
-    if not param_list:
-        logger.info("  - No parameters found in this module.")
-        return
-
-    for name, param in param_list:
-        total_params += param.numel()
-        status = "Trainable" if param.requires_grad else "Frozen"
-        logger.info(f"  - {name:<60} | Shape: {str(param.shape):<25} | Status: {status}")
-        if param.requires_grad:
-            trainable_params += param.numel()
-
-    logger.info(f"--- Summary for Module: '{module_name}' ---")
-    logger.info(f"  - Total Parameters: {total_params:,}")
-    logger.info(f"  - Trainable Parameters: {trainable_params:,}")
-    if total_params > 0:
-        percentage = 100 * trainable_params / total_params
-        logger.info(f"  - Trainable Percentage: {percentage:.4f}%")
-    logger.info("-" * (len(module_name) + 40))
-
-
-def log_param_statistics(model: nn.Module, logger: logging.Logger) -> None:
-    """
-    Overview:
-        Logs a concise summary of the number and size of trainable versus total
-        parameters in a model.
-
-    Arguments:
-        - model (:obj:`nn.Module`): The model to analyze.
-        - logger (:obj:`logging.Logger`): The logger instance for output.
-    """
-    n_tensors_total = sum(1 for _ in model.parameters())
-    n_tensors_train = sum(1 for p in model.parameters() if p.requires_grad)
-
-    n_elems_total = sum(p.numel() for p in model.parameters())
-    n_elems_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-    logger.info(
-        f'Trainable Parameters: '
-        f'{n_tensors_train}/{n_tensors_total} tensors | '
-        f'{n_elems_train:,}/{n_elems_total:,} elements '
-        f'({n_elems_train/1e6:.2f}M / {n_elems_total/1e6:.2f}M)'
-    )
-
-
-def log_buffer_memory_usage(
-    train_iter: int,
-    buffer: GameBuffer,
-    writer: SummaryWriter,
-    task_id: int = 0
-) -> None:
-    """
-    Overview:
-        Logs the memory usage of the replay buffer and the current process to TensorBoard.
-
-    Arguments:
-        - train_iter (:obj:`int`): The current training iteration.
-        - buffer (:obj:`GameBuffer`): The replay buffer instance.
-        - writer (:obj:`SummaryWriter`): The TensorBoard writer.
-        - task_id (:obj:`int`): An optional ID to distinguish logs for different tasks.
-    """
-    # In DDP, only the main process should write to TensorBoard.
-    if writer is None:
-        return
-
-    prefix = f"Buffer/Task_{task_id}"
-    writer.add_scalar(f'{prefix}/num_collected_episodes', buffer.num_of_collected_episodes, train_iter)
-    writer.add_scalar(f'{prefix}/num_game_segments', len(buffer.game_segment_buffer), train_iter)
-    writer.add_scalar(f'{prefix}/num_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
-
-    # Calculate and log memory usage of the main buffer component.
-    buffer_memory_bytes = asizeof(buffer.game_segment_buffer)
-    buffer_memory_mb = buffer_memory_bytes / (1024 * 1024)
-    writer.add_scalar(f'{prefix}/memory_usage_mb/game_segment_buffer', buffer_memory_mb, train_iter)
-
-    # Get and log total memory usage of the current process.
-    process = psutil.Process(os.getpid())
-    process_memory_bytes = process.memory_info().rss
-    process_memory_mb = process_memory_bytes / (1024 * 1024)
-    writer.add_scalar(f'{prefix}/memory_usage_mb/process', process_memory_mb, train_iter)
-
-
-def log_buffer_run_time(train_iter: int, buffer: GameBuffer, writer: SummaryWriter) -> None:
-    """
-    Overview:
-        Logs average runtime metrics related to buffer operations (e.g., sampling, search)
-        to TensorBoard.
-
-    Arguments:
-        - train_iter (:obj:`int`): The current training iteration.
-        - buffer (:obj:`GameBuffer`): The buffer instance containing runtime metrics.
-        - writer (:obj:`SummaryWriter`): The TensorBoard writer.
-    """
-    if writer is None or buffer.sample_times == 0:
-        return
-
-    sample_times = buffer.sample_times
-    writer.add_scalar('Buffer/avg_reanalyze_time_ms', (buffer.compute_target_re_time / sample_times) * 1000, train_iter)
-    writer.add_scalar('Buffer/avg_origin_search_time_ms', (buffer.origin_search_time / sample_times) * 1000, train_iter)
-    writer.add_scalar('Buffer/avg_reuse_search_time_ms', (buffer.reuse_search_time / sample_times) * 1000, train_iter)
-    writer.add_scalar('Buffer/avg_active_root_num', buffer.active_root_num / sample_times, train_iter)
-
-    # Reset metrics after logging to prepare for the next interval.
-    buffer.reset_runtime_metrics()
-
-
-# ==============================================================================
-# Example Usage
-# ==============================================================================
-if __name__ == '__main__':
-    # Configure a basic logger to see output from functions with `verbose=True`
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-    print("\n--- Example for `compute_task_weights` ---")
-    task_rewards_list = [
-        {"task1": 10, "task2": 100, "task3": 1000, "task4": 500, "task5": 300},
-        {"task1": 1, "task2": 10, "task3": 100, "task4": 1000, "task5": 10000},
-        {"task1": 0.1, "task2": 0.5, "task3": 0.9, "task4": 5, "task5": 10},
-    ]
-
-    for i, task_rewards in enumerate(task_rewards_list, start=1):
-        print(f"\n--- Case {i} ---")
-        print(f"Original Rewards: {task_rewards}")
-
-        # Example 1: Using 'none' normalization (proportional to raw values)
-        weights_none = compute_task_weights(task_rewards, option="none", use_softmax=False)
-        print(f"Weights (proportional to raw values): {weights_none}")
-
-        # Example 2: Using 'symlog' normalization
-        weights_symlog = compute_task_weights(task_rewards, option="symlog", use_softmax=False)
-        print(f"Weights (with symlog normalization): {weights_symlog}")
-
-        # Example 3: Using 'rank' normalization and softmax with inverse proportion
-        weights_rank_softmax = compute_task_weights(task_rewards, option="rank", use_softmax=True, reverse=True)
-        print(f"Weights (inverse rank with softmax): {weights_rank_softmax}")
-
-    print("\n--- Example for `freeze_non_lora` ---")
-
-<<<<<<< HEAD
-    # ==========================================================================
-    # FIX: The nn.Parameter must be wrapped in an nn.Module subclass to be
-    #      placed inside an nn.ModuleDict.
-    # ==========================================================================
-    class AdapterScale(nn.Module):
-        """A simple nn.Module wrapper for a single learnable parameter."""
-        def __init__(self):
-            super().__init__()
-            self.logit = nn.Parameter(torch.randn(1))
-
-    # Create a dummy model to demonstrate freezing
-    class DummyModel(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.backbone = nn.Linear(10, 10)
-            self.layer1 = nn.Linear(10, 10)
-            # Simulate LoRA parameters with correct naming
-            self.layer1.lora_A = nn.Parameter(torch.randn(10, 2))
-            self.layer1.lora_B = nn.Parameter(torch.randn(2, 10))
-            
-            # Correctly structure the adapter_scales using the wrapper module.
-            # This ensures that the value associated with key '0' is a valid nn.Module.
-            self.adapter_scales = nn.ModuleDict({
-                '0': AdapterScale()
-            })
-
-    model = DummyModel()
-    print("Initial parameter status:")
-    log_module_trainable_status(model, "DummyModel", logging.getLogger())
-
-    print("\nFreezing non-LoRA parameters...")
-    freeze_non_lora(model, freeze=True, verbose=True)
-    print("\nParameter status after freezing:")
-    log_module_trainable_status(model, "DummyModel", logging.getLogger())
-
-    print("\nUn-freezing non-LoRA parameters...")
-    freeze_non_lora(model, freeze=False, verbose=True)
-    print("\nParameter status after un-freezing:")
-    log_module_trainable_status(model, "DummyModel", logging.getLogger())
-=======
-        # Reset the time records in the buffer.
-        buffer.reset_runtime_metrics()
 
 
 def convert_to_batch_for_unizero(batch_data, policy_cfg, reward_support, value_support):
@@ -997,4 +793,205 @@ class UniZeroDataLoader:
     def __len__(self):
         """Return the total number of batches"""
         return self.num_batches
->>>>>>> origin/main
+
+# ==============================================================================
+# Logging Utilities
+# ==============================================================================
+
+def log_module_trainable_status(
+    module: nn.Module,
+    module_name: str,
+    logger: logging.Logger
+) -> None:
+    """
+    Overview:
+        Logs the detailed trainable/frozen status of all parameters within a given module.
+
+    Arguments:
+        - module (:obj:`nn.Module`): The module to inspect (e.g., a ViT Encoder).
+        - module_name (:obj:`str`): The name of the module for logging purposes.
+        - logger (:obj:`logging.Logger`): The logger instance to use for output.
+    """
+    logger.info(f"--- Parameter Status Details for Module: '{module_name}' ---")
+
+    total_params = 0
+    trainable_params = 0
+
+    param_list = list(module.named_parameters())
+    if not param_list:
+        logger.info("  - No parameters found in this module.")
+        return
+
+    for name, param in param_list:
+        total_params += param.numel()
+        status = "Trainable" if param.requires_grad else "Frozen"
+        logger.info(f"  - {name:<60} | Shape: {str(param.shape):<25} | Status: {status}")
+        if param.requires_grad:
+            trainable_params += param.numel()
+
+    logger.info(f"--- Summary for Module: '{module_name}' ---")
+    logger.info(f"  - Total Parameters: {total_params:,}")
+    logger.info(f"  - Trainable Parameters: {trainable_params:,}")
+    if total_params > 0:
+        percentage = 100 * trainable_params / total_params
+        logger.info(f"  - Trainable Percentage: {percentage:.4f}%")
+    logger.info("-" * (len(module_name) + 40))
+
+
+def log_param_statistics(model: nn.Module, logger: logging.Logger) -> None:
+    """
+    Overview:
+        Logs a concise summary of the number and size of trainable versus total
+        parameters in a model.
+
+    Arguments:
+        - model (:obj:`nn.Module`): The model to analyze.
+        - logger (:obj:`logging.Logger`): The logger instance for output.
+    """
+    n_tensors_total = sum(1 for _ in model.parameters())
+    n_tensors_train = sum(1 for p in model.parameters() if p.requires_grad)
+
+    n_elems_total = sum(p.numel() for p in model.parameters())
+    n_elems_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    logger.info(
+        f'Trainable Parameters: '
+        f'{n_tensors_train}/{n_tensors_total} tensors | '
+        f'{n_elems_train:,}/{n_elems_total:,} elements '
+        f'({n_elems_train/1e6:.2f}M / {n_elems_total/1e6:.2f}M)'
+    )
+
+
+def log_buffer_memory_usage(
+    train_iter: int,
+    buffer: GameBuffer,
+    writer: SummaryWriter,
+    task_id: int = 0
+) -> None:
+    """
+    Overview:
+        Logs the memory usage of the replay buffer and the current process to TensorBoard.
+
+    Arguments:
+        - train_iter (:obj:`int`): The current training iteration.
+        - buffer (:obj:`GameBuffer`): The replay buffer instance.
+        - writer (:obj:`SummaryWriter`): The TensorBoard writer.
+        - task_id (:obj:`int`): An optional ID to distinguish logs for different tasks.
+    """
+    # In DDP, only the main process should write to TensorBoard.
+    if writer is None:
+        return
+
+    prefix = f"Buffer/Task_{task_id}"
+    writer.add_scalar(f'{prefix}/num_collected_episodes', buffer.num_of_collected_episodes, train_iter)
+    writer.add_scalar(f'{prefix}/num_game_segments', len(buffer.game_segment_buffer), train_iter)
+    writer.add_scalar(f'{prefix}/num_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
+
+    # Calculate and log memory usage of the main buffer component.
+    buffer_memory_bytes = asizeof(buffer.game_segment_buffer)
+    buffer_memory_mb = buffer_memory_bytes / (1024 * 1024)
+    writer.add_scalar(f'{prefix}/memory_usage_mb/game_segment_buffer', buffer_memory_mb, train_iter)
+
+    # Get and log total memory usage of the current process.
+    process = psutil.Process(os.getpid())
+    process_memory_bytes = process.memory_info().rss
+    process_memory_mb = process_memory_bytes / (1024 * 1024)
+    writer.add_scalar(f'{prefix}/memory_usage_mb/process', process_memory_mb, train_iter)
+
+
+def log_buffer_run_time(train_iter: int, buffer: GameBuffer, writer: SummaryWriter) -> None:
+    """
+    Overview:
+        Logs average runtime metrics related to buffer operations (e.g., sampling, search)
+        to TensorBoard.
+
+    Arguments:
+        - train_iter (:obj:`int`): The current training iteration.
+        - buffer (:obj:`GameBuffer`): The buffer instance containing runtime metrics.
+        - writer (:obj:`SummaryWriter`): The TensorBoard writer.
+    """
+    if writer is None or buffer.sample_times == 0:
+        return
+
+    sample_times = buffer.sample_times
+    writer.add_scalar('Buffer/avg_reanalyze_time_ms', (buffer.compute_target_re_time / sample_times) * 1000, train_iter)
+    writer.add_scalar('Buffer/avg_origin_search_time_ms', (buffer.origin_search_time / sample_times) * 1000, train_iter)
+    writer.add_scalar('Buffer/avg_reuse_search_time_ms', (buffer.reuse_search_time / sample_times) * 1000, train_iter)
+    writer.add_scalar('Buffer/avg_active_root_num', buffer.active_root_num / sample_times, train_iter)
+
+    # Reset metrics after logging to prepare for the next interval.
+    buffer.reset_runtime_metrics()
+
+
+# ==============================================================================
+# Example Usage
+# ==============================================================================
+if __name__ == '__main__':
+    # Configure a basic logger to see output from functions with `verbose=True`
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    print("\n--- Example for `compute_task_weights` ---")
+    task_rewards_list = [
+        {"task1": 10, "task2": 100, "task3": 1000, "task4": 500, "task5": 300},
+        {"task1": 1, "task2": 10, "task3": 100, "task4": 1000, "task5": 10000},
+        {"task1": 0.1, "task2": 0.5, "task3": 0.9, "task4": 5, "task5": 10},
+    ]
+
+    for i, task_rewards in enumerate(task_rewards_list, start=1):
+        print(f"\n--- Case {i} ---")
+        print(f"Original Rewards: {task_rewards}")
+
+        # Example 1: Using 'none' normalization (proportional to raw values)
+        weights_none = compute_task_weights(task_rewards, option="none", use_softmax=False)
+        print(f"Weights (proportional to raw values): {weights_none}")
+
+        # Example 2: Using 'symlog' normalization
+        weights_symlog = compute_task_weights(task_rewards, option="symlog", use_softmax=False)
+        print(f"Weights (with symlog normalization): {weights_symlog}")
+
+        # Example 3: Using 'rank' normalization and softmax with inverse proportion
+        weights_rank_softmax = compute_task_weights(task_rewards, option="rank", use_softmax=True, reverse=True)
+        print(f"Weights (inverse rank with softmax): {weights_rank_softmax}")
+
+    print("\n--- Example for `freeze_non_lora` ---")
+
+    # ==========================================================================
+    # FIX: The nn.Parameter must be wrapped in an nn.Module subclass to be
+    #      placed inside an nn.ModuleDict.
+    # ==========================================================================
+    class AdapterScale(nn.Module):
+        """A simple nn.Module wrapper for a single learnable parameter."""
+        def __init__(self):
+            super().__init__()
+            self.logit = nn.Parameter(torch.randn(1))
+
+    # Create a dummy model to demonstrate freezing
+    class DummyModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = nn.Linear(10, 10)
+            self.layer1 = nn.Linear(10, 10)
+            # Simulate LoRA parameters with correct naming
+            self.layer1.lora_A = nn.Parameter(torch.randn(10, 2))
+            self.layer1.lora_B = nn.Parameter(torch.randn(2, 10))
+            
+            # Correctly structure the adapter_scales using the wrapper module.
+            # This ensures that the value associated with key '0' is a valid nn.Module.
+            self.adapter_scales = nn.ModuleDict({
+                '0': AdapterScale()
+            })
+
+    model = DummyModel()
+    print("Initial parameter status:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nFreezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=True, verbose=True)
+    print("\nParameter status after freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nUn-freezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=False, verbose=True)
+    print("\nParameter status after un-freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+    

@@ -6,8 +6,6 @@ This module provides a unified, robust, and extensible KV cache management syste
 for the UniZero world model. It replaces the scattered cache logic with a clean,
 well-tested abstraction.
 
-Author: Claude Code
-Date: 2025-10-24
 """
 
 import logging
@@ -26,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 class EvictionStrategy(Enum):
     """Cache eviction strategies."""
-    FIFO = "fifo"  # First In First Out (循环覆盖)
+    FIFO = "fifo"  # First In First Out (circular overwrite)
     LRU = "lru"    # Least Recently Used
-    PRIORITY = "priority"  # 基于优先级
+    PRIORITY = "priority"  # Priority-based
 
 
 @dataclass
@@ -258,8 +256,6 @@ class KVCachePool:
             # Don't reset stats on clear, user can call stats.reset() explicitly
             pass
 
-        # logger.info(f"[{self.name}] Cleared all cache entries")
-
     def __len__(self) -> int:
         """Return the number of cached entries."""
         return len(self._key_to_index)
@@ -292,18 +288,18 @@ class KVCacheManager:
         config,
         env_num: int,
         enable_stats: bool = True,
-        clear_recur_log_freq: int = 1000, # <--- RENAMED & MODIFIED
-        clear_all_log_freq: int = 100     # <--- NEW
+        clear_recur_log_freq: int = 1000,
+        clear_all_log_freq: int = 100
     ):
         self.config = config
         self.env_num = env_num
         self.enable_stats = enable_stats
-        
-        # --- Throttling parameters and counters ---
+
+        # Throttling parameters and counters for logging control
         self.clear_recur_log_freq = clear_recur_log_freq
         self.clear_all_log_freq = clear_all_log_freq
         self._clear_recur_counter = 0
-        self._clear_all_counter = 0  # <--- NEW
+        self._clear_all_counter = 0
 
         # Initialize cache pools
         self._init_cache_pools()
@@ -399,17 +395,17 @@ class KVCacheManager:
         # Step 2: If not found, try recurrent_infer cache (global)
         return self.get_recur_cache(cache_key)
 
-    def clear_all(self): # <--- MODIFIED METHOD
-        """Clear all cache pools, with throttled logging."""
-        # Core clearing actions always execute.
+    def clear_all(self):
+        """Clear all cache pools with throttled logging."""
+        # Core clearing actions always execute
         for pool in self.init_pools:
             pool.clear()
         self.recur_pool.clear()
         self.wm_pool.clear()
         self.keys_values_wm_list.clear()
         self.keys_values_wm_size_list.clear()
-        
-        # --- Throttled Logging Logic ---
+
+        # Throttled logging logic
         self._clear_all_counter += 1
         if self.clear_all_log_freq > 0 and self._clear_all_counter % self.clear_all_log_freq == 0:
             logger.info(
@@ -424,13 +420,12 @@ class KVCacheManager:
         logger.info("Cleared initial inference caches")
 
     def clear_recur_cache(self):
-        """Clear only recurrent inference cache, with throttled logging."""
-        # The core cache clearing action always executes.
+        """Clear only recurrent inference cache with throttled logging."""
+        # The core cache clearing action always executes
         self.recur_pool.clear()
-        
-        # --- Throttled Logging Logic ---
+
+        # Throttled logging logic: only log if frequency is positive and counter is a multiple of the frequency
         self._clear_recur_counter += 1
-        # Only log if frequency is positive and the counter is a multiple of the frequency.
         if self.clear_recur_log_freq > 0 and self._clear_recur_counter % self.clear_recur_log_freq == 0:
             logger.info(
                 f"Cleared recurrent inference cache (this message appears every "
