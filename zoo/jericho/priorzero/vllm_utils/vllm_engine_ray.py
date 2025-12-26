@@ -126,9 +126,9 @@ def create_vllm_engines(
     use_hybrid_engine = shared_pg is not None
     num_gpus = int(tensor_parallel_size == 1)
     if use_hybrid_engine and tensor_parallel_size == 1:
-        # every worker will use 0.2 GPU, so that we can schedule
+        # every worker will use 0.3 GPU, so that we can schedule
         # 2 instances on the same GPUs.
-        num_gpus = 0.2
+        num_gpus = 0.3
 
     if not use_hybrid_engine:
         # Create a big placement group to ensure that all engines are packed
@@ -180,7 +180,8 @@ def create_vllm_engines(
                 **additional_kwargs,
             )
         )
-
+    if vllm_enable_sleep:
+        batch_vllm_engine_call(vllm_engines, "sleep")
     return vllm_engines
 
 

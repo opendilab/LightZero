@@ -21,7 +21,6 @@ class PriorZeroEvaluator(OriginalEvaluator):
 
     def __init__(
         self,
-        vllm_engine: Optional[AsyncLLMEngine] = None,
         **kwargs
     ):
         """
@@ -32,12 +31,6 @@ class PriorZeroEvaluator(OriginalEvaluator):
             **kwargs: Arguments for parent MuZeroEvaluator
         """
         super().__init__(**kwargs)
-        self.vllm_engine = vllm_engine
-
-        if vllm_engine is not None:
-            self._logger.info("✓ PriorZeroEvaluator initialized with vLLM engine")
-        else:
-            self._logger.info("✓ PriorZeroEvaluator initialized (no vLLM engine)")
 
     # All other methods are inherited from MuZeroEvaluator
     # The policy's _forward_collect already handles LLM prior integration

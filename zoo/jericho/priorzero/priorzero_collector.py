@@ -20,7 +20,6 @@ import os
 from lzero.worker.muzero_segment_collector import MuZeroSegmentCollector as OriginalCollector
 from lzero.mcts.utils import prepare_observation
 from game_segment_priorzero import GameSegment
-from priorzero_utils import build_llm_prompt
 
 # ==============================================================================
 # Helper Functions
@@ -83,7 +82,7 @@ class PriorZeroCollector(OriginalCollector):
 
     def __init__(
         self,
-        llm_prior_generator: None,
+        data_processor: None,
         policy_config: Dict,
         llm_config: Dict,
         **kwargs
@@ -101,7 +100,7 @@ class PriorZeroCollector(OriginalCollector):
 
         super().__init__(**kwargs)
 
-        self.llm_prior_generator = llm_prior_generator
+        self.data_processor = data_processor
         self.llm_cfg = llm_config
 
         self.history_buffers = defaultdict(
@@ -188,39 +187,6 @@ class PriorZeroCollector(OriginalCollector):
         # Reset placeholders for the next collection cycle.
         last_game_segments[i] = None
         last_game_priorities[i] = None
-    
-    def _get_llm_prior(
-        self,
-        states: List[str],
-        valid_actions_list: List[List[str]], 
-        histories: Optional[List[List[Tuple[str, str, float]]]] = None,
-    ) -> List[Any]:
-        """
-        [PRIORZERO-SEQUENCE-SCORING]
-        Ensures every action has a logprob by retrying and falling back if needed.
-        """
-
-        assert self.llm_prior_generator is not None, "llm_prior_generator is None."
-        all_prompts = []
-        all_labels = []
-        for i, actions in enumerate(valid_actions_list):  
-            actions.append('go')   # 确保环境使用的动作都在valid actions里有对应的logprob
-            state = states[i]
-            history = histories[i]
-            prompt = build_llm_prompt(current_obs=state, history=history, use_cot=self.llm_cfg.use_cot)
-            for action in actions:
-                all_prompts.append(prompt)
-                all_labels.append(action)
-                
-        all_prior_scores = self.llm_prior_generator._generate_vllm(all_prompts, all_labels, reduction='mean')
-        llm_prior, idx = [], 0
-        for env_id in range(len(states)):
-            tmp_dict = {}
-            for action in valid_actions_list[env_id]:
-                tmp_dict[action] = all_prior_scores[idx]
-                idx = idx + 1
-            llm_prior.append(tmp_dict)
-        return llm_prior
 
     @contextmanager
     def _profile_block(self, name: str):
@@ -341,9 +307,6 @@ class PriorZeroCollector(OriginalCollector):
         if collect_with_pure_policy:
             temp_visit_list = [0.0 for _ in range(self._env.action_space.n)]
 
-        # ==================================================================
-        # Main Collection Loop
-        # ==================================================================
         while True:
             with self._timer:
                 obs = self._env.ready_obs
@@ -370,9 +333,6 @@ class PriorZeroCollector(OriginalCollector):
                 )
                 stack_obs_tensor = torch.from_numpy(stack_obs_tensor).to(self.policy_config.device)
 
-                # ==============================================================
-                # [PRIORZERO-NEW] Get LLM Priors
-                # ==============================================================
                 if collect_with_pure_policy:
                     continue
                 else:
@@ -390,18 +350,15 @@ class PriorZeroCollector(OriginalCollector):
                         valid_actions = obs[env_id].get('valid_actions', [])
                         valid_actions_list.append(valid_actions)
 
-                    if self.llm_cfg.enable_llm:
-                        with self._profile_block(name='collect_get_llm_prior_profile'):
-                            llm_prior_logprob = self._get_llm_prior(
-                                states=raw_obs_list,
-                                valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
-                                histories=histories_list
-                            )
-                    else:
-                        llm_prior_logprob = [None for i in range(len(valid_actions_list))]
+                    with self._profile_block(name='collect_get_llm_prior_profile'):
+                        llm_prior_per_seq, llm_prior_per_tok = self.data_processor.get_llm_prior(
+                            states=raw_obs_list,
+                            valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
+                            histories=histories_list
+                        )
 
                 policy_kwargs_forward = {
-                    'llm_prior_logprob': llm_prior_logprob,
+                    'llm_prior_logprob': llm_prior_per_seq,
                     'valid_actions_list': valid_actions_list,
                 }
 
@@ -482,7 +439,7 @@ class PriorZeroCollector(OriginalCollector):
                         timestep=to_ndarray(obs_new.get('timestep', -1)),
                         raw_obs_text=extract_raw_obs_text(obs_new),
                         history_obs=list(self.history_buffers[env_id]),
-                        action_logprob=llm_prior_logprob[env_id] # 是一个字典对 {'open': -151; "down": -231}
+                        action_logprob=llm_prior_per_tok[env_id]
                     )
 
                     # Update state
@@ -538,8 +495,8 @@ class PriorZeroCollector(OriginalCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(obs_new), init_history_obs=list(self.history_buffers[env_id]), init_action_logprob=None)
 
                     self._env_info[env_id]['step'] += 1
-                    if llm_prior_logprob[env_id] is not None:
-                        llm_prior_tensor = torch.tensor([logit for k, logit in llm_prior_logprob[env_id].items()]) 
+                    if llm_prior_per_seq[env_id] is not None:
+                        llm_prior_tensor = torch.tensor([logit for k, logit in llm_prior_per_seq[env_id].items()]) 
                         llm_prior_prob = torch.softmax(llm_prior_tensor, dim=-1)
                         llm_prior_entropy[env_id].append(-torch.sum(llm_prior_prob * torch.log(llm_prior_prob + 1e-9), dim=-1))
                     else:
