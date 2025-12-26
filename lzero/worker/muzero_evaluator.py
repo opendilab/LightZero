@@ -214,17 +214,16 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): A flag indicating whether the training should stop (e.g., if the stop value is reached).
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing evaluation results, such as rewards and episode lengths.
         """
-        # if torch.cuda.is_available():
-        #     print(f"=========in eval() Rank {get_rank()} ===========")
-        #     device = torch.cuda.current_device()
-        #     print(f"当前默认的 GPU 设备编号: {device}")
-        #     torch.cuda.set_device(get_rank())
-        #     print(f"set device后的 GPU 设备编号: {get_rank()}")
+        if torch.cuda.is_available():
+            # NOTE: important for unizero_multitask pipeline.
+            print(f"=========in eval() Rank {get_rank()} ===========")
+            device = torch.cuda.current_device()
+            print(f"before set device: {device}")
+            torch.cuda.set_device(get_rank())
+            print(f"after set device: {get_rank()}")
 
-        # The evaluator is designed to work on rank 0, but DDP support is being developed.
         episode_info = None
         stop_flag = False
-        # TODO(username): Refine evaluation logic for UniZero multitask with DDP v2.
         if get_rank() >= 0:
             if n_episode is None:
                 n_episode = self._default_n_episode
@@ -455,7 +454,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                     f"stop_value: {self._stop_value}. The agent is considered converged."
                 )
 
-        # TODO(username): Finalize DDP synchronization for evaluation results.
+        # NOTE: Only for usual DDP not for unizero_multitask pipeline.
+        # Finalize DDP synchronization for evaluation results. 
         # if get_world_size() > 1:
         #     objects = [stop_flag, episode_info]
         #     print(f'rank {self._rank}, self.task_id: {self.task_id}')

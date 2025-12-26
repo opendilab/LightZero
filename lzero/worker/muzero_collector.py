@@ -605,11 +605,12 @@ class MuZeroCollector(ISerialCollector):
         # --- Finalize and Log ---
         collected_duration = sum([d['time'] for d in self._episode_info])
 
+        # NOTE: Only for usual DDP not for unizero_multitask pipeline.
         # In DDP, aggregate statistics across all processes.
-        if self._world_size > 1:
-            collected_step = allreduce_data(collected_step, 'sum')
-            collected_episode = allreduce_data(collected_episode, 'sum')
-            collected_duration = allreduce_data(collected_duration, 'sum')
+        # if self._world_size > 1:
+        #     collected_step = allreduce_data(collected_step, 'sum')
+        #     collected_episode = allreduce_data(collected_episode, 'sum')
+        #     collected_duration = allreduce_data(collected_duration, 'sum')
 
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode

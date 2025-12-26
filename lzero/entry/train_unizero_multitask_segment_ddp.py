@@ -594,8 +594,8 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # Check if it's time for evaluation.
-            if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
-            # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # TODO: Only for debug
+            # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
+            if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # TODO: Only for debug
 
                 print('=' * 20)
                 print(f'Rank {rank} evaluating task_id: {cfg.policy.task_id}...')

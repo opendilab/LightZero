@@ -275,7 +275,8 @@ if __name__ == "__main__":
 
     # Test environments from atari8 base set
     # args.env = 'ALE/Pong-v5'               # Memory-planning environment with sparse rewards
-    args.env = 'ALE/Qbert-v5'               # Memory-planning environment with sparse rewards
+    # args.env = 'ALE/Qbert-v5'               # Memory-planning environment with sparse rewards
+    args.env = 'ALE/MsPacman-v5'               # Memory-planning environment with sparse rewards
 
     main(args.env, args.seed)
 

@@ -384,7 +384,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 if len(ready_env_id) < self._env_num:
                     self._logger.debug(f'Only {len(ready_env_id)}/{self._env_num} envs are ready.')
 
-                # TODO(author): For UniZero, waiting for all environments to be ready can negatively impact performance.
+                # TODO: For UniZero, waiting for all environments to be ready can negatively impact performance.
                 # This wait loop is currently commented out, but its impact should be considered.
                 # while len(obs.keys()) != self._env_num:
                 #     time.sleep(retry_waiting_time)
@@ -616,7 +616,8 @@ class MuZeroSegmentCollector(ISerialCollector):
 
 
         collected_duration = sum([d['time'] for d in self._episode_info])
-        # TODO: for atari multitask new ddp pipeline
+
+        # NOTE: Only for usual DDP not for unizero_multitask pipeline.
         # reduce data when enables DDP
         # if self._world_size > 1:
         #     collected_step = allreduce_data(collected_step, 'sum')
@@ -638,9 +639,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): The current training iteration for logging context.
         """
-        # TODO(author): For multi-task DDP, logging might be restricted to rank 0.
-        # if self._rank != 0:
-        #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)
