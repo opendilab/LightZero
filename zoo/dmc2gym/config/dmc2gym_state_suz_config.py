@@ -99,35 +99,6 @@ def main(env_id, seed):
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
                     rotary_emb=False,
-                    
-                    
-                    # --- MOE Settings ---
-                    moe_in_transformer=False,
-                    # multiplication_moe_in_transformer=True,
-                    multiplication_moe_in_transformer=False,
-                    num_experts_of_moe_in_transformer=8,
-                    n_shared_experts=1,
-                    num_experts_per_tok=1,
-                    use_normal_head=True,
-                    use_softmoe_head=False,
-                    use_moe_head=False,
-                    num_experts_in_moe_head=4,
-        
-                    # --- LoRA Parameters ---
-                    moe_use_lora=False,  # TODO
-                    curriculum_stage_num=3,
-                    lora_target_modules=["attn", "feed_forward"],
-                    lora_r=0,
-                    lora_alpha=1,
-                    lora_dropout=0.0,
-
-                    # --- Multi-task Settings ---
-                    task_embed_option=None,  # TODO: 'concat_task_embed' or None
-                    use_task_embed=False,  # TODO
-
-                    # --- Analysis ---
-                    analysis_dormant_ratio_weight_rank=False,  # TODO
-                    analysis_dormant_ratio_interval=5000,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.

@@ -209,11 +209,38 @@ class UniZeroPolicy(MuZeroPolicy):
                 rope_theta=10000,
                 # (int) The maximum sequence length for position encoding.
                 max_seq_len=8192,
-                lora_r= 0,
+                # (int) The rank parameter for LoRA (Low-Rank Adaptation). Set to 0 to disable LoRA.
+                lora_r=0,
+                # (float) The alpha parameter for LoRA scaling.
+                lora_alpha=1,
+                # (float) The dropout probability for LoRA layers.
+                lora_dropout=0.0,
                 # Controls where to compute reconstruction loss: 'after_backbone', 'before_backbone', or None.
                 #   - after_backbone: The reconstruction loss is computed after the encoded representation passes through the backbone.
-	        #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
+	            #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
                 decode_loss_mode=None,
+                # (str/None) Task embedding option. Set to None to disable task-specific embeddings.
+                task_embed_option=None,
+                # (bool) Whether to use task embeddings.
+                use_task_embed=False,
+                # (bool) Whether to use normal head (standard prediction heads).
+                use_normal_head=True,
+                # (bool) Whether to use Soft Mixture-of-Experts (MoE) head.
+                use_softmoe_head=False,
+                # (bool) Whether to use Mixture-of-Experts (MoE) head.
+                use_moe_head=False,
+                # (int) Number of experts in the MoE head.
+                num_experts_in_moe_head=4,
+                # (bool) Whether to use MoE in the transformer layers.
+                moe_in_transformer=False,
+                # (bool) Whether to use multiplicative MoE in the transformer layers.
+                multiplication_moe_in_transformer=False,
+                # (int) Number of shared experts in MoE.
+                n_shared_experts=1,
+                # (int) Number of experts to use per token in MoE.
+                num_experts_per_tok=1,
+                # (int) Total number of experts in the transformer MoE.
+                num_experts_of_moe_in_transformer=8,
             ),
         ),
         # ****** common ******

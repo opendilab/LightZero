@@ -40,7 +40,7 @@ seed = 0
 # ==============================================================
 
 dmc2gym_pixels_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_image_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
+    exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_image_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
         continuous=True,
@@ -75,7 +75,6 @@ dmc2gym_pixels_cont_sampled_unizero_config = dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
-                # device='cpu',
                 device='cuda',
                 action_space_size=action_space_size,
                 num_layers=2,
@@ -116,7 +115,6 @@ dmc2gym_pixels_cont_sampled_unizero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    # env_manager=dict(type='subprocess'),
     env_manager=dict(type='base'),
     policy=dict(
         type='sampled_unizero',

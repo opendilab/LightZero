@@ -1,19 +1,6 @@
 from easydict import EasyDict
 from typing import List, Any, Dict, Tuple
 
-import logging
-
-# Set up logging configuration
-# Configure logging to output to both a file and the console.
-# logging.basicConfig(
-#     level=logging.INFO,
-#     format='%(asctime)s - %(message)s',
-#     handlers=[
-#         logging.FileHandler("output.log", encoding="utf-8"),  # Log to file
-#         logging.StreamHandler()  # Log to console
-#     ]
-# )
-
 
 def create_config(
         env_id: str,
@@ -102,9 +89,6 @@ def create_config(
         final_norm_option_in_obs_head='LayerNorm',
         final_norm_option_in_encoder='LayerNorm',
         predict_latent_loss_type='mse',  # TODO: for latent state layer_norm
-        # final_norm_option_in_obs_head='SimNorm',
-        # final_norm_option_in_encoder='SimNorm',
-        # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
 
         # --- Architecture ---
         share_head=False,  # TODO
@@ -121,7 +105,6 @@ def create_config(
 
         # --- Transformer/MOE Settings ---
         num_layers=4,  # TODO: 8 for standard, 1 for debug
-        # num_layers=8,  # TODO: 8 for standard, 1 for debug
         num_heads=24,
         embed_dim=768,
         moe_in_transformer=False,
@@ -145,7 +128,6 @@ def create_config(
         # --- Multi-task Settings ---
         task_embed_option=None,  # TODO: 'concat_task_embed' or None
         use_task_embed=False,  # TODO
-        # task_embed_dim=128,
         task_num=len(env_id_list),
 
         # --- Analysis ---
@@ -308,16 +290,8 @@ def generate_configs(
     """
     configs = []
 
-    # Define the experiment name prefix. This helps in organizing experiment logs and results.
-    # IMPORTANT: To avoid filesystem path length issues, consider using a simplified version
-    # if you encounter "File name too long" errors.
-    #
-    # ===== Simplified Version (RECOMMENDED if you encounter path length issues) =====
-    # exp_name_prefix = f'data_20251120/dmc_{len(env_id_list)}t_brf{buffer_reanalyze_freq:.0e}_s{seed}/'
-    #
-    # ===== Detailed Version (Current) =====
     exp_name_prefix = (
-        f'data_suz_dmc_mt_20251120/dmc_{len(env_id_list)}tasks_frameskip4-pendulum-skip8_ln-mse'
+        f'data_suz_dmc_mt/dmc_{len(env_id_list)}tasks_frameskip4-pendulum-skip8_ln-mse'
         f'_nlayer8_trans-moe8_brf{buffer_reanalyze_freq}_seed{seed}/'
     )
 
@@ -387,15 +361,8 @@ if __name__ == "__main__":
 
         Example command:
         cd <PATH_TO_YOUR_PROJECT_ROOT>
-        # Using torch.distributed.launch (deprecated)
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 \\
-            <PATH_TO_THIS_SCRIPT>/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee \\
+        torchrun --nproc_per_node=8 <PATH_TO_THIS_SCRIPT>/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee \\
             <PATH_TO_LOG_DIR>/uz_mt_dmc18_train.log
-
-        # Using torchrun (recommended)
-        torchrun --nproc_per_node=8 <PATH_TO_THIS_SCRIPT>/dmc2gym_state_suz_multitask_ddp_config.py
-        torchrun --nproc_per_node=4 /mnt/afs/wanzunian/niuyazhe/puyuan/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
-        
     """
     # --- Import necessary components for training ---
     # It's good practice to place imports inside the main guard

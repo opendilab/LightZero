@@ -315,9 +315,6 @@ if __name__ == "__main__":
         cd /path/to/your/project/
 
         torchrun --nproc_per_node=4 /mnt/shared-storage-user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code/LightZero/logs/202512/atari8_uz_mt.log
-
-        /mnt/shared-storage-user/puyuan/lz/bin/python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/shared-storage-user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code/LightZero/logs/202512/atari8_uz_mt.log
-
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
