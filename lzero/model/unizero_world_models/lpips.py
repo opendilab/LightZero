@@ -13,21 +13,6 @@ import torch.nn as nn
 from torchvision import models
 from tqdm import tqdm
 
-# ==================================================================================
-# ================================ Core Configuration ==============================
-# ==================================================================================
-# Set TORCH_HOME environment variable after importing torch and torchvision,
-# but before instantiating any models. This tells PyTorch where to store all
-# models downloaded via torch.hub (including pretrained models from torchvision.models).
-# PyTorch will automatically create the 'hub/checkpoints' subdirectory.
-# custom_torch_home = "./LightZero/tokenizer_pretrained_vgg"
-custom_torch_home = "/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg"
-
-os.environ['TORCH_HOME'] = custom_torch_home
-# Ensure the directory exists (although torch.hub will also try to create it)
-os.makedirs(os.path.join(custom_torch_home, 'hub', 'checkpoints'), exist_ok=True)
-# ==================================================================================
-
 
 class LPIPS(nn.Module):
     # Learned perceptual metric

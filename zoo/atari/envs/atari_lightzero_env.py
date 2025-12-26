@@ -3,9 +3,7 @@ from ditk import logging
 from typing import List
 
 import gym
-# import gymnasium as gym
 import ale_py
-
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
@@ -35,8 +33,6 @@ class AtariEnvLightZero(BaseEnv):
         evaluator_env_num=3,
         # (int) The number of episodes to evaluate during each evaluation period.
         n_evaluator_episode=3,
-        # (str) The name of the Atari game environment.
-        # env_id='PongNoFrameskip-v4',
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
@@ -125,7 +121,7 @@ class AtariEnvLightZero(BaseEnv):
                 self.cfg.observation_shape[1],
                 self.cfg.observation_shape[2]
             )
-            
+
             self._action_space = self._env.action_space
 
             self._observation_space = gym.spaces.Dict({
@@ -142,17 +138,10 @@ class AtariEnvLightZero(BaseEnv):
                     low=0, high=self.cfg.collect_max_episode_steps, shape=(), dtype=np.int32
                 ),
             })
-            
-            # ==================================================================
-            # ==                         FINAL FIX                            ==
-            # ==================================================================
+
             # Access `reward_range` directly on the wrapped environment object.
             # The gym wrapper system will correctly delegate this call to the
             # underlying gymnasium environment's property.
-            # self._reward_space = gym.spaces.Box(
-            #     low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
-            # )
-
             # TODO
             self._reward_space = gym.spaces.Box(
                 low=-9999, high=999, shape=(1,), dtype=np.float32
@@ -192,7 +181,7 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         self._timestep += 1
-        if self._timestep%200==0:
+        if self._timestep % 200 == 0:
             logging.info(f'self._timestep: {self._timestep}')
         observation = self.observe()
         if done:
@@ -219,7 +208,6 @@ class AtariEnvLightZero(BaseEnv):
         action_mask = np.ones(self._action_space.n, 'int8')
 
         return {'observation': observation, 'action_mask': action_mask, 'to_play': np.array(-1), 'timestep': np.array(self._timestep)}
-
 
     @property
     def legal_actions(self):
@@ -275,11 +263,7 @@ class AtariEnvLightZero(BaseEnv):
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
         cfg.episode_life = True
-        
         cfg.clip_rewards = True
-        
-        # cfg.clip_rewards = False # TODO
-        
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod

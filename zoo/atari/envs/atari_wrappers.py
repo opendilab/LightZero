@@ -3,20 +3,20 @@ from datetime import datetime
 from typing import Optional
 
 import cv2
-import gym  # 用于旧版 API 的包装器基类
-import gymnasium  # 用于创建环境
+import gym  # For legacy API wrapper base class
+import gymnasium  # For creating environments
 import ale_py
 import numpy as np
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
     ScaledFloatFrameWrapper, \
-    ClipRewardWrapper, FrameStackWrapper, TimeLimitWrapper  # 确保 TimeLimitWrapper 已导入
+    ClipRewardWrapper, FrameStackWrapper, TimeLimitWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
 from easydict import EasyDict
 from gymnasium.wrappers import RecordVideo
 
 
 # only for reference now
-# 注意：如果要在新环境中使用这些函数，它们也需要进行类似的 gym/gymnasium 兼容性修改。
+# Note: If these functions are to be used with new environments, they also need similar gym/gymnasium compatibility modifications.
 def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):
     """Configure environment for DeepMind-style Atari. The observation is
     channel-first: (c, h, w) instead of (h, w, c).
@@ -31,9 +31,8 @@ def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, s
     """
     # assert 'NoFrameskip' in env_id
     env = gymnasium.make(env_id)
-    env = GymnasiumToGymWrapper(env) # 添加兼容层
+    env = GymnasiumToGymWrapper(env)  # Add compatibility layer
     env = NoopResetWrapper(env, noop_max=30)
-    # env = MaxAndSkipWrapper(env, skip=4)
     env = MaxAndSkipWrapper(env, skip=1)
     if episode_life:
         env = EpisodicLifeWrapper(env)
@@ -65,9 +64,8 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     """
     # assert 'MontezumaRevenge' in env_id
     env = gymnasium.make(env_id)
-    env = GymnasiumToGymWrapper(env) # 添加兼容层
+    env = GymnasiumToGymWrapper(env)  # Add compatibility layer
     env = NoopResetWrapper(env, noop_max=30)
-    # env = MaxAndSkipWrapper(env, skip=4)
     env = MaxAndSkipWrapper(env, skip=1)
     if episode_life:
         env = EpisodicLifeWrapper(env)
@@ -84,8 +82,8 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     return env
 
 
-# 这个 TimeLimit 类可以被 ding.envs.TimeLimitWrapper 替代，以保持更好的一致性。
-# 但如果需要保留，它现在可以正常工作，因为它包装的是 GymnasiumToGymWrapper 的输出。
+# This TimeLimit class can be replaced by ding.envs.TimeLimitWrapper for better consistency.
+# However, if it needs to be retained, it now works correctly because it wraps the output of GymnasiumToGymWrapper.
 class TimeLimit(gym.Wrapper):
     """
     Overview:
@@ -120,13 +118,13 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     Return:
         - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
-    # 步骤 1: 使用 gymnasium 创建基础环境
+    # Step 1: Create base environment using gymnasium
     if config.render_mode_human:
         env = gymnasium.make(config.env_id, render_mode='human', full_action_space=config.full_action_space)
     else:
         env = gymnasium.make(config.env_id, render_mode='rgb_array', full_action_space=config.full_action_space)
-    
-    # (可选) 应用 gymnasium 原生包装器
+
+    # (Optional) Apply gymnasium native wrappers
     if hasattr(config, 'save_replay') and config.save_replay \
             and hasattr(config, 'replay_path') and config.replay_path is not None:
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -138,22 +136,17 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
             name_prefix=video_name
         )
 
-    # 步骤 2: 添加兼容层，将 gymnasium 环境转换为 gym 环境接口
+    # Step 2: Add compatibility layer to convert gymnasium environment to gym interface
     env = GymnasiumToGymWrapper(env)
 
-    # 步骤 3: 现在可以安全地应用所有 ding 和旧版 gym 风格的包装器
+    # Step 3: Now safely apply all ding and legacy gym-style wrappers
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)
     if episode_life:
         env = EpisodicLifeWrapper(env)
-    
-    # ==================================================================
-    # ==                            核心修复点 1                        ==
-    # ==================================================================
-    # 将关键字参数 `max_episode_steps` 修改为 `max_limit_steps`
-    # env = TimeLimitWrapper(env, max_episode_step=config.max_episode_steps)
+
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
-    
+
     if config.warp_frame:
         # we must set WarpFrame before ScaledFloatFrameWrapper
         env = WarpFrame(env, width=config.observation_shape[1], height=config.observation_shape[2], grayscale=config.gray_scale)
@@ -169,10 +162,7 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     return env
 
 
-
-
-
-# 这个包装器继承自 gym.ObservationWrapper，现在可以正常工作
+# This wrapper inherits from gym.ObservationWrapper and now works correctly
 class WarpFrame(gym.ObservationWrapper):
     def __init__(self, env: gym.Env, width: int = 84, height: int = 84, grayscale: bool = True,
                  dict_space_key: Optional[str] = None):
@@ -246,39 +236,39 @@ class GameWrapper(gym.Wrapper):
         return [_ for _ in range(self.env.action_space.n)]
 
 
-# 这是关键的兼容性包装器
+# This is the key compatibility wrapper
 class GymnasiumToGymWrapper(gym.Wrapper):
     """
     Overview:
         A wrapper class that adapts a Gymnasium environment to the Gym interface.
     """
     def __init__(self, env):
-        # 确保传入的是一个 gymnasium 环境
+        # Ensure the input is a gymnasium environment
         assert isinstance(env, gymnasium.Env), f"Expected env to be a `gymnasium.Env` but got {type(env)}"
         super().__init__(env)
         self._seed = None
 
     def seed(self, seed):
         self._seed = seed
-        # 调用 gymnasium 的新版 seeder
+        # Call gymnasium's new seeder
         self.env.reset(seed=seed)
 
     def reset(self, **kwargs):
-        # 如果 seed 在 kwargs 中，优先使用它
+        # If seed is in kwargs, use it with priority
         if self._seed is not None:
             kwargs['seed'] = self._seed
-            self._seed = None # seed 只在第一次 reset 时生效
-        
-        # 调用 gymnasium 的 reset，它返回 (obs, info)
+            self._seed = None  # Seed only takes effect on first reset
+
+        # Call gymnasium's reset, which returns (obs, info)
         result = self.env.reset(**kwargs)
         obs, info = result
-        # 只返回 obs，以匹配旧版 gym API
+        # Only return obs to match legacy gym API
         return obs
 
     def step(self, action):
-        # 调用 gymnasium 的 step，它返回 (obs, rew, terminated, truncated, info)
+        # Call gymnasium's step, which returns (obs, rew, terminated, truncated, info)
         obs, rew, terminated, truncated, info = self.env.step(action)
-        # 将 terminated 和 truncated 合并为 done
+        # Merge terminated and truncated into done
         done = terminated or truncated
-        # 返回4个值，以匹配旧版 gym API
+        # Return 4 values to match legacy gym API
         return obs, rew, done, info

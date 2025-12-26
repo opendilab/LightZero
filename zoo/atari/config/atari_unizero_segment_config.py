@@ -1,7 +1,5 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-import os
-os.environ['HF_HOME'] = '/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg'
 
 def main(env_id, seed):
     action_space_size = atari_env_action_space_map[env_id]
