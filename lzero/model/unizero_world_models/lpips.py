@@ -13,7 +13,6 @@ import torch.nn as nn
 from torchvision import models
 from tqdm import tqdm
 
-
 class LPIPS(nn.Module):
     # Learned perceptual metric
     def __init__(self, use_dropout: bool = True):

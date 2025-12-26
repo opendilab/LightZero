@@ -384,6 +384,13 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ==================== Training Loop ====================
+    # Set NCCL timeout to prevent watchdog hang due to unbalanced data collection speeds
+    # Different games (e.g., Pong vs Seaquest) have vastly different episode lengths,
+    # which can cause some ranks to finish collection much faster than others.
+    # Default timeout is 30 minutes; we increase it to 60 minutes for safety.
+    os.environ.setdefault('NCCL_TIMEOUT', '3600')  # 60 minutes in seconds
+    os.environ.setdefault('NCCL_BLOCKING_WAIT', '1')  # Enable blocking wait for better error messages
+
     for seed in [0]:
         configs = generate_configs(
             env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,

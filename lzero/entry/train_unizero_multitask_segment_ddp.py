@@ -622,11 +622,14 @@ def train_unizero_multitask_segment_ddp(
             print('=' * 20)
             print(f'Starting collection for Rank {rank} task_id: {cfg.policy.task_id}...')
             print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
+            logging.info(f'Rank {rank}: Starting data collection for task {cfg.policy.task_id} at train_iter {learner.train_iter}')
 
             # Reset initial data before each collection, crucial for multi-task settings.
             collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
             # Collect data.
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
+            logging.info(f'Rank {rank}: Finished data collection for task {cfg.policy.task_id}, collected {len(new_data[0]) if new_data else 0} segments')
 
             # Update the replay buffer.
             replay_buffer.push_game_segments(new_data)
@@ -648,6 +651,19 @@ def train_unizero_multitask_segment_ddp(
             # Log after data collection.
             logging.info(f'Rank {rank}: Completed data collection for task {cfg.policy.task_id}')
 
+        # ========== CRITICAL FIX: Synchronize all ranks after data collection ==========
+        # Wait for all ranks to complete their data collection before proceeding.
+        # This prevents fast-collecting ranks from reaching barriers/all_gather calls
+        # while slow-collecting ranks are still in the collection loop.
+        try:
+            logging.info(f'Rank {rank}: Waiting at post-collection barrier...')
+            dist.barrier()
+            logging.info(f'Rank {rank}: All ranks completed data collection, proceeding...')
+        except Exception as e:
+            logging.error(f'Rank {rank}: Post-collection barrier failed, error: {e}')
+            raise e
+        # ===============================================================================
+
         # Check if there is enough data for training.
         not_enough_data = any(
             replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size / world_size
@@ -662,7 +678,9 @@ def train_unizero_multitask_segment_ddp(
             # Calculate task weights.
             try:
                 # Gather task rewards.
+                logging.info(f'Rank {rank}: Entering evaluation synchronization barrier at train_iter {learner.train_iter}')
                 dist.barrier()
+                logging.info(f'Rank {rank}: Passed evaluation barrier, gathering task returns')
                 all_task_returns = [None for _ in range(world_size)]
                 dist.all_gather_object(all_task_returns, task_returns)
                 # Merge task rewards.

@@ -68,7 +68,8 @@ def main(env_id, seed):
                 world_model_cfg=dict(
                     latent_recon_loss_weight=0.1, # TODO
                     perceptual_loss_weight=0.1,
-                    use_new_cache_manager=False, # TODO
+                    # use_new_cache_manager=False, # TODO
+                    use_new_cache_manager=True, # ==============TODO==============
 
                     norm_type=norm_type,
                     final_norm_option_in_obs_head='LayerNorm',
@@ -260,7 +261,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_1226/{env_id[3:-3]}/{env_id[3:-3]}_uz_head-clip-p_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_1226_2/{env_id[3:-3]}/{env_id[3:-3]}_uz_newkv_head-clip-p_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_unizero/{env_id[3:-3]}/{env_id[3:-3]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
@@ -274,9 +275,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Test environments from atari8 base set
-    # args.env = 'ALE/Pong-v5'               # Memory-planning environment with sparse rewards
+    args.env = 'ALE/Pong-v5'               # Memory-planning environment with sparse rewards
     # args.env = 'ALE/Qbert-v5'               # Memory-planning environment with sparse rewards
-    args.env = 'ALE/MsPacman-v5'               # Memory-planning environment with sparse rewards
+    
+    # args.env = 'ALE/MsPacman-v5'               # Memory-planning environment with sparse rewards
 
     main(args.env, args.seed)
 
