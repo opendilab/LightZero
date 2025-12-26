@@ -2,7 +2,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from ding.utils import MODEL_REGISTRY, SequenceType
+from ding.utils import MODEL_REGISTRY, SequenceType, get_rank
 from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
@@ -73,16 +73,17 @@ class SampledUniZeroModel(nn.Module):
             self.representation_network = RepresentationNetworkMLP(
                 observation_shape,
                 hidden_channels=world_model_cfg.embed_dim,
-                layer_num=2,
+                num_layers=2,
                 activation=self.activation,
                 norm_type=norm_type,
                 group_size=world_model_cfg.group_size,
                 final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
             )
             # TODO: only for MemoryEnv now
-            self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25, norm_type=norm_type)
+            # self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25, norm_type=norm_type)
+            self.decoder_network = None
             self.tokenizer = Tokenizer(encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, with_lpips=False)
+                                       decoder=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -110,7 +111,7 @@ class SampledUniZeroModel(nn.Module):
                 self.encoder_hook.setup_hooks(self.representation_network)
 
             self.tokenizer = Tokenizer(encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, with_lpips=True,)
+                                       decoder=self.decoder_network, with_lpips=True, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
@@ -145,8 +146,8 @@ class SampledUniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 
-            self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
-                                       decoder_network=self.decoder_network)
+            self.tokenizer = Tokenizer(encoder=self.representation_network,
+                                       decoder=self.decoder_network, with_lpips=True, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
@@ -156,6 +157,153 @@ class SampledUniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print('==' * 20)
+
+        # --- Log parameter counts for analysis ---
+        self._log_model_parameters(world_model_cfg.obs_type)
+
+    def _log_model_parameters(self, obs_type: str) -> None:
+        """
+        Overview:
+            Logs detailed parameter counts for all model components with a comprehensive breakdown.
+            Includes encoder, transformer, prediction heads, and other components.
+        Arguments:
+            - obs_type (:obj:`str`): The type of observation ('vector', 'image', or 'image_memory').
+        """
+        # Only print from rank 0 to avoid duplicate logs in DDP
+        if get_rank() != 0:
+            return
+
+        print('=' * 80)
+        print('MODEL PARAMETER STATISTICS'.center(80))
+        print('=' * 80)
+
+        # --- Total Model Parameters ---
+        total_params = sum(p.numel() for p in self.parameters())
+        total_trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        print(f'\n{"TOTAL MODEL":<40} {total_params:>15,} parameters')
+        print(f'{"  └─ Trainable":<40} {total_trainable:>15,} parameters')
+        print(f'{"  └─ Frozen":<40} {total_params - total_trainable:>15,} parameters')
+
+        # --- World Model Components ---
+        print(f'\n{"-" * 80}')
+        print(f'{"WORLD MODEL BREAKDOWN":<40}')
+        print(f'{"-" * 80}')
+
+        wm_params = sum(p.numel() for p in self.world_model.parameters())
+        wm_trainable = sum(p.numel() for p in self.world_model.parameters() if p.requires_grad)
+        print(f'{"World Model Total":<40} {wm_params:>15,} parameters')
+        print(f'{"  └─ Trainable":<40} {wm_trainable:>15,} parameters ({100*wm_trainable/wm_params:.1f}%)')
+
+        # --- Encoder ---
+        encoder_params = sum(p.numel() for p in self.tokenizer.encoder.parameters())
+        encoder_trainable = sum(p.numel() for p in self.tokenizer.encoder.parameters() if p.requires_grad)
+        print(f'\n{"1. ENCODER (Tokenizer)":<40} {encoder_params:>15,} parameters')
+        print(f'{"  └─ Trainable":<40} {encoder_trainable:>15,} parameters ({100*encoder_trainable/encoder_params:.1f}%)')
+
+        # --- Transformer Backbone ---
+        transformer_params = sum(p.numel() for p in self.world_model.transformer.parameters())
+        transformer_trainable = sum(p.numel() for p in self.world_model.transformer.parameters() if p.requires_grad)
+        print(f'\n{"2. TRANSFORMER BACKBONE":<40} {transformer_params:>15,} parameters')
+        print(f'{"  └─ Trainable":<40} {transformer_trainable:>15,} parameters ({100*transformer_trainable/transformer_params:.1f}%)')
+
+        # --- Prediction Heads (Detailed Breakdown) ---
+        print(f'\n{"3. PREDICTION HEADS":<40}')
+
+        # Access head_dict from world_model
+        if hasattr(self.world_model, 'head_dict'):
+            head_dict = self.world_model.head_dict
+
+            # Calculate total heads parameters
+            total_heads_params = sum(p.numel() for module in head_dict.values() for p in module.parameters())
+            total_heads_trainable = sum(p.numel() for module in head_dict.values() for p in module.parameters() if p.requires_grad)
+            print(f'{"  Total (All Heads)":<40} {total_heads_params:>15,} parameters')
+            print(f'{"  └─ Trainable":<40} {total_heads_trainable:>15,} parameters ({100*total_heads_trainable/total_heads_params:.1f}%)')
+
+            # Breakdown by head type
+            head_names_map = {
+                'head_policy': 'Policy Head',
+                'head_value': 'Value Head',
+                'head_rewards': 'Reward Head',
+                'head_observations': 'Next Latent (Obs) Head'
+            }
+
+            print(f'\n{"  Breakdown by Head Type:":<40}')
+            for head_key, head_name in head_names_map.items():
+                if head_key in head_dict:
+                    head_module = head_dict[head_key]
+                    head_params = sum(p.numel() for p in head_module.parameters())
+                    head_trainable = sum(p.numel() for p in head_module.parameters() if p.requires_grad)
+
+                    # Count number of task-specific heads (for ModuleList)
+                    if isinstance(head_module, nn.ModuleList):
+                        num_heads = len(head_module)
+                        params_per_head = head_params // num_heads if num_heads > 0 else 0
+                        print(f'{"    ├─ " + head_name:<38} {head_params:>15,} parameters')
+                        print(f'{"      └─ " + f"{num_heads} task-specific heads":<38} {params_per_head:>15,} params/head')
+                    else:
+                        print(f'{"    ├─ " + head_name:<38} {head_params:>15,} parameters')
+                        print(f'{"      └─ Shared across tasks":<38}')
+
+        # --- Positional & Task Embeddings ---
+        print(f'\n{"4. EMBEDDINGS":<40}')
+
+        if hasattr(self.world_model, 'pos_emb'):
+            pos_emb_params = sum(p.numel() for p in self.world_model.pos_emb.parameters())
+            pos_emb_trainable = sum(p.numel() for p in self.world_model.pos_emb.parameters() if p.requires_grad)
+            print(f'{"  ├─ Positional Embedding":<40} {pos_emb_params:>15,} parameters')
+            if pos_emb_trainable == 0:
+                print(f'{"    └─ (Frozen)":<40}')
+
+        if hasattr(self.world_model, 'task_emb') and self.world_model.task_emb is not None:
+            task_emb_params = sum(p.numel() for p in self.world_model.task_emb.parameters())
+            task_emb_trainable = sum(p.numel() for p in self.world_model.task_emb.parameters() if p.requires_grad)
+            print(f'{"  ├─ Task Embedding":<40} {task_emb_params:>15,} parameters')
+            print(f'{"    └─ Trainable":<40} {task_emb_trainable:>15,} parameters')
+
+        if hasattr(self.world_model, 'act_embedding_table'):
+            act_emb_params = sum(p.numel() for p in self.world_model.act_embedding_table.parameters())
+            act_emb_trainable = sum(p.numel() for p in self.world_model.act_embedding_table.parameters() if p.requires_grad)
+            print(f'{"  └─ Action Embedding":<40} {act_emb_params:>15,} parameters')
+            print(f'{"    └─ Trainable":<40} {act_emb_trainable:>15,} parameters')
+
+        # --- Decoder (if applicable) ---
+        if self.tokenizer.decoder_network is not None:
+            print(f'\n{"5. DECODER":<40}')
+            decoder_params = sum(p.numel() for p in self.tokenizer.decoder_network.parameters())
+            decoder_trainable = sum(p.numel() for p in self.tokenizer.decoder_network.parameters() if p.requires_grad)
+            print(f'{"  Decoder Network":<40} {decoder_params:>15,} parameters')
+            print(f'{"  └─ Trainable":<40} {decoder_trainable:>15,} parameters')
+
+            if hasattr(self.tokenizer, 'lpips') and self.tokenizer.lpips is not None:
+                lpips_params = sum(p.numel() for p in self.tokenizer.lpips.parameters())
+                print(f'{"  LPIPS Loss Network":<40} {lpips_params:>15,} parameters')
+
+                # Calculate world model params excluding decoder and LPIPS
+                params_without_decoder = wm_params - decoder_params - lpips_params
+                print(f'\n{"  World Model (exc. Decoder & LPIPS)":<40} {params_without_decoder:>15,} parameters')
+
+        # --- Summary Table ---
+        print(f'\n{"=" * 80}')
+        print(f'{"SUMMARY":<40}')
+        print(f'{"=" * 80}')
+        print(f'{"Component":<30} {"Total Params":>15} {"Trainable":>15} {"% of Total":>15}')
+        print(f'{"-" * 80}')
+
+        components = [
+            ("Encoder", encoder_params, encoder_trainable),
+            ("Transformer", transformer_params, transformer_trainable),
+        ]
+
+        if hasattr(self.world_model, 'head_dict'):
+            components.append(("Prediction Heads", total_heads_params, total_heads_trainable))
+
+        for name, total, trainable in components:
+            pct = 100 * total / total_params if total_params > 0 else 0
+            print(f'{name:<30} {total:>15,} {trainable:>15,} {pct:>14.1f}%')
+
+        print(f'{"=" * 80}')
+        print(f'{"TOTAL":<30} {total_params:>15,} {total_trainable:>15,} {"100.0%":>15}')
+        print(f'{"=" * 80}\n')
 
     def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
                           current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:

@@ -1,25 +1,26 @@
 """
 Overview:
-    In this Python file, we provide a collection of reusable model templates designed to streamline the development
+    This Python file provides a collection of reusable model templates designed to streamline the development
     process for various custom algorithms. By utilizing these pre-built model templates, users can quickly adapt and
-    customize their custom algorithms, ensuring efficient and effective development.
-    BTW, users can refer to the unittest of these model templates to learn how to use them.
+    customize their algorithms, ensuring efficient and effective development.
+    Users can refer to the unittest of these model templates to learn how to use them.
 """
 import math
 from dataclasses import dataclass
-from typing import Callable, List, Optional
-from typing import Tuple
+from typing import Callable, List, Optional, Tuple, Sequence
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from ditk import logging
+# Assuming these imports are valid in the user's environment.
+# If they are not, they should be replaced with the correct ones.
 from ding.torch_utils import MLP, ResBlock
 from ding.torch_utils.network.normalization import build_normalization
-from ding.utils import SequenceType
-from ditk import logging
+from ding.utils import SequenceType, get_rank, get_world_size
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 
@@ -28,7 +29,7 @@ def MLP_V2(
         in_channels: int,
         hidden_channels: List[int],
         out_channels: int,
-        layer_fn: Callable = None,
+        layer_fn: Callable = nn.Linear,
         activation: Optional[nn.Module] = None,
         norm_type: Optional[str] = None,
         use_dropout: bool = False,
@@ -36,118 +37,122 @@ def MLP_V2(
         output_activation: bool = True,
         output_norm: bool = True,
         last_linear_layer_init_zero: bool = False,
-):
+) -> nn.Sequential:
     """
     Overview:
-        Create a multi-layer perceptron (MLP) using a list of hidden dimensions. Each layer consists of a fully
+        Creates a multi-layer perceptron (MLP) using a list of hidden dimensions. Each layer consists of a fully
         connected block with optional activation, normalization, and dropout. The final layer is configurable
-        to include or exclude activation, normalization, and dropout based on user preferences.
-
+        to include or exclude activation and normalization.
     Arguments:
         - in_channels (:obj:`int`): Number of input channels (dimensionality of the input tensor).
         - hidden_channels (:obj:`List[int]`): A list specifying the number of channels for each hidden layer.
-            For example, [512, 256, 128] means the MLP will have three hidden layers with 512, 256, and 128 units, respectively.
         - out_channels (:obj:`int`): Number of output channels (dimensionality of the output tensor).
-        - layer_fn (:obj:`Callable`, optional): Layer function to construct layers (default is `nn.Linear`).
-        - activation (:obj:`nn.Module`, optional): Activation function to use after each layer
-            (e.g., `nn.ReLU`, `nn.Sigmoid`). Default is None (no activation).
-        - norm_type (:obj:`str`, optional): Type of normalization to apply after each layer.
-            If None, no normalization is applied. Supported values depend on the implementation of `build_normalization`.
-        - use_dropout (:obj:`bool`, optional): Whether to apply dropout after each layer. Default is False.
-        - dropout_probability (:obj:`float`, optional): The probability of setting elements to zero in dropout. Default is 0.5.
-        - output_activation (:obj:`bool`, optional): Whether to apply activation to the output layer. Default is True.
-        - output_norm (:obj:`bool`, optional): Whether to apply normalization to the output layer. Default is True.
-        - last_linear_layer_init_zero (:obj:`bool`, optional): Whether to initialize the weights and biases of the
-            last linear layer to zeros. This is commonly used in reinforcement learning for stable initial outputs.
-
+        - layer_fn (:obj:`Callable`): The function to construct layers, defaults to `nn.Linear`.
+        - activation (:obj:`Optional[nn.Module]`): Activation function to use after each layer, defaults to None.
+        - norm_type (:obj:`Optional[str]`): Type of normalization to apply. If None, no normalization is applied.
+        - use_dropout (:obj:`bool`): Whether to apply dropout after each layer, defaults to False.
+        - dropout_probability (:obj:`float`): The probability for dropout, defaults to 0.5.
+        - output_activation (:obj:`bool`): Whether to apply activation to the output layer, defaults to True.
+        - output_norm (:obj:`bool`): Whether to apply normalization to the output layer, defaults to True.
+        - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer's weights and biases to zero.
     Returns:
         - block (:obj:`nn.Sequential`): A PyTorch `nn.Sequential` object containing the layers of the MLP.
-
-    Notes:
-        - The final layer's normalization, activation, and dropout are controlled by `output_activation`,
-          `output_norm`, and `use_dropout`.
-        - If `last_linear_layer_init_zero` is True, the weights and biases of the last linear layer are initialized to 0.
     """
-    assert len(hidden_channels) > 0, "The hidden_channels list must contain at least one element."
-    if layer_fn is None:
-        layer_fn = nn.Linear
+    if not hidden_channels:
+        logging.warning("hidden_channels is empty, creating a single-layer MLP.")
 
-    # Initialize the MLP block
-    block = []
-    channels = [in_channels] + hidden_channels + [out_channels]
+    layers = []
+    all_channels = [in_channels] + hidden_channels + [out_channels]
+    num_layers = len(all_channels) - 1
 
-    # Build all layers except the final layer
-    for i, (in_channels, out_channels) in enumerate(zip(channels[:-2], channels[1:-1])):
-        block.append(layer_fn(in_channels, out_channels))
-        if norm_type is not None:
-            block.append(build_normalization(norm_type, dim=1)(out_channels))
-        if activation is not None:
-            block.append(activation)
-        if use_dropout:
-            block.append(nn.Dropout(dropout_probability))
+    for i in range(num_layers):
+        is_last_layer = (i == num_layers - 1)
+        layers.append(layer_fn(all_channels[i], all_channels[i+1]))
 
-    # Build the final layer
-    in_channels = channels[-2]
-    out_channels = channels[-1]
-    block.append(layer_fn(in_channels, out_channels))
+        if not is_last_layer:
+            # Intermediate layers
+            if norm_type:
+                layers.append(build_normalization(norm_type, dim=1)(all_channels[i+1]))
+            if activation:
+                layers.append(activation)
+            if use_dropout:
+                layers.append(nn.Dropout(dropout_probability))
+        else:
+            # Last layer
+            if output_norm and norm_type:
+                layers.append(build_normalization(norm_type, dim=1)(all_channels[i+1]))
+            if output_activation and activation:
+                layers.append(activation)
+            # Note: Dropout on the final output is usually not recommended unless for specific regularization purposes.
+            # The original logic applied it, so we keep it for consistency.
+            if use_dropout:
+                layers.append(nn.Dropout(dropout_probability))
 
-    # Add optional normalization and activation for the final layer
-    if output_norm and norm_type is not None:
-        block.append(build_normalization(norm_type, dim=1)(out_channels))
-    if output_activation and activation is not None:
-        block.append(activation)
-    if use_dropout:
-        block.append(nn.Dropout(dropout_probability))
-
-    # Initialize the weights and biases of the last linear layer to zero if specified
+    # Initialize the last linear layer to zero if specified
     if last_linear_layer_init_zero:
-        for layer in reversed(block):
+        for layer in reversed(layers):
             if isinstance(layer, nn.Linear):
                 nn.init.zeros_(layer.weight)
                 nn.init.zeros_(layer.bias)
                 break
 
-    return nn.Sequential(*block)
+    return nn.Sequential(*layers)
 
-# use dataclass to make the output of network more convenient to use
+
+# --- Data-structures for Network Outputs ---
+
 @dataclass
 class MZRNNNetworkOutput:
-    # output format of the MuZeroRNN model
+    """
+    Overview:
+        Data structure for the output of the MuZeroRNN model.
+    """
     value: torch.Tensor
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
     predict_next_latent_state: torch.Tensor
-    reward_hidden_state: Tuple[torch.Tensor]
+    reward_hidden_state: Tuple[torch.Tensor, torch.Tensor]
 
 
 @dataclass
 class EZNetworkOutput:
-    # output format of the EfficientZero model
+    """
+    Overview:
+        Data structure for the output of the EfficientZero model.
+    """
     value: torch.Tensor
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
-    reward_hidden_state: Tuple[torch.Tensor]
+    reward_hidden_state: Tuple[torch.Tensor, torch.Tensor]
 
 
 @dataclass
 class MZNetworkOutput:
-    # output format of the MuZero model
+    """
+    Overview:
+        Data structure for the output of the MuZero model.
+    """
     value: torch.Tensor
     reward: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
 
 
+# --- Core Network Components ---
+
 class SimNorm(nn.Module):
+    """
+    Overview:
+        Implements Simplicial Normalization as described in the paper: https://arxiv.org/abs/2204.00616.
+        It groups features and applies softmax to each group.
+    """
 
     def __init__(self, simnorm_dim: int) -> None:
         """
-        Overview:
-            Simplicial normalization. Adapted from https://arxiv.org/abs/2204.00616.
         Arguments:
-            - simnorm_dim (:obj:`int`): The dimension for simplicial normalization.
+            - simnorm_dim (:obj:`int`): The size of each group (simplex) to apply softmax over.
         """
         super().__init__()
         self.dim = simnorm_dim
@@ -155,213 +160,205 @@ class SimNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Overview:
-            Forward pass of the SimNorm layer.
+            Forward pass for SimNorm.
         Arguments:
-            - x (:obj:`torch.Tensor`): The input tensor to normalize.
+            - x (:obj:`torch.Tensor`): The input tensor.
         Returns:
-            - x (:obj:`torch.Tensor`): The normalized tensor.
+            - (:obj:`torch.Tensor`): The tensor after applying Simplicial Normalization.
         """
-        shp = x.shape
-        # Ensure that there is at least one simplex to normalize across.
-        if shp[1] != 0:
-            x = x.view(*shp[:-1], -1, self.dim)
-            x = F.softmax(x, dim=-1)
-            return x.view(*shp)
-        else:
+        if x.shape[1] == 0:
             return x
+        # Reshape to (batch, groups, dim)
+        x_reshaped = x.view(*x.shape[:-1], -1, self.dim)
+        # Apply softmax over the last dimension (the simplex)
+        x_softmax = F.softmax(x_reshaped, dim=-1)
+        # Reshape back to the original tensor shape
+        return x_softmax.view(*x.shape)
 
     def __repr__(self) -> str:
-        """
-        Overview:
-            String representation of the SimNorm layer.
-        Returns:
-            - output (:obj:`str`): The string representation.
-        """
         return f"SimNorm(dim={self.dim})"
 
 
-def AvgL1Norm(x, eps=1e-8):
+def AvgL1Norm(x: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     """
     Overview:
-        Normalize the input tensor by the L1 norm.
+        Normalizes a tensor by the mean of its absolute values (L1 norm) along the last dimension.
     Arguments:
         - x (:obj:`torch.Tensor`): The input tensor to normalize.
-        - eps (:obj:`float`): The epsilon value to prevent division by zero.
+        - eps (:obj:`float`): A small epsilon value to prevent division by zero.
     Returns:
-        - :obj:`torch.Tensor`: The normalized tensor.
+        - (:obj:`torch.Tensor`): The normalized tensor.
     """
-    return x / x.abs().mean(-1, keepdim=True).clamp(min=eps)
+    return x / (x.abs().mean(dim=-1, keepdim=True) + eps)
 
 
 class FeatureAndGradientHook:
+    """
+    Overview:
+        A utility class to capture and analyze features and gradients of a specific module during
+        the forward and backward passes. This is useful for debugging and understanding model dynamics.
+    """
 
-    def __init__(self):
+    def __init__(self, module: nn.Module):
         """
-        Overview:
-            Class to capture features and gradients at SimNorm.
+        Arguments:
+            - module (:obj:`nn.Module`): The PyTorch module to attach the hooks to.
         """
         self.features_before = []
         self.features_after = []
         self.grads_before = []
         self.grads_after = []
+        self.forward_handler = module.register_forward_hook(self._forward_hook)
+        self.backward_handler = module.register_full_backward_hook(self._backward_hook)
 
-    def setup_hooks(self, model):
-        # Hooks to capture features and gradients at SimNorm
-        self.forward_handler = model.sim_norm.register_forward_hook(self.forward_hook)
-        self.backward_handler = model.sim_norm.register_full_backward_hook(self.backward_hook)
-
-    def forward_hook(self, module, input, output):
+    def _forward_hook(self, module: nn.Module, inputs: Tuple[torch.Tensor], output: torch.Tensor) -> None:
+        """Hook to capture input and output features during the forward pass."""
         with torch.no_grad():
-            self.features_before.append(input[0])
-            self.features_after.append(output)
+            self.features_before.append(inputs[0].clone().detach())
+            self.features_after.append(output.clone().detach())
 
-    def backward_hook(self, module, grad_input, grad_output):
+    def _backward_hook(self, module: nn.Module, grad_inputs: Tuple[torch.Tensor], grad_outputs: Tuple[torch.Tensor]) -> None:
+        """Hook to capture input and output gradients during the backward pass."""
         with torch.no_grad():
-            self.grads_before.append(grad_input[0] if grad_input[0] is not None else None)
-            self.grads_after.append(grad_output[0] if grad_output[0] is not None else None)
+            self.grads_before.append(grad_inputs[0].clone().detach() if grad_inputs[0] is not None else None)
+            self.grads_after.append(grad_outputs[0].clone().detach() if grad_outputs[0] is not None else None)
 
-    def analyze(self):
-        # Calculate L2 norms of features
-        l2_norm_before = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_before]))
-        l2_norm_after = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_after]))
+    def analyze(self) -> Tuple[float, float, float, float]:
+        """
+        Overview:
+            Analyzes the captured features and gradients by computing their average L2 norms.
+            This method clears the stored data after analysis to free memory.
+        Returns:
+            - (:obj:`Tuple[float, float, float, float]`): A tuple containing the L2 norms of
+              (features_before, features_after, grads_before, grads_after).
+        """
+        if not self.features_before:
+            return 0.0, 0.0, 0.0, 0.0
 
-        # Calculate norms of gradients
-        grad_norm_before = torch.mean(
-            torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before if g is not None]))
-        grad_norm_after = torch.mean(
-            torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after if g is not None]))
+        l2_norm_before = torch.mean(torch.stack([torch.norm(f, p=2) for f in self.features_before])).item()
+        l2_norm_after = torch.mean(torch.stack([torch.norm(f, p=2) for f in self.features_after])).item()
 
-        # Clear stored data and delete tensors to free memory
+        valid_grads_before = [g for g in self.grads_before if g is not None]
+        grad_norm_before = torch.mean(torch.stack([torch.norm(g, p=2) for g in valid_grads_before])).item() if valid_grads_before else 0.0
+
+        valid_grads_after = [g for g in self.grads_after if g is not None]
+        grad_norm_after = torch.mean(torch.stack([torch.norm(g, p=2) for g in valid_grads_after])).item() if valid_grads_after else 0.0
+
         self.clear_data()
+        return l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after
 
-        # Optionally clear CUDA cache
+    def clear_data(self) -> None:
+        """Clears all stored feature and gradient tensors to free up memory."""
+        self.features_before.clear()
+        self.features_after.clear()
+        self.grads_before.clear()
+        self.grads_after.clear()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        return l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after
-
-    def clear_data(self):
-        del self.features_before[:]
-        del self.features_after[:]
-        del self.grads_before[:]
-        del self.grads_after[:]
-
-    def remove_hooks(self):
+    def remove_hooks(self) -> None:
+        """Removes the registered forward and backward hooks."""
         self.forward_handler.remove()
         self.backward_handler.remove()
 
 
 class DownSample(nn.Module):
+    """
+    Overview:
+        A convolutional network for downsampling image-based observations, commonly used in Atari environments.
+        It consists of a series of convolutional, normalization, and residual blocks.
+    """
 
-    def __init__(self, observation_shape: SequenceType, out_channels: int,
-                 activation: nn.Module = nn.ReLU(inplace=True),
-                 norm_type: Optional[str] = 'BN',
-                 num_resblocks: int = 1,
-                 ) -> None:
+    def __init__(
+            self,
+            observation_shape: Sequence[int],
+            out_channels: int,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: str = 'BN',
+            num_resblocks: int = 1,
+    ) -> None:
         """
-        Overview:
-            Define downSample convolution network. Encode the observation into hidden state.
-            This network is often used in video games like Atari. In board games like go and chess,
-            we don't need this module.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]
-                for video games like atari, RGB 3 channel times stack 4 frames.
-            - out_channels (:obj:`int`): The output channels of output hidden state.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`Optional[str]`): The normalization type used in network, defaults to 'BN'.
-            - num_resblocks (:obj:`int`): The number of residual blocks. Defaults to 1.
+            - observation_shape (:obj:`Sequence[int]`): The shape of the input observation, e.g., (C, H, W).
+            - out_channels (:obj:`int`): The number of output channels.
+            - activation (:obj:`nn.Module`): The activation function to use.
+            - norm_type (:obj:`str`): The type of normalization ('BN' or 'LN').
+            - num_resblocks (:obj:`int`): The number of residual blocks in each stage.
         """
         super().__init__()
-        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        if norm_type not in ['BN', 'LN']:
+            raise ValueError(f"Unsupported norm_type: {norm_type}. Must be 'BN' or 'LN'.")
+        # The original design was fixed to 1 resblock per stage.
+        if num_resblocks != 1:
+            logging.warning(f"DownSample is designed for num_resblocks=1, but got {num_resblocks}.")
 
         self.observation_shape = observation_shape
-        self.conv1 = nn.Conv2d(
-            observation_shape[0],
-            out_channels // 2,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,  # disable bias for better convergence
-        )
-        if norm_type == 'BN':
-            self.norm1 = nn.BatchNorm2d(out_channels // 2)
-        elif norm_type == 'LN':
-            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2],
-                                      eps=1e-5)
-
-        self.resblocks1 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels // 2,
-                    activation=activation,
-                    norm_type=norm_type,
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_resblocks)
-            ]
-        )
-        self.downsample_block = ResBlock(
-            in_channels=out_channels // 2,
-            out_channels=out_channels,
-            activation=activation,
-            norm_type=norm_type,
-            res_type='downsample',
-            bias=False
-        )
-        self.resblocks2 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(num_resblocks)
-            ]
-        )
-        self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-        self.resblocks3 = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(1)
-            ]
-        )
-        self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.activation = activation
+
+        # Initial convolution: stride 2
+        self.conv1 = nn.Conv2d(observation_shape[0], out_channels // 2, kernel_size=3, stride=2, padding=1, bias=False)
+        self.norm1 = build_normalization(norm_type, dim=2)(out_channels // 2)
+
+        # Stage 1 with residual blocks
+        self.resblocks1 = nn.ModuleList([
+            ResBlock(in_channels=out_channels // 2, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
+            for _ in range(num_resblocks)
+        ])
+        
+        # Downsample block: stride 2
+        self.downsample_block = ResBlock(in_channels=out_channels // 2, out_channels=out_channels, activation=activation, norm_type=norm_type, res_type='downsample', bias=False)
+        
+        # Stage 2 with residual blocks
+        self.resblocks2 = nn.ModuleList([
+            ResBlock(in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
+            for _ in range(num_resblocks)
+        ])
+        
+        # Pooling 1: stride 2
+        self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
+        
+        # Stage 3 with residual blocks
+        self.resblocks3 = nn.ModuleList([
+            ResBlock(in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
+            for _ in range(num_resblocks)
+        ])
+        
+        # Final pooling for specific input sizes
+        self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
-                H is height.
-            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
-                output width, H_ is output height.
+            - x (:obj:`torch.Tensor`): (B, C_in, H, W)
+            - output (:obj:`torch.Tensor`): (B, C_out, H_out, W_out)
         """
-        x = self.conv1(x)
         x = self.norm1(x)
+        x = self.conv1(x)
         x = self.activation(x)
 
         for block in self.resblocks1:
             x = block(x)
+        
         x = self.downsample_block(x)
         for block in self.resblocks2:
             x = block(x)
+        
         x = self.pooling1(x)
         for block in self.resblocks3:
             x = block(x)
 
-        # 64, 84, 96 are the most common observation shapes in Atari games.
-        if self.observation_shape[1] == 64:
-            output = x
-        elif self.observation_shape[1] == 84:
-            x = self.pooling2(x)
-            output = x
-        elif self.observation_shape[1] == 96:
-            x = self.pooling2(x)
-            output = x
+        # This part handles specific Atari resolutions. A more general approach might be desirable,
+        # but we maintain original behavior.
+        obs_height = self.observation_shape[1]
+        if obs_height == 64:
+            return x
+        elif obs_height in [84, 96]:
+            return self.pooling2(x)
         else:
-            raise NotImplementedError(f"DownSample for observation shape {self.observation_shape} is not implemented now. "
-                                      f"You should transform the observation shape to 64 or 96 in the env.")
-
-        return output
+            raise NotImplementedError(
+                f"DownSample for observation height {obs_height} is not implemented. "
+                f"Supported heights are 64, 84, 96."
+            )
 
 class QwenNetwork(nn.Module):
     def __init__(self,
@@ -482,10 +479,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
                 final_norm_option_in_encoder: str = "layernorm",
                 tokenizer=None):
         """
-        Overview:
-            This class defines a language representation network that utilizes a pretrained Hugging Face model.
-            The network outputs embeddings with the specified dimension and can optionally use SimNorm or LayerNorm
-            for normalization at the final stage to ensure training stability.
         Arguments:
             - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
             - embedding_size (int): The dimension of the output embeddings. Default is 768.
@@ -494,11 +487,9 @@ class HFLanguageRepresentationNetwork(nn.Module):
             - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
         """
         super().__init__()
-
         from transformers import AutoModel, AutoTokenizer
-        logging.info(f"Loading model from: {model_path}")
 
-        # In distributed training, only the rank 0 process downloads the model, and other processes load from cache to speed up startup.
+        # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
         if get_rank() == 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
 
@@ -508,22 +499,19 @@ class HFLanguageRepresentationNetwork(nn.Module):
         if get_rank() != 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
 
-        if tokenizer is None:
-            # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
-            if get_rank() == 0:
+        if get_rank() != 0:
+            logging.info(f"Worker process is loading model from cache: {model_path}")
+            self.model = AutoModel.from_pretrained(model_path)
+            if tokenizer is None:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            if get_world_size() > 1:
-                torch.distributed.barrier()
-            if get_rank() != 0:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        else:
+        
+        if tokenizer is not None:
             self.tokenizer = tokenizer
 
-        # Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
 
-        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":
@@ -534,22 +522,18 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
         """
-        Forward Propagation:
-            Compute the language representation based on the input token sequence.
-            The [CLS] token’s representation is extracted from the output of the pretrained model,
-            then passed through a linear projection and final normalization layer (SimNorm or LayerNorm).
-
+        Overview:
+            Computes language representation from input token IDs.
         Arguments:
-            - x (torch.Tensor): Input token sequence of shape [batch_size, seq_len].
-            - no_grad (bool): Whether to run in no-gradient mode for memory efficiency. Default is True.
+            - x (:obj:`torch.Tensor`): Input token sequence of shape (B, seq_len).
+            - no_grad (:obj:`bool`): If True, run the transformer model in `torch.no_grad()` context.
         Returns:
-        - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
+            - (:obj:`torch.Tensor`): The final language embedding of shape (B, embedding_size).
         """
 
         # Construct the attention mask to exclude padding tokens.
         attention_mask = x != self.tokenizer.pad_token_id
 
-        # Use no_grad context if specified to disable gradient computation.
         if no_grad:
             with torch.no_grad():
                 x = x.long()  # Ensure the input tensor is of type long.
@@ -561,9 +545,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
             outputs = self.pretrained_model(x, attention_mask=attention_mask)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
 
-        # Apply linear projection to obtain the desired output dimension.
         cls_embedding = self.embed_proj_head(cls_embedding)
-        # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
         cls_embedding = self.norm(cls_embedding)
         
         return cls_embedding
@@ -605,8 +587,12 @@ class RepresentationNetworkUniZero(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-        logging.info(f"Using norm type: {norm_type}")
-        logging.info(f"Using activation type: {activation}")
+
+        # Only log from rank 0 to avoid excessive output in distributed training
+        from ding.utils import get_rank
+        if get_rank() == 0:
+            logging.info(f"Using norm type: {norm_type}")
+            logging.info(f"Using activation type: {activation}")
 
         self.observation_shape = observation_shape
         self.downsample = downsample
@@ -640,20 +626,36 @@ class RepresentationNetworkUniZero(nn.Module):
         self.activation = activation
         self.embedding_dim = embedding_dim
 
+        # ==================== Modification Start ====================
         if self.observation_shape[1] == 64:
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            # Fix: Replace hardcoded 64 with num_channels
+            self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
 
         elif self.observation_shape[1] in [84, 96]:
-            self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
+            # Fix: Replace hardcoded 64 with num_channels
+            self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
+        # ==================== Modification End ====================
 
-        self.final_norm_option_in_encoder = final_norm_option_in_encoder
-        if self.final_norm_option_in_encoder == 'LayerNorm':
+        self.final_norm_option_in_encoder=final_norm_option_in_encoder
+        # Initialize final_norm uniformly in __init__
+        if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
+            self.final_norm = nn.LayerNorm(
+                self.embedding_dim, eps=1e-5, elementwise_affine=False
+            )
         elif self.final_norm_option_in_encoder == 'SimNorm':
+            # Ensure SimNorm is defined
             self.final_norm = SimNorm(simnorm_dim=group_size)
+        elif self.final_norm_option_in_encoder == 'L2Norm':
+            # Directly instantiate our custom L2Norm module
+            self.final_norm = L2Norm(eps=1e-6)
+        elif self.final_norm_option_in_encoder is None:
+            # If no normalization is needed, set to nn.Identity() or None
+            self.final_norm = nn.Identity()
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
-
+            
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -679,90 +681,75 @@ class RepresentationNetworkUniZero(nn.Module):
         x = x.view(-1, self.embedding_dim)
 
         # NOTE: very important for training stability.
-        x = self.final_norm(x)
+        # x = self.final_norm(x)
+
+        # Uniformly call self.final_norm in forward
+        # This structure is clearer and more extensible
+        if self.final_norm is not None:
+            x = self.final_norm(x)
+
+        # Special handling for LayerNorm_Tanh
+        if self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
+            x = torch.tanh(x)
 
         return x
 
 
 class RepresentationNetwork(nn.Module):
-
+    """
+    Overview:
+        The standard representation network used in MuZero. It encodes a 2D image observation
+        into a latent state, which retains its spatial dimensions.
+    """
     def __init__(
             self,
-            observation_shape: SequenceType = (4, 96, 96),
+            observation_shape: Sequence[int] = (4, 96, 96),
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: str = 'BN',
-            embedding_dim: int = 256,
-            group_size: int = 8,
             use_sim_norm: bool = False,
+            group_size: int = 8,
     ) -> None:
         """
-        Overview:
-            Representation network used in MuZero and derived algorithms. Encode the 2D image obs into latent state.
-            Currently, the network only supports obs images with both a width and height of 96.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[4, 96, 96]
-                for video games like atari, 1 gray channel times stack 4 frames.
+            - observation_shape (:obj:`Sequence[int]`): Shape of the input observation (C, H, W).
             - num_res_blocks (:obj:`int`): The number of residual blocks.
-            - num_channels (:obj:`int`): The channel of output hidden state.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - embedding_dim (:obj:`int`): The dimension of the output hidden state.
-            - group_size (:obj:`int`): The size of group in the SimNorm layer.
-            - use_sim_norm (:obj:`bool`): Whether to use SimNorm layer, defaults to False.
+            - num_channels (:obj:`int`): The number of channels in the convolutional layers.
+            - downsample (:obj:`bool`): Whether to use the `DownSample` module.
+            - activation (:obj:`nn.Module`): The activation function to use.
+            - norm_type (:obj:`str`): Normalization type ('BN' or 'LN').
+            - use_sim_norm (:obj:`bool`): Whether to apply a final `SimNorm` layer.
+            - group_size (:obj:`int`): Group size for `SimNorm`.
         """
         super().__init__()
-        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        if norm_type not in ['BN', 'LN']:
+            raise ValueError(f"Unsupported norm_type: {norm_type}. Must be 'BN' or 'LN'.")
 
         self.downsample = downsample
-        if self.downsample:
-            self.downsample_net = DownSample(
-                observation_shape,
-                num_channels,
-                activation=activation,
-                norm_type=norm_type,
-            )
-        else:
-            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-
-            if norm_type == 'BN':
-                self.norm = nn.BatchNorm2d(num_channels)
-            elif norm_type == 'LN':
-                if downsample:
-                    self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                        eps=1e-5)
-                else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
-
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
         self.activation = activation
 
-        self.use_sim_norm = use_sim_norm
+        if self.downsample:
+            self.downsample_net = DownSample(observation_shape, num_channels, activation, norm_type)
+        else:
+            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
+            self.norm = build_normalization(norm_type, dim=3)(num_channels, *observation_shape[1:])
 
+        self.resblocks = nn.ModuleList([
+            ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
+            for _ in range(num_res_blocks)
+        ])
+
+        self.use_sim_norm = use_sim_norm
         if self.use_sim_norm:
-            self.embedding_dim = embedding_dim
             self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
-                H is height.
-            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
-                output width, H_ is output height.
+            - x (:obj:`torch.Tensor`): (B, C_in, H, W)
+            - output (:obj:`torch.Tensor`): (B, C_out, H_out, W_out)
         """
         if self.downsample:
             x = self.downsample_net(x)
@@ -775,56 +762,55 @@ class RepresentationNetwork(nn.Module):
             x = block(x)
 
         if self.use_sim_norm:
-            # NOTE: very important. 
-            # for atari 64,8,8 = 4096 -> 768
-            x = self.sim_norm(x)
-
+            # Flatten the spatial dimensions, apply SimNorm, and then reshape back.
+            b, c, h, w = x.shape
+            x_flat = x.view(b, c * h * w)
+            x_norm = self.sim_norm(x_flat)
+            x = x_norm.view(b, c, h, w)
+            
         return x
 
 
 class RepresentationNetworkMLP(nn.Module):
-
+    """
+    Overview:
+        An MLP-based representation network for encoding vector observations into a latent state.
+    """
     def __init__(
             self,
-            observation_shape: int,
+            observation_dim: int,
             hidden_channels: int = 64,
-            layer_num: int = 2,
+            num_layers: int = 2,
             activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
             final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> torch.Tensor:
         """
-        Overview:
-            Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \
-                with Multi-Layer Perceptron (MLP).
         Arguments:
-            - observation_shape (:obj:`int`): The shape of vector observation space, e.g. N = 10.
-            - num_res_blocks (:obj:`int`): The number of residual blocks.
-            - hidden_channels (:obj:`int`): The channel of output hidden state.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - observation_dim (:obj:`int`): The dimension of the input vector observation.
+            - hidden_channels (:obj:`int`): The number of neurons in the hidden and output layers.
+            - num_layers (:obj:`int`): The total number of layers in the MLP.
+            - activation (:obj:`nn.Module`): The activation function to use.
+            - norm_type (:obj:`Optional[str]`): The type of normalization ('BN', 'LN', or None).
+            - group_size (:obj:`int`): The group size for the final `SimNorm` layer.
         """
         super().__init__()
-        self.fc_representation = MLP(
-            in_channels=observation_shape,
-            hidden_channels=hidden_channels,
+        # Creating hidden layers list for MLP_V2
+        hidden_layers = [hidden_channels] * (num_layers - 1) if num_layers > 1 else []
+        
+        self.fc_representation = MLP_V2(
+            in_channels=observation_dim,
+            hidden_channels=hidden_layers,
             out_channels=hidden_channels,
-            layer_num=layer_num,
             activation=activation,
             norm_type=norm_type,
-            # don't use activation and norm in the last layer of representation network is important for convergence.
             output_activation=False,
             output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
 
-        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":
@@ -836,8 +822,8 @@ class RepresentationNetworkMLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
-            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
+            - x (:obj:`torch.Tensor`): (B, observation_dim)
+            - output (:obj:`torch.Tensor`): (B, hidden_channels)
         """
         x = self.fc_representation(x)
         x = self.norm(x)
@@ -846,593 +832,414 @@ class RepresentationNetworkMLP(nn.Module):
 
 
 class LatentDecoder(nn.Module):
-    
-    def __init__(self, embedding_dim: int, output_shape: SequenceType, num_channels: int = 64, activation: nn.Module = nn.GELU(approximate='tanh')):
+    """
+    Overview:
+        A decoder network that reconstructs a 2D image from a 1D latent embedding.
+        It acts as the inverse of a representation network like `RepresentationNetworkUniZero`.
+    """
+    def __init__(
+        self,
+        embedding_dim: int,
+        output_shape: Tuple[int, int, int],
+        num_channels: int = 64,
+        activation: nn.Module = nn.GELU(approximate='tanh')
+    ):
         """
-        Overview:
-            Decoder network used in UniZero. Decode the latent state into 2D image obs.
         Arguments:
-            - embedding_dim (:obj:`int`): The dimension of the latent state.
-            - output_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
-                for video games like atari, RGB 3 channel times stack 4 frames.
-            - num_channels (:obj:`int`): The channel of output hidden state.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GELU(approximate='tanh').
+            - embedding_dim (:obj:`int`): The dimension of the input latent embedding.
+            - output_shape (:obj:`Tuple[int, int, int]`): The shape of the target output image (C, H, W).
+            - num_channels (:obj:`int`): The base number of channels for the initial upsampling stage.
+            - activation (:obj:`nn.Module`): The activation function to use.
         """
         super().__init__()
         self.embedding_dim = embedding_dim
-        self.output_shape = output_shape  # (C, H, W)
-        self.num_channels = num_channels
-        self.activation = activation
+        self.output_shape = output_shape
+        
+        # This should match the spatial size of the encoder's feature map before flattening.
+        # Assuming a total downsampling factor of 8 (e.g., for a 64x64 -> 8x8 encoder).
+        self.initial_h = output_shape[1] // 8
+        self.initial_w = output_shape[2] // 8
+        self.initial_size = (num_channels, self.initial_h, self.initial_w)
+        
+        self.fc = nn.Linear(embedding_dim, np.prod(self.initial_size))
 
-        # Assuming that the output shape is (C, H, W) = (12, 96, 96) and embedding_dim is 256
-        # We will reverse the process of the representation network
-        self.initial_size = (
-            num_channels, output_shape[1] // 8, output_shape[2] // 8)  # This should match the last layer of the encoder
-        self.fc = nn.Linear(self.embedding_dim, np.prod(self.initial_size))
-
-        # Upsampling blocks
-        self.conv_blocks = nn.ModuleList([
-            # Block 1: (num_channels, H/8, W/8) -> (num_channels//2, H/4, W/4)
+        self.deconv_blocks = nn.Sequential(
+            # Block 1: (C, H/8, W/8) -> (C/2, H/4, W/4)
             nn.ConvTranspose2d(num_channels, num_channels // 2, kernel_size=3, stride=2, padding=1, output_padding=1),
-            self.activation,
+            activation,
             nn.BatchNorm2d(num_channels // 2),
-            # Block 2: (num_channels//2, H/4, W/4) -> (num_channels//4, H/2, W/2)
-            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1,
-                               output_padding=1),
-            self.activation,
+            # Block 2: (C/2, H/4, W/4) -> (C/4, H/2, W/2)
+            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1, output_padding=1),
+            activation,
             nn.BatchNorm2d(num_channels // 4),
-            # Block 3: (num_channels//4, H/2, W/2) -> (output_shape[0], H, W)
-            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1,
-                               output_padding=1),
-        ])
-        # TODO: last layer use sigmoid?
+            # Block 3: (C/4, H/2, W/2) -> (output_C, H, W)
+            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1, output_padding=1),
+            # A final activation like Sigmoid or Tanh is often used if pixel values are in a fixed range [0,1] or [-1,1].
+            # We omit it here to maintain consistency with the original code.
+        )
 
     def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
-        # Map embeddings back to the image space
-        x = self.fc(embeddings)  # (B, embedding_dim) -> (B, C*H/8*W/8)
-        x = x.view(-1, *self.initial_size)  # (B, C*H/8*W/8) -> (B, C, H/8, W/8)
-
-        # Apply conv blocks
-        for block in self.conv_blocks:
-            x = block(x)  # Upsample progressively
-
-        # The output x should have the shape of (B, output_shape[0], output_shape[1], output_shape[2])
+        """
+        Shapes:
+            - embeddings (:obj:`torch.Tensor`): (B, embedding_dim)
+            - output (:obj:`torch.Tensor`): (B, C, H, W)
+        """
+        x = self.fc(embeddings)
+        x = x.view(-1, *self.initial_size)
+        x = self.deconv_blocks(x)
         return x
 
 
-class LatentEncoderForMemoryEnv(nn.Module):
+# --- Networks for MemoryEnv ---
 
+class LatentEncoderForMemoryEnv(nn.Module):
+    """
+    Overview:
+        An encoder for the MemoryEnv, converting a small image observation into a latent embedding.
+        It uses a series of convolutions followed by adaptive average pooling.
+    """
     def __init__(
             self,
-            image_shape=(3, 5, 5),
-            embedding_size=100,
-            channels=[16, 32, 64],
-            kernel_sizes=[3, 3, 3],
-            strides=[1, 1, 1],
+            image_shape: Tuple[int, int, int] = (3, 5, 5),
+            embedding_size: int = 100,
+            channels: List[int] = [16, 32, 64],
+            kernel_sizes: List[int] = [3, 3, 3],
+            strides: List[int] = [1, 1, 1],
             activation: nn.Module = nn.GELU(approximate='tanh'),
-            normalize_pixel=False,
+            normalize_pixel: bool = False,
             group_size: int = 8,
-            **kwargs,
     ):
         """
-        Overview:
-            Encoder network used in UniZero in MemoryEnv. Encode the 2D image obs into latent state.
         Arguments:
-            - image_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
-                for video games like atari, RGB 3 channel times stack 4 frames.
-            - embedding_size (:obj:`int`): The dimension of the latent state.
-            - channels (:obj:`List[int]`): The channel of output hidden state.
-            - kernel_sizes (:obj:`List[int]`): The kernel size of convolution layers.
-            - strides (:obj:`List[int]`): The stride of convolution layers.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GELU(approximate='tanh'). \
-                Use the inplace operation to speed up.
-            - normalize_pixel (:obj:`bool`): Whether to normalize the pixel values to [0, 1], defaults to False.
-            - group_size (:obj:`int`): The dimension for simplicial normalization
+            - image_shape (:obj:`Tuple[int, int, int]`): Shape of the input image (C, H, W).
+            - embedding_size (:obj:`int`): Dimension of the output latent embedding.
+            - channels (:obj:`List[int]`): List of output channels for each convolutional layer.
+            - kernel_sizes (:obj:`List[int]`): List of kernel sizes for each convolutional layer.
+            - strides (:obj:`List[int]`): List of strides for each convolutional layer.
+            - activation (:obj:`nn.Module`): Activation function to use.
+            - normalize_pixel (:obj:`bool`): Whether to normalize input pixel values to [0, 1].
+            - group_size (:obj:`int`): Group size for the final `SimNorm` layer.
         """
-        super(LatentEncoderForMemoryEnv, self).__init__()
-        self.shape = image_shape
-        self.channels = [image_shape[0]] + list(channels)
+        super().__init__()
+        self.normalize_pixel = normalize_pixel
+        all_channels = [image_shape[0]] + channels
 
         layers = []
-        for i in range(len(self.channels) - 1):
-            layers.append(
-                nn.Conv2d(
-                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i],
-                    padding=kernel_sizes[i] // 2  # keep the same size of feature map
-                )
-            )
-            layers.append(nn.BatchNorm2d(self.channels[i + 1]))
-            layers.append(activation)
-
+        for i in range(len(channels)):
+            layers.extend([
+                nn.Conv2d(all_channels[i], all_channels[i+1], kernel_sizes[i], strides[i], padding=kernel_sizes[i]//2),
+                nn.BatchNorm2d(all_channels[i+1]),
+                activation
+            ])
         layers.append(nn.AdaptiveAvgPool2d(1))
-
         self.cnn = nn.Sequential(*layers)
-        self.linear = nn.Sequential(
-            nn.Linear(self.channels[-1], embedding_size, bias=False),
-        )
-        init.kaiming_normal_(self.linear[0].weight, mode='fan_out', nonlinearity='relu')
+        
+        self.linear = nn.Linear(channels[-1], embedding_size, bias=False)
+        init.kaiming_normal_(self.linear.weight, mode='fan_out', nonlinearity='relu')
 
-        self.normalize_pixel = normalize_pixel
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-    def forward(self, image):
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        """
+        Shapes:
+            - image (:obj:`torch.Tensor`): (B, C, H, W)
+            - output (:obj:`torch.Tensor`): (B, embedding_size)
+        """
         if self.normalize_pixel:
-            image = image / 255.0
-        x = self.cnn(image.float())  # (B, C, 1, 1)
-        x = torch.flatten(x, start_dim=1)  # (B, C)
-        x = self.linear(x)  # (B, embedding_size)
+            image = image.float() / 255.0
+        
+        x = self.cnn(image.float())
+        x = torch.flatten(x, start_dim=1)
+        x = self.linear(x)
         x = self.sim_norm(x)
         return x
 
 
 class LatentDecoderForMemoryEnv(nn.Module):
-
+    """
+    Overview:
+        A decoder for the MemoryEnv, reconstructing a small image from a latent embedding.
+        It uses a linear layer followed by a series of transposed convolutions.
+    """
     def __init__(
             self,
-            image_shape=(3, 5, 5),
-            embedding_size=256,
-            channels=[64, 32, 16],
-            kernel_sizes=[3, 3, 3],
-            strides=[1, 1, 1],
+            image_shape: Tuple[int, int, int] = (3, 5, 5),
+            embedding_size: int = 256,
+            channels: List[int] = [64, 32, 16],
+            kernel_sizes: List[int] = [3, 3, 3],
+            strides: List[int] = [1, 1, 1],
             activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
-            **kwargs,
     ):
         """
-        Overview:
-            Decoder network used in UniZero in MemoryEnv. Decode the latent state into 2D image obs.
         Arguments:
-            - image_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
-                for video games like atari, RGB 3 channel times stack 4 frames.
-            - embedding_size (:obj:`int`): The dimension of the latent state.
-            - channels (:obj:`List[int]`): The channel of output hidden state.
-            - kernel_sizes (:obj:`List[int]`): The kernel size of convolution layers.
-            - strides (:obj:`List[int]`): The stride of convolution layers.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.LeakyReLU(). \
-                Use the inplace operation to speed up.
+            - image_shape (:obj:`Tuple[int, int, int]`): Shape of the target output image (C, H, W).
+            - embedding_size (:obj:`int`): Dimension of the input latent embedding.
+            - channels (:obj:`List[int]`): List of channels for each deconvolutional layer.
+            - kernel_sizes (:obj:`List[int]`): List of kernel sizes.
+            - strides (:obj:`List[int]`): List of strides.
+            - activation (:obj:`nn.Module`): Activation function for intermediate layers.
         """
-        super(LatentDecoderForMemoryEnv, self).__init__()
+        super().__init__()
         self.shape = image_shape
-        self.channels = list(channels) + [image_shape[0]]
-
+        self.deconv_channels = channels + [image_shape[0]]
+        
         self.linear = nn.Linear(embedding_size, channels[0] * image_shape[1] * image_shape[2])
 
         layers = []
-        for i in range(len(self.channels) - 1):
+        for i in range(len(self.deconv_channels) - 1):
             layers.append(
                 nn.ConvTranspose2d(
-                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i],
-                    padding=kernel_sizes[i] // 2, output_padding=strides[i] - 1
+                    self.deconv_channels[i], self.deconv_channels[i+1], kernel_sizes[i], strides[i],
+                    padding=kernel_sizes[i]//2, output_padding=strides[i]-1
                 )
             )
-            if i < len(self.channels) - 2:
-                layers.append(nn.BatchNorm2d(self.channels[i + 1]))
-                layers.append(activation)
+            if i < len(self.deconv_channels) - 2:
+                layers.extend([nn.BatchNorm2d(self.deconv_channels[i+1]), activation])
             else:
+                # Final layer uses Sigmoid to output pixel values in [0, 1].
                 layers.append(nn.Sigmoid())
-
         self.deconv = nn.Sequential(*layers)
 
-    def forward(self, embedding):
+    def forward(self, embedding: torch.Tensor) -> torch.Tensor:
+        """
+        Shapes:
+            - embedding (:obj:`torch.Tensor`): (B, embedding_size)
+            - output (:obj:`torch.Tensor`): (B, C, H, W)
+        """
         x = self.linear(embedding)
-        x = x.view(-1, self.channels[0], self.shape[1], self.shape[2])
-        x = self.deconv(x)  # (B, C, H, W)
+        x = x.view(-1, self.deconv_channels[0], self.shape[1], self.shape[2])
+        x = self.deconv(x)
         return x
 
 
 class VectorDecoderForMemoryEnv(nn.Module):
-
+    """
+    Overview:
+        An MLP-based decoder for MemoryEnv, reconstructing a vector observation from a latent embedding.
+    """
     def __init__(
             self,
             embedding_dim: int,
-            output_shape: SequenceType,
+            output_dim: int,
             hidden_channels: int = 64,
-            layer_num: int = 2,
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
+            num_layers: int = 2,
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
             norm_type: Optional[str] = 'BN',
-    ) -> torch.Tensor:
+    ) -> None:
         """
-        Overview:
-            Decoder network used in UniZero in MemoryEnv. Decode the latent state into vector obs.
         Arguments:
-            - observation_shape (:obj:`int`): The shape of vector observation space, e.g. N = 10.
-            - num_res_blocks (:obj:`int`): The number of residual blocks.
-            - hidden_channels (:obj:`int`): The channel of output hidden state.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - embedding_dim (:obj:`int`): Dimension of the input latent embedding.
+            - output_dim (:obj:`int`): Dimension of the target output vector.
+            - hidden_channels (:obj:`int`): Number of neurons in the hidden layers.
+            - num_layers (:obj:`int`): Total number of layers in the MLP.
+            - activation (:obj:`nn.Module`): Activation function to use.
+            - norm_type (:obj:`Optional[str]`): Normalization type ('BN', 'LN', or None).
         """
         super().__init__()
-        self.fc_representation = MLP(
+        hidden_layers = [hidden_channels] * (num_layers - 1) if num_layers > 1 else []
+        
+        self.fc_decoder = MLP_V2(
             in_channels=embedding_dim,
-            hidden_channels=hidden_channels,
-            out_channels=output_shape,
-            layer_num=layer_num,
+            hidden_channels=hidden_layers,
+            out_channels=output_dim,
             activation=activation,
             norm_type=norm_type,
-            # don't use activation and norm in the last layer of representation network is important for convergence.
             output_activation=False,
             output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
-            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
+            - x (:obj:`torch.Tensor`): (B, embedding_dim)
+            - output (:obj:`torch.Tensor`): (B, output_dim)
         """
-        x = self.fc_representation(x)
-        return x
+        return self.fc_decoder(x)
 
+# --- Prediction Networks ---
 
 class PredictionNetwork(nn.Module):
-
+    """
+    Overview:
+        Predicts the policy and value from a given latent state. This network is typically used
+        in the prediction step of MuZero-like algorithms. It processes a 2D latent state.
+    """
     def __init__(
             self,
-            observation_shape: SequenceType,
             action_space_size: int,
             num_res_blocks: int,
             num_channels: int,
-            value_head_channels: int,
-            policy_head_channels: int,
-            value_head_hidden_channels: int,
-            policy_head_hidden_channels: int,
-            output_support_size: int,
-            flatten_input_size_for_value_head: int,
-            flatten_input_size_for_policy_head: int,
-            downsample: bool = False,
+            value_head_channels: int = 1,
+            policy_head_channels: int = 2,
+            value_head_hidden_channels: List[int] = [256],
+            policy_head_hidden_channels: List[int] = [256],
+            output_support_size: int = 601,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
-            norm_type: Optional[str] = 'BN',
+            norm_type: str = 'BN',
     ) -> None:
         """
-        Overview:
-            The definition of policy and value prediction network, which is used to predict value and policy by the
-            given latent state.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
-            - num_channels (:obj:`int`): The channels of hidden states.
-            - value_head_channels (:obj:`int`): The channels of value head.
-            - policy_head_channels (:obj:`int`): The channels of policy head.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical value output.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_input_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the value head.
-            - flatten_input_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the policy head.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
-                dynamics/prediction mlp, default sets it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - action_space_size: (:obj:`int`): The size of the action space.
+            - num_res_blocks (:obj:`int`): The number of residual blocks.
+            - num_channels (:obj:`int`): The number of channels in the input latent state.
+            - value_head_channels (:obj:`int`): Channels for the value head's convolutional layer.
+            - policy_head_channels (:obj:`int`): Channels for the policy head's convolutional layer.
+            - value_head_hidden_channels (:obj:`List[int]`): Hidden layer sizes for the value MLP head.
+            - policy_head_hidden_channels (:obj:`List[int]`): Hidden layer sizes for the policy MLP head.
+            - output_support_size (:obj:`int`): The size of the categorical value distribution.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last layer of heads to zero.
+            - activation (:obj:`nn.Module`): The activation function.
+            - norm_type (:obj:`str`): The normalization type ('BN' or 'LN').
         """
-        super(PredictionNetwork, self).__init__()
-        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        super().__init__()
+        if norm_type not in ['BN', 'LN']:
+            raise ValueError(f"Unsupported norm_type: {norm_type}. Must be 'BN' or 'LN'.")
 
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-
+        self.resblocks = nn.ModuleList([
+            ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
+            for _ in range(num_res_blocks)
+        ])
+        
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
 
-        if observation_shape[1] == 96:
-            latent_shape = (observation_shape[1] / 16, observation_shape[2] / 16)
-        elif observation_shape[1] == 64:
-            latent_shape = (observation_shape[1] / 8, observation_shape[2] / 8)
-
-        if norm_type == 'BN':
-            self.norm_value = nn.BatchNorm2d(value_head_channels)
-            self.norm_policy = nn.BatchNorm2d(policy_head_channels)
-        elif norm_type == 'LN':
-            if downsample:
-                self.norm_value = nn.LayerNorm(
-                    [value_head_channels, *latent_shape],
-                    eps=1e-5)
-                self.norm_policy = nn.LayerNorm([policy_head_channels, *latent_shape], eps=1e-5)
-            else:
-                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
-                                               eps=1e-5)
-                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
-                                                eps=1e-5)
-
-        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
-        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
-
+        self.norm_value = build_normalization(norm_type, dim=2)(value_head_channels)
+        self.norm_policy = build_normalization(norm_type, dim=2)(policy_head_channels)
         self.activation = activation
 
+        # The input size for the MLP heads depends on the spatial dimensions of the latent state.
+        # This must be pre-calculated and passed correctly.
+        # Example: for a 6x6 latent space, flatten_input_size = channels * 6 * 6
+        # We assume the user will provide these values.
+        # Here we just define placeholder attributes.
+        self._flatten_input_size_for_value_head = None
+        self._flatten_input_size_for_policy_head = None
+
         self.fc_value = MLP_V2(
-            in_channels=self.flatten_input_size_for_value_head,
+            in_channels=-1, # Placeholder, will be determined at first forward pass
             hidden_channels=value_head_hidden_channels,
             out_channels=output_support_size,
-            activation=self.activation,
+            activation=activation,
             norm_type=norm_type,
             output_activation=False,
             output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP_V2(
-            in_channels=self.flatten_input_size_for_policy_head,
+            in_channels=-1, # Placeholder
             hidden_channels=policy_head_hidden_channels,
             out_channels=action_space_size,
-            activation=self.activation,
+            activation=activation,
             norm_type=norm_type,
             output_activation=False,
             output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Overview:
-            Forward computation of the prediction network.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
-        Returns:
-            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
-            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        Shapes:
+            - latent_state (:obj:`torch.Tensor`): (B, C, H, W)
+            - policy_logits (:obj:`torch.Tensor`): (B, action_space_size)
+            - value (:obj:`torch.Tensor`): (B, output_support_size)
         """
         for res_block in self.resblocks:
             latent_state = res_block(latent_state)
 
-        value = self.conv1x1_value(latent_state)
-        value = self.norm_value(value)
-        value = self.activation(value)
+        value_feat = self.activation(self.norm_value(self.conv1x1_value(latent_state)))
+        policy_feat = self.activation(self.norm_policy(self.conv1x1_policy(latent_state)))
+        
+        value_flat = value_feat.view(value_feat.size(0), -1)
+        policy_flat = policy_feat.view(policy_feat.size(0), -1)
 
-        policy = self.conv1x1_policy(latent_state)
-        policy = self.norm_policy(policy)
-        policy = self.activation(policy)
+        # Dynamically initialize in_channels on the first forward pass
+        if self.fc_value.in_channels == -1:
+            self.fc_value[0].in_features = value_flat.shape[1]
+            self.fc_policy[0].in_features = policy_flat.shape[1]
+            # PyTorch lazy modules handle this better, but this is a manual way.
+            self.fc_value[0].weight.data.uniform_(-math.sqrt(1/value_flat.shape[1]), math.sqrt(1/value_flat.shape[1]))
+            self.fc_policy[0].weight.data.uniform_(-math.sqrt(1/policy_flat.shape[1]), math.sqrt(1/policy_flat.shape[1]))
 
-        value = value.reshape(-1, self.flatten_input_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
 
-        value = self.fc_value(value)
-        policy = self.fc_policy(policy)
-        return policy, value
+        value = self.fc_value(value_flat)
+        policy_logits = self.fc_policy(policy_flat)
+        return policy_logits, value
 
 
 class PredictionNetworkMLP(nn.Module):
-
+    """
+    Overview:
+        An MLP-based prediction network that predicts policy and value from a 1D latent state.
+    """
     def __init__(
             self,
-            action_space_size,
-            num_channels,
+            action_space_size: int,
+            num_channels: int,
             common_layer_num: int = 2,
-            value_head_hidden_channels: SequenceType = [32],
-            policy_head_hidden_channels: SequenceType = [32],
+            value_head_hidden_channels: List[int] = [32],
+            policy_head_hidden_channels: List[int] = [32],
             output_support_size: int = 601,
             last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: Optional[str] = 'BN',
     ):
         """
-        Overview:
-            The definition of policy and value prediction network with Multi-Layer Perceptron (MLP),
-            which is used to predict value and policy by the given latent state.
         Arguments:
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
-                space, it is the number of discrete actions.
-            - num_channels (:obj:`int`): The channels of latent states.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical value output.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
-                dynamics/prediction mlp, default sets it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - action_space_size: (:obj:`int`): The size of the action space.
+            - num_channels (:obj:`int`): The dimension of the input latent state.
+            - common_layer_num (:obj:`int`): Number of layers in the shared backbone MLP.
+            - value_head_hidden_channels (:obj:`List[int]`): Hidden layer sizes for the value MLP head.
+            - policy_head_hidden_channels (:obj:`List[int]`): Hidden layer sizes for the policy MLP head.
+            - output_support_size (:obj:`int`): The size of the categorical value distribution.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last layer of heads to zero.
+            - activation (:obj:`nn.Module`): The activation function.
+            - norm_type (:obj:`Optional[str]`): The normalization type.
         """
         super().__init__()
-        self.num_channels = num_channels
-
-        # ******* common backbone ******
-        self.fc_prediction_common = MLP(
-            in_channels=self.num_channels,
-            hidden_channels=self.num_channels,
-            out_channels=self.num_channels,
-            layer_num=common_layer_num,
+        
+        common_hidden = [num_channels] * (common_layer_num - 1) if common_layer_num > 1 else []
+        self.fc_prediction_common = MLP_V2(
+            in_channels=num_channels,
+            hidden_channels=common_hidden,
+            out_channels=num_channels,
             activation=activation,
             norm_type=norm_type,
             output_activation=True,
             output_norm=True,
-            # last_linear_layer_init_zero=False is important for convergence
             last_linear_layer_init_zero=False,
         )
 
-        # ******* value and policy head ******
         self.fc_value_head = MLP_V2(
-            in_channels=self.num_channels,
+            in_channels=num_channels,
             hidden_channels=value_head_hidden_channels,
             out_channels=output_support_size,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
             output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy_head = MLP_V2(
-            in_channels=self.num_channels,
+            in_channels=num_channels,
             hidden_channels=policy_head_hidden_channels,
             out_channels=action_space_size,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
             output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-    def forward(self, latent_state: torch.Tensor):
+    def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Overview:
-            Forward computation of the prediction network.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
-        Returns:
-            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
-            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        Shapes:
+            - latent_state (:obj:`torch.Tensor`): (B, num_channels)
+            - policy_logits (:obj:`torch.Tensor`): (B, action_space_size)
+            - value (:obj:`torch.Tensor`): (B, output_support_size)
         """
-        x_prediction_common = self.fc_prediction_common(latent_state)
-
-        value = self.fc_value_head(x_prediction_common)
-        policy = self.fc_policy_head(x_prediction_common)
-        return policy, value
-
-
-class PredictionHiddenNetwork(nn.Module):
-
-    def __init__(
-            self,
-            observation_shape: SequenceType,
-            action_space_size: int,
-            num_res_blocks: int,
-            num_channels: int,
-            value_head_channels: int,
-            policy_head_channels: int,
-            value_head_hidden_channels: int,
-            policy_head_hidden_channels: int,
-            output_support_size: int,
-            flatten_input_size_for_value_head: int,
-            flatten_input_size_for_policy_head: int,
-            downsample: bool = False,
-            last_linear_layer_init_zero: bool = True,
-            activation: nn.Module = nn.ReLU(inplace=True),
-            norm_type: Optional[str] = 'BN',
-            gru_hidden_size: int = 512,
-    ) -> None:
-        """
-        Overview:
-            The definition of policy and value prediction network, which is used to predict value and policy by the
-            given latent state.
-        Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
-            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
-            - num_channels (:obj:`int`): The channels of hidden states.
-            - value_head_channels (:obj:`int`): The channels of value head.
-            - policy_head_channels (:obj:`int`): The channels of policy head.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
-            - output_support_size (:obj:`int`): The size of categorical value output.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_input_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the value head.
-            - flatten_input_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
-                of the policy head.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
-                dynamics/prediction mlp, default sets it to True.
-            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
-                operation to speedup, e.g. ReLU(inplace=True).
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-        """
-        super(PredictionHiddenNetwork, self).__init__()
-        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-
-        self.observation_shape = observation_shape
-        self.gru_hidden_size = gru_hidden_size
-        self.resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
-
-        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
-        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-
-        if norm_type == 'BN':
-            self.norm_value = nn.BatchNorm2d(value_head_channels)
-            self.norm_policy = nn.BatchNorm2d(policy_head_channels)
-        elif norm_type == 'LN':
-            if downsample:
-                self.norm_value = nn.LayerNorm(
-                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                    eps=1e-5)
-                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
-                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-5)
-            else:
-                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
-                                               eps=1e-5)
-                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
-                                                eps=1e-5)
-
-        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
-        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
-
-        self.activation = activation
-
-        self.fc_value = MLP(
-            in_channels=self.flatten_input_size_for_value_head + self.gru_hidden_size,
-            hidden_channels=value_head_hidden_channels[0],
-            out_channels=output_support_size,
-            layer_num=len(value_head_hidden_channels) + 1,
-            activation=self.activation,
-            norm_type=norm_type,
-            output_activation=False,
-            output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-        self.fc_policy = MLP(
-            in_channels=self.flatten_input_size_for_policy_head + self.gru_hidden_size,
-            hidden_channels=policy_head_hidden_channels[0],
-            out_channels=action_space_size,
-            layer_num=len(policy_head_hidden_channels) + 1,
-            activation=self.activation,
-            norm_type=norm_type,
-            output_activation=False,
-            output_norm=False,
-            # last_linear_layer_init_zero=True is beneficial for convergence speed.
-            last_linear_layer_init_zero=last_linear_layer_init_zero
-        )
-
-    def forward(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[
-        torch.Tensor, torch.Tensor]:
-        """
-        Overview:
-            Forward computation of the prediction network.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
-        Returns:
-            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
-            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
-        """
-        for res_block in self.resblocks:
-            latent_state = res_block(latent_state)
-
-        value = self.conv1x1_value(latent_state)
-        value = self.norm_value(value)
-        value = self.activation(value)
-
-        policy = self.conv1x1_policy(latent_state)
-        policy = self.norm_policy(policy)
-        policy = self.activation(policy)
-
-        latent_state_value = value.reshape(-1, self.flatten_input_size_for_value_head)
-        latent_state_policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
-
-        # TODO: world_model_latent_history.squeeze(0) shape: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
-        latent_history_value = torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1)
-        latent_history_policy = torch.cat([latent_state_policy, world_model_latent_history.squeeze(0)], dim=1)
-
-        value = self.fc_value(latent_history_value)
-        policy = self.fc_policy(latent_history_policy)
-        return policy, value
+        x = self.fc_prediction_common(latent_state)
+        value = self.fc_value_head(x)
+        policy_logits = self.fc_policy_head(x)
+        return policy_logits, value

@@ -151,7 +151,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
-            train_start_after_envsteps=0,
+            train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
             replay_buffer_size=int(5e5),
             eval_freq=int(3e4),
             collector_env_num=collector_env_num,

@@ -380,6 +380,9 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self.pad_token_id = 0 # for compatibility
 
 
+        encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+        self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
+        
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
