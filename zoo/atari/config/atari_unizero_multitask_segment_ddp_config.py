@@ -93,7 +93,7 @@ def create_config(
     """
     return EasyDict(dict(
         env=dict(
-            frame_skip=1, # TODO
+            frame_skip=1,  # TODO
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
@@ -105,9 +105,6 @@ def create_config(
             full_action_space=True,
             collect_max_episode_steps=int(5e3),
             eval_max_episode_steps=int(5e3),
-
-            # collect_max_episode_steps=int(50), # debug
-            # eval_max_episode_steps=int(50),
         ),
         policy=dict(
             multi_gpu=True,  # Essential for DDP (Distributed Data Parallel)
@@ -140,8 +137,6 @@ def create_config(
                     predict_latent_loss_type='mse',
                     share_head=False,
                     analysis_dormant_ratio_weight_rank=False,
-                    # analysis_dormant_ratio_weight_rank=True,
-                    # analysis_dormant_ratio_interval=5000,
                     continuous_action_space=False,
                     task_embed_option=None,
                     use_task_embed=False,
@@ -152,29 +147,22 @@ def create_config(
                     device='cuda',
                     action_space_size=action_space_size,
                     num_layers=num_layers,
-                    # num_heads=24,
                     num_heads=8,
                     embed_dim=768,
                     obs_type='image',
                     env_num=len(env_id_list),
                     task_num=len(env_id_list),
-                    # game_segment_length=game_segment_length,
-                    game_segment_length=20, # TODO
+                    game_segment_length=20,  # TODO
                     use_priority=True,
-                    # use_priority=False, # TODO=====
                     priority_prob_alpha=1,
                     priority_prob_beta=1,
                     encoder_type='vit',
-                    # encoder_type='resnet',
                     use_normal_head=True,
                     use_softmoe_head=False,
                     use_moe_head=False,
                     num_experts_in_moe_head=4,
                     moe_in_transformer=False,
-
                     multiplication_moe_in_transformer=True,
-                    # multiplication_moe_in_transformer=False, # TODO===============
-
                     n_shared_experts=1,
                     num_experts_per_tok=1,
                     num_experts_of_moe_in_transformer=8,
@@ -183,62 +171,49 @@ def create_config(
                     lora_r=0,
                     lora_alpha=1,
                     lora_dropout=0.0,
-
-
-                    optim_type='AdamW_mix_lr_wdecay', # only for tsne plot
+                    optim_type='AdamW_mix_lr_wdecay',  # only for tsne plot
                 ),
             ),
             optim_type='AdamW_mix_lr_wdecay',
-            weight_decay=1e-2, # TODO: encoder 5*wd, transformer wd, head 0
+            weight_decay=1e-2,  # TODO: encoder 5*wd, transformer wd, head 0
             learning_rate=0.0001,
 
-            # (bool) 是否启用自适应策略熵权重 (alpha)
+            # ==================== Adaptive Entropy Weight Configuration ====================
+            # (bool) Whether to enable adaptive policy entropy weight (alpha)
             use_adaptive_entropy_weight=True,
-            # use_adaptive_entropy_weight=False,
-
-            # (float) 自适应alpha优化器的学习率
-            # adaptive_entropy_alpha_lr=1e-4,
+            # (float) Learning rate for adaptive alpha optimizer
             adaptive_entropy_alpha_lr=1e-3,
-            target_entropy_start_ratio =0.98,
-            # target_entropy_end_ratio =0.9, # TODO=====
-            # target_entropy_end_ratio =0.7,
-            # target_entropy_decay_steps = 100000, # 例如，在100k次迭代后达到最终值
+            target_entropy_start_ratio=0.98,
+            target_entropy_end_ratio=0.5,  # for action_space=18
+            target_entropy_decay_steps=100000,  # e.g., reach final value after 150k iterations (300k envsteps)
 
-            target_entropy_end_ratio =0.5, # for action_space=18
-            target_entropy_decay_steps = 100000, # 例如，在150k次迭代 300k envsteps后达到最终值
-            # target_entropy_decay_steps = 150000, # 例如，在150k次迭代 300k envsteps后达到最终值
-
-            # ==================== START: Encoder-Clip Annealing Config ====================
-            # (bool) 是否启用 encoder-clip 值的退火。
+            # ==================== Encoder-Clip Annealing Configuration ====================
+            # (bool) Whether to enable encoder-clip value annealing.
             use_encoder_clip_annealing=True,
-            # (str) 退火类型。可选 'linear' 或 'cosine'。
+            # (str) Annealing type. Options: 'linear' or 'cosine'.
             encoder_clip_anneal_type='cosine',
-            # (float) 退火的起始 clip 值 (训练初期，较宽松)。
+            # (float) Starting clip value for annealing (early training, more relaxed).
             encoder_clip_start_value=30.0,
-            # (float) 退火的结束 clip 值 (训练后期，较严格)。
+            # (float) Ending clip value for annealing (late training, more strict).
             encoder_clip_end_value=10.0,
-            # (int) 完成从起始值到结束值的退火所需的训练迭代步数。
-            encoder_clip_anneal_steps=100000,  # 例如，在100k次迭代后达到最终值
-            # encoder_clip_anneal_steps=50000,  # 例如，在30k次迭代后达到最终值
+            # (int) Number of training iterations required to complete annealing from start to end value.
+            encoder_clip_anneal_steps=100000,  # e.g., reach final value after 100k iterations
 
-
-            # ==================== START: label smooth ====================
-            policy_ls_eps_start=0.05, #TODO============= good start in Pong and MsPacman
+            # ==================== Label Smoothing Configuration ====================
+            policy_ls_eps_start=0.05,  # TODO============= good start in Pong and MsPacman
             policy_ls_eps_end=0.01,
-            policy_ls_eps_decay_steps=50000, # 50k
-            label_smoothing_eps=0.1,  #TODO============= for value
+            policy_ls_eps_decay_steps=50000,  # 50k
+            label_smoothing_eps=0.1,  # TODO============= for value
 
-            # ==================== [新增] 范数监控频率 ====================
-            # 每隔多少个训练迭代步数，监控一次模型参数的范数。设置为0则禁用。
+            # ==================== Norm Monitoring Frequency ====================
+            # Monitor model parameter norms every N training iterations. Set to 0 to disable.
             monitor_norm_freq=10000,
-            # monitor_norm_freq=2,  # only for debug
 
             use_task_exploitation_weight=False,
             task_complexity_weight=False,
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
-            # use_priority=False, # TODO=====
             use_priority=True,
             priority_prob_alpha=1,
             priority_prob_beta=1,
@@ -250,17 +225,13 @@ def create_config(
             update_per_collect=80,  # Corresponds to replay_ratio=0.5 for 8 games (20*8*0.5=80)
             replay_ratio=0.25,
             batch_size=batch_size,
-            # optim_type='AdamW',
             cos_lr_scheduler=False,
             num_segments=num_segments,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5),
-            # eval_freq=int(2e4),  # Evaluation frequency for 26 games
             eval_freq=int(1e4),  # Evaluation frequency for 8 games
-            # eval_freq=int(1e4),  # Evaluation frequency for 8 games
-            # eval_freq=int(2),  # ======== TODO: only for debug========
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -289,23 +260,11 @@ def generate_configs(
           and its corresponding configuration objects.
     """
     configs = []
+
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
-    # benchmark_tag = "data_unizero_mt_refactor1010_debug"  # e.g., unizero_atari_mt_20250612
-    benchmark_tag = "data_unizero_mt_refactor1121"  # e.g., unizero_atari_mt_20250612
-
-    # model_tag = f"vit-small_moe8_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}_not-share-head"
-    # model_tag = f"resnet_noprior_noalpha_nomoe_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
-    
-    # model_tag = f"vit_prior_alpha-100k-098-07_encoder-100k-30-10_moe8_head-inner-ln_adamw-wd1e-2_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
-
-    # model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-100k-098-07_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
+    benchmark_tag = "data_unizero_mt_refactor1121"
     model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
-    
-    # model_tag = f"resnet_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
-    
-    # model_tag = f"resnet_encoder-100k-30-10-true_label-smooth_prior_alpha-150k-098-05_moe8_head-inner-ln_adamw-wd1e-2-all_tbs512_tran-nlayer{num_layers}_brf{buffer_reanalyze_freq}"
-
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
@@ -315,7 +274,6 @@ def generate_configs(
             buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size, num_layers
         )
         config.policy.task_id = task_id
-        # --- MODIFIED LINE ---
         # Correctly extract the game name from 'ALE/GameName-v5' format.
         game_name = env_id.split('/')[1].split('-')[0]
         config.exp_name = exp_name_prefix + f"{game_name}_seed{seed}"
@@ -347,51 +305,39 @@ if __name__ == "__main__":
     """
     Overview:
         This script should be executed with <nproc_per_node> GPUs for distributed training.
-        Run the following command to launch the script:
 
-        Example launch command:
+        Example launch commands:
+
         export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-
         export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
-
         export CUDA_VISIBLE_DEVICES=4,5,6,7
 
         cd /path/to/your/project/
-        
-        torchrun --nproc_per_node=4 /mnt/afs/wanzunian/niuyazhe/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/afs/wanzunian/niuyazhe/puyuan/LightZero/logs/202511/atari26_scalezero_nlayer1.log
 
-        
-        /mnt/shared-storage-user/puyuan/lz/bin/python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/shared-storage-user/puyuan/code_20250828/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code_20250828/LightZero/log/20251024_vit_nlayer2_alpha-100k-098-05.log
+        torchrun --nproc_per_node=4 /mnt/shared-storage-user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code/LightZero/logs/202512/atari8_uz_mt.log
 
-        python -m torch.distributed.launch --nproc_per_node=6 --master_port=29502 /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee /mnt/nfs/zhangjinouwen/puyuan/LightZero/log/20251012_resnet_nlayer4_alpha-100k-098-05.log
-            /path/to/this/script.py 2>&1 | tee /path/to/your/log/file.log
+        /mnt/shared-storage-user/puyuan/lz/bin/python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /mnt/shared-storage-user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py  2>&1 | tee /mnt/shared-storage-user/puyuan/code/LightZero/logs/202512/atari8_uz_mt.log
+
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     import torch.distributed as dist
     import os
 
-    # --- Main Experiment Settings ---
-    # num_games = 8  # Options: 3, 8, 26
-    num_games = 26  # Options: 3, 8, 26
-    
+    # ==================== Main Experiment Settings ====================
+    num_games = 8  # Options: 3, 8, 26
     num_layers = 2
-    # num_layers = 8
-    # num_layers = 1
-    
-    
-    # num_layers = 2 # debug
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    # max_env_step = int(4e5)
-    max_env_step = int(5e6) # TODO
+    max_env_step = int(5e6)  # TODO
     reanalyze_ratio = 0.0
 
-    # --- MODIFIED SECTION: Standardized env_id_list formats ---
+    # ==================== Environment Configuration ====================
+    # Standardized env_id_list formats
     if num_games == 3:
         env_id_list = ['ALE/Pong-v5', 'ALE/MsPacman-v5', 'ALE/Seaquest-v5']
     elif num_games == 8:
@@ -412,7 +358,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Unsupported number of environments: {num_games}")
 
-    # --- Batch Size Calculation ---
+    # ==================== Batch Size Calculation ====================
     # The effective batch size is adjusted based on the number of games and model size (layers)
     # to fit within GPU memory constraints.
     if len(env_id_list) == 8:
@@ -429,10 +375,10 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Batch size not configured for {len(env_id_list)} environments.")
 
-    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size, gpu_num=6) # TODO
+    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size, gpu_num=6)  # TODO
     total_batch_size = effective_batch_size  # Currently for logging purposes
 
-    # --- Model and Training Settings ---
+    # ==================== Model and Training Settings ====================
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
@@ -440,19 +386,7 @@ if __name__ == "__main__":
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
-    # ====== only for debug =====
-    # num_games = 8  # Options: 3, 8, 26
-    # num_layers = 2 # debug
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 5
-    # batch_sizes = [num_games] * len(env_id_list)
-    # buffer_reanalyze_freq = 1/100000000
-    # total_batch_size = num_games * len(env_id_list)
-
-
-    # --- Training Loop ---
+    # ==================== Training Loop ====================
     for seed in [0]:
         configs = generate_configs(
             env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,

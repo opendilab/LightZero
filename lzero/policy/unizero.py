@@ -20,13 +20,11 @@ from .utils import configure_optimizers_nanogpt
 from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
 import torch.nn.functional as F
 
-# ==================== Head Clip Manager ====================
 from lzero.policy.head_clip_manager import (
     HeadClipManager,
     create_head_clip_manager_from_dict,
     HeadClipConfig,
 )
-# ===========================================================
 
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
@@ -68,21 +66,16 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         {
             'params': list(tokenizer_params.values()),
             'lr': learning_rate,  # Tokenizer uses base learning rate, e.g., 1e-4
-            # 'lr': learning_rate * 0.1,  # Set a smaller learning rate for encoder, e.g., 1e-5
-            # 'weight_decay': weight_decay * 5.0  # <-- Set 5x weight decay for Encoder! This is a strong regularization
-            'weight_decay': weight_decay  # <-- Set 5x weight decay for Encoder! This is a strong regularization
+            'weight_decay': weight_decay
         },
         {
             'params': list(transformer_params.values()),
             'lr': learning_rate,  # 1e-4
-            # 'lr': learning_rate * 0.2,  # Set a smaller learning rate for Transformer backbone, e.g., 1e-5
             'weight_decay': weight_decay
-            # 'weight_decay': weight_decay * 5.0
         },
         {
             'params': list(head_params.values()),
             'lr': learning_rate,  # Heads also use base learning rate, e.g., 1e-4
-            # 'weight_decay': 0.0  # Usually Heads' weights are not decayed
             'weight_decay': weight_decay
 
         }
@@ -94,7 +87,7 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
 
     optimizer = torch.optim.AdamW(optim_groups, betas=betas)
     return optimizer
-    
+
 @POLICY_REGISTRY.register('unizero')
 class UniZeroPolicy(MuZeroPolicy):
     """
@@ -219,7 +212,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 lora_r= 0,
                 # Controls where to compute reconstruction loss: 'after_backbone', 'before_backbone', or None.
                 #   - after_backbone: The reconstruction loss is computed after the encoded representation passes through the backbone.
-		        #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
+	        #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
                 decode_loss_mode=None,
             ),
         ),
@@ -414,7 +407,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.
         random_collect_episode_num=0,
-        
+
         # ****** Explore by eps greedy ******
         eps=dict(
             # (bool) Whether to use eps greedy exploration in collecting data.
@@ -533,12 +526,12 @@ class UniZeroPolicy(MuZeroPolicy):
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         if self._cfg.optim_type == 'SGD':
-            # --- 改为SGD优化器 ---
+            # Configure SGD optimizer
             self._optimizer_world_model = torch.optim.SGD(
                 self._model.world_model.parameters(),
-                lr=self._cfg.learning_rate,  # 初始学习率，在配置中设为 0.2
-                momentum=self._cfg.momentum, # 在配置中设为 0.9
-                weight_decay=self._cfg.weight_decay # 在配置中设为 1e-4
+                lr=self._cfg.learning_rate,
+                momentum=self._cfg.momentum,
+                weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
             # NOTE: nanoGPT optimizer
@@ -552,7 +545,7 @@ class UniZeroPolicy(MuZeroPolicy):
         elif self._cfg.optim_type == 'AdamW_mix_lr_wdecay':
             self._optimizer_world_model = configure_optimizer_unizero(
                 model=self._model.world_model,
-                learning_rate=self._cfg.learning_rate,  # 使用一个合理的AdamW基础学习率
+                learning_rate=self._cfg.learning_rate,
                 weight_decay=self._cfg.weight_decay,
                 device_type=self._cfg.device,
                 betas=(0.9, 0.95),
@@ -560,17 +553,12 @@ class UniZeroPolicy(MuZeroPolicy):
 
         if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
-            # TODO: check the total training steps
-            # self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
             total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
-            # final_lr = self._cfg.get('final_learning_rate', 0.0)
-            # final_lr = self._cfg.get('final_learning_rate', 1e-6)
             final_lr = self._cfg.get('final_learning_rate', 4e-5)
 
-
             self.lr_scheduler = CosineAnnealingLR(
-                self._optimizer_world_model, 
-                T_max=total_iters, 
+                self._optimizer_world_model,
+                T_max=total_iters,
                 eta_min=final_lr
             )
             print(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
@@ -620,7 +608,7 @@ class UniZeroPolicy(MuZeroPolicy):
             encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
             self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
 
-        
+
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
@@ -707,13 +695,12 @@ class UniZeroPolicy(MuZeroPolicy):
             self.head_clip_manager = None
         # ===================== END: Initialize Head-Clip Manager =====================
 
-        # --- NEW: Policy Label Smoothing Parameters ---
-        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start 越大的action space需要越大的eps
-        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
-        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
+        # Policy Label Smoothing Parameters
+        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05)
+        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01)
+        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000)
         print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
 
-    # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -734,8 +721,8 @@ class UniZeroPolicy(MuZeroPolicy):
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
 
-        # --- NEW: Calculate current epsilon for policy ---
-        # ==================== [NEW] Fix2: Continuous Label Smoothing ====================
+        # Calculate current epsilon for policy label smoothing
+        # ==================== Continuous Label Smoothing ====================
         use_continuous_label_smoothing = self._cfg.get('use_continuous_label_smoothing', False)
         if use_continuous_label_smoothing:
             # Use fixed high epsilon throughout training
@@ -753,7 +740,7 @@ class UniZeroPolicy(MuZeroPolicy):
         if self._cfg.model.frame_stack_num > 1:
             obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
         else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
@@ -777,9 +764,6 @@ class UniZeroPolicy(MuZeroPolicy):
         transformed_target_value = scalar_transform(target_value)
 
         # Convert to categorical distributions
-        # target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
-
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
 
@@ -803,7 +787,7 @@ class UniZeroPolicy(MuZeroPolicy):
                                             device=self._cfg.device)
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
 
-        # ==================== [FIXED] Fix2: Apply Policy Label Smoothing ====================
+        # ==================== Apply Policy Label Smoothing ====================
         # This was previously computed but never applied. Now we actually smooth the target_policy.
         smoothed_target_policy = target_policy[:, :-1]
         if current_policy_label_eps > 0:
@@ -824,31 +808,31 @@ class UniZeroPolicy(MuZeroPolicy):
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
-        )           # NOTE : compute_loss third argument is now a dead argument. If this changes, it could need adaptation between value_inverse and reward_inverse.
+        )
 
-        # ==================== [修改] 集成范数监控逻辑 ====================
+        # ==================== Integrate norm monitoring logic ====================
         norm_log_dict = {}
-        # 检查是否达到监控频率
+        # Check if monitoring frequency is reached
         if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
             with torch.no_grad():
-                # 1. 监控模型参数范数
+                # 1. Monitor model parameter norms
                 param_norm_metrics = self._monitor_model_norms()
                 norm_log_dict.update(param_norm_metrics)
 
-                # 2. 监控中间张量 x (Transformer的输出)
+                # 2. Monitor intermediate tensor x (Transformer output)
                 intermediate_x = losses.intermediate_losses.get('intermediate_tensor_x')
                 if intermediate_x is not None:
-                    # x 的形状为 (B, T, E)
-                    # 计算每个 token 的 L2 范数
+                    # x shape is (B, T, E)
+                    # Calculate L2 norm for each token
                     token_norms = intermediate_x.norm(p=2, dim=-1)
 
-                    # 记录这些范数的统计数据
+                    # Record statistics of these norms
                     norm_log_dict['norm/x_token/mean'] = token_norms.mean().item()
                     norm_log_dict['norm/x_token/std'] = token_norms.std().item()
                     norm_log_dict['norm/x_token/max'] = token_norms.max().item()
                     norm_log_dict['norm/x_token/min'] = token_norms.min().item()
 
-                # 3. 监控 logits 的详细统计 (Value, Policy, Reward)
+                # 3. Monitor detailed statistics of logits (Value, Policy, Reward)
                 logits_value = losses.intermediate_losses.get('logits_value')
                 if logits_value is not None:
                     norm_log_dict['logits/value/mean'] = logits_value.mean().item()
@@ -873,17 +857,17 @@ class UniZeroPolicy(MuZeroPolicy):
                     norm_log_dict['logits/reward/min'] = logits_reward.min().item()
                     norm_log_dict['logits/reward/abs_max'] = logits_reward.abs().max().item()
 
-                # 4. 监控 obs_embeddings (Encoder输出) 的统计
+                # 4. Monitor obs_embeddings (Encoder output) statistics
                 obs_embeddings = losses.intermediate_losses.get('obs_embeddings')
                 if obs_embeddings is not None:
-                    # 计算每个 embedding 的 L2 范数
+                    # Calculate L2 norm for each embedding
                     emb_norms = obs_embeddings.norm(p=2, dim=-1)
                     norm_log_dict['embeddings/obs/norm_mean'] = emb_norms.mean().item()
                     norm_log_dict['embeddings/obs/norm_std'] = emb_norms.std().item()
                     norm_log_dict['embeddings/obs/norm_max'] = emb_norms.max().item()
                     norm_log_dict['embeddings/obs/norm_min'] = emb_norms.min().item()
 
-                # ==================== [NEW] Early Warning System ====================
+                # ==================== Early Warning System ====================
                 # Detect potential training instability and issue warnings
                 warnings_issued = []
 
@@ -920,22 +904,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 # ====================================================================
         # =================================================================
 
-        # ==================== START MODIFICATION 2 ====================
         # Extract the calculated value_priority from the returned losses.
         value_priority_tensor = losses.intermediate_losses['value_priority']
         # Convert to numpy array for the replay buffer, adding a small epsilon.
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
-        # ===================== END MODIFICATION 2 =====================
 
-        # weighted_total_loss = losses.loss_total
-        # TODO:
         weighted_total_loss = (weights * losses.loss_total).mean()
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
-        # 从 losses 对象中提取策略熵
-
+        # Extract losses from intermediate_losses dictionary
         obs_loss = self.intermediate_losses['loss_obs']
         reward_loss = self.intermediate_losses['loss_rewards']
         policy_loss = self.intermediate_losses['loss_policy']
@@ -953,18 +932,10 @@ class UniZeroPolicy(MuZeroPolicy):
         avg_weight_mag_encoder = self.intermediate_losses['avg_weight_mag_encoder']
         avg_weight_mag_transformer = self.intermediate_losses['avg_weight_mag_transformer']
         avg_weight_mag_head = self.intermediate_losses['avg_weight_mag_head']
-        e_rank_last_linear = self.intermediate_losses['e_rank_last_linear'] 
+        e_rank_last_linear = self.intermediate_losses['e_rank_last_linear']
         e_rank_sim_norm = self.intermediate_losses['e_rank_sim_norm']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
-
         latent_action_l2_norms = self.intermediate_losses['latent_action_l2_norms']
-
-        # logits_value_mean=self.intermediate_losses['logits_value_mean']
-        # logits_value_max=self.intermediate_losses['logits_value_max']
-        # logits_value_min=self.intermediate_losses['logits_value_min']
-        # logits_policy_mean=self.intermediate_losses['logits_policy_mean']
-        # logits_policy_max=self.intermediate_losses['logits_policy_max']
-        # logits_policy_min=self.intermediate_losses['logits_policy_min']
 
         temperature_value=self.intermediate_losses['temperature_value']
         temperature_reward=self.intermediate_losses['temperature_reward']
@@ -979,67 +950,56 @@ class UniZeroPolicy(MuZeroPolicy):
             self._optimizer_world_model.zero_grad()
 
 
-        # ==================== START: 目标熵正则化更新逻辑 ====================
+        # ==================== START: Target Entropy Regularization Update Logic ====================
         alpha_loss = None
-        current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight # 默认使用固定值
+        current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight  # Default to fixed value
         if self.use_adaptive_entropy_weight:
-            # --- 动态计算目标熵 (这部分逻辑是正确的，予以保留) ---
+            # Dynamically calculate target entropy (this logic is correct and preserved)
             progress = min(1.0, train_iter / self.target_entropy_decay_steps)
             current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
             action_space_size = self._cfg.model.action_space_size
-            # 注意：我们将 target_entropy 定义为正数，更符合直觉
+            # Note: We define target_entropy as a positive number, which is more intuitive
             current_target_entropy = -np.log(1.0 / action_space_size) * current_ratio
 
-            # --- 计算 alpha_loss (已修正符号) ---
-            # 这是核心修正点：去掉了最前面的负号
-            # detach() 仍然是关键，确保 alpha_loss 的梯度只流向 log_alpha
+            # Calculate alpha_loss (corrected sign)
+            # This is the core correction: removed the negative sign at the front
+            # detach() is still critical to ensure alpha_loss gradient only flows to log_alpha
             alpha_loss = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean()
 
-            # # --- 更新 log_alpha ---
+            # Update log_alpha
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
-            # --- [优化建议] 增加 log_alpha 裁剪作为安全措施 ---
+            # [Optimization suggestion] Add log_alpha clipping as a safety measure
             with torch.no_grad():
-                # 将 alpha 限制在例如 [1e-4, 10.0] 的范围内
-                # self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
-                # self.log_alpha.clamp_(np.log(5e-3), np.log(10.0))
+                # Limit alpha to a range, e.g., [1e-4, 10.0]
                 self.log_alpha.clamp_(np.log(5e-2), np.log(10.0))
-                
 
-            # --- 使用当前更新后的 alpha (截断梯度流) ---
+            # Use current updated alpha (with gradient flow truncated)
             current_alpha = self.log_alpha.exp().detach()
 
-            # 重新计算加权的策略损失和总损失
-            # 注意：这里的 policy_entropy 已经是一个batch的平均值
+            # Recalculate weighted policy loss and total loss
+            # Note: policy_entropy here is already an average value of a batch
             weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
-            # 重新构建总损失 (不使用 losses.loss_total)
-            # 确保这里的权重与 LossWithIntermediateLosses 类中的计算方式一致
-            # self.obs_loss_weight = 10
-            # self.value_loss_weight = 0.5
-            # self.reward_loss_weight = 1.
-            # self.policy_loss_weight = 1.
-            # self.ends_loss_weight = 0.
-            # self.obs_loss_weight = 10 # TODO ===============
-            # self.obs_loss_weight = 5 # TODO ===============
-            self.obs_loss_weight = 2 # TODO ===============
+            # Rebuild total loss (not using losses.loss_total)
+            # Ensure the weights here are consistent with the calculation in LossWithIntermediateLosses class
+            self.obs_loss_weight = 2
             self.value_loss_weight = 0.5
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
             self.ends_loss_weight = 0.
 
-            self.latent_recon_loss_weight = self._cfg.model.world_model_cfg.latent_recon_loss_weight # 默认使用固定值
-            self.perceptual_loss_weight = self._cfg.model.world_model_cfg.perceptual_loss_weight # 默认使用固定值
+            self.latent_recon_loss_weight = self._cfg.model.world_model_cfg.latent_recon_loss_weight
+            self.perceptual_loss_weight = self._cfg.model.world_model_cfg.perceptual_loss_weight
 
             if self.latent_recon_loss_weight>0:
                 total_loss = (
                     self.reward_loss_weight * reward_loss +
                     self.value_loss_weight * value_loss +
                     self.policy_loss_weight * weighted_policy_loss +
-                    self.obs_loss_weight  * obs_loss +   # 假设 ssl_loss_weight 是 obs_loss 的权重
+                    self.obs_loss_weight  * obs_loss +
                     self.latent_recon_loss_weight * latent_recon_loss+
                     self.perceptual_loss_weight*perceptual_loss
-                    # ... 如果还有其他损失项，也加进来 ...
                 )
             else:
 
@@ -1047,51 +1007,47 @@ class UniZeroPolicy(MuZeroPolicy):
                     self.reward_loss_weight * reward_loss +
                     self.value_loss_weight * value_loss +
                     self.policy_loss_weight * weighted_policy_loss +
-                    self.obs_loss_weight  * obs_loss  # 假设 ssl_loss_weight 是 obs_loss 的权重
+                    self.obs_loss_weight  * obs_loss
 
-                    # ... 如果还有其他损失项，也加进来 ...
                 )
             weighted_total_loss = (weights * total_loss).mean()
-        # ===================== END: 目标熵正则化更新逻辑 =====================
+        # ===================== END: Target Entropy Regularization Update Logic =====================
 
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()
 
-        # -----------------------------------------------------------------
-        # 仍然在 torch.no_grad() 环境下执行
+        # Still executed within torch.no_grad() context
         # =================================================================
         with torch.no_grad():
             # 1. Encoder-Clip
-            # ==================== START: 动态计算当前 Clip 阈值 ====================
-            current_clip_value = self.latent_norm_clip_threshold  # 默认使用固定值
+            # ==================== START: Dynamically calculate current Clip threshold ====================
+            current_clip_value = self.latent_norm_clip_threshold  # Default to fixed value
             if self.use_encoder_clip_annealing:
                 progress = min(1.0, train_iter / self.encoder_clip_anneal_steps)
 
                 if self.encoder_clip_anneal_type == 'cosine':
-                    # 余弦调度: 从1平滑过渡到0
+                    # Cosine schedule: smoothly transition from 1 to 0
                     cosine_progress = 0.5 * (1.0 + np.cos(np.pi * progress))
                     current_clip_value = self.encoder_clip_end + \
                                          (self.encoder_clip_start - self.encoder_clip_end) * cosine_progress
-                else:  # 默认为线性调度
+                else:  # Default to linear schedule
                     current_clip_value = self.encoder_clip_start * (1 - progress) + \
                                          self.encoder_clip_end * progress
-            # ===================== END: 动态计算当前 Clip 阈值 =====================
+            # ===================== END: Dynamically calculate current Clip threshold =====================
 
-            # 1. Encoder-Clip (使用动态计算出的 current_clip_value)
+            # 1. Encoder-Clip (using dynamically calculated current_clip_value)
             if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
                 obs_embeddings = losses.intermediate_losses['obs_embeddings']
                 if obs_embeddings is not None:
                     max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
                     if max_latent_norm > current_clip_value:
                         scale_factor = current_clip_value / max_latent_norm.item()
-                        # 不再频繁打印，或者可以改为每隔N步打印一次
+                        # No longer print frequently, or can be changed to print every N steps
                         if train_iter % 1000 == 0:
                             print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
                         scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
-            # ==================== START: Head-Clip ====================
-            # 与 Encoder-Clip 原理一致的动态 Head Clipping
             if self.use_head_clip and self.head_clip_manager is not None:
                 head_clip_results = self.head_clip_manager.apply_head_clip(
                     self._learn_model.world_model,
@@ -1099,19 +1055,11 @@ class UniZeroPolicy(MuZeroPolicy):
                     train_iter
                 )
 
-                # # 将 head clip 的结果添加到日志（如果有的话）
-                # if head_clip_results:
-                #     for head_name, info in head_clip_results.items():
-                #         return_log_dict[f'head_clip/{head_name}/max_logits'] = info['max_logits']
-                #         return_log_dict[f'head_clip/{head_name}/threshold'] = info['threshold']
-                #         if info['scaled']:
-                #             return_log_dict[f'head_clip/{head_name}/scale_factor'] = info['scale_factor']
-            # ===================== END: Head-Clip =====================
 
         # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:
-            # ==================== [新增] 监控梯度范数 ====================
-            # 在梯度裁剪之前监控梯度范数，用于诊断梯度爆炸/消失问题
+            # ==================== [NEW] Monitor gradient norms ====================
+            # Monitor gradient norms before gradient clipping to diagnose gradient explosion/vanishing issues
             if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
                 grad_norm_metrics = self._monitor_gradient_norms()
                 norm_log_dict.update(grad_norm_metrics)
@@ -1198,7 +1146,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder, 
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
             'analysis/dormant_ratio_transformer': dormant_ratio_transformer,
             'analysis/dormant_ratio_head': dormant_ratio_head,
 
@@ -1214,27 +1162,17 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
-        
-        # "logits_value_mean":logits_value_mean,
-        # "logits_value_max":logits_value_max,
-        # "logits_value_min":logits_value_min,
-        # "logits_policy_mean":logits_policy_mean,
-        # "logits_policy_max":logits_policy_max,
-        # "logits_policy_min":logits_policy_min,
 
-             "temperature_value":temperature_value,
-        "temperature_reward":temperature_reward,
-        "temperature_policy":temperature_policy,
+            "temperature_value":temperature_value,
+            "temperature_reward":temperature_reward,
+            "temperature_policy":temperature_policy,
 
-        "current_policy_label_eps":current_policy_label_eps,
+            "current_policy_label_eps":current_policy_label_eps,
         }
 
-        # ==================== [修改] 将范数监控结果合并到日志中 ====================
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
-        # =======================================================================
 
-        # ==================== [NEW] Fix4: Enhanced Policy Monitoring ====================
         use_enhanced_policy_monitoring = self._cfg.get('use_enhanced_policy_monitoring', False)
         if use_enhanced_policy_monitoring:
             # Monitor policy logits statistics
@@ -1268,20 +1206,16 @@ class UniZeroPolicy(MuZeroPolicy):
                 return_log_dict['target_policy_entropy/std'] = target_policy_entropies.std().item()
         # ================================================================================
 
-        # ==================== START: 添加新日志项 ====================
         if self.use_adaptive_entropy_weight:
             return_log_dict['adaptive_alpha'] = current_alpha.item()
             return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
             return_log_dict['alpha_loss'] = alpha_loss.item()
-        # ==================== START: 添加新日志项 ====================
 
-        # ==================== START: 添加新日志项 ====================
         if self.use_encoder_clip_annealing:
             return_log_dict['current_encoder_clip_value'] = current_clip_value
-        # ===================== END: 添加新日志项 =====================
 
         if self.use_head_clip and self.head_clip_manager is not None:
-            # 将 head clip 的结果添加到日志（如果有的话）
+            # Add head clip results to log (if any)
             if head_clip_results:
                 for head_name, info in head_clip_results.items():
                     return_log_dict[f'head_clip/{head_name}/max_logits'] = info['max_logits']
@@ -1310,7 +1244,7 @@ class UniZeroPolicy(MuZeroPolicy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
-        # 为 collect MCTS 创建一个配置副本，并设置特定的模拟次数
+        # Create a configuration copy for collect MCTS and set specific simulation count
         mcts_collect_cfg = copy.deepcopy(self._cfg)
         mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
         if self._cfg.mcts_ctree:
@@ -1329,7 +1263,6 @@ class UniZeroPolicy(MuZeroPolicy):
             ).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
-    # @profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -1400,7 +1333,7 @@ class UniZeroPolicy(MuZeroPolicy):
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
 
             next_latent_state_with_env = self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
-            
+
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
@@ -1409,7 +1342,7 @@ class UniZeroPolicy(MuZeroPolicy):
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                
+
                 if self._cfg.eps.eps_greedy_exploration_in_collect:
                     # eps greedy collect
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
@@ -1429,19 +1362,12 @@ class UniZeroPolicy(MuZeroPolicy):
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 next_latent_state = next_latent_state_with_env[i][action]
-                
+
                 if self._cfg.model.world_model_cfg.obs_type == 'text' and self._cfg.model.world_model_cfg.decode_loss_mode is not None and self._cfg.model.world_model_cfg.decode_loss_mode.lower() != 'none':
                     # Output the plain text content decoded by the decoder from the next latent state
                     predicted_next = self._collect_model.tokenizer.decode_to_plain_text(embeddings=next_latent_state, max_length=256)
                 else:
                     predicted_next = None
-
-                # ============== TODO: only for visualize ==============
-                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                # )
-                # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                # ============== TODO: only for visualize ==============
 
                 output[env_id] = {
                     'action': action,
@@ -1458,7 +1384,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = data
             self.last_batch_action = batch_action
 
-            # ========= TODO: This logic is a temporary workaround specific to the muzero_segment_collector. =========
+            # This logic is a temporary workaround specific to the muzero_segment_collector.
             if active_collect_env_num < self.collector_env_num:
                 # When an environment finishes an episode ('done'), the length of `self.last_batch_obs` passed back
                 # becomes smaller than the total number of collector environments.
@@ -1470,9 +1396,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 # we force the transformer to start its context from scratch, avoiding incorrect cache lookups.
                 print('========== collect_forward ============')
                 print(f'An environment has finished. Active envs: {active_collect_env_num} < Total envs: {self.collector_env_num}. Resetting all.')
-                
+
                 self._reset_collect(reset_init_data=True)
-                
+
                 # If the sampling type is 'episode', it's unexpected for the number of active environments to drop,
                 # as this suggests an inconsistent state or a potential issue in the collection logic.
                 if getattr(self._cfg, 'sample_type', '') == 'episode':
@@ -1486,8 +1412,8 @@ class UniZeroPolicy(MuZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
- 
-        # 为 eval MCTS 创建一个配置副本，并设置特定的模拟次数
+
+        # Create a configuration copy for eval MCTS and set specific simulation count
         mcts_eval_cfg = copy.deepcopy(self._cfg)
         mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
 
@@ -1495,7 +1421,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
             self._mcts_eval = MCTSPtree(mcts_eval_cfg)
-            
+
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
@@ -1563,10 +1489,9 @@ class UniZeroPolicy(MuZeroPolicy):
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
             batch_action = []
-            
+
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # print("roots_visit_count_distributions:", distributions, "root_value:", value)
 
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
@@ -1652,9 +1577,7 @@ class UniZeroPolicy(MuZeroPolicy):
                             print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
                     # =============================================================================
 
-        # ======== TODO: 20251015 ========
         # Determine the clear interval based on the environment's sample type
-        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
 
         # Clear caches if the current steps are a multiple of the clear interval
@@ -1687,7 +1610,6 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         if reset_init_data:
             if task_id is not None:
-                # self.last_batch_obs_eval = initialize_zeros_batch(
                 self.last_batch_obs_eval = initialize_pad_batch(
                     self._cfg.model.observation_shape_list[task_id],
                     self._cfg.evaluator_env_num,
@@ -1697,7 +1619,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
             else:
-                self.last_batch_obs_eval = initialize_pad_batch( # TODO
+                self.last_batch_obs_eval = initialize_pad_batch(
                     self._cfg.model.observation_shape,
                     self._cfg.evaluator_env_num,
                     self._cfg.device,
@@ -1707,7 +1629,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
-        # --- BEGIN ROBUST FIX ---
         # This logic handles the crucial end-of-episode cache clearing for evaluation.
         # The evaluator calls `_policy.reset([env_id])` when an episode is done.
         if env_id is not None:
@@ -1745,11 +1666,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 torch.cuda.empty_cache()
                 return
-            # --- END ROBUST FIX ---
 
-        # ======== TODO: 20251015 ========
         # Determine the clear interval based on the environment's sample type
-        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
@@ -1832,14 +1750,6 @@ class UniZeroPolicy(MuZeroPolicy):
             # ==================== Gradient Norms ====================
             'total_grad_norm_before_clip_wm',
 
-            # ==================== Logits Statistics ====================
-            # 'logits_value_mean',
-            # 'logits_value_max',
-            # 'logits_value_min',
-            # 'logits_policy_mean',
-            # 'logits_policy_max',
-            # 'logits_policy_min',
-
             # ==================== Temperature Parameters ====================
             'temperature_value',
             'temperature_reward',
@@ -1853,50 +1763,50 @@ class UniZeroPolicy(MuZeroPolicy):
             'current_encoder_clip_value',
         ]
 
-        # ==================== [新增] 范数和中间张量监控变量 ====================
+        # ==================== [NEW] Norm and Intermediate Tensor Monitoring Variables ====================
         norm_vars = [
-            # 模块总范数 (参数范数)
+            # Module total norms (parameter norms)
             'norm/encoder/_total_norm',
             'norm/transformer/_total_norm',
             'norm/head_value/_total_norm',
             'norm/head_reward/_total_norm',
             'norm/head_policy/_total_norm',
 
-            # 模块总范数 (梯度范数)
+            # Module total norms (gradient norms)
             'grad/encoder/_total_norm',
             'grad/transformer/_total_norm',
             'grad/head_value/_total_norm',
             'grad/head_reward/_total_norm',
             'grad/head_policy/_total_norm',
 
-            # 中间张量 x (Transformer输出) 的统计信息
+            # Intermediate tensor x (Transformer output) statistics
             'norm/x_token/mean',
             'norm/x_token/std',
             'norm/x_token/max',
             'norm/x_token/min',
 
-            # Logits 的详细统计 (Value)
+            # Detailed logits statistics (Value)
             'logits/value/mean',
             'logits/value/std',
             'logits/value/max',
             'logits/value/min',
             'logits/value/abs_max',
 
-            # Logits 的详细统计 (Policy)
+            # Detailed logits statistics (Policy)
             'logits/policy/mean',
             'logits/policy/std',
             'logits/policy/max',
             'logits/policy/min',
             'logits/policy/abs_max',
 
-            # Logits 的详细统计 (Reward)
+            # Detailed logits statistics (Reward)
             'logits/reward/mean',
             'logits/reward/std',
             'logits/reward/max',
             'logits/reward/min',
             'logits/reward/abs_max',
 
-            # Embeddings 的统计信息
+            # Embeddings statistics
             'embeddings/obs/norm_mean',
             'embeddings/obs/norm_std',
             'embeddings/obs/norm_max',
@@ -1904,11 +1814,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
         ]
 
-        # ==================== [修复] Head-Clip 监控变量自动生成 ====================
+        # ==================== [FIX] Head-Clip Monitoring Variables Auto-Generation ====================
         head_clip_vars = []
-        # 检查 head_clip 是否启用以及 manager 是否存在
+        # Check if head_clip is enabled and manager exists
         if getattr(self, 'use_head_clip', False) and getattr(self, 'head_clip_manager', None) is not None:
-            # 遍历所有启用的 head，生成对应的监控 key
+            # Iterate through all enabled heads and generate corresponding monitoring keys
             for head_name in self.head_clip_manager.enabled_heads:
                 head_clip_vars.append(f'head_clip/{head_name}/max_logits')
                 head_clip_vars.append(f'head_clip/{head_name}/threshold')
@@ -1937,10 +1847,10 @@ class UniZeroPolicy(MuZeroPolicy):
         ]
         # ==============================================================================
 
-        # 注意：我们不把每一层的范数都加到这里，因为数量太多会导致日志混乱。
-        # 在实践中，如果通过总范数发现问题，可以临时在TensorBoard中搜索特定层的范数，
-        # 或者在本地打印 `norm_log_dict` 来进行详细分析。
-        # wandb等工具可以更好地处理大量的动态指标。
+        # Note: We don't add every layer's norm here because too many metrics would clutter the logs.
+        # In practice, if you find issues through total norms, you can temporarily search for specific layer norms in TensorBoard,
+        # or print `norm_log_dict` locally for detailed analysis.
+        # Tools like wandb can better handle large numbers of dynamic metrics.
         # ========================================================================
 
         return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
@@ -1958,10 +1868,10 @@ class UniZeroPolicy(MuZeroPolicy):
             'target_model': self._target_model.state_dict(),
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
-        # ==================== START: 保存Alpha优化器状态 ====================
+        # ==================== START: Save Alpha Optimizer State ====================
         if self.use_adaptive_entropy_weight:
             state_dict['alpha_optimizer'] = self.alpha_optimizer.state_dict()
-        # ===================== END: 保存Alpha优化器状态 =====================
+        # ===================== END: Save Alpha Optimizer State =====================
         return state_dict
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
@@ -1973,12 +1883,6 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
-        # self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
-
-        # ==================== START: 加载Alpha优化器状态 ====================
-        # if self.use_adaptive_entropy_weight and 'alpha_optimizer' in state_dict:
-        #     self.alpha_optimizer.load_state_dict(state_dict['alpha_optimizer'])
-        # ===================== END: 加载Alpha优化器状态 =====================
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """

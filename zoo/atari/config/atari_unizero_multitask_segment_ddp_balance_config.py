@@ -317,7 +317,7 @@ def generate_configs(
           the task_id and a list with the main config and the environment manager config.
     """
     configs = []
-    exp_name_base_prefix = 'data_unizero_atari_mt_balance_20250730'  # YYYYMMDD format
+    exp_name_base_prefix = 'data_unizero_mt_balance_atari'  # YYYYMMDD format
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(

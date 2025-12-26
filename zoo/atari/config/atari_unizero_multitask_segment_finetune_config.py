@@ -395,7 +395,7 @@ if __name__ == "__main__":
         # --- Pretrained Model Path ---
         # Please replace `<YOUR_PRETRAINED_MODEL_PATH>` with the actual path to your model.
         pretrained_model_path = (
-            "<YOUR_PRETRAINED_MODEL_PATH>/data_unizero_atari_mt_20250307/"
+            "<YOUR_PRETRAINED_MODEL_PATH>/data_unizero_mt_atari/"
             "atari_8games_brf0.02_not-share-head_final-ln_seed0/Pong_seed0/ckpt/ckpt_best.pth.tar"
         )
         
