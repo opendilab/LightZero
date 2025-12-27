@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import re
 import torch
 import torch.distributed as dist
-from torch.utils.data import Dataset, DataLoader
 from vllm import SamplingParams
+from ding.utils import build_logger
 
 class DataProcessor:
     """
@@ -17,7 +17,7 @@ class DataProcessor:
       - samples -> Dataset/Dataloader（collate_fn 做 pack）
     """
 
-    def __init__(self, vllm_engine, strategy, model_path):
+    def __init__(self, rank, vllm_engine, strategy, model_path, exp_name=None, instance_name="vllm_output"):
         self.vllm_engine = vllm_engine
         self.strategy = strategy
         self.args = getattr(strategy, "args", None)
@@ -35,14 +35,16 @@ class DataProcessor:
         self.top_p = self.args.top_p
         self.vllm_enable_sleep = self.args.vllm_enable_sleep
         self.reduction = self.args.reduction
+        self.rank = rank
+        self.output_step = 0
         
-    @staticmethod
-    def bcast_obj(obj, src: int = 0):
-        if (not dist.is_available()) or (not dist.is_initialized()) or dist.get_world_size() <= 1:
-            return obj
-        lst = [obj] if dist.get_rank() == src else [None]
-        dist.broadcast_object_list(lst, src=src)
-        return lst[0]
+        from collections import deque
+        self.vllm_output = deque(maxlen=10)
+        
+        if self.rank == 0:
+            self._logger, _ = build_logger(
+                path=f'./{exp_name}/log/{instance_name}', name=instance_name, need_tb=False
+            )
 
     def build_llm_prompt(self, current_obs: str, history: Optional[List[Tuple[str, str, float]]] = None) -> str:
         prompt_parts = []
@@ -141,8 +143,7 @@ class DataProcessor:
                     }
                 )
         return samples
-        
-    
+
     def make_llm_train_samples(self, priorzero_batch) -> List[Dict[str, Any]]:
         current_batch, target_batch = priorzero_batch
         obs_batch_ori, action_batch, target_action_batch, mask_batch, batch_index_tensor, weights, make_time, timestep_batch, raw_obs_list, history_obs_list, action_logprob_list = current_batch
@@ -254,6 +255,7 @@ class DataProcessor:
 
         all_prompts = []
         all_labels = []
+        self.vllm_output.append((states[0], histories[0]))
         
         for i, actions in enumerate(valid_actions_list):  
             actions.append('go')   # 确保环境使用的动作都在valid actions里有对应的logprob
@@ -282,9 +284,6 @@ class DataProcessor:
     @torch.no_grad()
     def _score_labels_with_prompt_logprobs(self, all_prompts: List[str], all_labels: List[str]) -> List[float]:
         assert len(all_prompts) == len(all_labels)
-        
-        if self.vllm_enable_sleep:
-            self.vllm_engine.wake_up()
         
         if self.use_cot:
             all_prefix_cot = self._build_cot_prefix_texts(all_prompts)
@@ -334,8 +333,42 @@ class DataProcessor:
             else:
                 scores.append(sum(token_lps) if self.reduction == "sum" else sum(token_lps) / len(token_lps))
                 old_action_logprob.append(token_lps)
-        
-        if self.vllm_enable_sleep:
-            self.vllm_engine.sleep()
             
         return scores, old_action_logprob
+
+    @torch.no_grad()
+    def get_llm_output_log(self):
+        if self.rank != 0:
+            return 
+        sampling_params = SamplingParams(
+            temperature=1.0,
+            top_p=1.0,
+            max_tokens=self.prompt_max_len,
+            logprobs=None,
+            prompt_logprobs=None,
+        )
+
+        all_context_texts = [self.build_chat_context(self.build_llm_prompt(state, history)) for state, history in list(self.vllm_output)]
+        context_token_ids = self.tokenizer(
+            all_context_texts,
+            add_special_tokens=False,
+            max_length=self.prompt_max_len,
+            padding=False,
+            truncation=True,
+        )["input_ids"]
+
+        self.vllm_engine.add_requests(sampling_params=sampling_params, prompt_token_ids=context_token_ids)
+        outputs = self.vllm_engine.get_responses()
+        
+        self.output_step += 1
+        # if not hasattr(self, "_logger") or self._logger is None:
+            # return
+
+        for i, ((state, history), out) in enumerate(zip(list(self.vllm_output), outputs)):
+            self._logger.info(
+                f"\n[vllm_output step={self.output_step} idx={i}]"
+                f"\n--- INPUT ---\n{self.build_llm_prompt(state, history)}"
+                f"\n--- OUTPUT ---\n{out.outputs[0].text}\n"
+            )
+        
+        

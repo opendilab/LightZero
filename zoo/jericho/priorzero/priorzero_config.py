@@ -30,7 +30,7 @@ class PriorZeroLLMConfig:
     vllm_sync_backend: str = "nccl" # vLLM 同步参数使用的后端
     vllm_sync_with_ray: bool = False # 是否使用 ray 来同步 vLLM 参数
     vllm_tensor_parallel_size: int = 1 # 每个vllm engine使用几张GPU张量并行
-    gpu_memory_utilization: float = 0.15
+    gpu_memory_utilization: float = 0.6
     vllm_enable_sleep: bool = True # 是否可以休眠
     temperature: float = 1.0
     top_p: float = 1.0
@@ -64,7 +64,7 @@ class PriorZeroLLMConfig:
 
 
 def get_priorzero_config(
-    env_id: str = 'zork1.z5',
+    env_id: str = 'detective.z5',
     seed: int = 0,
     exp_name: str = None,
     use_cot: bool = False,
@@ -263,7 +263,7 @@ def get_priorzero_config(
 
 
 def get_priorzero_debug_config(
-    env_id: str = 'zork1.z5',
+    env_id: str = 'detective.z5',
     seed: int = 0,
     exp_name: str = None,
     use_cot: bool = False,
