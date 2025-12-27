@@ -128,51 +128,51 @@ def train_priorzero(
     else:
         ref_model = None
     
-    if rank == 0:
-        from vllm_utils.vllm_engine import create_vllm_engines
-        vllm_engines = create_vllm_engines(
-            num_engines=llm_cfg.vllm_num_engines,
-            tensor_parallel_size=llm_cfg.vllm_tensor_parallel_size,
-            pretrain=llm_cfg.model_name_or_path,
-            seed=llm_cfg.seed,
-            enable_prefix_caching=llm_cfg.enable_prefix_caching,
-            max_model_len=llm_cfg.prompt_max_len + llm_cfg.generate_max_len,
-            gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
-            vllm_enable_sleep=llm_cfg.vllm_enable_sleep,
-        )
-        from priorzero_datafactory import DataProcessor
-        data_processor = DataProcessor(vllm_engines=vllm_engines, strategy=strategy, model_path=llm_cfg.model_name_or_path)
-        replay_buffer, tb_logger, policy, collector, evaluator, learner = prepare_unizero( cfg=cfg,
-                                                                                create_cfg=create_cfg, 
-                                                                                llm_cfg=llm_cfg, 
-                                                                                seed=seed, 
-                                                                                data_processor=data_processor)
+    from vllm_utils.vllm_engine import create_vllm_engine
+    vllm_engine = create_vllm_engine(
+        tensor_parallel_size=llm_cfg.vllm_tensor_parallel_size,
+        pretrain=llm_cfg.model_name_or_path,
+        enable_prefix_caching=llm_cfg.enable_prefix_caching,
+        max_model_len=llm_cfg.prompt_max_len + llm_cfg.generate_max_len,
+        gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
+        vllm_enable_sleep=llm_cfg.vllm_enable_sleep,
+    )
+    print(f'[Rank {rank}] Vllm engine successfully created!')
+    
+    from priorzero_datafactory import DataProcessor
+    data_processor = DataProcessor(vllm_engine=vllm_engine, strategy=strategy, model_path=llm_cfg.model_name_or_path)
+    
+    if rank == 0:  
+        replay_buffer, tb_logger, policy, collector, evaluator, learner = prepare_unizero( 
+                                                                            cfg=cfg,
+                                                                            create_cfg=create_cfg, 
+                                                                            llm_cfg=llm_cfg, 
+                                                                            seed=seed, 
+                                                                            data_processor=data_processor)
         batch_size = cfg.policy.batch_size
-    else:
-        vllm_engines = None
     
     policy_model = PolicyModel(
         strategy=strategy,
         pretrain=llm_cfg.model_name_or_path,
-        vllm_engines=vllm_engines 
+        vllm_engine=vllm_engine
     )
     from priorzero_trainer import PriorZeroLLMTrainer
     trainer = PriorZeroLLMTrainer(
         cfg=llm_cfg,
         pretrain=llm_cfg.model_name_or_path,
         strategy= strategy,
-        vllm_engines = vllm_engines,
+        vllm_engine = vllm_engine,
         policy_model=policy_model,
         reference_model=ref_model,
         broadcast_every=llm_cfg.broadcast_every,
-        exp_name=cfg.exp_name,
-        tb_logger=tb_logger,
+        exp_name=cfg.exp_name if rank == 0 else None,
+        tb_logger=tb_logger if rank == 0 else None,
     )
         
     torch_dist_barrier_and_cuda_sync()
     
     while True:
-        cmd, llm_batch = "noop", None
+        cmd = "noop"
         
         if rank == 0:
             if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):

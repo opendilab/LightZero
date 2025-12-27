@@ -17,8 +17,8 @@ class DataProcessor:
       - samples -> Dataset/Dataloader（collate_fn 做 pack）
     """
 
-    def __init__(self, vllm_engines, strategy, model_path):
-        self.vllm_engines = vllm_engines
+    def __init__(self, vllm_engine, strategy, model_path):
+        self.vllm_engine = vllm_engine
         self.strategy = strategy
         self.args = getattr(strategy, "args", None)
         
@@ -152,8 +152,7 @@ class DataProcessor:
 
         if self.use_cot:
             if self.vllm_enable_sleep:
-                from vllm_utils.vllm_engine import batch_vllm_engine_call
-                batch_vllm_engine_call(self.vllm_engines, "wake_up")
+                self.vllm_engine.wake_up()
             
             all_user_prompts = [s["instruction"] for s in samples]
             prefix_list = self._build_cot_prefix_texts(all_user_prompts)
@@ -161,8 +160,7 @@ class DataProcessor:
                 s["prefix_cot"] = p
             
             if self.vllm_enable_sleep:
-                from vllm_utils.vllm_engine import batch_vllm_engine_call
-                batch_vllm_engine_call(self.vllm_engines, "sleep")
+                self.vllm_engine.sleep()
 
         if self.use_cot:
             prompts_only = [s["prompt"] + s["prefix_cot"] + " " for s in samples]
@@ -207,8 +205,6 @@ class DataProcessor:
         生成一次完整输出，从最后一次出现的 "Action:" 截断出 prefix（包含 Action: 和其后的空格位置）。
         返回 prefix_cot_list，与 all_user_prompts 等长。
         """
-        llms = self.vllm_engines
-
         cot_sampling_params = SamplingParams(
             temperature=1.0,
             top_p=1.0,
@@ -227,13 +223,8 @@ class DataProcessor:
             truncation=True,
         )["input_ids"]
 
-        cot_outputs = []
-        bs = (len(context_token_ids) + len(llms) - 1) // len(llms)
-        for i, llm in enumerate(llms):
-            chunk = context_token_ids[i * bs: (i + 1) * bs]
-            if len(chunk) > 0:
-                llm.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=chunk)
-                cot_outputs.extend(llm.get_responses())
+        self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=context_token_ids)
+        cot_outputs = self.vllm_engine.get_responses()
 
         prefix_cot_list = []
         for output in cot_outputs:
@@ -293,13 +284,11 @@ class DataProcessor:
         assert len(all_prompts) == len(all_labels)
         
         if self.vllm_enable_sleep:
-            from vllm_utils.vllm_engine import batch_vllm_engine_call
-            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+            self.vllm_engine.wake_up()
         
         if self.use_cot:
             all_prefix_cot = self._build_cot_prefix_texts(all_prompts)
 
-        llms = self.vllm_engines
         sampling_params = SamplingParams(
             temperature=self.temperature,
             top_p=self.top_p,
@@ -322,13 +311,8 @@ class DataProcessor:
         p_lens = [len(x) for x in context_ids]
         l_lens = [len(x) for x in label_ids]
 
-        bs = (len(full_ids) + len(llms) - 1) // len(llms)
-        outs = []
-        for i, llm in enumerate(llms):
-            chunk = full_ids[i * bs: (i + 1) * bs]
-            if len(chunk) > 0:
-                llm.add_requests(sampling_params=sampling_params, prompt_token_ids=chunk)
-                outs.extend(llm.get_responses())
+        self.vllm_engine.add_requests(sampling_params=sampling_params, prompt_token_ids=full_ids)
+        outs = self.vllm_engine.get_responses()
 
         scores = []
         old_action_logprob = []
@@ -352,7 +336,6 @@ class DataProcessor:
                 old_action_logprob.append(token_lps)
         
         if self.vllm_enable_sleep:
-            from vllm_utils.vllm_engine import batch_vllm_engine_call
-            batch_vllm_engine_call(self.vllm_engines, "sleep")
+            self.vllm_engine.sleep()
             
         return scores, old_action_logprob

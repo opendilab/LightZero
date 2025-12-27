@@ -26,10 +26,9 @@ class PriorZeroLLMConfig:
     # vLLM engines 
     enable_vllm: bool = True
     enable_prefix_caching: bool = True
-    use_cuda_ipc: bool = True
+    use_cuda_ipc: bool = False
     vllm_sync_backend: str = "nccl" # vLLM 同步参数使用的后端
     vllm_sync_with_ray: bool = False # 是否使用 ray 来同步 vLLM 参数
-    vllm_num_engines: int = 1 # vllm engine的数量
     vllm_tensor_parallel_size: int = 1 # 每个vllm engine使用几张GPU张量并行
     gpu_memory_utilization: float = 0.15
     vllm_enable_sleep: bool = True # 是否可以休眠

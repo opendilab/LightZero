@@ -7,19 +7,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-import deepspeed
 import ray
 import numpy as np
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer
 
 from openrlhf.trainer.ppo_utils import  FixedKLController 
 
-from utils import compute_approx_kl
-
-import math
 import ray
 import torch
-from typing import Any, Dict, List, Optional, Tuple
 
 def get_tokenizer(pretrain: str) -> AutoTokenizer:
     tokenizer = AutoTokenizer.from_pretrained(
@@ -36,7 +31,7 @@ class PriorZeroLLMTrainer:
         cfg, 
         pretrain: str,
         strategy,  
-        vllm_engines,
+        vllm_engine,
         policy_model,  # RayActorGroup(PolicyModelActor)
         reference_model=None,  # RayActorGroup(ReferenceModelActor) or None
         broadcast_every: int = 1,   # 每 N step 同步一次权重到 vLLM
@@ -51,7 +46,7 @@ class PriorZeroLLMTrainer:
 
         self.policy_model = policy_model
         self.reference_model = reference_model
-        self.vllm_engines = vllm_engines
+        self.vllm_engine = vllm_engine
 
         self.broadcast_every = max(int(broadcast_every), 1)
         self.global_step = 0
@@ -106,13 +101,12 @@ class PriorZeroLLMTrainer:
         
         self.global_step += 1
         
-        if self.vllm_engines is not None and (self.global_step % self.broadcast_every == 0):
+        if self.vllm_engine is not None and (self.global_step % self.broadcast_every == 0):
             self._broadcast_to_vllm()
         
         if self._tb_logger is not None and self.strategy.is_rank_0():
             for k, v in status.items():
                 self._tb_logger.add_scalar(f"learner_llm_iter/{k}", float(v), self.global_step)
-            
         
         # if self.strategy.args.deepspeed_enable_sleep:
         #     self.policy_model.reload_states()
@@ -125,10 +119,9 @@ class PriorZeroLLMTrainer:
 
     def _broadcast_to_vllm(self):
         if self.strategy.args.vllm_enable_sleep:
-            from vllm_utils.vllm_engine import batch_vllm_engine_call
-            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+            self.vllm_engine.wake_up()
 
         self.policy_model.broadcast_to_vllm()
 
         if self.strategy.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "sleep")
+            self.vllm_engine.sleep()

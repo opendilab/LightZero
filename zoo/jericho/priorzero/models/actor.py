@@ -175,7 +175,7 @@ class BatchPPOTrainer:
         actor_optim,
         actor_scheduler=None,               
         micro_train_batch_size: int = 8,
-        vllm_engines = None
+        vllm_engine = None
     ):
         self.strategy = strategy
         self.args = strategy.args
@@ -183,7 +183,7 @@ class BatchPPOTrainer:
         self.actor = actor
         self.actor_optim = actor_optim
         self.actor_scheduler = actor_scheduler
-        self.vllm_engines = vllm_engines
+        self.vllm_engine = vllm_engine
         self.use_cuda_ipc = self.args.use_cuda_ipc
 
         self.micro_train_batch_size = micro_train_batch_size
@@ -279,12 +279,26 @@ class BatchPPOTrainer:
             for k in status_mean.keys():
                 status_mean[k] /= len(status_list)
         return status_mean
-        
+    
+    def _deepspeed_broadcast(self):
+        use_prefix_cache = getattr(self.strategy.args, "enable_prefix_caching", False)
+        if use_prefix_cache:
+            self.vllm_engine.reset_prefix_cache()
+
+        torch.cuda.empty_cache()
+        model = self.actor.model
+        count, num_params = 0, len(list(model.named_parameters()))
+        for name, param in model.named_parameters():
+            count += 1  # empty_cache at last param
+            # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
+            with deepspeed.zero.GatheredParameters([param], enabled=self.strategy.args.zero_stage == 3):
+                shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
+                self.vllm_engine.update_weight(name, dtype=param.dtype, shape=shape, weight=param.data, empty_cache=(count == num_params)) 
+    
     def _broadcast_to_vllm(self):
         use_prefix_cache = getattr(self.strategy.args, "enable_prefix_caching", False)
         if use_prefix_cache and torch.distributed.get_rank() == 0:
-            for engine in self.vllm_engines:
-                engine.reset_prefix_cache()
+            self.vllm_engine.reset_prefix_cache()
 
         torch.cuda.empty_cache()
         model = self.actor.model
@@ -293,8 +307,7 @@ class BatchPPOTrainer:
         def _broadcast_param(param, count, num_params):
             if torch.distributed.get_rank() == 0:
                 shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
-                for engine in self.vllm_engines:
-                    engine.update_weight(name, dtype=param.dtype, shape=shape, empty_cache=count == num_params) 
+                self.vllm_engine.update_weight(name, dtype=param.dtype, shape=shape, empty_cache=count == num_params) 
                 
                 self._model_update_group.broadcast(param.data, src=0, stream=torch.cuda.current_stream())
 
@@ -315,14 +328,13 @@ class BatchPPOTrainer:
                     ipc_handles.update(d)
 
                 shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
-                for engine in self.vllm_engines:    
-                    engine.update_weight_cuda_ipc(
-                        name,
-                        dtype=param.dtype,
-                        shape=shape,
-                        ipc_handles=ipc_handles,
-                        empty_cache=count == num_params,
-                    )
+                self.vllm_engine.update_weight_cuda_ipc(
+                    name,
+                    dtype=param.dtype,
+                    shape=shape,
+                    ipc_handles=ipc_handles,
+                    empty_cache=count == num_params,
+                )
 
             torch_dist_barrier_and_cuda_sync()
 
@@ -356,12 +368,12 @@ class PolicyModel:
         strategy,
         pretrain: str,
         max_steps: Optional[int] = None,
-        vllm_engines=None,
+        vllm_engine=None,
     ):
         self.strategy = strategy
         args = strategy.args
 
-        self.vllm_engines = vllm_engines
+        self.vllm_engine = vllm_engine
         self.max_steps = max_steps
 
         if getattr(args, "vllm_num_engines", 0) > 0:
@@ -418,7 +430,7 @@ class PolicyModel:
             actor_optim=self.actor_optim,
             actor_scheduler=self.actor_scheduler,
             micro_train_batch_size=args.micro_train_batch_size,
-            vllm_engines = vllm_engines,
+            vllm_engine = vllm_engine,
         )
 
     def fit(self, batch_data, kl_ctl: float = 0.0):
@@ -460,7 +472,8 @@ class PolicyModel:
         return action_log_probs.to("cpu") if to_cpu else action_log_probs
 
     def broadcast_to_vllm(self):
-        self.trainer._broadcast_to_vllm()
+        # self.trainer._broadcast_to_vllm()
+        self.trainer._deepspeed_broadcast()
 
     def save_model(self):
         args = self.strategy.args
