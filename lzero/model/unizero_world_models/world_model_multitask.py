@@ -157,6 +157,15 @@ class WorldModelMT(WorldModel):
             print(f"self.obs_act_embed_dim: {self.obs_act_embed_dim}")
             print(f'=' * 20)
 
+        # ==================== [NEW] Policy Stability Fix Options ====================
+        # Load fix options from config (with defaults for backward compatibility)
+        self.use_policy_logits_clip = getattr(self.config, 'use_policy_logits_clip', False)
+        self.policy_logits_clip_method = getattr(self.config, 'policy_logits_clip_method', 'normalize_max')
+        self.policy_logits_clip_min = getattr(self.config, 'policy_logits_clip_min', -10.0)
+        self.policy_logits_clip_max = getattr(self.config, 'policy_logits_clip_max', 10.0)
+        self.policy_logits_soft_beta = getattr(self.config, 'policy_logits_soft_beta', 1.0)
+        self.policy_logits_adaptive_percentile = getattr(self.config, 'policy_logits_adaptive_percentile', 95)
+
         assert self.num_experts_in_moe_head > 0
         if self.use_normal_head:
             self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm')
@@ -628,6 +637,14 @@ class WorldModelMT(WorldModel):
             logits_rewards = self.head_rewards_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_policy = self.head_policy_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_value = self.head_value_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
+
+        # ==================== [NEW] Advanced Policy Logits Control ====================
+        # Apply configurable policy logits control to prevent explosion
+        # Multiple methods available: hard, soft_tanh, soft_sigmoid, normalize_max, etc.
+        self.use_policy_logits_clip=True # TODO
+        if self.use_policy_logits_clip:
+            logits_policy = self._apply_policy_logits_control(logits_policy)
+        # ================================================================================
 
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
 

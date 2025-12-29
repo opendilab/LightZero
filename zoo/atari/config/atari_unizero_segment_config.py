@@ -131,7 +131,8 @@ def main(env_id, seed):
                     # - 'normalize_mean': Subtract mean then clamp - Centers distribution
                     # - 'adaptive': Adaptive clipping based on running statistics - Advanced
                     # - 'none': No clipping (only use if use_policy_logits_clip=False)
-                    policy_logits_clip_method='soft_tanh',  # RECOMMENDED: 'soft_tanh' or 'normalize_max'
+                    # policy_logits_clip_method='soft_tanh',  # RECOMMENDED: 'soft_tanh' or 'normalize_max'
+                    policy_logits_clip_method='normalize_max',  # RECOMMENDED: 'soft_tanh' or 'normalize_max'
 
                     # Clip range (used by all methods except 'none')
                     policy_logits_clip_min=-10.0,        # RECOMMENDED: ±10 (was ±20, too loose)
@@ -247,8 +248,8 @@ def main(env_id, seed):
             train_start_after_envsteps=0,  # Only for debug
             game_segment_length=game_segment_length,
             grad_clip_value=5,
-            replay_buffer_size=int(1e5),  # TODO
-            # replay_buffer_size=int(5e5),  # TODO
+            # replay_buffer_size=int(1e5),  # TODO
+            replay_buffer_size=int(5e5),  # TODO
             # replay_buffer_size=int(1e6),  # TODO
 
             eval_freq=int(1e4),
@@ -283,7 +284,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-softtanh_rbs1e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-normmax_rbs5e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-no-clamp_rbs1e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 

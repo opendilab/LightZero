@@ -562,7 +562,7 @@ class WorldModel(nn.Module):
         # ==================== [NEW] Policy Stability Fix Options ====================
         # Load fix options from config (with defaults for backward compatibility)
         self.use_policy_logits_clip = getattr(self.config, 'use_policy_logits_clip', False)
-        self.policy_logits_clip_method = getattr(self.config, 'policy_logits_clip_method', 'soft_tanh')
+        self.policy_logits_clip_method = getattr(self.config, 'policy_logits_clip_method', 'normalize_max')
         self.policy_logits_clip_min = getattr(self.config, 'policy_logits_clip_min', -10.0)
         self.policy_logits_clip_max = getattr(self.config, 'policy_logits_clip_max', 10.0)
         self.policy_logits_soft_beta = getattr(self.config, 'policy_logits_soft_beta', 1.0)

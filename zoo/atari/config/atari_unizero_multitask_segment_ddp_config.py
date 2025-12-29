@@ -234,8 +234,7 @@ def create_config(
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
-            # replay_buffer_size=int(5e5),
-            replay_buffer_size=int(1e5), # TODO
+            replay_buffer_size=int(5e5),
             eval_freq=int(1e4),  # Evaluation frequency for 8 games
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -269,7 +268,7 @@ def generate_configs(
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
     benchmark_tag = "data_unizero_mt_1229"
-    model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10_alpha-150k-098-01_tbs1024_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    model_tag = f"vit_tran-nlayer{num_layers}_poli-normmax_rbs5e5_moe8_encoder-100k-30-10_alpha-150k-098-01_tbs1024_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
     # model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
