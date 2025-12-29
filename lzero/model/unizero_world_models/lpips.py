@@ -13,6 +13,11 @@ import torch.nn as nn
 from torchvision import models
 from tqdm import tqdm
 
+os.environ['HF_HOME'] = '/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg'
+custom_torch_home = "/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg"
+os.environ['TORCH_HOME'] = custom_torch_home
+os.makedirs(os.path.join(custom_torch_home, 'hub', 'checkpoints'), exist_ok=True)
+
 class LPIPS(nn.Module):
     # Learned perceptual metric
     def __init__(self, use_dropout: bool = True):

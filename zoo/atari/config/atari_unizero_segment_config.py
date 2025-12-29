@@ -68,8 +68,8 @@ def main(env_id, seed):
                 world_model_cfg=dict(
                     latent_recon_loss_weight=0.1, # TODO
                     perceptual_loss_weight=0.1,
-                    # use_new_cache_manager=False, # TODO
-                    use_new_cache_manager=True, # ==============TODO==============
+                    use_new_cache_manager=False, # TODO
+                    # use_new_cache_manager=True, # ==============TODO==============
 
                     norm_type=norm_type,
                     final_norm_option_in_obs_head='LayerNorm',
@@ -117,11 +117,30 @@ def main(env_id, seed):
                     # ==================== [FIXED LOCATION] Policy Stability Fixes ====================
                     # These fixes belong in world_model_cfg because they are read by world_model.py
 
-                    # Fix1: Clip policy logits to prevent explosion
+                    # ==================== Fix1: Advanced Policy Logits Control ====================
+                    # Multiple methods to prevent policy logits explosion
                     # RECOMMENDED: Enable this as a safety net against catastrophic logits
-                    use_policy_logits_clip=True,
-                    policy_logits_clip_min=-20.0,        # STRENGTHENED: Tighter clip (was -5.0)
-                    policy_logits_clip_max=20.0,         # STRENGTHENED: Tighter clip (was 5.0)
+
+                    use_policy_logits_clip=True,  # Master switch: enable/disable all logits control
+
+                    # Method selection (choose ONE):
+                    # - 'hard': Hard clamp (torch.clamp) - Simple but gradients die at boundaries
+                    # - 'soft_tanh': Soft clamp using tanh - Smooth, gradients never zero, RECOMMENDED
+                    # - 'soft_sigmoid': Soft clamp using sigmoid - Similar to tanh but different curve
+                    # - 'normalize_max': Subtract max then clamp - Preserves relative order, safer
+                    # - 'normalize_mean': Subtract mean then clamp - Centers distribution
+                    # - 'adaptive': Adaptive clipping based on running statistics - Advanced
+                    # - 'none': No clipping (only use if use_policy_logits_clip=False)
+                    policy_logits_clip_method='soft_tanh',  # RECOMMENDED: 'soft_tanh' or 'normalize_max'
+
+                    # Clip range (used by all methods except 'none')
+                    policy_logits_clip_min=-10.0,        # RECOMMENDED: ±10 (was ±20, too loose)
+                    policy_logits_clip_max=10.0,         # RECOMMENDED: ±10 (was ±20, too loose)
+
+                    # Advanced parameters for specific methods
+                    policy_logits_soft_beta=1.0,         # Smoothness for soft methods (higher = smoother)
+                    policy_logits_adaptive_percentile=95,  # Percentile for adaptive method (e.g., 95%)
+                    # =================================================================================
 
                     # Fix2: Unified policy label smoothing (applied in unizero.py)
                     # This is the PRIMARY smoothing mechanism
@@ -228,9 +247,12 @@ def main(env_id, seed):
             train_start_after_envsteps=0,  # Only for debug
             game_segment_length=game_segment_length,
             grad_clip_value=5,
-            replay_buffer_size=int(5e5),  # TODO
+            replay_buffer_size=int(1e5),  # TODO
+            # replay_buffer_size=int(5e5),  # TODO
+            # replay_buffer_size=int(1e6),  # TODO
 
-            eval_freq=int(5e3),
+            eval_freq=int(1e4),
+            # eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -261,7 +283,13 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_1226_2/{env_id[3:-3]}/{env_id[3:-3]}_uz_newkv_head-clip-p_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-softtanh_rbs1e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_poli-no-clamp_rbs1e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_rbs1e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip20_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # main_config.exp_name = f'data_unizero_st_1229/{env_id[3:-3]}/{env_id[3:-3]}_uz_newkv_rbs1e5_head-clip-p_target005_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip20_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # main_config.exp_name = f'data_unizero_st_1226_2/{env_id[3:-3]}/{env_id[3:-3]}_uz_newkv_head-clip-p_target005_allhead4_targetentropy-alpha-500k-098-005-min005_mse-loss2_rec01_poli-clip10_pol-smo-005_pol-loss-tmp-1.5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_unizero/{env_id[3:-3]}/{env_id[3:-3]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
@@ -275,9 +303,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Test environments from atari8 base set
-    args.env = 'ALE/Pong-v5'               # Memory-planning environment with sparse rewards
-    # args.env = 'ALE/Qbert-v5'               # Memory-planning environment with sparse rewards
-    
+    # args.env = 'ALE/Pong-v5'               # Memory-planning environment with sparse rewards
+
+    args.env = 'ALE/Qbert-v5'               # Memory-planning environment with sparse rewards
     # args.env = 'ALE/MsPacman-v5'               # Memory-planning environment with sparse rewards
 
     main(args.env, args.seed)

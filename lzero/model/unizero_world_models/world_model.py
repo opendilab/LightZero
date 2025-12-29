@@ -562,8 +562,17 @@ class WorldModel(nn.Module):
         # ==================== [NEW] Policy Stability Fix Options ====================
         # Load fix options from config (with defaults for backward compatibility)
         self.use_policy_logits_clip = getattr(self.config, 'use_policy_logits_clip', False)
+        self.policy_logits_clip_method = getattr(self.config, 'policy_logits_clip_method', 'soft_tanh')
         self.policy_logits_clip_min = getattr(self.config, 'policy_logits_clip_min', -10.0)
         self.policy_logits_clip_max = getattr(self.config, 'policy_logits_clip_max', 10.0)
+        self.policy_logits_soft_beta = getattr(self.config, 'policy_logits_soft_beta', 1.0)
+        self.policy_logits_adaptive_percentile = getattr(self.config, 'policy_logits_adaptive_percentile', 95)
+
+        # Running statistics for adaptive clipping
+        if self.policy_logits_clip_method == 'adaptive':
+            self.register_buffer('policy_logits_running_max', torch.tensor(10.0))
+            self.register_buffer('policy_logits_running_min', torch.tensor(-10.0))
+            self.policy_logits_momentum = 0.99
 
         # [NEW] Fix5: Temperature scaling for policy loss
         self.use_policy_loss_temperature = getattr(self.config, 'use_policy_loss_temperature', False)
@@ -581,9 +590,14 @@ class WorldModel(nn.Module):
 
         # [NEW] Debug: Print configuration on initialization
         if self.use_policy_logits_clip:
-            logging.info(f"[Policy Logits Clip] ENABLED: range=[{self.policy_logits_clip_min}, {self.policy_logits_clip_max}]")
+            logging.info(
+                f"[Policy Logits Control] ENABLED\n"
+                f"  Method: {self.policy_logits_clip_method}\n"
+                f"  Range: [{self.policy_logits_clip_min}, {self.policy_logits_clip_max}]\n"
+                f"  Soft Beta: {self.policy_logits_soft_beta if 'soft' in self.policy_logits_clip_method else 'N/A'}"
+            )
         else:
-            logging.warning(f"[Policy Logits Clip] DISABLED! Using default values.")
+            logging.warning(f"[Policy Logits Control] DISABLED! Logits may grow unbounded.")
 
         if self.use_policy_loss_temperature and self.policy_loss_temperature != 1.0:
             logging.info(f"[Policy Loss Temperature] ENABLED: temperature={self.policy_loss_temperature}")
@@ -597,6 +611,119 @@ class WorldModel(nn.Module):
         self.act_tokens_pattern[-1] = 1
         self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
         self.value_policy_tokens_pattern[-2] = 1
+
+    def _apply_policy_logits_control(self, logits_policy: torch.Tensor) -> torch.Tensor:
+        """
+        Apply policy logits control using various methods to prevent explosion.
+
+        This method implements multiple strategies to constrain policy logits:
+        1. 'hard': Hard clamp (torch.clamp) - Simple but gradients die at boundaries
+        2. 'soft_tanh': Soft clamp using tanh - Smooth, gradients never zero
+        3. 'soft_sigmoid': Soft clamp using sigmoid - Similar to tanh but different curve
+        4. 'normalize_max': Subtract max then clamp - Preserves relative order, safer
+        5. 'normalize_mean': Subtract mean then clamp - Centers distribution
+        6. 'adaptive': Adaptive clipping based on running statistics
+        7. 'none': No clipping
+
+        Arguments:
+            - logits_policy (:obj:`torch.Tensor`): Raw policy logits from head_policy
+                Shape: [batch_size, num_steps, action_dim] or [batch_size * num_steps, action_dim]
+
+        Returns:
+            - torch.Tensor: Controlled policy logits with the same shape
+
+        Examples:
+            >>> logits = torch.randn(32, 10, 6) * 20  # Large logits
+            >>> controlled = self._apply_policy_logits_control(logits)
+            >>> assert controlled.abs().max() <= self.policy_logits_clip_max
+        """
+        if not self.use_policy_logits_clip or self.policy_logits_clip_method == 'none':
+            return logits_policy
+
+        method = self.policy_logits_clip_method
+        clip_min = self.policy_logits_clip_min
+        clip_max = self.policy_logits_clip_max
+
+        # ==================== Method 1: Hard Clamp ====================
+        if method == 'hard':
+            # Simple hard clipping
+            # Pros: Simple, fast
+            # Cons: Gradients become zero outside [clip_min, clip_max]
+            return torch.clamp(logits_policy, min=clip_min, max=clip_max)
+
+        # ==================== Method 2: Soft Tanh Clamp ====================
+        elif method == 'soft_tanh':
+            # Soft clamp using tanh function: clip_max * tanh(x / clip_max)
+            # Pros: Gradients never zero, smooth transition
+            # Cons: Slightly more computation
+            # When x is small: tanh(x) ≈ x, so output ≈ x (unchanged)
+            # When x is large: tanh(x) → 1, so output → clip_max (smoothly saturates)
+            C = clip_max  # Use positive bound as scale
+            beta = self.policy_logits_soft_beta  # Smoothness parameter
+            return C * torch.tanh(logits_policy / (C * beta))
+
+        # ==================== Method 3: Soft Sigmoid Clamp ====================
+        elif method == 'soft_sigmoid':
+            # Soft clamp using sigmoid: maps (-∞, ∞) to (clip_min, clip_max)
+            # Formula: clip_min + (clip_max - clip_min) * sigmoid(x / beta)
+            # Pros: Smooth, bounded
+            # Cons: Compresses entire range, may lose relative ordering
+            beta = self.policy_logits_soft_beta
+            range_size = clip_max - clip_min
+            return clip_min + range_size * torch.sigmoid(logits_policy / beta)
+
+        # ==================== Method 4: Normalize Max + Hard Clamp ====================
+        elif method == 'normalize_max':
+            # Subtract max value first (exploits softmax translation invariance)
+            # softmax(x) = softmax(x - c) for any constant c
+            # By subtracting max, we ensure the largest logit is 0, others are negative
+            # Then apply hard clamp (mainly affects the negative tail)
+            # Pros: Preserves relative ordering, safer than pure hard clamp
+            # Cons: Still has gradient issues for very negative values
+            logits_normalized = logits_policy - logits_policy.max(dim=-1, keepdim=True)[0].detach()
+            return torch.clamp(logits_normalized, min=clip_min, max=clip_max)
+
+        # ==================== Method 5: Normalize Mean + Hard Clamp ====================
+        elif method == 'normalize_mean':
+            # Subtract mean (centers the distribution)
+            # Pros: Centers logits around 0, prevents drift
+            # Cons: May change relative probabilities more than normalize_max
+            logits_normalized = logits_policy - logits_policy.mean(dim=-1, keepdim=True).detach()
+            return torch.clamp(logits_normalized, min=clip_min, max=clip_max)
+
+        # ==================== Method 6: Adaptive Clipping ====================
+        elif method == 'adaptive':
+            # Dynamically adjust clipping thresholds based on running statistics
+            # Update running stats (only during training)
+            if self.training:
+                with torch.no_grad():
+                    # Compute percentile-based bounds
+                    flat_logits = logits_policy.view(-1)
+                    percentile = self.policy_logits_adaptive_percentile
+                    current_max = torch.quantile(flat_logits, percentile / 100.0)
+                    current_min = torch.quantile(flat_logits, (100 - percentile) / 100.0)
+
+                    # Update running statistics with momentum
+                    self.policy_logits_running_max = (
+                        self.policy_logits_momentum * self.policy_logits_running_max +
+                        (1 - self.policy_logits_momentum) * current_max
+                    )
+                    self.policy_logits_running_min = (
+                        self.policy_logits_momentum * self.policy_logits_running_min +
+                        (1 - self.policy_logits_momentum) * current_min
+                    )
+
+            # Use running stats for clipping
+            adaptive_max = torch.clamp(self.policy_logits_running_max, max=clip_max)
+            adaptive_min = torch.clamp(self.policy_logits_running_min, min=clip_min)
+            return torch.clamp(logits_policy, min=adaptive_min, max=adaptive_max)
+
+        else:
+            raise ValueError(
+                f"Unknown policy_logits_clip_method: {method}. "
+                f"Valid options: 'hard', 'soft_tanh', 'soft_sigmoid', 'normalize_max', "
+                f"'normalize_mean', 'adaptive', 'none'"
+            )
 
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
@@ -945,15 +1072,12 @@ class WorldModel(nn.Module):
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
 
-        # ==================== [NEW] Fix1: Clip Policy Logits ====================
-        # Prevent policy logits from exploding, which can cause gradient issues
+        # ==================== [NEW] Advanced Policy Logits Control ====================
+        # Apply configurable policy logits control to prevent explosion
+        # Multiple methods available: hard, soft_tanh, soft_sigmoid, normalize_max, etc.
         if self.use_policy_logits_clip:
-            logits_policy = torch.clamp(
-                logits_policy,
-                min=self.policy_logits_clip_min,
-                max=self.policy_logits_clip_max
-            )
-        # ========================================================================
+            logits_policy = self._apply_policy_logits_control(logits_policy)
+        # ================================================================================
 
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 

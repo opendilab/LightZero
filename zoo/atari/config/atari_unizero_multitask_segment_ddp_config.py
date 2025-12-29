@@ -184,8 +184,12 @@ def create_config(
             # (float) Learning rate for adaptive alpha optimizer
             adaptive_entropy_alpha_lr=1e-3,
             target_entropy_start_ratio=0.98,
-            target_entropy_end_ratio=0.5,  # for action_space=18
-            target_entropy_decay_steps=100000,  # e.g., reach final value after 150k iterations (300k envsteps)
+            # target_entropy_end_ratio=0.5,  # for action_space=18
+            # target_entropy_decay_steps=100000,  # e.g., reach final value after 150k iterations (300k envsteps)
+
+            target_entropy_end_ratio=0.1,  # for action_space=18
+            target_entropy_decay_steps=150000,  # Complete decay after 150k iterations (needs coordination with replay ratio)
+
 
             # ==================== Encoder-Clip Annealing Configuration ====================
             # (bool) Whether to enable encoder-clip value annealing.
@@ -230,7 +234,8 @@ def create_config(
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
-            replay_buffer_size=int(5e5),
+            # replay_buffer_size=int(5e5),
+            replay_buffer_size=int(1e5), # TODO
             eval_freq=int(1e4),  # Evaluation frequency for 8 games
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -263,8 +268,9 @@ def generate_configs(
 
     # --- Experiment Name Template ---
     # Replace placeholders like [BENCHMARK_TAG] and [MODEL_TAG] to define the experiment name.
-    benchmark_tag = "data_unizero_mt_1226"
-    model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    benchmark_tag = "data_unizero_mt_1229"
+    model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10_alpha-150k-098-01_tbs1024_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
+    # model_tag = f"vit_tran-nlayer{num_layers}_moe8_encoder-100k-30-10-true_alpha-100k-098-05_prior_adamw-wd1e-2-all_tbs512_brf{buffer_reanalyze_freq}_label-smooth_head-inner-ln"
     exp_name_prefix = f'{benchmark_tag}/atari_{len(env_id_list)}games_{model_tag}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
@@ -360,7 +366,9 @@ if __name__ == "__main__":
     # to fit within GPU memory constraints.
     if len(env_id_list) == 8:
         if num_layers in [2, 4]:
-            effective_batch_size = 512
+            # effective_batch_size = 512
+            effective_batch_size = 1024 # TODO 128*8=2048
+            # effective_batch_size = 2048 # TODO 256*8=2048
         elif num_layers == 8:
             effective_batch_size = 512
     elif len(env_id_list) == 26:
@@ -372,7 +380,9 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Batch size not configured for {len(env_id_list)} environments.")
 
-    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size, gpu_num=6)  # TODO
+    # batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size, gpu_num=6)  # TODO
+    batch_sizes, grad_acc_steps = compute_batch_config(env_id_list, effective_batch_size, gpu_num=4)  # TODO
+
     total_batch_size = effective_batch_size  # Currently for logging purposes
 
     # ==================== Model and Training Settings ====================
