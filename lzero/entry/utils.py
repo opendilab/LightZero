@@ -9,7 +9,7 @@ focusing on clarity, professionalism, efficiency, and extensibility.
 # ==============================================================================
 from __future__ import annotations
 
-import logging
+from ditk import logging
 import math
 import os
 import re
@@ -614,8 +614,6 @@ def random_collect(
     collector.reset_policy(policy.collect_mode)
 
 
-
-
 def convert_to_batch_for_unizero(batch_data, policy_cfg, reward_support, value_support):
     """
     Overview:
@@ -699,7 +697,7 @@ def create_unizero_loss_metrics(policy):
     Returns:
         - compute_metrics (:obj:`Callable`): Function that computes losses for a batch of data
     """
-    import logging
+    from ditk import logging
 
     # Get reward_support and value_support from policy
     reward_support = policy.reward_support

@@ -1,4 +1,4 @@
-import logging
+from ditk import logging
 import os
 from functools import partial
 from typing import Tuple, Optional
@@ -136,9 +136,6 @@ def train_unizero(
     else:
         world_size = 1
         rank = 0
-    # TODO: for visualize
-    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-    # import sys; sys.exit(0)
 
     while True:
         # Log memory usage of the replay buffer
@@ -223,11 +220,7 @@ def train_unizero(
                 if os.environ.get('DEBUG', '').lower() == 'true':
                     import pudb; pudb.set_trace()
 
-
                 log_vars = learner.train(train_data, collector.envstep)
-                
-                
-                
                 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])

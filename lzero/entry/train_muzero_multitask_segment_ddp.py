@@ -1,5 +1,5 @@
 import concurrent.futures
-import logging
+from ditk import logging
 import os
 from functools import partial
 from typing import Any, Dict, List, Optional, Tuple

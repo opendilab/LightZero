@@ -377,9 +377,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
-        self.pad_token_id = 0 # for compatibility
-
-
         encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
         self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
         

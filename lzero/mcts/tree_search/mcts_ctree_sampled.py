@@ -87,7 +87,7 @@ class SampledUniZeroMCTSCtree(object):
     ) -> None:
         """
         Overview:
-            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
+            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel.
             This method utilizes the C++ implementation of the tree search for efficiency.
 
         Arguments:
@@ -96,6 +96,7 @@ class SampledUniZeroMCTSCtree(object):
             - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
             - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
             - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
+            - task_id (:obj:`int`, optional): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()
@@ -176,7 +177,6 @@ class SampledUniZeroMCTSCtree(object):
                 network_output.reward = to_detach_cpu_numpy(self.reward_inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
-                # print("network_output.latent_state.shape:", network_output.latent_state.shape)
 
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()

@@ -422,6 +422,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tup
     Arguments:
         - obs_batch_ori (:obj:`np.ndarray`): The original observations in a batch style.
         - cfg (:obj:`EasyDict`): The configuration dictionary containing model settings.
+        - task_id (:obj:`int`, optional): The global task ID, used in multitask settings to select the appropriate observation shape.
 
     Returns:
         - obs_batch (:obj:`torch.Tensor`): The tensor containing the observations for the initial inference.
@@ -610,10 +611,6 @@ def concat_output_value(output_lst: List) -> np.ndarray:
     value_lst = []
     for output in output_lst:
         value_lst.append(output.value)
-
-    # print(f'value_lst:{value_lst}')
-    # print(f'value_lst[0]:{value_lst[0]}')
-    # print(f'value_lst[0].shape:{value_lst[0].shape}')
 
     value_lst = np.concatenate(value_lst)
 

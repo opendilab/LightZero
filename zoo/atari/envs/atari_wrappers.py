@@ -162,10 +162,22 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     return env
 
 
-# This wrapper inherits from gym.ObservationWrapper and now works correctly
 class WarpFrame(gym.ObservationWrapper):
+    """
+    Overview:
+        A wrapper that warps frames to 84x84 as done in the Nature paper and later work.
+    """
+
     def __init__(self, env: gym.Env, width: int = 84, height: int = 84, grayscale: bool = True,
                  dict_space_key: Optional[str] = None):
+        """
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
+            - width (:obj:`int`): The width to which the frames are resized.
+            - height (:obj:`int`): The height to which the frames are resized.
+            - grayscale (:obj:`bool`): If True, convert frames to grayscale.
+            - dict_space_key (:obj:`Optional[str]`): If specified, indicates which observation should be warped.
+        """
         super().__init__(env)
         self._width = width
         self._height = height
@@ -211,30 +223,53 @@ class WarpFrame(gym.ObservationWrapper):
 
 
 class JpegWrapper(gym.Wrapper):
+    """
+    Overview:
+        A wrapper that converts the observation into a string to save memory.
+    """
+
     def __init__(self, env: gym.Env, transform2string: bool = True):
+        """
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
+            - transform2string (:obj:`bool`): If True, transform the observations to string.
+        """
         super().__init__(env)
         self.transform2string = transform2string
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
+
         if self.transform2string:
             observation = jpeg_data_compressor(observation)
+
         return observation, reward, done, info
 
     def reset(self, **kwargs):
         observation = self.env.reset(**kwargs)
+
         if self.transform2string:
             observation = jpeg_data_compressor(observation)
+
         return observation
 
 
 class GameWrapper(gym.Wrapper):
+    """
+    Overview:
+        A wrapper to adapt the environment to the game interface.
+    """
+
     def __init__(self, env: gym.Env):
+        """
+        Arguments:
+            - env (:obj:`gym.Env`): The environment to wrap.
+        """
         super().__init__(env)
 
     def legal_actions(self):
         return [_ for _ in range(self.env.action_space.n)]
-
+        
 
 # This is the key compatibility wrapper
 class GymnasiumToGymWrapper(gym.Wrapper):

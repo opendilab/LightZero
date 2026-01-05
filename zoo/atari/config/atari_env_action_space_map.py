@@ -1,5 +1,6 @@
 from easydict import EasyDict
 
+# ale-py==0.10.1, gymnasium==1.2.1
 atari_env_action_space_map = EasyDict({
     'ALE/Alien-v5': 18,
     'ALE/Amidar-v5': 10,

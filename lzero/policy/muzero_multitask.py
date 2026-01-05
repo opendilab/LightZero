@@ -33,7 +33,7 @@ def generate_task_loss_dict(multi_task_losses: List[float], task_name_template: 
     Arguments:
         - multi_task_losses (:obj:`List[float]`): A list containing the loss for each task.
         - task_name_template (:obj:`str`): A template for the task name, e.g., 'loss_task{}'.
-        - task_id (:obj:`int`): The starting ID for the tasks.
+        - task_id (:obj:`int`): The starting global task ID for the current rank. Used to offset task indices when generating task names.
     Returns:
         - task_loss_dict (:obj:`Dict[str, float]`): A dictionary containing the loss for each task.
     """
@@ -576,7 +576,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             Reset the observation and action for the collector environment.
         Arguments:
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
-            - task_id (:obj:`int`): The ID of the task.
+            - task_id (:obj:`int`): The global task ID.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -592,7 +592,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             Reset the observation and action for the evaluator environment.
         Arguments:
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
-            - task_id (:obj:`int`): The ID of the task.
+            - task_id (:obj:`int`): The global task ID.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -686,7 +686,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             - to_play (:obj:`int`): The player to play.
             - epsilon (:obj:`float`): The epsilon of the eps greedy exploration.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - task_id (:obj:`int`): The ID of the task.
+            - task_id (:obj:`int`): The global task ID for the current environments.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -826,7 +826,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - task_id (:obj:`int`): The ID of the task.
+            - task_id (:obj:`int`): The global task ID for the current environments.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.

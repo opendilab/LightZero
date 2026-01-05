@@ -4,19 +4,15 @@ Modified from https://github.com/CompVis/taming-transformers
 
 import hashlib
 import os
-from collections import namedtuple
-from pathlib import Path
-
 import requests
 import torch
 import torch.nn as nn
 from torchvision import models
 from tqdm import tqdm
+from collections import namedtuple
+from pathlib import Path
+from ditk import logging
 
-os.environ['HF_HOME'] = '/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg'
-custom_torch_home = "/mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg"
-os.environ['TORCH_HOME'] = custom_torch_home
-os.makedirs(os.path.join(custom_torch_home, 'hub', 'checkpoints'), exist_ok=True)
 
 class LPIPS(nn.Module):
     # Learned perceptual metric
@@ -83,9 +79,9 @@ class vgg16(torch.nn.Module):
     def __init__(self, requires_grad: bool = False, pretrained: bool = True) -> None:
         super(vgg16, self).__init__()
         # With TORCH_HOME set, pretrained=True will search or download the model in the specified directory
-        print("Loading vgg16 backbone...")
+        logging.info("Loading vgg16 backbone...")
         vgg_pretrained_features = models.vgg16(pretrained=pretrained).features
-        print("vgg16 backbone loaded.")
+        logging.info("vgg16 backbone loaded.")
         self.slice1 = torch.nn.Sequential()
         self.slice2 = torch.nn.Sequential()
         self.slice3 = torch.nn.Sequential()
@@ -179,18 +175,3 @@ def get_ckpt_path(name: str, root: str, check: bool = False) -> str:
         md5 = md5_hash(path)
         assert md5 == MD5_MAP[name], md5
     return path
-
-# ===============================
-# ===== Usage Example =====
-# ===============================
-if __name__ == '__main__':
-    print(f"PyTorch Hub directory set to: {os.environ['TORCH_HOME']}")
-
-    # On the first run, you will see two download processes:
-    # 1. Download vgg16-397923af.pth to /mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg/hub/checkpoints/
-    # 2. Download vgg.pth to /mnt/shared-storage-user/puyuan/code/LightZero/tokenizer_pretrained_vgg/
-    # After that, subsequent runs will load directly from the specified directory without any downloads.
-
-    print("\nInitializing LPIPS model...")
-    model = LPIPS()
-    print("\nLPIPS model initialized successfully.")

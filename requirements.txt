@@ -1,5 +1,6 @@
 DI-engine>=0.5.3
-gymnasium[atari]==0.28.0
+gymnasium[atari]>=1.2.1
+ale-py>=0.10.1
 numpy>=1.24.1,<2
 transformers
 pympler
@@ -8,9 +9,9 @@ moviepy
 pytest
 line_profiler
 xxhash
-simple_parsing
 einops
 openai
 nltk
 pyecharts
 numba
+simple_parsing # for Jericho env

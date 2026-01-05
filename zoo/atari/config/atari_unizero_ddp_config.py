@@ -21,11 +21,6 @@ num_unroll_steps = 10
 infer_context_length = 4
 seed = 0
 
-# ====== only for debug =====
-# num_simulations = 2
-# max_env_step = int(2e5)
-# batch_size = 2
-# num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -61,14 +56,6 @@ atari_unizero_config = dict(
                 embed_dim=768,
                 obs_type='image',
                 env_num=max(collector_env_num, evaluator_env_num),
-                task_num=1,
-                use_normal_head=True,
-                use_softmoe_head=False,
-                use_moe_head=False,
-                num_experts_in_moe_head=4,
-                moe_in_transformer=False,
-                multiplication_moe_in_transformer=False,
-                num_experts_of_moe_in_transformer=4,
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.

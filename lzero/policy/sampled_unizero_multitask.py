@@ -42,7 +42,7 @@ def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]],
     Arguments:
         - multi_task_losses (:obj:`List[Union[torch.Tensor, float]]`): A list containing the loss for each task.
         - task_name_template (:obj:`str`): A template for the task name, e.g., 'obs_loss_task{}'.
-        - task_id (:obj:`int`): The base task ID.
+        - task_id (:obj:`int`): The starting global task ID for the current rank. Used to offset task indices when generating task names.
     Returns:
         - (:obj:`Dict[str, float]`): A dictionary containing the loss for each task.
     """
@@ -669,7 +669,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             - epsilon (:obj:`float`): The exploration noise parameter.
             - ready_env_id (:obj:`np.ndarray`): An array of environment IDs that are ready for action.
             - timestep (:obj:`List[int]`): The current timestep for each environment.
-            - task_id (:obj:`int`): The ID of the task being executed.
+            - task_id (:obj:`int`): The global task ID for the current environments.
         Returns:
             - (:obj:`Dict[int, Dict[str, Any]]`): A dictionary mapping environment IDs to action selection results.
         """
@@ -783,7 +783,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             - to_play (:obj:`int`): The current player.
             - ready_env_id (:obj:`np.ndarray`): An array of environment IDs that are ready for action.
             - timestep (:obj:`List[int]`): The current timestep for each environment.
-            - task_id (:obj:`int`): The ID of the task being evaluated.
+            - task_id (:obj:`int`): The global task ID for the current environments.
         Returns:
             - (:obj:`Dict[int, Dict[str, Any]]`): A dictionary mapping environment IDs to action selection results.
         """
@@ -860,7 +860,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             - env_id (:obj:`int`, optional): The ID of the environment to reset. If None, applies to all.
             - current_steps (:obj:`int`): The current number of steps, used for periodic cache clearing.
             - reset_init_data (:obj:`bool`): Whether to reset the initial observation and action batches.
-            - task_id (:obj:`int`, optional): The task ID, used to determine observation shape.
+            - task_id (:obj:`int`, optional): The global task ID, used to determine observation shape.
         """
         if reset_init_data:
             obs_shape = self._cfg.model.observation_shape_list[task_id] if task_id is not None else self._cfg.model.observation_shape

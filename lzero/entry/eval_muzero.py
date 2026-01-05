@@ -1,7 +1,7 @@
+from ditk import logging
 import os
 from functools import partial
 from typing import Optional, Tuple
-import logging
 
 import numpy as np
 import torch

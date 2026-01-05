@@ -417,9 +417,6 @@ class DMC2GymEnv(BaseEnv):
         if self._timestep > self.max_episode_steps:
             done = True
 
-        if self._timestep > self._cfg.max_episode_steps:
-            done = True
-
         if done:
             logging.info(f'one episode done! episode return: {self._eval_episode_return}, episode_steps:{self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return

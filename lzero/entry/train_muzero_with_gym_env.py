@@ -1,4 +1,4 @@
-import logging
+from ditk import logging
 import os
 from typing import Optional
 from typing import Tuple

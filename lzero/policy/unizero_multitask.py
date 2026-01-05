@@ -35,7 +35,7 @@ def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]],
     Arguments:
         - multi_task_losses (:obj:`List[Union[torch.Tensor, float]]`): A list containing the loss for each task.
         - task_name_template (:obj:`str`): The template for the task name, e.g., 'obs_loss_task{}'.
-        - task_id (:obj:`int`): The starting ID of the tasks.
+        - task_id (:obj:`int`): The starting global task ID for the current rank. Used to offset task indices when generating task names.
     Returns:
         - task_loss_dict (:obj:`Dict[str, float]`): A dictionary where keys are formatted task names and values are the corresponding losses.
     """
@@ -1540,7 +1540,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - epsilon (:obj:`float`, optional): The probability for epsilon-greedy exploration.
             - ready_env_id (:obj:`np.array`, optional): An array of IDs for environments that are ready for a new action.
             - timestep (:obj:`List`, optional): The current timestep in each environment.
-            - task_id (:obj:`int`, optional): The ID of the task for the current environments.
+            - task_id (:obj:`int`, optional): The global task ID for the current environments.
         Returns:
             - output (:obj:`Dict`): A dictionary where keys are environment IDs and values are dictionaries
               containing the selected action and other MCTS statistics.
@@ -1672,7 +1672,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - to_play (:obj:`int`, optional): The player ID for the current turn.
             - ready_env_id (:obj:`np.array`, optional): An array of IDs for environments that are ready for a new action.
             - timestep (:obj:`List`, optional): The current timestep in each environment.
-            - task_id (:obj:`int`, optional): The ID of the task for the current environments.
+            - task_id (:obj:`int`, optional): The global task ID for the current environments.
         Returns:
             - output (:obj:`Dict`): A dictionary where keys are environment IDs and values are dictionaries
               containing the selected action and other MCTS statistics.
@@ -1746,7 +1746,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - env_id (:obj:`int`, optional): The ID of the environment to reset. If None, the reset applies more broadly. Defaults to None.
             - current_steps (:obj:`int`, optional): The current step count in the environment, used to trigger periodic cache clearing. Defaults to 0.
             - reset_init_data (:obj:`bool`, optional): If True, resets the initial observation and action buffers. Defaults to True.
-            - task_id (:obj:`int`, optional): The task ID, currently unused in this method. Defaults to None.
+            - task_id (:obj:`int`, optional): The global task ID. Can be used to handle different observation shapes per task. Defaults to None.
         """
         if reset_init_data:
             self.last_batch_obs = initialize_zeros_batch(
@@ -1823,7 +1823,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - env_id (:obj:`int`, optional): The ID of the environment to reset. Defaults to None.
             - current_steps (:obj:`int`, optional): The current step count, used for periodic cache clearing. Defaults to 0.
             - reset_init_data (:obj:`bool`, optional): If True, resets the initial observation and action buffers. Defaults to True.
-            - task_id (:obj:`int`, optional): The task ID. Can be used to handle different observation shapes per task. Defaults to None.
+            - task_id (:obj:`int`, optional): The global task ID. Can be used to handle different observation shapes per task. Defaults to None.
         """
         if reset_init_data:
             self.last_batch_obs_eval = initialize_zeros_batch(

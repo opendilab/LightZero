@@ -139,12 +139,8 @@ class AtariEnvLightZero(BaseEnv):
                 ),
             })
 
-            # Access `reward_range` directly on the wrapped environment object.
-            # The gym wrapper system will correctly delegate this call to the
-            # underlying gymnasium environment's property.
-            # TODO
             self._reward_space = gym.spaces.Box(
-                low=-9999, high=999, shape=(1,), dtype=np.float32
+                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
             )
 
             self._init_flag = True
@@ -181,8 +177,8 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         self._timestep += 1
-        if self._timestep % 200 == 0:
-            logging.info(f'self._timestep: {self._timestep}')
+        # if self._timestep % 200 == 0:
+        #     logging.info(f'self._timestep: {self._timestep}')
         observation = self.observe()
         if done:
             logging.info(f'one episode done! total episode length is: {self._timestep}')
