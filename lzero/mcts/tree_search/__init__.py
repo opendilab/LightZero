@@ -1,4 +1,4 @@
-from .mcts_ctree import MuZeroMCTSCtree, EfficientZeroMCTSCtree, GumbelMuZeroMCTSCtree, UniZeroMCTSCtree, MuZeroRNNFullObsMCTSCtree
+from .mcts_ctree import MuZeroMCTSCtree, EfficientZeroMCTSCtree, GumbelMuZeroMCTSCtree, UniZeroMCTSCtree, MuZeroRNNFullObsMCTSCtree,EZV2MCTSCtree
 from .mcts_ctree_sampled import SampledEfficientZeroMCTSCtree, SampledMuZeroMCTSCtree, SampledUniZeroMCTSCtree
 from .mcts_ctree_stochastic import StochasticMuZeroMCTSCtree
 from .mcts_ptree import MuZeroMCTSPtree, EfficientZeroMCTSPtree
