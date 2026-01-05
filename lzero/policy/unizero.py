@@ -1,32 +1,29 @@
 import copy
-from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Union
 import logging
-import numpy as np
-import torch
+import logging
+from typing import Any, Dict, List, Tuple, Union
+
 import wandb
 from ding.model import model_wrap
+import torch.nn.functional as F
 from ding.utils import POLICY_REGISTRY
-
-from lzero.entry.utils import initialize_zeros_batch, initialize_pad_batch
-from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
+from collections import defaultdict
+from typing import List, Dict, Any, Tuple, Union
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack_for_unizero
-from lzero.policy.muzero import MuZeroPolicy
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          mz_network_output_unpack, phi_transform, prepare_obs,
+                          prepare_obs_stack_for_unizero, scalar_transform,
+                          select_action, to_torch_float_tensor)
+from lzero.policy.head_clip_manager import (HeadClipConfig, HeadClipManager,
+                                            create_head_clip_manager_from_dict)
 from .utils import configure_optimizers_nanogpt
+from lzero.policy.utils import initialize_pad_batch
+from torch.nn.utils.convert_parameters import (parameters_to_vector,
+                                               vector_to_parameters)
+
 
 from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
-import torch.nn.functional as F
-
-from lzero.policy.head_clip_manager import (
-    HeadClipManager,
-    create_head_clip_manager_from_dict,
-    HeadClipConfig,
-)
-
-def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
     Efficiently scale all weights of a module using vectorized operations.
     """
@@ -247,7 +244,13 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to enable adaptive policy entropy weight (alpha)
         use_adaptive_entropy_weight=True,
         # (float) Learning rate for adaptive alpha optimizer
-        adaptive_entropy_alpha_lr=1e-4,
+        adaptive_entropy_alpha_lr=1e-3,
+        # (float) Target entropy ratio at the start of training (higher = more exploration)
+        target_entropy_start_ratio=0.98,
+        # (float) Target entropy ratio at the end of training (lower = more exploitation)
+        target_entropy_end_ratio=0.05,
+        # (int) Number of training steps to decay target entropy from start to end ratio
+        target_entropy_decay_steps=500000,
         # ==================== START: Encoder-Clip Annealing Config ====================
         # (bool) Whether to enable annealing for encoder-clip values.
         use_encoder_clip_annealing=True,
@@ -258,7 +261,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # (float) Ending clip value for annealing (stricter in later training).
         encoder_clip_end_value=10.0,
         # (int) Training iteration steps required to complete annealing from start to end value.
-        encoder_clip_anneal_steps=100000,  # e.g., reach final value after 200k iterations
+        encoder_clip_anneal_steps=100000,  # e.g., reach final value after 100k iterations
+        # (float) Fixed latent norm clip threshold (used when encoder_clip_annealing is disabled)
+        latent_norm_clip_threshold=20.0,
         # ===================== END: Encoder-Clip Annealing Config =====================
 
         # ==================== START: Head-Clip Annealing Config ====================
@@ -288,6 +293,33 @@ class UniZeroPolicy(MuZeroPolicy):
             log_freq=1000,    # Print log every 1000 iterations
         ),
         # ===================== END: Head-Clip Annealing Config =====================
+
+        # ==================== START: Policy Label Smoothing Config ====================
+        # (float) Starting epsilon value for policy label smoothing (higher = more smoothing)
+        policy_ls_eps_start=0.05,
+        # (float) Ending epsilon value for policy label smoothing (lower = less smoothing)
+        policy_ls_eps_end=0.01,
+        # (int) Number of training steps to decay label smoothing epsilon from start to end
+        policy_ls_eps_decay_steps=50000,
+        # (bool) Whether to use continuous (fixed) label smoothing throughout training
+        use_continuous_label_smoothing=False,
+        # (float) Fixed epsilon value for continuous label smoothing (only used when use_continuous_label_smoothing=True)
+        continuous_ls_eps=0.05,
+        # ===================== END: Policy Label Smoothing Config =====================
+
+        # ==================== START: Learning Rate Scheduler Config ====================
+        # (int) Total training iterations for cosine annealing LR scheduler (only used when cos_lr_scheduler=True)
+        total_iterations=500000,
+        # (float) Final learning rate for cosine annealing LR scheduler (only used when cos_lr_scheduler=True)
+        final_learning_rate=4e-5,
+        # ===================== END: Learning Rate Scheduler Config =====================
+
+        # ==================== START: Monitoring Config ====================
+        # (int) Frequency of monitoring model parameter and gradient norms (in training iterations). Set to 0 to disable.
+        monitor_norm_freq=5000,
+        # (bool) Whether to enable enhanced policy monitoring (logits statistics, target policy entropy, etc.)
+        use_enhanced_policy_monitoring=False,
+        # ===================== END: Monitoring Config =====================
 
         # (bool) whether to use rnd model.
         use_rnd_model=False,
@@ -354,10 +386,6 @@ class UniZeroPolicy(MuZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
-        # ==================== Norm Monitoring Frequency ====================
-        # How often (in training iteration steps) to monitor model parameter norms. Set to 0 to disable.
-        monitor_norm_freq=5000,
-        # ====================================================================
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -580,8 +608,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
-            total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
-            final_lr = self._cfg.get('final_learning_rate', 4e-5)
+            total_iters = self._cfg.total_iterations
+            final_lr = self._cfg.final_learning_rate
 
             self.lr_scheduler = CosineAnnealingLR(
                 self._optimizer_world_model,
@@ -630,11 +658,20 @@ class UniZeroPolicy(MuZeroPolicy):
         self.grad_norm_after = 0.
 
         if self._cfg.model.model_type == 'conv':
+            # for image-input env
             self.pad_token_id = -1
         else:
+            # for text-input env and vector-input env
+            # Retrieve the tokenizer from the encoder module if it exists
             encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
-            self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
 
+            # Extract the padding token ID from the tokenizer if available, otherwise use 0 as default. Used in _reset_collect()
+            # The pad_token_id is used to identify padding tokens in sequences, which is essential for:
+            # 1. Masking padded positions during attention computation to prevent them from affecting the output
+            # 2. Properly handling variable-length sequences in batch processing
+            # 3. Distinguishing between actual tokens and padding in loss calculation
+            # Default value 0 is a common convention when no specific padding token is defined
+            self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
 
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
@@ -644,12 +681,12 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: Target Entropy Regularization Initialization ====================
         # Read whether to enable adaptive alpha from config, and provide a default value
-        self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
+        self.use_adaptive_entropy_weight = self._cfg.use_adaptive_entropy_weight
 
         # Add configuration in _init_learn
-        self.target_entropy_start_ratio = self._cfg.get('target_entropy_start_ratio', 0.98)
-        self.target_entropy_end_ratio = self._cfg.get('target_entropy_end_ratio', 0.7)
-        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000)  # e.g., complete annealing within 200k steps (2M envsteps)
+        self.target_entropy_start_ratio = self._cfg.target_entropy_start_ratio
+        self.target_entropy_end_ratio = self._cfg.target_entropy_end_ratio
+        self.target_entropy_decay_steps = self._cfg.target_entropy_decay_steps  # e.g., complete annealing within 200k steps (2M envsteps)
 
         if self.use_adaptive_entropy_weight:
             # 1. Set target entropy. For discrete action spaces, a common heuristic is the negative logarithm
@@ -664,7 +701,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # 3. Create a dedicated optimizer for log_alpha.
             #    Using a smaller learning rate (e.g., 1e-4) different from the main optimizer is usually more stable.
-            alpha_lr = self._cfg.get('adaptive_entropy_alpha_lr', 1e-4)
+            alpha_lr = self._cfg.adaptive_entropy_alpha_lr
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
 
             print("="*20)
@@ -675,13 +712,13 @@ class UniZeroPolicy(MuZeroPolicy):
         # ===================== END: Target Entropy Regularization Initialization =====================
 
         # ==================== START: Initialize Encoder-Clip Annealing Parameters ====================
-        self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
-        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0)  # TODO
+        self.use_encoder_clip_annealing = self._cfg.use_encoder_clip_annealing
+        self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold  # TODO
         if self.use_encoder_clip_annealing:
-            self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
-            self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
-            self.encoder_clip_end = self._cfg.get('encoder_clip_end_value', 10.0)
-            self.encoder_clip_anneal_steps = self._cfg.get('encoder_clip_anneal_steps', 200000)
+            self.encoder_clip_anneal_type = self._cfg.encoder_clip_anneal_type
+            self.encoder_clip_start = self._cfg.encoder_clip_start_value
+            self.encoder_clip_end = self._cfg.encoder_clip_end_value
+            self.encoder_clip_anneal_steps = self._cfg.encoder_clip_anneal_steps
 
             print("="*20)
             print(">>> Encoder-Clip Annealing Enabled <<<")
@@ -691,14 +728,14 @@ class UniZeroPolicy(MuZeroPolicy):
             print("="*20)
         else:
             # If annealing is not enabled, use a fixed clip threshold
-            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 20.0)
+            self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold
         # ===================== END: Initialize Encoder-Clip Annealing Parameters =====================
 
         # ==================== START: Initialize Head-Clip Manager ====================
-        self.use_head_clip = self._cfg.get('use_head_clip', False)
+        self.use_head_clip = self._cfg.use_head_clip
 
         if self.use_head_clip:
-            head_clip_config_dict = self._cfg.get('head_clip_config', {})
+            head_clip_config_dict = self._cfg.head_clip_config
             # Ensure enabled is consistent with top-level configuration
             head_clip_config_dict['enabled'] = self.use_head_clip
 
@@ -723,10 +760,10 @@ class UniZeroPolicy(MuZeroPolicy):
         # ===================== END: Initialize Head-Clip Manager =====================
 
         # Policy Label Smoothing Parameters
-        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05)
-        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01)
-        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000)
-        print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
+        self.policy_ls_eps_start = self._cfg.policy_ls_eps_start
+        self.policy_ls_eps_end = self._cfg.policy_ls_eps_end
+        self.policy_ls_eps_decay_steps = self._cfg.policy_ls_eps_decay_steps
+        print(f"self.policy_ls_eps_start: {self.policy_ls_eps_start}")
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -750,10 +787,10 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Calculate current epsilon for policy label smoothing
         # ==================== Continuous Label Smoothing ====================
-        use_continuous_label_smoothing = self._cfg.get('use_continuous_label_smoothing', False)
+        use_continuous_label_smoothing = self._cfg.use_continuous_label_smoothing
         if use_continuous_label_smoothing:
             # Use fixed high epsilon throughout training
-            current_policy_label_eps = self._cfg.get('continuous_ls_eps', 0.05)
+            current_policy_label_eps = self._cfg.continuous_ls_eps
         else:
             # Use original decay schedule
             if self.policy_ls_eps_start > 0:
@@ -1200,7 +1237,7 @@ class UniZeroPolicy(MuZeroPolicy):
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
 
-        use_enhanced_policy_monitoring = self._cfg.get('use_enhanced_policy_monitoring', False)
+        use_enhanced_policy_monitoring = self._cfg.use_enhanced_policy_monitoring
         if use_enhanced_policy_monitoring:
             # Monitor policy logits statistics
             with torch.no_grad():

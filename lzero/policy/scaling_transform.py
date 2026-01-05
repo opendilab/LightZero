@@ -1,5 +1,7 @@
 from typing import Union
+
 import torch
+
 
 class DiscreteSupport(object):
 
@@ -109,12 +111,12 @@ def visit_count_temperature(
 def phi_transform(
     discrete_support: DiscreteSupport,
     x: torch.Tensor,
-    label_smoothing_eps: float = 0.0  # <--- Added smoothing parameter
+    label_smoothing_eps: float = 0.0
 ) -> torch.Tensor:
     """
     Overview:
-        Map a real-valued scalar to a categorical distribution over a discrete support 
-        using linear interpolation (a.k.a. “soft” one-hot).
+        Map a real-valued scalar to a categorical distribution over a discrete support
+        using linear interpolation (a.k.a. "soft" one-hot).
 
         For each scalar value, the probability mass is split between the two
         nearest support atoms so that their weighted sum equals the original
@@ -126,8 +128,13 @@ def phi_transform(
         - x : torch.Tensor
             Input tensor of arbitrary shape ``(...,)`` containing real numbers.
         - label_smoothing_eps : float
-            Epsilon value for label smoothing. If greater than 0, the resulting 
-            distribution is mixed with a uniform distribution. Defaults to 0.
+            Epsilon value for label smoothing (default: 0). When > 0, mixes the target
+            distribution with a uniform distribution to:
+            - Prevent overconfidence and overfitting to discrete support atoms
+            - Improve generalization through smoother value/reward representations
+            - Enhance numerical stability during training
+
+            Formula: smooth_target = (1 - ε) * target + ε / N, where N = support size.
 
     Returns:
         - torch.Tensor
@@ -136,8 +143,8 @@ def phi_transform(
 
     Notes
     -----
-    • No in-place ops on the input are used, improving autograd safety.  
-    • Only one `scatter_add_` kernel is launched for efficiency.  
+    • No in-place ops on the input are used, improving autograd safety.
+    • Only one `scatter_add_` kernel is launched for efficiency.
     """
     # --- constants ----------------------------------------------------------
     min_bound = discrete_support.arange[0, 0]
@@ -172,8 +179,8 @@ def phi_transform(
     # --- 5. Apply label smoothing ------------------------------------------
     if label_smoothing_eps > 0:
         # Mix the original "two-hot" target with a uniform distribution
-        smooth_target = (1.0 - label_smoothing_eps) * target + (label_smoothing_eps / size)
-        return smooth_target
+        # smooth_target
+        return (1.0 - label_smoothing_eps) * target + (label_smoothing_eps / size)
     else:
         return target
 

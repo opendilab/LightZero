@@ -24,7 +24,7 @@ atari_sampled_efficientzero_config = dict(
     exp_name=f'data_sez/{env_id[:-14]}_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id=env_id,
-        obs_shape=(4, 96, 96),
+        obs_shape=(4, 64, 64),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -32,7 +32,7 @@ atari_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(4, 96, 96),
+            observation_shape=(4, 64, 64),
             frame_stack_num=4,
             action_space_size=action_space_size,
             downsample=True,

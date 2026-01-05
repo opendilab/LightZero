@@ -1,31 +1,30 @@
 import copy
+import sys
 from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
-
 from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
-from lzero.policy import prepare_obs_stack_for_unizero
-from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          mz_network_output_unpack, phi_transform, prepare_obs,
+                          prepare_obs_stack_for_unizero, scalar_transform,
+                          select_action, to_torch_float_tensor)
 from lzero.policy.unizero import UniZeroPolicy, scale_module_weights_vectorized
+
 from .utils import configure_optimizers_nanogpt
-import sys
 
 # Please replace the path with the actual location of your LibMTL library.
 sys.path.append('/path/to/your/LibMTL')
 
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+import torch.distributed as dist
 from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
 from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
-
-import torch.distributed as dist
-
+from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 
 
 def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]], task_name_template: str, task_id: int) -> Dict[str, float]:
@@ -50,38 +49,7 @@ def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]],
     return task_loss_dict
 
 
-
 class WrappedModel:
-    """
-    Overview:
-        A wrapper class for the world model to conveniently access its parameters and zero its gradients.
-        This version wraps the entire world model.
-    """
-    def __init__(self, world_model: torch.nn.Module):
-        """
-        Arguments:
-            - world_model (:obj:`torch.nn.Module`): The world model instance.
-        """
-        self.world_model = world_model
-
-    def parameters(self) -> iter:
-        """
-        Overview:
-            Returns an iterator over the parameters of the entire world model.
-        """
-        return self.world_model.parameters()
-
-    def zero_grad(self, set_to_none: bool = False) -> None:
-        """
-        Overview:
-            Sets the gradients of all world model parameters to zero.
-        Arguments:
-            - set_to_none (:obj:`bool`): Whether to set gradients to None instead of zero.
-        """
-        self.world_model.zero_grad(set_to_none=set_to_none)
-
-
-class WrappedModelV2:
     """
     Overview:
         A wrapper for specific components of the world model.
@@ -126,49 +94,6 @@ class WrappedModelV2:
         self.transformer.zero_grad(set_to_none=set_to_none)
         self.pos_emb.zero_grad(set_to_none=set_to_none)
         # self.task_emb.zero_grad(set_to_none=set_to_none)  # TODO: Match the decision made in the parameters() method.
-        self.act_embedding_table.zero_grad(set_to_none=set_to_none)
-
-
-class WrappedModelV3:
-    """
-    Overview:
-        An alternative wrapper for world model components.
-        This version excludes the tokenizer from the shared parameters, focusing gradient correction
-        on the transformer and embedding layers.
-    """
-    def __init__(self, transformer: torch.nn.Module, pos_emb: torch.nn.Module, task_emb: torch.nn.Module, act_embedding_table: torch.nn.Module):
-        """
-        Arguments:
-            - transformer (:obj:`torch.nn.Module`): The transformer backbone.
-            - pos_emb (:obj:`torch.nn.Module`): The positional embedding module.
-            - task_emb (:obj:`torch.nn.Module`): The task embedding module.
-            - act_embedding_table (:obj:`torch.nn.Module`): The action embedding table.
-        """
-        self.transformer = transformer
-        self.pos_emb = pos_emb
-        self.task_emb = task_emb
-        self.act_embedding_table = act_embedding_table
-
-    def parameters(self) -> iter:
-        """
-        Overview:
-            Returns an iterator over the parameters of the transformer and various embedding layers.
-        """
-        return (list(self.transformer.parameters()) +
-                list(self.pos_emb.parameters()) +
-                list(self.task_emb.parameters()) +
-                list(self.act_embedding_table.parameters()))
-
-    def zero_grad(self, set_to_none: bool = False) -> None:
-        """
-        Overview:
-            Sets the gradients of the wrapped components to zero.
-        Arguments:
-            - set_to_none (:obj:`bool`): Whether to set gradients to None instead of zero.
-        """
-        self.transformer.zero_grad(set_to_none=set_to_none)
-        self.pos_emb.zero_grad(set_to_none=set_to_none)
-        self.task_emb.zero_grad(set_to_none=set_to_none)
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
 
 
@@ -333,6 +258,53 @@ class UniZeroMTPolicy(UniZeroPolicy):
             ),
         ),
         # ****** common ******
+        # (bool) Whether to enable adaptive policy entropy weight (alpha)
+        use_adaptive_entropy_weight=True,
+        # (float) Learning rate for adaptive alpha optimizer
+        adaptive_entropy_alpha_lr=1e-3,
+        # (float) Target entropy ratio at the start of training (higher = more exploration)
+        target_entropy_start_ratio=0.98,
+        # (float) Target entropy ratio at the end of training (lower = more exploitation)
+        target_entropy_end_ratio=0.1,
+        # (int) Number of training steps to decay target entropy from start to end ratio
+        target_entropy_decay_steps=150000,
+
+        # ==================== START: Encoder-Clip Annealing Config ====================
+        # (bool) Whether to enable annealing for encoder-clip values.
+        use_encoder_clip_annealing=True,
+        # (str) Annealing type. Options: 'linear' or 'cosine'.
+        encoder_clip_anneal_type='cosine',
+        # (float) Starting clip value for annealing (looser in early training).
+        encoder_clip_start_value=30.0,
+        # (float) Ending clip value for annealing (stricter in later training).
+        encoder_clip_end_value=10.0,
+        # (int) Training iteration steps required to complete annealing from start to end value.
+        encoder_clip_anneal_steps=100000,  # e.g., reach final value after 100k iterations
+        # (float) Fixed latent norm clip threshold (used when encoder_clip_annealing is disabled)
+        latent_norm_clip_threshold=30.0,
+        # ===================== END: Encoder-Clip Annealing Config =====================
+
+        # ==================== START: Policy Label Smoothing Config ====================
+        # (float) Starting epsilon value for policy label smoothing (higher = more smoothing)
+        policy_ls_eps_start=0.05,
+        # (float) Ending epsilon value for policy label smoothing (lower = less smoothing)
+        policy_ls_eps_end=0.01,
+        # (int) Number of training steps to decay label smoothing epsilon from start to end
+        policy_ls_eps_decay_steps=50000,
+        # ===================== END: Policy Label Smoothing Config =====================
+
+        # ==================== START: Learning Rate Scheduler Config ====================
+        # (int) Total training iterations for cosine annealing LR scheduler (only used when cos_lr_scheduler=True)
+        total_iterations=500000,
+        # (float) Final learning rate for cosine annealing LR scheduler (only used when cos_lr_scheduler=True)
+        final_learning_rate=1e-6,
+        # ===================== END: Learning Rate Scheduler Config =====================
+
+        # ==================== START: Monitoring Config ====================
+        # (int) Frequency of monitoring model parameter and gradient norms (in training iterations). Set to 0 to disable.
+        monitor_norm_freq=10000,
+        # ===================== END: Monitoring Config =====================
+
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
@@ -399,10 +371,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
-        # ==================== Norm Monitoring Frequency ====================
-        # How often (in training iteration steps) to monitor model parameter norms. Set to 0 to disable.
-        monitor_norm_freq=5000,
-        # ====================================================================
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -648,8 +616,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
-            total_iters = self._cfg.get('total_iterations', 500000) # 500k iter
-            final_lr = self._cfg.get('final_learning_rate', 1e-6)
+            total_iters = self._cfg.total_iterations # 500k iter
+            final_lr = self._cfg.final_learning_rate
 
             self.lr_scheduler = CosineAnnealingLR(
                 self._optimizer_world_model,
@@ -708,7 +676,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         print(f'self._cfg.only_use_moco_stats:{self._cfg.only_use_moco_stats}')
         if self._cfg.use_moco or self._cfg.only_use_moco_stats:
             # The prediction heads' gradients are not corrected.
-            self.wrapped_model = WrappedModelV2(
+            self.wrapped_model = WrappedModel(
                 # TODO: This assumes the tokenizer has an encoder attribute which is a list. This might need to be more robust.
                 self._learn_model.world_model.tokenizer.encoder[0],
                 self._learn_model.world_model.transformer,
@@ -751,12 +719,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # ==================== START: Target Entropy Regularization Initialization ====================
         # Read whether to enable adaptive alpha from config, and provide a default value
-        self.use_adaptive_entropy_weight = self._cfg.get('use_adaptive_entropy_weight', True)
+        self.use_adaptive_entropy_weight = self._cfg.use_adaptive_entropy_weight
 
         # Add configuration in _init_learn
-        self.target_entropy_start_ratio = self._cfg.get('target_entropy_start_ratio', 0.98)
-        self.target_entropy_end_ratio = self._cfg.get('target_entropy_end_ratio', 0.7)
-        self.target_entropy_decay_steps = self._cfg.get('target_entropy_decay_steps', 200000) # e.g., complete annealing within 200k steps (2M envsteps)
+        self.target_entropy_start_ratio = self._cfg.target_entropy_start_ratio
+        self.target_entropy_end_ratio = self._cfg.target_entropy_end_ratio
+        self.target_entropy_decay_steps = self._cfg.target_entropy_decay_steps # e.g., complete annealing within 200k steps (2M envsteps)
 
         if self.use_adaptive_entropy_weight:
             # 1. Set target entropy. For discrete action spaces, a common heuristic is the negative logarithm
@@ -771,7 +739,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             # 3. Create a dedicated optimizer for log_alpha.
             #    Using a smaller learning rate (e.g., 1e-4) different from the main optimizer is usually more stable.
-            alpha_lr = self._cfg.get('adaptive_entropy_alpha_lr', 1e-4)
+            alpha_lr = self._cfg.adaptive_entropy_alpha_lr
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
 
             print("="*20)
@@ -781,14 +749,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
             print("="*20)
         # ===================== END: Target Entropy Regularization Initialization =====================
 
-        self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
+        self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold
         # ==================== START: Initialize Encoder-Clip Annealing Parameters ====================
-        self.use_encoder_clip_annealing = self._cfg.get('use_encoder_clip_annealing', False)
+        self.use_encoder_clip_annealing = self._cfg.use_encoder_clip_annealing
         if self.use_encoder_clip_annealing:
-            self.encoder_clip_anneal_type = self._cfg.get('encoder_clip_anneal_type', 'cosine')
-            self.encoder_clip_start = self._cfg.get('encoder_clip_start_value', 30.0)
-            self.encoder_clip_end = self._cfg.get('encoder_clip_end_value', 10.0)
-            self.encoder_clip_anneal_steps = self._cfg.get('encoder_clip_anneal_steps', 200000)
+            self.encoder_clip_anneal_type = self._cfg.encoder_clip_anneal_type
+            self.encoder_clip_start = self._cfg.encoder_clip_start_value
+            self.encoder_clip_end = self._cfg.encoder_clip_end_value
+            self.encoder_clip_anneal_steps = self._cfg.encoder_clip_anneal_steps
 
             print("="*20)
             print(">>> Encoder-Clip Annealing Enabled <<<")
@@ -798,13 +766,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             print("="*20)
         else:
             # If annealing is not enabled, use a fixed clip threshold
-            self.latent_norm_clip_threshold = self._cfg.get('latent_norm_clip_threshold', 30.0)
+            self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold
         # ===================== END: Initialize Encoder-Clip Annealing Parameters =====================
 
         # Policy Label Smoothing Parameters
-        self.policy_ls_eps_start = self._cfg.get('policy_ls_eps_start', 0.05) # TODO policy_label_smoothing_eps_start: larger action space requires larger eps
-        self.policy_ls_eps_end = self._cfg.get('policy_label_smoothing_eps_end ', 0.01) # TODO policy_label_smoothing_eps_start
-        self.policy_ls_eps_decay_steps = self._cfg.get('policy_ls_eps_decay_steps ', 50000) # TODO 50k
+        self.policy_ls_eps_start = self._cfg.policy_ls_eps_start # TODO policy_label_smoothing_eps_start: larger action space requires larger eps
+        self.policy_ls_eps_end = self._cfg.policy_ls_eps_end # TODO policy_label_smoothing_eps_start
+        self.policy_ls_eps_decay_steps = self._cfg.policy_ls_eps_decay_steps # TODO 50k
         print(f"self.policy_ls_eps_start:{self.policy_ls_eps_start}")
 
     @staticmethod

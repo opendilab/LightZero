@@ -81,7 +81,7 @@ class AtariMuZeroMultitaskConfig:
         return EasyDict(dict(
             env=dict(
                 stop_value=int(self.max_env_step),
-                observation_shape=(4, 96, 96),
+                observation_shape=(4, 64, 64),
                 frame_stack_num=4,
                 gray_scale=True,
                 collector_env_num=self.collector_env_num,
@@ -111,7 +111,7 @@ class AtariMuZeroMultitaskConfig:
                     fc_reward_layers=[32],
                     fc_value_layers=[32],
                     fc_policy_layers=[32],
-                    observation_shape=(4, 96, 96),
+                    observation_shape=(4, 64, 64),
                     frame_stack_num=4,
                     gray_scale=True,
                     action_space_size=self.action_space_size,

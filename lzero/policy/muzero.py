@@ -71,7 +71,7 @@ class MuZeroPolicy(Policy):
             norm_type='BN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
-            # (bool) Whether to analyze dormant ratio.
+            # (bool) Whether to analyze dormant ratio. More details can be found in https://proceedings.mlr.press/v202/sokar23a/sokar23a.pdf.
             analysis_dormant_ratio=False,
             # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
             # More details can be found in https://arxiv.org/abs/2310.00344.
