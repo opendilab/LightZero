@@ -212,7 +212,7 @@ class LayerNorm(nn.Module):
 
 
 # modified from https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
-def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type):
+def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type, rnd_model: nn.Module = None):
     # start with all of the candidate parameters
     param_dict = {pn: p for pn, p in model.named_parameters()}
     # filter out those that do not require grad
@@ -221,14 +221,31 @@ def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, devi
     # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
     decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
     nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-    optim_groups = [
-        {'params': decay_params, 'weight_decay': weight_decay},
-        {'params': nodecay_params, 'weight_decay': 0.0}
-    ]
+    
+    if rnd_model is not None:
+        rnd_param_dict = {
+            pn: p for pn, p in rnd_model.named_parameters() if p.requires_grad
+        }
+        rnd_decay_params = [p for n, p in rnd_param_dict.items() if p.dim() >= 2]
+        rnd_nodecay_params = [p for n, p in rnd_param_dict.items() if p.dim() < 2]
+
+        decay_params.extend(rnd_decay_params)
+        nodecay_params.extend(rnd_nodecay_params)
+
+        print(
+            f"[RND] extra decayed tensors: {len(rnd_decay_params)}, "
+            f"non-decayed tensors: {len(rnd_nodecay_params)}"
+        )
+    
     num_decay_params = sum(p.numel() for p in decay_params)
     num_nodecay_params = sum(p.numel() for p in nodecay_params)
     print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
     print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+    optim_groups = [
+        {'params': decay_params, 'weight_decay': weight_decay},
+        {'params': nodecay_params, 'weight_decay': 0.0}
+    ]
+    
     # Create AdamW optimizer and use the fused version if it is available
     fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
     if torch.cuda.is_available():

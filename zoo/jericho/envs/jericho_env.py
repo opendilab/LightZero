@@ -102,6 +102,12 @@ class JerichoEnv(BaseEnv):
             print(f'[jericho]: use_cache: {self.use_cache}, cache_size={self.cache_size}')
 
         
+        self.use_cache = self.cfg['use_cache']
+        if self.use_cache:
+            self.cache_size = self.cfg['cache_size']
+            self.cache_buffer = OrderedDict()
+            print(f'[jericho]: use_cache: {self.use_cache}, cache_size={self.cache_size}')
+        
         # Initialize the tokenizer once (only in rank 0 process if distributed)
         if JerichoEnv.tokenizer is None:
             if self.rank == 0:
@@ -509,10 +515,10 @@ if __name__ == '__main__':
             for_unizero=False,
             collector_env_num=1,
             evaluator_env_num=1,
-            save_replay=True,
+            save_replay=False,
             save_replay_path=None,
             env_type=env_type,
-            collect_policy_mode='expert'    # random, human, expert
+            collect_policy_mode='random'    # random, human, expert
         )
     )
     env = JerichoEnv(env_cfg)

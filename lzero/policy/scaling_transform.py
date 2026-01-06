@@ -110,6 +110,7 @@ def visit_count_temperature(
 def phi_transform(
     discrete_support: DiscreteSupport,
     x: torch.Tensor,
+    label_smoothing_eps: float = 0.
 ) -> torch.Tensor:
     """
     Overview:
@@ -163,7 +164,14 @@ def phi_transform(
                          dtype=x.dtype, device=x.device)
 
     target.scatter_add_(-1, idx, prob)
-    return target
+
+    # --- 5. 应用标签平滑 ---
+    if label_smoothing_eps > 0:
+        # 将原始的 two-hot 目标与一个均匀分布混合
+        smooth_target = (1.0 - label_smoothing_eps) * target + (label_smoothing_eps / size)
+        return smooth_target
+    else:
+        return target
 
 
 def cross_entropy_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:

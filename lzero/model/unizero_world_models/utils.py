@@ -181,15 +181,29 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
 
 def hash_state(state):
     """
-    Hash the state vector.
+    Overview:
+        Computes a fast and robust hash for a NumPy array state.
+
+    Why this is optimal:
+        1.  Algorithm (`xxhash.xxh64`): Uses one of the fastest non-cryptographic hash
+            functions available, ideal for performance-critical applications like caching.
+        2.  Input Preparation (`state.tobytes()`): Ensures correctness by creating a
+            canonical byte representation of the array. This guarantees that two
+            logically identical arrays will produce the same hash, regardless of their
+            internal memory layout (e.g., C-contiguous, F-contiguous, or strided views).
+        3.  Output Format (`.intdigest()`): Directly produces an integer hash value,
+            which is the most efficient key type for Python dictionaries, avoiding the
+            overhead of string keys.
 
     Arguments:
-        state: The state vector to be hashed.
+        - state (np.ndarray): The state array to be hashed.
     Returns:
-        The hash value of the state vector.
+        - int: A 64-bit integer hash of the state.
     """
-    # Use xxhash for faster hashing
-    return xxhash.xxh64(state).hexdigest()
+    # Ensure the array is contiguous in memory before converting to bytes,
+    # although .tobytes() handles this, being explicit can sometimes be clearer.
+    # For simplicity and since .tobytes() defaults to C-order, we can rely on it.
+    return xxhash.xxh64(state.tobytes()).intdigest()
 
 @dataclass
 class WorldModelOutput:
@@ -201,7 +215,7 @@ class WorldModelOutput:
     logits_value: torch.FloatTensor
 
 
-def init_weights(module, norm_type='BN'):
+def init_weights(module, norm_type='BN', liner_weight_zero=False):
     """
     Initialize the weights of the module based on the specified normalization type.
 
@@ -209,9 +223,16 @@ def init_weights(module, norm_type='BN'):
         module (nn.Module): The module to initialize.
         norm_type (str): The type of normalization to use ('BN' for BatchNorm, 'LN' for LayerNorm).
     """
-    if isinstance(module, (nn.Linear, nn.Embedding)):
+    if isinstance(module, nn.Embedding):
         module.weight.data.normal_(mean=0.0, std=0.02)
-        if isinstance(module, nn.Linear) and module.bias is not None:
+    elif isinstance(module, nn.Linear):
+        if norm_type == 'BN':
+            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            print("Init Linear using kaiming normal for BN")
+        elif norm_type == 'LN':
+            nn.init.xavier_uniform_(module.weight)
+            print("Init Linear using xavier uniform for LN")
+        if module.bias is not None:
             module.bias.data.zero_()
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
         print(f"Init {module} using zero bias, 1 weight")
@@ -228,13 +249,6 @@ def init_weights(module, norm_type='BN'):
         elif norm_type == 'LN':
             nn.init.xavier_uniform_(module.weight)
             print(f"Init nn.Conv2d using xavier uniform for LN")
-    elif isinstance(module, nn.Linear):
-        if norm_type == 'BN':
-            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-            print("Init Linear using kaiming normal for BN")
-        elif norm_type == 'LN':
-            nn.init.xavier_uniform_(module.weight)
-            print("Init Linear using xavier uniform for LN")
 
 
 class LossWithIntermediateLosses:

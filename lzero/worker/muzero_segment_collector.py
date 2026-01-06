@@ -1,7 +1,7 @@
 import logging
 import time
 from collections import deque, namedtuple
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict
 
 import numpy as np
 import torch
@@ -14,6 +14,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from lzero.reward_model.rnd_reward_model import RNDRewardModel
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('segment_muzero')
@@ -46,6 +47,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             policy_config: 'policy_config' = None,  # noqa
+            rnd_model:  RNDRewardModel = None,
     ) -> None:
         """
         Overview:
@@ -89,6 +91,12 @@ class MuZeroSegmentCollector(ISerialCollector):
         self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
 
         self.reset(policy, env)
+        
+        if self.policy_config.use_rnd_model:
+            self.rnd_model = rnd_model
+            self.rnd_model.reset_discounted_reward(self._env_num)
+            self.rnd_next_obs_seq = {env_id: [] for env_id in range(self._env_num)}
+            self.obs_per_env = {env_id: deque([], maxlen=self.policy_config.model.frame_stack_num) for env_id in range(self._env_num)}
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -551,7 +559,15 @@ class MuZeroSegmentCollector(ISerialCollector):
                         self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, episode_timestep.info))
                         continue
                     obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
-
+                    
+                    if self.policy_config.use_rnd_model:
+                        self.obs_per_env[env_id].append(obs['observation'])
+                        if obs['timestep'] == 1:
+                            for _ in range(self.policy_config.model.frame_stack_num):
+                                self.obs_per_env[env_id].append(obs['observation'])
+                        self.rnd_next_obs_seq[env_id].append(np.concatenate(list(self.obs_per_env[env_id]), axis=0))
+                        
+                    
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
                     else:
@@ -721,6 +737,10 @@ class MuZeroSegmentCollector(ISerialCollector):
 
             # NOTE: must after the for loop to make sure all env_id's data are collected
             if len(self.game_segment_pool) >= self._default_num_segments:
+                if self.policy_config.use_rnd_model:
+                    self.rnd_model._update_rnd_return_rms(self.rnd_next_obs_seq)
+                    self.rnd_next_obs_seq = {env_id: [] for env_id in range(self._env_num)}
+                    
                 logging.info(f'env {env_id} collected {len(self.game_segment_pool)} segments now!')
 
                 # [data, meta_data]
