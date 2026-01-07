@@ -1,5 +1,5 @@
 import copy
-from typing import TYPE_CHECKING, List, Any, Union
+from typing import TYPE_CHECKING, List, Any, Union, Optional
 
 import numpy as np
 import torch
