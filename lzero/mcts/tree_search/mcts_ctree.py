@@ -265,7 +265,7 @@ class MuZeroMCTSCtree(object):
 
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], task_id: : Optional[int] = None
+            List[Any]], task_id: Optional[int] = None
     ) -> None:
         """
         Overview:

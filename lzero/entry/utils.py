@@ -46,6 +46,7 @@
 # ==============================================================================
 from __future__ import annotations
 
+import concurrent.futures
 from ditk import logging
 import math
 import os
@@ -74,6 +75,17 @@ ISerialCollector = Any
 BaseEnvManager = Any
 IBuffer = Any
 GameBuffer = Any
+BaseLearner = Any
+Evaluator = Any
+Collector = Any
+
+
+# ==============================================================================
+# Global Constants
+# ==============================================================================
+
+# Timeout for evaluation process in seconds (200 minutes)
+EVALUATION_TIMEOUT = 12000
 
 
 # ==============================================================================
@@ -590,6 +602,67 @@ def random_collect(
 
     # Restore the original policy to the collector.
     collector.reset_policy(policy.collect_mode)
+
+
+def safe_eval(
+    evaluator: Evaluator,
+    learner: BaseLearner,
+    collector: Collector,
+    rank: int,
+    world_size: int,
+    timeout: int = EVALUATION_TIMEOUT
+) -> Tuple[Optional[bool], Optional[Any]]:
+    """
+    Overview:
+        Safely executes an evaluation task with a timeout to prevent hangs.
+        This function runs the evaluation in a separate thread and enforces a timeout
+        to ensure the training process doesn't get stuck during evaluation.
+
+    Arguments:
+        - evaluator (:obj:`Evaluator`): The evaluator instance.
+        - learner (:obj:`BaseLearner`): The learner instance, used for saving checkpoints.
+        - collector (:obj:`Collector`): The data collector instance, used to get current envstep.
+        - rank (:obj:`int`): The rank of the current process in distributed training.
+        - world_size (:obj:`int`): The total number of processes in distributed training.
+        - timeout (:obj:`int`): The maximum time (in seconds) to wait for evaluation. Defaults to EVALUATION_TIMEOUT.
+
+    Returns:
+        - Tuple[Optional[bool], Optional[Any]]: A tuple containing:
+            - stop_flag: Boolean indicating if training should stop (None if timeout/error)
+            - reward_dict: Dictionary containing evaluation metrics (None if timeout/error)
+    """
+    try:
+        logging.info(f"========= Evaluation starting on Rank {rank}/{world_size} =========")
+        # Reset the stop_event to ensure it is not set before each evaluation.
+        evaluator.stop_event.clear()
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit the evaluation task to run in a separate thread.
+            future = executor.submit(
+                evaluator.eval,
+                learner.save_checkpoint,
+                learner.train_iter,
+                collector.envstep
+            )
+            try:
+                stop_flag, reward = future.result(timeout=timeout)
+                logging.info(f"====== Evaluation finished on Rank {rank}/{world_size} ======")
+                return stop_flag, reward
+            except concurrent.futures.TimeoutError:
+                # If a timeout occurs, set the stop_event to signal the evaluation thread to stop.
+                evaluator.stop_event.set()
+                logging.error(
+                    f"Evaluation timed out on Rank {rank}/{world_size} after {timeout} seconds. "
+                    f"Continuing training."
+                )
+                return None, None
+
+    except Exception as e:
+        logging.error(
+            f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}",
+            exc_info=True
+        )
+        return None, None
 
 
 def convert_to_batch_for_unizero(batch_data, policy_cfg, reward_support, value_support):

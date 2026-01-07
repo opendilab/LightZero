@@ -15,7 +15,7 @@ from ding.utils import EasyTimer, set_pkg_seed, get_rank, get_world_size
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage, allocate_batch_size
+from lzero.entry.utils import log_buffer_memory_usage, allocate_batch_size, EVALUATION_TIMEOUT, safe_eval
 from lzero.mcts import MuZeroGameBuffer as GameBuffer
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector as Collector
@@ -24,53 +24,11 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 # ==========================
 # Global Constants
 # ==========================
-EVALUATION_TIMEOUT_SECONDS: int = 3600
+# Note: This file uses a shorter timeout (1 hour) compared to other multitask files (200 minutes)
+# You can adjust this value or use EVALUATION_TIMEOUT from utils.py instead
+EVALUATION_TIMEOUT_SECONDS: int = 3600  # 1 hour
 MAX_TRAIN_ITER_INF: int = int(1e10)
 MAX_ENV_STEP_INF: int = int(1e10)
-
-
-def safe_eval(
-        evaluator: Evaluator,
-        learner: BaseLearner,
-        collector: Collector,
-        rank: int,
-        world_size: int
-) -> Tuple[Optional[bool], Optional[float]]:
-    """
-    Overview:
-        Safely performs an evaluation step with a timeout to prevent the training process from blocking.
-    Arguments:
-        - evaluator (:obj:`Evaluator`): The evaluator instance.
-        - learner (:obj:`BaseLearner`): The learner instance to save checkpoints.
-        - collector (:obj:`Collector`): The collector instance to get the current envstep.
-        - rank (:obj:`int`): The rank of the current process.
-        - world_size (:obj:`int`): The total number of processes.
-    Returns:
-        - (:obj:`Tuple[Optional[bool], Optional[float]]`): A tuple containing the stop flag and the evaluation reward.
-          Returns (None, None) if a timeout occurs.
-    """
-    logging.info(f"Rank {rank}/{world_size}: Starting evaluation...")
-    # Ensure the stop_event is clear before each evaluation.
-    evaluator.stop_event.clear()
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(
-            evaluator.eval,
-            learner.save_checkpoint,
-            learner.train_iter,
-            collector.envstep
-        )
-        try:
-            stop, reward = future.result(timeout=EVALUATION_TIMEOUT_SECONDS)
-            logging.info(f"Rank {rank}/{world_size}: Evaluation finished successfully. Stop: {stop}, Reward: {reward}")
-            return stop, reward
-        except concurrent.futures.TimeoutError:
-            # Set the evaluator's stop_event on timeout to gracefully stop the evaluation worker.
-            evaluator.stop_event.set()
-            logging.warning(
-                f"Rank {rank}/{world_size}: Evaluation timed out after {EVALUATION_TIMEOUT_SECONDS} seconds. "
-                f"Continuing training."
-            )
-            return None, None
 
 
 class MuZeroMultiTaskTrainer:
@@ -290,7 +248,8 @@ class MuZeroMultiTaskTrainer:
 
             # Evaluation step
             if evaluator.should_eval(self.learner.train_iter):
-                safe_eval(evaluator, self.learner, collector, self.rank, self.world_size)
+                safe_eval(evaluator, self.learner, collector, self.rank, self.world_size,
+                         timeout=EVALUATION_TIMEOUT_SECONDS)
 
             # Collection step
             self._collect_data_for_task(cfg, collector, replay_buffer)

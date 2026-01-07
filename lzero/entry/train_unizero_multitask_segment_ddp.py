@@ -15,7 +15,17 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.utils import EasyTimer, get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
 from ditk import logging
-from lzero.entry.utils import TemperatureScheduler, log_buffer_memory_usage
+from lzero.entry.utils import (
+    EVALUATION_TIMEOUT,
+    TemperatureScheduler,
+    allocate_batch_size,
+    compute_task_weights,
+    compute_unizero_mt_normalized_stats,
+    log_buffer_memory_usage,
+    safe_eval,
+    symlog,
+    inv_symlog,
+)
 # NOTE: The following imports are for type hinting purposes.
 # The actual GameBuffer is selected dynamically based on the policy type.
 from lzero.mcts import UniZeroGameBuffer
@@ -51,263 +61,7 @@ def build_learner_group(learner_ranks: list[int]) -> "dist.ProcessGroup":
 # Stores the latest evaluation returns: {task_id: eval_episode_return_mean}
 GLOBAL_EVAL_RETURNS: Dict[int, float] = defaultdict(lambda: None)
 
-
-def compute_unizero_mt_normalized_stats(
-        eval_returns: Dict[int, float]
-) -> Tuple[Optional[float], Optional[float]]:
-    """
-    Overview:
-        Computes the Human-Normalized Mean and Median from evaluation returns for UniZero-MT.
-        If there are no samples, it returns (None, None).
-    Arguments:
-        - eval_returns (:obj:`Dict[int, float]`): A dictionary of evaluation returns, keyed by task ID.
-    Returns:
-        - (:obj:`Tuple[Optional[float], Optional[float]]`): A tuple containing the human-normalized mean and median.
-                                                            Returns (None, None) if no valid returns are provided.
-    """
-    normalized = []
-    for tid, ret in eval_returns.items():
-        if ret is None:
-            continue
-        # Denominator for normalization
-        denom = new_HUMAN_SCORES[tid] - new_RANDOM_SCORES[tid]
-        if denom == 0:
-            continue
-        normalized.append((ret - new_RANDOM_SCORES[tid]) / denom)
-
-    if not normalized:
-        return None, None
-    arr = np.asarray(normalized, dtype=np.float32)
-    return float(arr.mean()), float(np.median(arr))
-
-
-# Set a timeout for evaluation in seconds
-TIMEOUT = 12000  # e.g., 200 minutes
-
 timer = EasyTimer()
-
-
-def safe_eval(
-        evaluator: Evaluator,
-        learner: BaseLearner,
-        collector: Collector,
-        rank: int,
-        world_size: int
-) -> Tuple[Optional[bool], Optional[float]]:
-    """
-    Overview:
-        Safely executes an evaluation task with a timeout to prevent hangs.
-    Arguments:
-        - evaluator (:obj:`Evaluator`): The evaluator instance.
-        - learner (:obj:`BaseLearner`): The learner instance.
-        - collector (:obj:`Collector`): The data collector instance.
-        - rank (:obj:`int`): The rank of the current process.
-        - world_size (:obj:`int`): The total number of processes.
-    Returns:
-        - (:obj:`Tuple[Optional[bool], Optional[float]]`): A tuple containing the stop flag and reward if evaluation succeeds,
-                                                           otherwise (None, None).
-    """
-    try:
-        print(f"========= Evaluation starting on Rank {rank}/{world_size} =========")
-        # Reset the stop_event to ensure it is not set before each evaluation.
-        evaluator.stop_event.clear()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Submit the evaluation task.
-            future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
-            try:
-                stop, reward = future.result(timeout=TIMEOUT)
-            except concurrent.futures.TimeoutError:
-                # If a timeout occurs, set the stop_event.
-                evaluator.stop_event.set()
-                print(f"Evaluation timed out on Rank {rank}/{world_size} after {TIMEOUT} seconds.")
-                return None, None
-
-        print(f"====== Evaluation finished on Rank {rank}/{world_size} ======")
-        return stop, reward
-    except Exception as e:
-        print(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}")
-        return None, None
-
-
-def allocate_batch_size(
-        cfgs: List[dict],
-        game_buffers: List['UniZeroGameBuffer'],
-        alpha: float = 1.0,
-        clip_scale: int = 1
-) -> List[int]:
-    """
-    Overview:
-        Allocates batch sizes for different tasks inversely proportional to the number of collected episodes.
-        It also dynamically adjusts the batch size range to improve training stability and efficiency.
-    Arguments:
-        - cfgs (:obj:`List[dict]`): A list of configurations for each task.
-        - game_buffers (:obj:`List[GameBuffer]`): A list of replay buffer instances for each task.
-        - alpha (:obj:`float`): A hyperparameter to control the degree of inverse proportionality. Defaults to 1.0.
-        - clip_scale (:obj:`int`): The clipping ratio for dynamic adjustment. Defaults to 1.
-    Returns:
-        - (:obj:`List[int]`): The list of allocated batch sizes.
-    """
-    # Extract the number of collected episodes for each task.
-    buffer_num_of_collected_episodes = [buffer.num_of_collected_episodes for buffer in game_buffers]
-
-    # Get the current world_size and rank.
-    world_size = torch.distributed.get_world_size()
-    rank = torch.distributed.get_rank()
-
-    # Gather the lists of collected episodes from all ranks.
-    all_task_num_of_collected_episodes = [None for _ in range(world_size)]
-    torch.distributed.all_gather_object(all_task_num_of_collected_episodes, buffer_num_of_collected_episodes)
-
-    # Merge the collected episodes from all ranks into a single list.
-    all_task_num_of_collected_episodes = [
-        episode for sublist in all_task_num_of_collected_episodes for episode in sublist
-    ]
-    if rank == 0:
-        print(f'Collected episodes for all tasks: {all_task_num_of_collected_episodes}')
-
-    # Calculate the inverse proportional weights for each task.
-    inv_episodes = np.array([1.0 / (episodes + 1) for episodes in all_task_num_of_collected_episodes])
-    inv_sum = np.sum(inv_episodes)
-
-    # Calculate the total batch size (sum of cfg.policy.batch_size for all tasks).
-    total_batch_size = cfgs[0].policy.total_batch_size
-
-    # Dynamic adjustment: define the min and max batch size range.
-    avg_batch_size = total_batch_size / world_size
-    min_batch_size = avg_batch_size / clip_scale
-    max_batch_size = avg_batch_size * clip_scale
-
-    # Dynamically adjust alpha to make batch size changes smoother.
-    task_weights = (inv_episodes / inv_sum) ** alpha
-    batch_sizes = total_batch_size * task_weights
-
-    # Clip the batch sizes to be within the [min_batch_size, max_batch_size] range.
-    batch_sizes = np.clip(batch_sizes, min_batch_size, max_batch_size)
-
-    # Ensure batch sizes are integers.
-    batch_sizes = [int(size) for size in batch_sizes]
-
-    return batch_sizes
-
-
-def symlog(x: torch.Tensor) -> torch.Tensor:
-    """
-    Overview:
-        Symlog normalization to reduce the magnitude difference of target values.
-        symlog(x) = sign(x) * log(|x| + 1)
-    """
-    return torch.sign(x) * torch.log(torch.abs(x) + 1)
-
-
-def inv_symlog(x: torch.Tensor) -> torch.Tensor:
-    """
-    Overview:
-        Inverse operation of Symlog to restore the original value.
-        inv_symlog(x) = sign(x) * (exp(|x|) - 1)
-    """
-    return torch.sign(x) * (torch.exp(torch.abs(x)) - 1)
-
-
-# Global max and min for "run-max-min" normalization
-GLOBAL_MAX = -float('inf')
-GLOBAL_MIN = float('inf')
-
-
-def compute_task_weights(
-        task_returns: Dict[int, float],
-        option: str = "symlog",
-        epsilon: float = 1e-6,
-        temperature: float = 1.0,
-        use_softmax: bool = False,
-        reverse: bool = False,
-        clip_min: float = 1e-2,
-        clip_max: float = 1.0,
-) -> Dict[int, float]:
-    """
-    Overview:
-        An improved function for calculating task weights, supporting multiple normalization methods,
-        Softmax, proportional/inverse weighting, and weight clipping.
-    Arguments:
-        - task_returns (:obj:`Dict[int, float]`): A dictionary where keys are task_ids and values are evaluation rewards or losses.
-        - option (:obj:`str`): Normalization method. Options: "symlog", "max-min", "run-max-min", "rank", "none".
-        - epsilon (:obj:`float`): A small value to avoid division by zero.
-        - temperature (:obj:`float`): Temperature coefficient to control the weight distribution.
-        - use_softmax (:obj:`bool`): Whether to use Softmax for weight distribution.
-        - reverse (:obj:`bool`): If True, weights are inversely proportional to values; if False, they are proportional.
-        - clip_min (:obj:`float`): The minimum value to clip weights to.
-        - clip_max (:obj:`float`): The maximum value to clip weights to.
-    Returns:
-        - (:obj:`Dict[int, float]`): A dictionary of weights for each task, where keys are task_ids.
-    """
-    global GLOBAL_MAX, GLOBAL_MIN
-
-    # Return an empty dictionary if the input is empty.
-    if not task_returns:
-        return {}
-
-    # Step 1: Construct a tensor from the values of task_returns.
-    task_ids = list(task_returns.keys())
-    returns_tensor = torch.tensor(list(task_returns.values()), dtype=torch.float32)
-
-    if option == "symlog":
-        # Use symlog normalization.
-        scaled_returns = symlog(returns_tensor)
-    elif option == "max-min":
-        # Use max-min normalization.
-        max_reward = returns_tensor.max().item()
-        min_reward = returns_tensor.min().item()
-        scaled_returns = (returns_tensor - min_reward) / (max_reward - min_reward + epsilon)
-    elif option == "run-max-min":
-        # Use global running max-min normalization.
-        GLOBAL_MAX = max(GLOBAL_MAX, returns_tensor.max().item())
-        GLOBAL_MIN = min(GLOBAL_MIN, returns_tensor.min().item())
-        scaled_returns = (returns_tensor - GLOBAL_MIN) / (GLOBAL_MAX - GLOBAL_MIN + epsilon)
-    elif option == "rank":
-        # Use rank-based normalization. Rank is based on value size, with 1 for the smallest.
-        sorted_indices = torch.argsort(returns_tensor)
-        scaled_returns = torch.empty_like(returns_tensor)
-        rank_values = torch.arange(1, len(returns_tensor) + 1, dtype=torch.float32)  # Ranks from 1 to N
-        scaled_returns[sorted_indices] = rank_values
-    elif option == "none":
-        # No normalization.
-        scaled_returns = returns_tensor
-    else:
-        raise ValueError(f"Unsupported option: {option}")
-
-    # Step 2: Determine if weights are proportional or inversely proportional based on `reverse`.
-    if not reverse:
-        # Proportional: weight is positively correlated with the value.
-        raw_weights = scaled_returns
-    else:
-        # Inverse: weight is negatively correlated with the value.
-        # Clamp to avoid division by zero or negative numbers.
-        scaled_returns = torch.clamp(scaled_returns, min=epsilon)
-        raw_weights = 1.0 / scaled_returns
-
-    # Step 3: Calculate weights with or without Softmax.
-    if use_softmax:
-        # Use Softmax for weight distribution.
-        beta = 1.0 / max(temperature, epsilon)  # Ensure temperature is not zero.
-        logits = -beta * raw_weights
-        softmax_weights = F.softmax(logits, dim=0).numpy()
-        weights = dict(zip(task_ids, softmax_weights))
-    else:
-        # Do not use Softmax, calculate weights directly.
-        # Temperature scaling.
-        scaled_weights = raw_weights ** (1 / max(temperature, epsilon))  # Ensure temperature is not zero.
-
-        # Normalize weights.
-        total_weight = scaled_weights.sum()
-        normalized_weights = scaled_weights / total_weight
-
-        # Convert to dictionary.
-        weights = dict(zip(task_ids, normalized_weights.numpy()))
-
-    # Step 4: Clip the weight range.
-    for task_id in weights:
-        weights[task_id] = max(min(weights[task_id], clip_max), clip_min)
-
-    return weights
 
 
 def train_unizero_multitask_segment_ddp(
@@ -695,7 +449,12 @@ def train_unizero_multitask_segment_ddp(
                     GLOBAL_EVAL_RETURNS[tid] = ret  # Update even for solved tasks.
 
                 # Calculate Human-Normalized Mean / Median.
-                uni_mean, uni_median = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+                # Convert arrays to dictionaries with task_id as keys
+                human_scores_dict = {i: new_HUMAN_SCORES[i] for i in range(len(new_HUMAN_SCORES))}
+                random_scores_dict = {i: new_RANDOM_SCORES[i] for i in range(len(new_RANDOM_SCORES))}
+                uni_mean, uni_median = compute_unizero_mt_normalized_stats(
+                    GLOBAL_EVAL_RETURNS, human_scores_dict, random_scores_dict
+                )
 
                 if uni_mean is not None:  # At least one task has been evaluated.
                     if rank == 0:  # Only write to TensorBoard on rank 0 to avoid duplication.

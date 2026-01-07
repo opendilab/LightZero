@@ -26,15 +26,13 @@ from tensorboardX import SummaryWriter
 
 from .utils import (allocate_batch_size, compute_task_weights,
                     compute_unizero_mt_normalized_stats,
+                    EVALUATION_TIMEOUT, safe_eval,
                     freeze_non_lora_parameters, log_module_trainable_status,
                     log_param_statistics, tasks_per_stage)
 
 # A global dictionary to store the most recent evaluation return for each task.
 # Format: {task_id: eval_episode_return_mean}
 GLOBAL_EVAL_RETURNS: Dict[int, float] = defaultdict(lambda: None)
-
-# Timeout for the evaluation process in seconds.
-EVALUATION_TIMEOUT = 12000  # 200 minutes
 
 
 class CurriculumController:
@@ -148,48 +146,6 @@ class CurriculumController:
             return True
 
         return False
-
-
-def safe_eval(
-        evaluator: Evaluator,
-        learner: BaseLearner,
-        collector: Collector,
-        rank: int,
-        world_size: int
-) -> Tuple[Optional[bool], Optional[Dict[str, Any]]]:
-    """
-    Overview:
-        Executes the evaluation process with a timeout to prevent the training from stalling.
-    Arguments:
-        - evaluator (:obj:`Evaluator`): The evaluator instance.
-        - learner (:obj:`BaseLearner`): The learner instance, used to save checkpoints.
-        - collector (:obj:`Collector`): The collector instance, used to get the current envstep.
-        - rank (:obj:`int`): The rank of the current process.
-        - world_size (:obj:`int`): The total number of processes.
-    Returns:
-        - Tuple[Optional[bool], Optional[Dict[str, Any]]]: A tuple containing the stop flag and the reward dictionary
-          if evaluation succeeds. Returns (None, None) on timeout or error.
-    """
-    try:
-        logging.info(f"========= Evaluation starting on Rank {rank}/{world_size} =========")
-        # Ensure the stop_event is clear before starting a new evaluation.
-        evaluator.stop_event.clear()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Submit the evaluation task.
-            future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
-            try:
-                stop_flag, reward_dict = future.result(timeout=EVALUATION_TIMEOUT)
-            except concurrent.futures.TimeoutError:
-                # Set the stop_event to terminate the stuck evaluation thread.
-                evaluator.stop_event.set()
-                logging.error(f"Evaluation timed out on Rank {rank}/{world_size} after {EVALUATION_TIMEOUT} seconds.")
-                return None, None
-
-        logging.info(f"====== Evaluation finished on Rank {rank}/{world_size} ======")
-        return stop_flag, reward_dict
-    except Exception as e:
-        logging.error(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}", exc_info=True)
-        return None, None
 
 
 def train_unizero_multitask_balance_segment_ddp(
@@ -485,7 +441,12 @@ def train_unizero_multitask_balance_segment_ddp(
                     logging.info(f"Computed task weights: {task_weights}")
                 
                 # Log UniZero-MT normalized stats
-                mean_norm, median_norm = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+                # Convert arrays to dictionaries with task_id as keys
+                human_scores_dict = {i: new_HUMAN_SCORES[i] for i in range(len(new_HUMAN_SCORES))}
+                random_scores_dict = {i: new_RANDOM_SCORES[i] for i in range(len(new_RANDOM_SCORES))}
+                mean_norm, median_norm = compute_unizero_mt_normalized_stats(
+                    GLOBAL_EVAL_RETURNS, human_scores_dict, random_scores_dict
+                )
                 if mean_norm is not None:
                     tb_logger.add_scalar('UniZero-MT/NormalizedMean', mean_norm, learner.train_iter)
                     tb_logger.add_scalar('UniZero-MT/NormalizedMedian', median_norm, learner.train_iter)
