@@ -1,18 +1,20 @@
 from typing import Optional
-
 import torch
 import torch.nn as nn
-from ding.utils import MODEL_REGISTRY, SequenceType
+from ding.utils import (ENV_REGISTRY, MODEL_REGISTRY, SequenceType, get_rank,
+                        get_world_size, set_pkg_seed)
+from ditk import logging
 from easydict import EasyDict
-# from transformers import T5ForConditionalGeneration, T5Tokenizer
-
-from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
-    HFLanguageRepresentationNetwork, QwenNetwork
+from .common import (FeatureAndGradientHook, HFLanguageRepresentationNetwork,
+                     LatentDecoder, LatentDecoderForMemoryEnv,
+                     LatentEncoderForMemoryEnv, MZNetworkOutput, QwenNetwork,
+                     RepresentationNetworkMLP, RepresentationNetworkUniZero,
+                     VectorDecoderForMemoryEnv)
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 from .vit import ViT, ViTConfig
-from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
+
+# from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -91,11 +93,11 @@ class UniZeroModel(nn.Module):
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print('==' * 20)
+            logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            logging.info('==' * 20)
+            logging.info(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            logging.info(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
+            logging.info('==' * 20)
         elif world_model_cfg.obs_type == 'text':
             if kwargs['encoder_option'] == 'legacy':
                 self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
@@ -127,18 +129,18 @@ class UniZeroModel(nn.Module):
             else:
                 raise ValueError(f"Unsupported encoder option: {kwargs['encoder_option']}")     
             
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer, 
-                                    with_lpips=False, projection=projection, encoder_option=kwargs['encoder_option']) 
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer,
+                                    with_lpips=False, projection=projection, encoder_option=kwargs['encoder_option'])
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
-            
+
             # --- Log parameter counts for analysis ---
             self._log_model_parameters(obs_type)
-            
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print('==' * 20)
+
+            logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            logging.info('==' * 20)
+            logging.info(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            logging.info(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
+            logging.info('==' * 20)
         elif world_model_cfg.obs_type == 'image':
             if world_model_cfg.encoder_type == "resnet":
                 self.representation_network = RepresentationNetworkUniZero(
@@ -174,10 +176,10 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
             
-            if world_model_cfg.latent_recon_loss_weight==0:
+            if world_model_cfg.latent_recon_loss_weight == 0:
                 self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
             else:
-                # TODO =============
+                # TODO: customize LatentDecoder
                 self.decoder_network = LatentDecoder(
                     embedding_dim=world_model_cfg.embed_dim,
                     output_shape=[3, 64, 64],
@@ -187,11 +189,11 @@ class UniZeroModel(nn.Module):
                 self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, with_lpips=True, obs_type=world_model_cfg.obs_type)
 
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print('==' * 20)
+            logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            logging.info('==' * 20)
+            logging.info(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            logging.info(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
+            logging.info('==' * 20)
         elif world_model_cfg.obs_type == 'image_memory':
             self.representation_network = LatentEncoderForMemoryEnv(
                 image_shape=(3, 5, 5),
@@ -218,17 +220,17 @@ class UniZeroModel(nn.Module):
 
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
-            
 
-        
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
-            print('==' * 20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-            print('==' * 20)
+
+            logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            logging.info(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+
+            logging.info('==' * 20)
+            logging.info(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            logging.info(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
+            logging.info(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            logging.info('==' * 20)
         
         # --- Log parameter counts for analysis ---
         self._log_model_parameters(world_model_cfg.obs_type)
@@ -248,41 +250,41 @@ class UniZeroModel(nn.Module):
         if get_rank() != 0:
             return
 
-        print('=' * 80)
-        print('MODEL PARAMETER STATISTICS'.center(80))
-        print('=' * 80)
+        logging.info('=' * 80)
+        logging.info('MODEL PARAMETER STATISTICS'.center(80))
+        logging.info('=' * 80)
 
         # --- Total Model Parameters ---
         total_params = sum(p.numel() for p in self.parameters())
         total_trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        print(f'\n{"TOTAL MODEL":<40} {total_params:>15,} parameters')
-        print(f'{"  └─ Trainable":<40} {total_trainable:>15,} parameters')
-        print(f'{"  └─ Frozen":<40} {total_params - total_trainable:>15,} parameters')
+        logging.info(f'\n{"TOTAL MODEL":<40} {total_params:>15,} parameters')
+        logging.info(f'{"  └─ Trainable":<40} {total_trainable:>15,} parameters')
+        logging.info(f'{"  └─ Frozen":<40} {total_params - total_trainable:>15,} parameters')
 
         # --- World Model Components ---
-        print(f'\n{"-" * 80}')
-        print(f'{"WORLD MODEL BREAKDOWN":<40}')
-        print(f'{"-" * 80}')
+        logging.info(f'\n{"-" * 80}')
+        logging.info(f'{"WORLD MODEL BREAKDOWN":<40}')
+        logging.info(f'{"-" * 80}')
 
         wm_params = sum(p.numel() for p in self.world_model.parameters())
         wm_trainable = sum(p.numel() for p in self.world_model.parameters() if p.requires_grad)
-        print(f'{"World Model Total":<40} {wm_params:>15,} parameters')
-        print(f'{"  └─ Trainable":<40} {wm_trainable:>15,} parameters ({100*wm_trainable/wm_params:.1f}%)')
+        logging.info(f'{"World Model Total":<40} {wm_params:>15,} parameters')
+        logging.info(f'{"  └─ Trainable":<40} {wm_trainable:>15,} parameters ({100*wm_trainable/wm_params:.1f}%)')
 
         # --- Encoder ---
         encoder_params = sum(p.numel() for p in self.tokenizer.encoder.parameters())
         encoder_trainable = sum(p.numel() for p in self.tokenizer.encoder.parameters() if p.requires_grad)
-        print(f'\n{"1. ENCODER (Tokenizer)":<40} {encoder_params:>15,} parameters')
-        print(f'{"  └─ Trainable":<40} {encoder_trainable:>15,} parameters ({100*encoder_trainable/encoder_params:.1f}%)')
+        logging.info(f'\n{"1. ENCODER (Tokenizer)":<40} {encoder_params:>15,} parameters')
+        logging.info(f'{"  └─ Trainable":<40} {encoder_trainable:>15,} parameters ({100*encoder_trainable/encoder_params:.1f}%)')
 
         # --- Transformer Backbone ---
         transformer_params = sum(p.numel() for p in self.world_model.transformer.parameters())
         transformer_trainable = sum(p.numel() for p in self.world_model.transformer.parameters() if p.requires_grad)
-        print(f'\n{"2. TRANSFORMER BACKBONE":<40} {transformer_params:>15,} parameters')
-        print(f'{"  └─ Trainable":<40} {transformer_trainable:>15,} parameters ({100*transformer_trainable/transformer_params:.1f}%)')
+        logging.info(f'\n{"2. TRANSFORMER BACKBONE":<40} {transformer_params:>15,} parameters')
+        logging.info(f'{"  └─ Trainable":<40} {transformer_trainable:>15,} parameters ({100*transformer_trainable/transformer_params:.1f}%)')
 
         # --- Prediction Heads (Detailed Breakdown) ---
-        print(f'\n{"3. PREDICTION HEADS":<40}')
+        logging.info(f'\n{"3. PREDICTION HEADS":<40}')
 
         # Access head_dict from world_model
         if hasattr(self.world_model, 'head_dict'):
@@ -291,8 +293,8 @@ class UniZeroModel(nn.Module):
             # Calculate total heads parameters
             total_heads_params = sum(p.numel() for module in head_dict.values() for p in module.parameters())
             total_heads_trainable = sum(p.numel() for module in head_dict.values() for p in module.parameters() if p.requires_grad)
-            print(f'{"  Total (All Heads)":<40} {total_heads_params:>15,} parameters')
-            print(f'{"  └─ Trainable":<40} {total_heads_trainable:>15,} parameters ({100*total_heads_trainable/total_heads_params:.1f}%)')
+            logging.info(f'{"  Total (All Heads)":<40} {total_heads_params:>15,} parameters')
+            logging.info(f'{"  └─ Trainable":<40} {total_heads_trainable:>15,} parameters ({100*total_heads_trainable/total_heads_params:.1f}%)')
 
             # Breakdown by head type
             head_names_map = {
@@ -302,7 +304,7 @@ class UniZeroModel(nn.Module):
                 'head_observations_multi_task': 'Next Latent (Obs) Head'
             }
 
-            print(f'\n{"  Breakdown by Head Type:":<40}')
+            logging.info(f'\n{"  Breakdown by Head Type:":<40}')
             for head_key, head_name in head_names_map.items():
                 if head_key in head_dict:
                     head_module = head_dict[head_key]
@@ -313,56 +315,56 @@ class UniZeroModel(nn.Module):
                     if isinstance(head_module, nn.ModuleList):
                         num_heads = len(head_module)
                         params_per_head = head_params // num_heads if num_heads > 0 else 0
-                        print(f'{"    ├─ " + head_name:<38} {head_params:>15,} parameters')
-                        print(f'{"      └─ " + f"{num_heads} task-specific heads":<38} {params_per_head:>15,} params/head')
+                        logging.info(f'{"    ├─ " + head_name:<38} {head_params:>15,} parameters')
+                        logging.info(f'{"      └─ " + f"{num_heads} task-specific heads":<38} {params_per_head:>15,} params/head')
                     else:
-                        print(f'{"    ├─ " + head_name:<38} {head_params:>15,} parameters')
-                        print(f'{"      └─ Shared across tasks":<38}')
+                        logging.info(f'{"    ├─ " + head_name:<38} {head_params:>15,} parameters')
+                        logging.info(f'{"      └─ Shared across tasks":<38}')
 
         # --- Positional & Task Embeddings ---
-        print(f'\n{"4. EMBEDDINGS":<40}')
+        logging.info(f'\n{"4. EMBEDDINGS":<40}')
 
         if hasattr(self.world_model, 'pos_emb'):
             pos_emb_params = sum(p.numel() for p in self.world_model.pos_emb.parameters())
             pos_emb_trainable = sum(p.numel() for p in self.world_model.pos_emb.parameters() if p.requires_grad)
-            print(f'{"  ├─ Positional Embedding":<40} {pos_emb_params:>15,} parameters')
+            logging.info(f'{"  ├─ Positional Embedding":<40} {pos_emb_params:>15,} parameters')
             if pos_emb_trainable == 0:
-                print(f'{"    └─ (Frozen)":<40}')
+                logging.info(f'{"    └─ (Frozen)":<40}')
 
         if hasattr(self.world_model, 'task_emb') and self.world_model.task_emb is not None:
             task_emb_params = sum(p.numel() for p in self.world_model.task_emb.parameters())
             task_emb_trainable = sum(p.numel() for p in self.world_model.task_emb.parameters() if p.requires_grad)
-            print(f'{"  ├─ Task Embedding":<40} {task_emb_params:>15,} parameters')
-            print(f'{"    └─ Trainable":<40} {task_emb_trainable:>15,} parameters')
+            logging.info(f'{"  ├─ Task Embedding":<40} {task_emb_params:>15,} parameters')
+            logging.info(f'{"    └─ Trainable":<40} {task_emb_trainable:>15,} parameters')
 
         if hasattr(self.world_model, 'act_embedding_table'):
             act_emb_params = sum(p.numel() for p in self.world_model.act_embedding_table.parameters())
             act_emb_trainable = sum(p.numel() for p in self.world_model.act_embedding_table.parameters() if p.requires_grad)
-            print(f'{"  └─ Action Embedding":<40} {act_emb_params:>15,} parameters')
-            print(f'{"    └─ Trainable":<40} {act_emb_trainable:>15,} parameters')
+            logging.info(f'{"  └─ Action Embedding":<40} {act_emb_params:>15,} parameters')
+            logging.info(f'{"    └─ Trainable":<40} {act_emb_trainable:>15,} parameters')
 
         # --- Decoder (if applicable) ---
         if obs_type in ['vector', 'image_memory'] and self.tokenizer.decoder_network is not None:
-            print(f'\n{"5. DECODER":<40}')
+            logging.info(f'\n{"5. DECODER":<40}')
             decoder_params = sum(p.numel() for p in self.tokenizer.decoder_network.parameters())
             decoder_trainable = sum(p.numel() for p in self.tokenizer.decoder_network.parameters() if p.requires_grad)
-            print(f'{"  Decoder Network":<40} {decoder_params:>15,} parameters')
-            print(f'{"  └─ Trainable":<40} {decoder_trainable:>15,} parameters')
+            logging.info(f'{"  Decoder Network":<40} {decoder_params:>15,} parameters')
+            logging.info(f'{"  └─ Trainable":<40} {decoder_trainable:>15,} parameters')
 
             if obs_type == 'image_memory' and hasattr(self.tokenizer, 'lpips'):
                 lpips_params = sum(p.numel() for p in self.tokenizer.lpips.parameters())
-                print(f'{"  LPIPS Loss Network":<40} {lpips_params:>15,} parameters')
+                logging.info(f'{"  LPIPS Loss Network":<40} {lpips_params:>15,} parameters')
 
                 # Calculate world model params excluding decoder and LPIPS
                 params_without_decoder = wm_params - decoder_params - lpips_params
-                print(f'\n{"  World Model (exc. Decoder & LPIPS)":<40} {params_without_decoder:>15,} parameters')
+                logging.info(f'\n{"  World Model (exc. Decoder & LPIPS)":<40} {params_without_decoder:>15,} parameters')
 
         # --- Summary Table ---
-        print(f'\n{"=" * 80}')
-        print(f'{"SUMMARY":<40}')
-        print(f'{"=" * 80}')
-        print(f'{"Component":<30} {"Total Params":>15} {"Trainable":>15} {"% of Total":>15}')
-        print(f'{"-" * 80}')
+        logging.info(f'\n{"=" * 80}')
+        logging.info(f'{"SUMMARY":<40}')
+        logging.info(f'{"=" * 80}')
+        logging.info(f'{"Component":<30} {"Total Params":>15} {"Trainable":>15} {"% of Total":>15}')
+        logging.info(f'{"-" * 80}')
 
         components = [
             ("Encoder", encoder_params, encoder_trainable),
@@ -374,11 +376,11 @@ class UniZeroModel(nn.Module):
 
         for name, total, trainable in components:
             pct = 100 * total / total_params if total_params > 0 else 0
-            print(f'{name:<30} {total:>15,} {trainable:>15,} {pct:>14.1f}%')
+            logging.info(f'{name:<30} {total:>15,} {trainable:>15,} {pct:>14.1f}%')
 
-        print(f'{"=" * 80}')
-        print(f'{"TOTAL":<30} {total_params:>15,} {total_trainable:>15,} {"100.0%":>15}')
-        print(f'{"=" * 80}\n')
+        logging.info(f'{"=" * 80}')
+        logging.info(f'{"TOTAL":<30} {total_params:>15,} {total_trainable:>15,} {"100.0%":>15}')
+        logging.info(f'{"=" * 80}\n')
         
     def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
                           current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:

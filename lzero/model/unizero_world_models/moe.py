@@ -170,7 +170,6 @@ class MoELayer(nn.Module):
         return output.view(original_shape)
 
 
-class MoELayerOptimized(nn.Module):
     """
     Overview:
         An optimized implementation of the Mixture-of-Experts (MoE) layer that maintains the same API as `MoELayer`.

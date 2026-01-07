@@ -161,7 +161,7 @@ class SampledUniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                                # search_depth is used for rope in UniZero
+                # search_depth is used for rope in UniZero
                 search_depth = results.get_search_len()
                 # for Sampled UniZero
                 if task_id is not None:

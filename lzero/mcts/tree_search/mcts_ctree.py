@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_muzero import mz_tree as mz_ctree
     from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as gmz_ctree
 
-from line_profiler import line_profiler
 
 class UniZeroMCTSCtree(object):
     """
@@ -76,7 +75,7 @@ class UniZeroMCTSCtree(object):
     #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], timestep: Union[int, List[Any]]=None, task_id=None
+            List[Any]], timestep: Union[int, List[Any]] = None, task_id: Optional[int] = None
     ) -> dict:
         """
         Overview:
@@ -89,7 +88,7 @@ class UniZeroMCTSCtree(object):
             - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
             - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
             - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
-            - task_id (:obj:`int`, optional): The global task ID for the current environments.
+            - task_id (:obj:`Optional[int]`): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()
@@ -264,10 +263,9 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], task_id=None
+            List[Any]], task_id: : Optional[int] = None
     ) -> None:
         """
         Overview:
@@ -277,7 +275,7 @@ class MuZeroMCTSCtree(object):
             - roots (:obj:`Any`): a batch of expanded root nodes
             - latent_state_roots (:obj:`list`): the hidden states of the roots
             - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games
-            - task_id (:obj:`int`, optional): The global task ID for the current environments.
+            - task_id (:obj:`Optional[int]`): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()

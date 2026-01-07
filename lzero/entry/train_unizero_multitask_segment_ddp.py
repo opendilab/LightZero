@@ -1,32 +1,28 @@
-from ditk import logging
+import concurrent.futures
 import os
+from collections import defaultdict
 from functools import partial
-from typing import Tuple, Optional, List, Dict
+from typing import Dict, List, Optional, Tuple
 
-import torch
 import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
-from ding.policy import create_policy, Policy
+from ding.policy import Policy, create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+from ding.utils import EasyTimer, get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
-
-from lzero.entry.utils import log_buffer_memory_usage, TemperatureScheduler
-from lzero.policy import visit_count_temperature
+from ditk import logging
+from lzero.entry.utils import TemperatureScheduler, log_buffer_memory_usage
 # HACK: The following imports are for type hinting purposes.
 # The actual GameBuffer is selected dynamically based on the policy type.
 from lzero.mcts import UniZeroGameBuffer
+from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
-from ding.utils import EasyTimer
-import torch.nn.functional as F
-
-import torch.distributed as dist
-import concurrent.futures
-from collections import defaultdict
-
+from tensorboardX import SummaryWriter
 
 # ====================================================================================================================
 # Note: Benchmark score definitions are initialized dynamically within the `train_unizero_multitask_segment_ddp`

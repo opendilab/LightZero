@@ -183,7 +183,7 @@ class AtariEnvLightZero(BaseEnv):
         if done:
             logging.info(f'one episode done! total episode length is: {self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
-            print(f'one episode of {self.cfg.env_id} done')
+            logging.debug(f'one episode of {self.cfg.env_id} done')
 
         return BaseEnvTimestep(observation, self.reward, done, info)
 

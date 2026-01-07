@@ -15,7 +15,7 @@ from ding.utils import EasyTimer, set_pkg_seed, get_rank, get_world_size
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, allocate_batch_size
 from lzero.mcts import MuZeroGameBuffer as GameBuffer
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector as Collector
@@ -71,68 +71,6 @@ def safe_eval(
                 f"Continuing training."
             )
             return None, None
-
-
-def allocate_batch_size(
-        cfgs: List[Any],
-        game_buffers: List[GameBuffer],
-        alpha: float = 1.0,
-        clip_scale: float = 1.0
-) -> List[int]:
-    """
-    Overview:
-        Allocates batch sizes for different tasks inversely proportional to their number of collected episodes.
-        This method dynamically adjusts the batch size range to enhance training stability and efficiency.
-    Arguments:
-        - cfgs (:obj:`List[Any]`): A list of configuration objects for each task.
-        - game_buffers (:obj:`List[GameBuffer]`): A list of replay buffer instances for each task.
-        - alpha (:obj:`float`): A hyperparameter to control the degree of inverse proportionality. Defaults to 1.0.
-        - clip_scale (:obj:`float`): A scaling factor for dynamic adjustment of min/max batch size. Defaults to 1.0.
-    Returns:
-        - (:obj:`List[int]`): A list of allocated batch sizes for each task.
-    """
-    # Step 1: Gather the number of collected episodes from all buffers on the current rank.
-    buffer_num_episodes = [buffer.num_of_collected_episodes for buffer in game_buffers]
-
-    world_size = get_world_size()
-    rank = get_rank()
-
-    # Step 2: Gather episode counts from all tasks across all ranks.
-    all_task_num_episodes = [None for _ in range(world_size)]
-    dist.all_gather_object(all_task_num_episodes, buffer_num_episodes)
-
-    # Flatten the list of lists into a single list.
-    flat_task_num_episodes = [item for sublist in all_task_num_episodes for item in sublist]
-    if rank == 0:
-        logging.info(f'Number of collected episodes per task (all ranks): {flat_task_num_episodes}')
-
-    # Step 3: Calculate inverse proportional weights. Add 1 to avoid division by zero.
-    inv_episodes = np.array([1.0 / (episodes + 1) for episodes in flat_task_num_episodes])
-    inv_sum = np.sum(inv_episodes)
-
-    # Step 4: Calculate the total batch size from the config of the first task.
-    # Assumption: max_batch_size is the same across all task configs and represents the global batch size.
-    global_batch_size = cfgs[0].policy.max_batch_size
-
-    # Step 5: Dynamically adjust the min and max batch size bounds.
-    avg_batch_size = global_batch_size / len(flat_task_num_episodes)
-    min_batch_size = max(1, avg_batch_size / clip_scale)  # Ensure min_batch_size is at least 1.
-    max_batch_size_clip = avg_batch_size * clip_scale
-
-    # Step 6: Calculate batch sizes based on weights and apply clipping.
-    task_weights = (inv_episodes / inv_sum) ** alpha
-    # Note: The original code used max_batch_size, which seems to be a typo.
-    # It should be global_batch_size to distribute the total batch size.
-    batch_sizes = global_batch_size * task_weights
-    batch_sizes = np.clip(batch_sizes, min_batch_size, max_batch_size_clip)
-
-    # Ensure batch sizes are integers.
-    final_batch_sizes = [int(size) for size in batch_sizes]
-
-    if rank == 0:
-        logging.info(f"Allocated batch sizes: {final_batch_sizes}")
-
-    return final_batch_sizes
 
 
 class MuZeroMultiTaskTrainer:

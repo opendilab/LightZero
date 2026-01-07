@@ -49,18 +49,18 @@
   - 使用 `MuZeroSegmentCollector` 进行高效数据收集
   - 支持缓冲区重分析技巧
 
-- **`train_unizero_multitask_segment_ddp.py`** - UniZero 多任务分布式训练入口
+- **`train_unizero_multitask_segment_ddp.py`** - UniZero/ScaleZero 多任务分布式训练入口
   - 支持多任务学习和分布式训练
   - 包含基准测试分数定义（如 Atari 的人类归一化分数）
   - 支持课程学习（Curriculum Learning）策略
   - 使用 DDP 加速训练
 
-- **`train_unizero_multitask_balance_segment_ddp.py`** - UniZero 多任务均衡分布式训练入口
+- **`train_unizero_multitask_balance_segment_ddp.py`** - UniZero/ScaleZero 多任务均衡分布式训练入口
   - 在多任务训练中实现任务间的均衡采样
   - 动态调整不同任务的批次大小
   - 适用于任务难度差异较大的场景
 
-- **`train_unizero_multitask_segment_eval.py`** - UniZero 多任务评估训练入口
+- **`train_unizero_multitask_segment_eval.py`** - UniZero/ScaleZero 多任务评估训练入口
   - 专门用于多任务场景的训练和周期性评估
   - 包含详细的评估指标统计
 
@@ -88,44 +88,6 @@
 - **`eval_muzero_with_gym_env.py`** - Gym 环境下的 MuZero 评估入口
   - 专门用于评估在 Gym 环境中训练的模型
 
-### 🛠️ 工具模块 (Utilities)
-
-- **`utils.py`** - 通用工具函数库
-  - **数学与张量工具**：
-    - `symlog`, `inv_symlog` - 对称对数变换
-    - `initialize_zeros_batch`, `initialize_pad_batch` - 批次初始化
-
-  - **LoRA 相关工具**：
-    - `freeze_non_lora_parameters` - 冻结非 LoRA 参数
-
-  - **任务与课程学习工具**：
-    - `compute_task_weights` - 计算任务权重
-    - `TemperatureScheduler` - 温度调度器
-    - `tasks_per_stage` - 计算每阶段任务数
-    - `compute_unizero_mt_normalized_stats` - 计算归一化统计
-    - `allocate_batch_size` - 动态分配批次大小
-
-  - **分布式训练工具 (DDP)**：
-    - `is_ddp_enabled` - 检查是否启用 DDP
-    - `ddp_synchronize` - DDP 同步
-    - `ddp_all_reduce_sum` - DDP 全局归约
-
-  - **强化学习工作流工具**：
-    - `calculate_update_per_collect` - 计算每次收集的更新次数
-    - `random_collect` - 随机策略数据收集
-    - `convert_to_batch_for_unizero` - UniZero 批次数据转换
-    - `create_unizero_loss_metrics` - 创建损失度量函数
-    - `UniZeroDataLoader` - UniZero 数据加载器
-
-  - **日志工具**：
-    - `log_module_trainable_status` - 记录模块可训练状态
-    - `log_param_statistics` - 记录参数统计
-    - `log_buffer_memory_usage` - 记录缓冲区内存使用
-    - `log_buffer_run_time` - 记录缓冲区运行时间
-
-- **`__init__.py`** - 包初始化文件
-  - 导出所有训练和评估入口函数
-  - 导出工具模块中的常用函数
 
 ## 📖 使用指南
 
@@ -163,7 +125,7 @@ policy = train_muzero(
    - 任务均衡采样 → `train_unizero_multitask_balance_segment_ddp`
 
 3. **分布式训练**：
-   - 所有带 `_ddp` 后缀的入口函数都支持分布式训练
+   - 所有带 `_ddp` 后缀的入口函数都支持数据并行分布式训练
 
 4. **特殊需求**：
    - 损失地形可视化 → `train_unizero_with_loss_landscape`
@@ -177,6 +139,7 @@ policy = train_muzero(
 - **EfficientZero**: [Mastering Atari Games with Limited Data](https://arxiv.org/abs/2111.00210)
 - **UniZero**: [Generalized and Efficient Planning with Scalable Latent World Models](https://arxiv.org/abs/2406.10667)
 - **ReZero**: [Boosting MCTS-based Algorithms by Reconstructing the Terminal Reward](https://arxiv.org/abs/2404.16364)
+- **ScaleZero**: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945)
 
 ## 💡 提示
 
@@ -190,4 +153,3 @@ policy = train_muzero(
 1. 所有路径参数建议使用**绝对路径**
 2. 预训练模型路径通常格式为 `exp_name/ckpt/ckpt_best.pth.tar`
 3. 使用分布式训练时，确保正确设置 `CUDA_VISIBLE_DEVICES` 环境变量
-4. 某些入口函数有特定的算法类型要求，请查看函数文档说明

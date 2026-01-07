@@ -9,46 +9,8 @@ from typing import Any, Dict, Optional, List
 
 import torch
 import torch.nn as nn
-from einops import rearrange
 from torch.nn import functional as F
 from transformers.modeling_outputs import BaseModelOutput
-
-class LossWithIntermediateLosses:
-    """
-    Overview:
-        A helper class to manage a total loss value alongside a dictionary of its constituent, named loss components.
-        This is primarily used for detailed logging.
-    """
-
-    def __init__(self, **kwargs: torch.Tensor) -> None:
-        """
-        Overview:
-            Initializes the loss object.
-        Arguments:
-            - kwargs (:obj:`torch.Tensor`): Keyword arguments where keys are loss names and values are the corresponding loss tensors.
-        """
-        # The total loss, which can be used for backpropagation.
-        self.loss_total: torch.Tensor = sum(kwargs.values())
-        # A dictionary holding the scalar values of intermediate losses, detached from the computation graph.
-        self.intermediate_losses: Dict[str, float] = {k: v.item() for k, v in kwargs.items()}
-
-    def __truediv__(self, value: float) -> "LossWithIntermediateLosses":
-        """
-        Overview:
-            Overloads the division operator to scale all loss components by a scalar value.
-            This is useful for operations like averaging over batch size or gradient accumulation steps.
-        Arguments:
-            - value (:obj:`float`): The scalar value to divide the losses by.
-        Returns:
-            - LossWithIntermediateLosses: The same instance with updated loss values.
-        """
-        if not isinstance(value, (int, float)) or value == 0:
-            raise ValueError(f"Division is only supported for a non-zero scalar, but got {value}.")
-
-        self.loss_total = self.loss_total / value
-        for k in self.intermediate_losses:
-            self.intermediate_losses[k] /= value
-        return self
 
 
 @dataclass
@@ -111,23 +73,13 @@ class Tokenizer(nn.Module):
         Returns:
             - torch.Tensor: The encoded latent embeddings with a consistent shape of (B, 1, E), where B is the effective batch size.
         """
-        
-        # global DEBUG_ENABLED;DEBUG_ENABLED = True 
-        # import torch.distributed as dist
-        # if dist.get_rank() == 0 and DEBUG_ENABLED:
-        #     print(f"rank {dist.get_rank()} 进入调试模式，输入interact，可以键入整段的python代码调试。通过设置 DEBUG_ENABLED = False, 可以跳过调试状态")
-        #     import ipdb; ipdb.set_trace()
-        # # 同步点，防止其它进程早跑
-        # dist.barrier()
-
         # Step 1: Select the appropriate encoder module.
         # This handles both single-task (a single nn.Module) and multi-task (an nn.ModuleList) scenarios.
         if isinstance(self.encoder, nn.ModuleList):
             if not 0 <= task_id < len(self.encoder):
-                # raise ValueError(
-                #     f"Provided task_id {task_id} is invalid for the encoder list of size {len(self.encoder)}."
-                # )
-                encoder_module = self.encoder[0]
+                raise ValueError(
+                    f"Provided task_id {task_id} is invalid for the encoder list of size {len(self.encoder)}."
+                )
             else:
                 encoder_module = self.encoder[task_id]
         else:
@@ -161,7 +113,8 @@ class Tokenizer(nn.Module):
 
         # Step 4: Reshape the output to a consistent sequence format (B', 1, E).
         # The '1' represents a sequence length of one, making it compatible with sequence models.
-        obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
+        obs_embeddings = obs_embeddings.unsqueeze(1)
+
 
         return obs_embeddings
 

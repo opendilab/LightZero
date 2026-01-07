@@ -34,11 +34,47 @@ class LPIPS(nn.Module):
             param.requires_grad = False
 
     def load_from_pretrained(self) -> None:
-        # Load LPIPS linear layer weights (vgg.pth) using the same root directory
-        # as TORCH_HOME for consistency
-        ckpt = get_ckpt_path(name="vgg_lpips", root=custom_torch_home)
-        self.load_state_dict(torch.load(ckpt, map_location=torch.device("cpu")), strict=False)
-        print(f"Loaded LPIPS pretrained weights from: {ckpt}")
+        """
+        Load LPIPS linear layer weights (vgg.pth) from TORCH_HOME directory.
+
+        Raises:
+            EnvironmentError: If TORCH_HOME is not set or invalid.
+            FileNotFoundError: If checkpoint file cannot be loaded.
+            RuntimeError: If state dict loading fails.
+        """
+        # Get TORCH_HOME from environment variable
+        torch_home = os.environ.get('TORCH_HOME')
+
+        if torch_home is None:
+            error_msg = (
+                "TORCH_HOME environment variable is not set. "
+                "Please set TORCH_HOME to specify the directory for pretrained models. "
+                "Example: export TORCH_HOME=/path/to/torch/home"
+            )
+            logging.error(error_msg)
+            raise EnvironmentError(error_msg)
+
+        try:
+            logging.info(f"Loading LPIPS pretrained weights from TORCH_HOME: {torch_home}")
+            ckpt = get_ckpt_path(name="vgg_lpips", root=torch_home)
+
+            if not os.path.exists(ckpt):
+                error_msg = f"Checkpoint file not found: {ckpt}"
+                logging.error(error_msg)
+                raise FileNotFoundError(error_msg)
+
+            logging.info(f"Loading checkpoint from: {ckpt}")
+            state_dict = torch.load(ckpt, map_location=torch.device("cpu"))
+            self.load_state_dict(state_dict, strict=False)
+            logging.info(f"Successfully loaded LPIPS pretrained weights from: {ckpt}")
+
+        except FileNotFoundError as e:
+            logging.error(f"Failed to load LPIPS checkpoint: {e}")
+            raise
+        except Exception as e:
+            error_msg = f"Failed to load LPIPS pretrained weights: {e}"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg) from e
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         in0_input, in1_input = (self.scaling_layer(input), self.scaling_layer(target))

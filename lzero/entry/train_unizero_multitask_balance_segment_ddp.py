@@ -1,39 +1,33 @@
-from ditk import logging
+import concurrent.futures
+import math
 import os
+from collections import defaultdict
 from functools import partial
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-import torch
 import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+from ding.utils import EasyTimer, get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
-
-from lzero.entry.utils import log_buffer_memory_usage, TemperatureScheduler
+from ditk import logging
+from lzero.entry.utils import TemperatureScheduler, log_buffer_memory_usage
+from lzero.model.unizero_world_models.transformer import (CurriculumLoRALinear,
+                                                          set_curriculum_stage)
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
-from ding.utils import EasyTimer
-import torch.nn.functional as F
-import torch.distributed as dist
-import concurrent.futures
-from lzero.model.unizero_world_models.transformer import set_curriculum_stage, CurriculumLoRALinear
+from tensorboardX import SummaryWriter
 
-from collections import defaultdict
-import math
-from .utils import (
-    freeze_non_lora_parameters,
-    compute_task_weights,
-    log_module_trainable_status,
-    log_param_statistics,
-    tasks_per_stage,
-    compute_unizero_mt_normalized_stats,
-    allocate_batch_size
-)
+from .utils import (allocate_batch_size, compute_task_weights,
+                    compute_unizero_mt_normalized_stats,
+                    freeze_non_lora_parameters, log_module_trainable_status,
+                    log_param_statistics, tasks_per_stage)
 
 # A global dictionary to store the most recent evaluation return for each task.
 # Format: {task_id: eval_episode_return_mean}
@@ -267,18 +261,11 @@ def train_unizero_multitask_balance_segment_ddp(
     end_idx = start_idx + tasks_per_rank + (1 if rank < remainder else 0)
     tasks_for_this_rank = input_cfg_list[start_idx:end_idx]
 
-    if not tasks_for_this_rank:
-        logging.warning(f"Rank {rank}: No tasks assigned. Process will idle but maintain DDP communication.")
-        # An idle process must still participate in collective communications.
-        # The main loop handles this by waiting at barriers.
-        while True:
-            dist.barrier()  # Wait for other processes
-            dist.barrier()  # Sync after potential training step
-            # A mechanism to terminate idle processes would be needed here,
-            # for now, they sync and wait.
-            # This part requires a robust termination signal from active processes.
-    
-    logging.info(f"Rank {rank}/{world_size} is handling tasks from index {start_idx} to {end_idx - 1}.")
+    # Ensure at least one task is assigned.
+    if len(tasks_for_this_rank) == 0:
+        logging.error(f"Rank {rank}: No tasks assigned, continuing execution.")
+    else:
+        logging.info(f"Rank {rank}/{world_size} processing tasks {start_idx} to {end_idx - 1}")
 
     # --- Environment, Policy, and Worker Initialization ---
     task_configs, replay_buffers, collectors, evaluators = [], [], [], []

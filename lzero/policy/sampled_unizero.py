@@ -8,7 +8,6 @@ import torch
 import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
-from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import (DiscreteSupport, InverseScalarTransform,

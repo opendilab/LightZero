@@ -947,6 +947,7 @@ class MuZeroPolicy(Policy):
             Reset the observation and action for the collector environment.
         Arguments:
             - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -962,6 +963,7 @@ class MuZeroPolicy(Policy):
             Reset the observation and action for the evaluator environment.
         Arguments:
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(

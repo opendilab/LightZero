@@ -1,7 +1,44 @@
 # -*- coding: utf-8 -*-
 """
-Optimized and refactored utility code for reinforcement learning models,
-focusing on clarity, professionalism, efficiency, and extensibility.
+### 🛠️ Utility Modules
+
+- **`utils.py`** - Common utility functions library
+  - **Math & Tensor Utilities**:
+    - `symlog`, `inv_symlog` - Symmetric logarithm transformations
+    - `initialize_zeros_batch`, `initialize_pad_batch` - Batch initialization
+
+  - **LoRA Utilities**:
+    - `freeze_non_lora_parameters` - Freeze non-LoRA parameters
+
+  - **Task & Curriculum Learning Utilities**:
+    - `compute_task_weights` - Compute task weights
+    - `TemperatureScheduler` - Temperature scheduler
+    - `tasks_per_stage` - Calculate tasks per stage
+    - `compute_unizero_mt_normalized_stats` - Compute normalized statistics
+    - `allocate_batch_size` - Dynamically allocate batch sizes
+
+  - **Distributed Training Utilities (DDP)**:
+    - `is_ddp_enabled` - Check if DDP is enabled
+    - `ddp_synchronize` - DDP synchronization
+    - `ddp_all_reduce_sum` - DDP all-reduce sum
+
+  - **RL Workflow Utilities**:
+    - `calculate_update_per_collect` - Calculate updates per collection
+    - `random_collect` - Random policy data collection
+    - `convert_to_batch_for_unizero` - UniZero batch data conversion
+    - `create_unizero_loss_metrics` - Create loss metrics function
+    - `UniZeroDataLoader` - UniZero data loader
+
+  - **Logging Utilities**:
+    - `log_module_trainable_status` - Log module trainable status
+    - `log_param_statistics` - Log parameter statistics
+    - `log_buffer_memory_usage` - Log buffer memory usage
+    - `log_buffer_run_time` - Log buffer runtime
+
+- **`__init__.py`** - Package initialization file
+  - Exports all training and evaluation entry functions
+  - Exports commonly used functions from utility modules
+
 """
 
 # ==============================================================================

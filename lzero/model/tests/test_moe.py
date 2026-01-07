@@ -8,18 +8,7 @@ Overview:
     compatibility and correct routing logic.
 """
 import dataclasses
-
-try:
-    import pytest
-    PYTEST_AVAILABLE = True
-except ImportError:
-    PYTEST_AVAILABLE = False
-    # Define a dummy fixture decorator for when pytest is not available
-    class pytest:
-        @staticmethod
-        def fixture(func):
-            return func
-
+import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

@@ -237,11 +237,8 @@ def init_weights(module, norm_type='BN',liner_weight_zero=False):
 
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
         print(f"Init {module} using zero bias, 1 weight")
-        try:
-            module.weight.data.fill_(1.0)
-            module.bias.data.zero_()
-        except Exception as e:
-            print(e)
+        module.weight.data.fill_(1.0)
+        module.bias.data.zero_()
 
     elif isinstance(module, nn.BatchNorm2d):
         print(f"Init nn.BatchNorm2d using zero bias, 1 weight")
