@@ -1,29 +1,26 @@
 import copy
 import logging
-import logging
+from collections import defaultdict
 from typing import Any, Dict, List, Tuple, Union
 
+import torch.nn.functional as F
 import wandb
 from ding.model import model_wrap
-import torch.nn.functional as F
 from ding.utils import POLICY_REGISTRY
-from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Union
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
-from lzero.policy import (DiscreteSupport, InverseScalarTransform,
-                          mz_network_output_unpack, phi_transform, prepare_obs,
+from lzero.policy import (DiscreteSupport, InverseScalarTransform, from,
+                          import, lzero.policy, mz_network_output_unpack,
+                          phi_transform, prepare_obs,
                           prepare_obs_stack_for_unizero, scalar_transform,
                           select_action, to_torch_float_tensor)
 from lzero.policy.head_clip_manager import (HeadClipConfig, HeadClipManager,
                                             create_head_clip_manager_from_dict)
-from .utils import configure_optimizers_nanogpt
 from lzero.policy.utils import initialize_pad_batch
 from torch.nn.utils.convert_parameters import (parameters_to_vector,
                                                vector_to_parameters)
 
+from .utils import configure_optimizers_nanogpt
 
-from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
     """
     Efficiently scale all weights of a module using vectorized operations.
     """

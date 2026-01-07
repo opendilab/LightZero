@@ -16,7 +16,7 @@ from ding.utils import EasyTimer, get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
 from ditk import logging
 from lzero.entry.utils import TemperatureScheduler, log_buffer_memory_usage
-# HACK: The following imports are for type hinting purposes.
+# NOTE: The following imports are for type hinting purposes.
 # The actual GameBuffer is selected dynamically based on the policy type.
 from lzero.mcts import UniZeroGameBuffer
 from lzero.policy import visit_count_temperature

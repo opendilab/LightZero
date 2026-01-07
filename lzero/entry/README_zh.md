@@ -10,7 +10,7 @@
 
 #### AlphaZero 系列
 - **`train_alphazero.py`** - AlphaZero 算法的训练入口
-  - 适用于完美信息的棋类游戏（如围棋、国际象棋等）
+  - 适用于完美信息的棋类游戏（如五子棋、中国象棋等）
   - 不需要环境模型，直接通过自我对弈学习
   - 使用蒙特卡洛树搜索（MCTS）进行策略改进
 
@@ -85,7 +85,7 @@
   - 支持所有 MuZero 变体的评估
   - 提供详细的性能统计
 
-- **`eval_muzero_with_gym_env.py`** - Gym 环境下的 MuZero 评估入口
+- **`eval_muzero_with_gym_env.py`** - Gym 环境下的 MuZero 评估入口  (最近没有维护此入口)
   - 专门用于评估在 Gym 环境中训练的模型
 
 
@@ -118,7 +118,7 @@ policy = train_muzero(
 1. **单任务学习**：
    - 棋类游戏 → `train_alphazero`
    - 一般 RL 任务 → `train_muzero` 或 `train_unizero`
-   - Gym 环境 → `train_muzero_with_gym_env`
+   - Gym 环境 → `train_muzero_with_gym_env` (最近没有维护此入口)
 
 2. **多任务学习**：
    - 标准多任务 → `train_unizero_multitask_segment_ddp`
@@ -145,7 +145,7 @@ policy = train_muzero(
 
 - 建议从标准的 `train_muzero` 或 `train_unizero` 开始
 - 对于大规模实验，考虑使用 DDP 版本以提高训练速度
-- 使用 `_segment` 版本可以获得更好的样本效率（通过重分析技巧）
+- 使用 `_segment` 版本可以获得更好的样本效率
 - 查看 `zoo/` 目录下的配置示例以了解如何设置各个算法
 
 ## 📝 注意事项

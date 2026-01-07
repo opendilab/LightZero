@@ -85,7 +85,7 @@ This directory contains the training and evaluation entry functions for various 
   - Supports evaluation of all MuZero variants
   - Provides detailed performance statistics
 
-- **`eval_muzero_with_gym_env.py`** - MuZero evaluation for Gym environments
+- **`eval_muzero_with_gym_env.py`** - MuZero evaluation for Gym environments (not recently maintained)
   - Specialized for evaluating models trained in Gym environments
 
 
@@ -118,7 +118,7 @@ policy = train_muzero(
 1. **Single-Task Learning**:
    - Board games → `train_alphazero`
    - General RL tasks → `train_muzero` or `train_unizero`
-   - Gym environments → `train_muzero_with_gym_env`
+   - Gym environments → `train_muzero_with_gym_env` (not recently maintained)
 
 2. **Multi-Task Learning**:
    - Standard multi-task → `train_unizero_multitask_segment_ddp`
@@ -139,6 +139,7 @@ policy = train_muzero(
 - **EfficientZero**: [Mastering Atari Games with Limited Data](https://arxiv.org/abs/2111.00210)
 - **UniZero**: [Generalized and Efficient Planning with Scalable Latent World Models](https://arxiv.org/abs/2406.10667)
 - **ReZero**: [Boosting MCTS-based Algorithms by Reconstructing the Terminal Reward](https://arxiv.org/abs/2404.16364)
+- **ScaleZero**: [One Model for All Tasks: Leveraging Efficient World Models in Multi-Task Planning](https://arxiv.org/abs/2509.07945)
 
 ## 💡 Tips
 

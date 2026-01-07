@@ -1,38 +1,30 @@
 import copy
 import logging
-from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Union
-
-import numpy as np
-import torch
-import wandb
-from ding.model import model_wrap
-from ding.utils import POLICY_REGISTRY, set_pkg_seed, get_rank, get_world_size
-
-from lzero.entry.utils import initialize_zeros_batch
-from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
-from lzero.model import ImageTransforms
-from lzero.policy import (
-    scalar_transform,
-    InverseScalarTransform,
-    phi_transform,
-    DiscreteSupport,
-    to_torch_float_tensor,
-    mz_network_output_unpack,
-    select_action,
-    prepare_obs,
-    prepare_obs_stack_for_unizero
-)
-from lzero.policy.unizero import UniZeroPolicy
-from .utils import configure_optimizers_nanogpt
-import torch.nn.functional as F
-import torch.distributed as dist
-
 # Please add the path to your LibMTL library.
 # For example: sys.path.append('/path/to/your/LibMTL/')
 import sys
+from collections import defaultdict
+from typing import Any, Dict, List, Tuple, Union
+
+import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
+import wandb
+from ding.model import model_wrap
+from ding.utils import POLICY_REGISTRY, get_rank, get_world_size, set_pkg_seed
 # sys.path.append('/path/to/your/LibMTL/') # Template path
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+from lzero.entry.utils import initialize_zeros_batch
+from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
+from lzero.model import ImageTransforms
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          mz_network_output_unpack, phi_transform, prepare_obs,
+                          prepare_obs_stack_for_unizero, scalar_transform,
+                          select_action, to_torch_float_tensor)
+from lzero.policy.unizero import UniZeroPolicy
+
+from .utils import configure_optimizers_nanogpt
 
 
 def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]], task_name_template: str, task_id: int) -> Dict[str, float]:
