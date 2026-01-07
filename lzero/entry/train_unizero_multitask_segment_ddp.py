@@ -40,7 +40,7 @@ from tensorboardX import SummaryWriter
 # ====================================================================================================================
 
 
-def build_learner_group(learner_ranks: list[int]) -> "dist.ProcessGroup":
+def build_learner_group(learner_ranks: List[int]) -> "dist.ProcessGroup":
     """
     Overview:
         Build a new process group for learners that perform backward propagation.
