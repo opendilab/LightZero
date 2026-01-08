@@ -11,16 +11,15 @@ from ding.utils import POLICY_REGISTRY
 from ditk import logging
 from lzero.mcts import SampledMuZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
 from lzero.policy import (DiscreteSupport, InverseScalarTransform,
-                          cross_entropy_loss, mz_network_output_unpack,
-                          negative_cosine_similarity, phi_transform,
-                          prepare_obs, scalar_transform, select_action,
-                          to_torch_float_tensor)
-from .utils import configure_optimizers_nanogpt
+                          cross_entropy_loss, from, import, lzero.policy,
+                          mz_network_output_unpack, negative_cosine_similarity,
+                          phi_transform, prepare_obs, scalar_transform,
+                          select_action, to_torch_float_tensor)
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
+from .utils import configure_optimizers_nanogpt
 
 
 @POLICY_REGISTRY.register('sampled_muzero')

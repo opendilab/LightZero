@@ -164,6 +164,7 @@ class SampledUniZeroMCTSCtree(object):
                 # search_depth is used for rope in UniZero
                 search_depth = results.get_search_len()
                 # for Sampled UniZero
+                # TODO: support RoPE
                 if task_id is not None:
                     # multi task setting
                     network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)

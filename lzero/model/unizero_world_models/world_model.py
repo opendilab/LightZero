@@ -1,36 +1,30 @@
+import datetime
 import logging
-from typing import Dict, Union, Optional, List, Tuple, Any
+import os
+from collections import OrderedDict, defaultdict
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
-
 from lzero.model.common import SimNorm
-from lzero.model.utils import calculate_dormant_ratio, compute_average_weight_magnitude, compute_effective_rank
+from lzero.model.utils import (calculate_dormant_ratio,
+                               compute_average_weight_magnitude,
+                               compute_effective_rank)
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+from sklearn.manifold import TSNE
+from torch.distributions import (Categorical, Independent, Normal,
+                                 TanhTransform, TransformedDistribution)
+
 from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
-from collections import OrderedDict 
-logging.getLogger().setLevel(logging.DEBUG)
-
-from collections import OrderedDict, defaultdict
-import matplotlib.pyplot as plt
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from sklearn.manifold import TSNE
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-import os
-import datetime
-import torch
-import torch.nn as nn
+from .utils import (LossWithIntermediateLosses, WorldModelOutput, hash_state,
+                    init_weights)
 
 logging.getLogger().setLevel(logging.DEBUG)
 

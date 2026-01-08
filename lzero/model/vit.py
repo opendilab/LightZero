@@ -9,35 +9,15 @@ integration with Low-Rank Adaptation (LoRA) through a flexible configuration sys
 
 """
 
+from typing import Optional, Tuple, Type, Union
+
 import torch
-from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from lzero.model.common import SimNorm
-from typing import Tuple, Union, Type, Optional
-
-# ==================== LoRA Integration Section Start ====================
-
-# Attempt to import core components from a local transformer.py for LoRA support.
-# This allows for flexible adaptation (e.g., LoRA) of linear layers.
-try:
-    # Assuming transformer.py is in the same directory. Adjust the import path if necessary.
-    from .transformer import _maybe_wrap_linear, TransformerConfig
-except ImportError:
-    # If the import fails (e.g., when running this file directly), provide a fallback.
-    # This ensures the model remains functional without LoRA components.
-    print("Warning: LoRA components could not be imported. Using standard nn.Linear.")
-    _maybe_wrap_linear = lambda linear, config, label: linear
-    
-    # Define a placeholder class for TransformerConfig if it's not available.
-    class TransformerConfig:
-        """Placeholder for TransformerConfig when LoRA components are not available."""
-        pass
-
-# ==================== LoRA Integration Section End ====================
-
-
-# ==================== Configuration Class ====================
+from lzero.model.unizero_world_models.transformer import (TransformerConfig,
+                                                          _maybe_wrap_linear)
+from torch import nn
 
 class ViTConfig:
     """
@@ -369,74 +349,3 @@ class ViT(nn.Module):
         x = self.final_norm(x)
 
         return x
-
-
-# ==================== Test and Benchmark Code ====================
-if __name__ == "__main__":
-    import random
-    import time
-
-    # Fix random seeds for reproducibility
-    torch.manual_seed(42)
-    random.seed(42)
-
-    # 1. Create a configuration object
-    # This is now the standard way to configure the model.
-    vit_config = ViTConfig(
-        image_size=64,
-        patch_size=8,
-        num_classes=768,
-        dim=768,
-        depth=12,
-        heads=12,
-        mlp_dim=3072,
-        dropout=0.1,
-        emb_dropout=0.1,
-        final_norm_option_in_encoder="LayerNorm"
-    )
-
-    # 2. Instantiate the model with the config
-    model = ViT(config=vit_config)
-    
-    # Move model to GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    model.eval() # Set model to evaluation mode for inference
-
-    # Create a dummy input tensor
-    dummy_input = torch.randn(256, 3, 64, 64).to(device)
-
-    # Perform a single forward pass
-    with torch.no_grad():
-        out = model(dummy_input)
-    
-    print(f"Device: {device}")
-    print(f"Output shape: {out.shape}")
-    print(f"Output[0] (first 50 values): {out[0][:50]}")
-
-    # 3. Simple Benchmark
-    print("\nStarting benchmark...")
-    warmup_reps, bench_reps = 5, 20
-    
-    with torch.no_grad():
-        # Warm-up runs
-        for _ in range(warmup_reps):
-            _ = model(dummy_input)
-        
-        # Synchronize before timing (for CUDA)
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-            
-        start_time = time.time()
-        for _ in range(bench_reps):
-            _ = model(dummy_input)
-            
-        # Synchronize after timing
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        
-        end_time = time.time()
-
-    total_time = end_time - start_time
-    avg_latency_ms = (total_time / bench_reps) * 1000
-    print(f"Average latency over {bench_reps} runs: {avg_latency_ms:.2f} ms")

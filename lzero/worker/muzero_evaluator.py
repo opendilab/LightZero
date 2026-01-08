@@ -1,21 +1,22 @@
 import copy
+import threading
 import time
 from collections import namedtuple
-from typing import Optional, Callable, Tuple, Dict, Any
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 import torch
 import wandb
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_ndarray, to_item, to_tensor
-from ding.utils import build_logger, EasyTimer
-from ding.utils import get_world_size, get_rank, broadcast_object_list
-from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
+from ding.torch_utils import to_item, to_ndarray, to_tensor
+from ding.utils import (EasyTimer, broadcast_object_list, build_logger,
+                        get_rank, get_world_size)
+from ding.worker.collector.base_serial_evaluator import (ISerialEvaluator,
+                                                         VectorEvalMonitor)
+from ditk import logging
 from easydict import EasyDict
-
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
-import threading
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -31,7 +32,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     # Default configuration for the MuZeroEvaluator.
     config = dict(
         # The frequency of evaluation, measured in training iterations.
-        eval_freq=50,
+        eval_freq=5000,
     )
 
     @classmethod
@@ -61,7 +62,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     ) -> None:
         """
         Overview:
-            Initialize the MuZeroEvaluator.
+            Initializes the MuZeroEvaluator. This evaluator is compatible with MuZero, Sampled MuZero, Gumbel MuZero, EfficientZero, UniZero, and Sampled UniZero (i.e., all algorithms except AlphaZero).
         Arguments:
             - eval_freq (:obj:`int`): The frequency, in training iterations, at which to run evaluation.
             - n_evaluator_episode (:obj:`int`): The total number of episodes to run during each evaluation.
@@ -72,16 +73,17 @@ class MuZeroEvaluator(ISerialEvaluator):
             - exp_name (:obj:`str`): The name of the experiment, used for logging.
             - instance_name (:obj:`str`): The name of this evaluator instance.
             - policy_config (:obj:`Optional[EasyDict]`): Configuration for the policy.
-            - task_id (:obj:`Optional[int]`): The unique identifier for the task. If None, it operates in single-task mode.
+            - task_id (:obj:`Optional[int]`): The unique identifier for the task. If None, the evaluator operates in single-task mode. In a multi-task setting, each task corresponds to a specific evaluator instance.
         """
         self.stop_event = threading.Event()  # Event to signal a stop, e.g., due to a timeout.
         self.task_id = task_id
         self._eval_freq = eval_freq
         self._exp_name = exp_name
         self._instance_name = instance_name
+        self._rank = get_rank()
 
         # Initialize logger. Only rank 0 needs a full logger with TensorBoard.
-        if get_rank() == 0:
+        if self._rank == 0:
             if tb_logger is not None:
                 self._logger, _ = build_logger(
                     f'./{self._exp_name}/log/{self._instance_name}', self._instance_name, need_tb=False
@@ -92,18 +94,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                     f'./{self._exp_name}/log/{self._instance_name}', self._instance_name
                 )
         else:
-            # TODO(username): Refine logger setup for UniZero multitask with DDP v2.
             if tb_logger is not None:
                 self._logger, _ = build_logger(
                     f'./{self._exp_name}/log/{self._instance_name}', self._instance_name, need_tb=False
                 )
                 self._tb_logger = tb_logger
 
-        self._rank = get_rank()
-        print(f'rank {self._rank}, self.task_id: {self.task_id}')
-
+        logging.info(f'rank {self._rank}, self.task_id: {self.task_id}')
         self.reset(policy, env)
-
         self._timer = EasyTimer()
         self._default_n_episode = n_evaluator_episode
         self._stop_value = stop_value
@@ -214,17 +212,26 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): A flag indicating whether the training should stop (e.g., if the stop value is reached).
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing evaluation results, such as rewards and episode lengths.
         """
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and self.task_id is not None:
             # NOTE: important for unizero_multitask pipeline.
-            print(f"=========in eval() Rank {get_rank()} ===========")
+            self._logger.info(f"=========in eval() Rank {get_rank()} ===========")
             device = torch.cuda.current_device()
-            print(f"before set device: {device}")
+            self._logger.info(f"before set device: {device}")
             torch.cuda.set_device(get_rank())
-            print(f"after set device: {get_rank()}")
+            self._logger.info(f"after set device: {get_rank()}")
 
         episode_info = None
         stop_flag = False
-        if get_rank() >= 0:
+        if self.task_id is not None and get_rank() >= 0:
+            # In a multi-task setting, each task corresponds to a specific evaluator instance.
+            eval_flag = True
+        elif self.task_id is None and get_rank() == 0:
+            # In a single-task setting, only evaluate rank 0.
+            eval_flag = True
+        else:
+            eval_flag = False
+
+        if eval_flag:
             if n_episode is None:
                 n_episode = self._default_n_episode
             assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
@@ -251,7 +258,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             timestep_dict = {}
             for i in range(env_nums):
                 if 'timestep' not in init_obs[i]:
-                    print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                    self._logger.warning(f"'timestep' key is missing in init_obs[{i}], assigning value -1")
                 timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
 
             dones = np.array([False for _ in range(env_nums)])
@@ -276,6 +283,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                 while not eval_monitor.is_finished():
                     # Check if a timeout has occurred.
                     if self.stop_event.is_set():
+                        # self.stop_event may be set in safe_eval() methd in lzero/entry/utils.py
                         self._logger.info("[EVALUATOR]: Evaluation aborted due to timeout.")
                         break
 
@@ -423,7 +431,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             if episode_info is not None:
                 info.update(episode_info)
 
-            print(f'rank {self._rank}, self.task_id: {self.task_id}')
+            logging.info(f'rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info(self._logger.get_tabulate_vars_hor(info))
 
             # Log to TensorBoard and WandB.

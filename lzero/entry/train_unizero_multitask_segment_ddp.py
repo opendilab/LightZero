@@ -39,25 +39,6 @@ from tensorboardX import SummaryWriter
 # function based on the `benchmark_name` argument to ensure correct score assignment.
 # ====================================================================================================================
 
-
-def build_learner_group(learner_ranks: List[int]) -> "dist.ProcessGroup":
-    """
-    Overview:
-        Build a new process group for learners that perform backward propagation.
-        This is useful in scenarios like MoCo where specific ranks handle the learning process.
-    Arguments:
-        - learner_ranks (:obj:`list[int]`): A list of ranks that will perform the backward pass.
-                                            For example, if CUDA_VISIBLE_DEVICES=0,1, then learner_ranks=[0,1].
-    Returns:
-        - pg (:obj:`dist.ProcessGroup`): A new process group for the specified learner ranks.
-    """
-    world_pg = dist.group.WORLD
-    pg = dist.new_group(ranks=learner_ranks, backend='nccl')
-    if dist.get_rank() in learner_ranks:
-        torch.cuda.set_device(learner_ranks.index(dist.get_rank()))
-    return pg
-
-
 # Stores the latest evaluation returns: {task_id: eval_episode_return_mean}
 GLOBAL_EVAL_RETURNS: Dict[int, float] = defaultdict(lambda: None)
 
@@ -151,7 +132,6 @@ def train_unizero_multitask_segment_ddp(
     tasks_per_rank = total_tasks // world_size
     remainder = total_tasks % world_size
 
-    # ==================== START: Critical Fix ====================
     # 1. Precisely calculate the number of tasks assigned to the current rank.
     if rank < remainder:
         start_idx = rank * (tasks_per_rank + 1)
@@ -161,7 +141,6 @@ def train_unizero_multitask_segment_ddp(
         start_idx = rank * tasks_per_rank + remainder
         end_idx = start_idx + tasks_per_rank
         num_tasks_for_this_rank = tasks_per_rank
-    # ==================== END: Critical Fix ====================
 
     tasks_for_this_rank = input_cfg_list[start_idx:end_idx]
 

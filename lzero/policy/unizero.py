@@ -44,7 +44,7 @@ def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
-    Configure optimizer with differentiated learning rates for UniZero model.
+    Configure optimizer with differentiated learning rates and weight decay for encoder/backbone/head of UniZero model.
     """
     # 1. Define parameters that need special handling
     param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
@@ -69,7 +69,7 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         },
         {
             'params': list(transformer_params.values()),
-            'lr': learning_rate,  # 1e-4
+            'lr': learning_rate,  # Tokenizer uses base learning rate, e.g., 1e-4
             'weight_decay': weight_decay
         },
         {
@@ -80,9 +80,9 @@ def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type,
         }
     ]
 
-    print("--- Optimizer Groups ---")
-    print(f"Transformer LR: {learning_rate}")
-    print(f"Tokenizer/Heads LR: {learning_rate}")
+    logging.info("--- Optimizer Groups ---")
+    logging.info(f"Transformer LR: {learning_rate}")
+    logging.info(f"Tokenizer/Heads LR: {learning_rate}")
 
     optimizer = torch.optim.AdamW(optim_groups, betas=betas)
     return optimizer
@@ -220,10 +220,12 @@ class UniZeroPolicy(MuZeroPolicy):
                 #   - after_backbone: The reconstruction loss is computed after the encoded representation passes through the backbone.
 	            #   - before_backbone: The reconstruction loss is computed directly on the encoded representation, without the backbone.
                 decode_loss_mode=None,
-                # (str/None) Task embedding option. Set to None to disable task-specific embeddings.
+                # (str/None) Task embedding option. Set to None to disable task-specific embeddings. Options are ['concat_task_embed', 'add_task_embed', 'register_task_embed'].
+                # Please note that "register_task_embed" has not yet been fully tested.
                 task_embed_option=None,
                 # (bool) Whether to use task embeddings.
                 use_task_embed=False,
+                # TODO: optimize the following configs.
                 # (bool) Whether to use normal head (standard prediction heads).
                 use_normal_head=True,
                 # (bool) Whether to use Soft Mixture-of-Experts (MoE) head.
@@ -412,7 +414,7 @@ class UniZeroPolicy(MuZeroPolicy):
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
         num_segments=8,
-        # # (int) the number of simulations in MCTS for renalyze.
+        # (int) the number of simulations in MCTS for renalyze.
         num_simulations=50,
         # (int) The number of simulations in MCTS for the collect phase.
         collect_num_simulations=25,
@@ -626,7 +628,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 T_max=total_iters,
                 eta_min=final_lr
             )
-            print(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
+            logging.info(f"CosineAnnealingLR enabled: T_max={total_iters}, eta_min={final_lr}")
 
 
         if self._cfg.piecewise_decay_lr_scheduler:
@@ -714,11 +716,11 @@ class UniZeroPolicy(MuZeroPolicy):
             alpha_lr = self._cfg.adaptive_entropy_alpha_lr
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
 
-            print("="*20)
-            print(">>> Target Entropy Regularization (Adaptive Alpha) Enabled <<<")
-            print(f"    Target Entropy: {self.target_entropy:.4f}")
-            print(f"    Alpha Optimizer Learning Rate: {alpha_lr:.2e}")
-            print("="*20)
+            logging.info("="*20)
+            logging.info(">>> Target Entropy Regularization (Adaptive Alpha) Enabled <<<")
+            logging.info(f"    Target Entropy: {self.target_entropy:.4f}")
+            logging.info(f"    Alpha Optimizer Learning Rate: {alpha_lr:.2e}")
+            logging.info("="*20)
         # ===================== END: Target Entropy Regularization Initialization =====================
 
         # ==================== START: Initialize Encoder-Clip Annealing Parameters ====================
@@ -730,12 +732,12 @@ class UniZeroPolicy(MuZeroPolicy):
             self.encoder_clip_end = self._cfg.encoder_clip_end_value
             self.encoder_clip_anneal_steps = self._cfg.encoder_clip_anneal_steps
 
-            print("="*20)
-            print(">>> Encoder-Clip Annealing Enabled <<<")
-            print(f"    Type: {self.encoder_clip_anneal_type}")
-            print(f"    Range: {self.encoder_clip_start} -> {self.encoder_clip_end}")
-            print(f"    Steps: {self.encoder_clip_anneal_steps}")
-            print("="*20)
+            logging.info("="*20)
+            logging.info(">>> Encoder-Clip Annealing Enabled <<<")
+            logging.info(f"    Type: {self.encoder_clip_anneal_type}")
+            logging.info(f"    Range: {self.encoder_clip_start} -> {self.encoder_clip_end}")
+            logging.info(f"    Steps: {self.encoder_clip_anneal_steps}")
+            logging.info("="*20)
         else:
             # If annealing is not enabled, use a fixed clip threshold
             self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold
@@ -752,19 +754,19 @@ class UniZeroPolicy(MuZeroPolicy):
             # Create HeadClipManager
             self.head_clip_manager = create_head_clip_manager_from_dict(head_clip_config_dict)
 
-            print("=" * 60)
-            print(">>> Head-Clip Manager Initialized <<<")
-            print(f"    Enabled heads: {self.head_clip_manager.enabled_heads}")
+            logging.info("=" * 60)
+            logging.info(">>> Head-Clip Manager Initialized <<<")
+            logging.info(f"    Enabled heads: {self.head_clip_manager.enabled_heads}")
             for head_name in self.head_clip_manager.enabled_heads:
                 config = self.head_clip_manager.get_head_config(head_name)
                 if config.use_annealing:
-                    print(
+                    logging.info(
                         f"    {head_name}: annealing {config.start_value:.1f} → {config.end_value:.1f} "
                         f"over {config.anneal_steps} steps ({config.anneal_type})"
                     )
                 else:
-                    print(f"    {head_name}: fixed threshold = {config.clip_threshold:.1f}")
-            print("=" * 60)
+                    logging.info(f"    {head_name}: fixed threshold = {config.clip_threshold:.1f}")
+            logging.info("=" * 60)
         else:
             self.head_clip_manager = None
         # ===================== END: Initialize Head-Clip Manager =====================
@@ -773,7 +775,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self.policy_ls_eps_start = self._cfg.policy_ls_eps_start
         self.policy_ls_eps_end = self._cfg.policy_ls_eps_end
         self.policy_ls_eps_decay_steps = self._cfg.policy_ls_eps_decay_steps
-        print(f"self.policy_ls_eps_start: {self.policy_ls_eps_start}")
+        logging.info(f"self.policy_ls_eps_start: {self.policy_ls_eps_start}")
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -1119,7 +1121,7 @@ class UniZeroPolicy(MuZeroPolicy):
                         scale_factor = current_clip_value / max_latent_norm.item()
                         # No longer print frequently, or can be changed to print every N steps
                         if train_iter % 1000 == 0:
-                            print(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
+                            logging.info(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
                         scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
             if self.use_head_clip and self.head_clip_manager is not None:
@@ -1306,7 +1308,7 @@ class UniZeroPolicy(MuZeroPolicy):
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():
             if param.requires_grad:
-                print(f"Layer: {name} | "
+                logging.info(f"Layer: {name} | "
                       f"Weight mean: {param.data.mean():.4f} | "
                       f"Weight std: {param.data.std():.4f} | "
                       f"Grad mean: {param.grad.mean():.4f} | "
@@ -1330,12 +1332,12 @@ class UniZeroPolicy(MuZeroPolicy):
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.full(
                 [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
             ).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
 
     def _forward_collect(
             self,
@@ -1384,7 +1386,7 @@ class UniZeroPolicy(MuZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action_collect, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -1456,7 +1458,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 batch_action.append(action)
 
             self.last_batch_obs = data
-            self.last_batch_action = batch_action
+            self.last_batch_action_collect = batch_action
 
             # This logic is a temporary workaround specific to the muzero_segment_collector.
             if active_collect_env_num < self.collector_env_num:
@@ -1468,15 +1470,15 @@ class UniZeroPolicy(MuZeroPolicy):
                 # Therefore, as a simpler solution, we reset the collection state for ALL environments.
                 # By resetting `self.last_batch_action` to -1 for all `self.collector_env_num` environments,
                 # we force the transformer to start its context from scratch, avoiding incorrect cache lookups.
-                print('========== collect_forward ============')
-                print(f'An environment has finished. Active envs: {active_collect_env_num} < Total envs: {self.collector_env_num}. Resetting all.')
+                logging.info('========== collect_forward ============')
+                logging.info(f'An environment has finished. Active envs: {active_collect_env_num} < Total envs: {self.collector_env_num}. Resetting all.')
 
                 self._reset_collect(reset_init_data=True)
 
                 # If the sampling type is 'episode', it's unexpected for the number of active environments to drop,
                 # as this suggests an inconsistent state or a potential issue in the collection logic.
                 if getattr(self._cfg, 'sample_type', '') == 'episode':
-                    print('WARNING: Inconsistent state detected. `sample_type` is "episode", but the number of active environments has changed.')
+                    logging.warning('Inconsistent state detected. `sample_type` is "episode", but the number of active environments has changed.')
 
         return output
 
@@ -1500,12 +1502,12 @@ class UniZeroPolicy(MuZeroPolicy):
 
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_action_eval = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.full(
                 [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
             ).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_action_eval = [-1 for i in range(self.collector_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, timestep: List = [0], task_id: int = None,) -> Dict:
@@ -1540,7 +1542,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data, timestep)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action_eval, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward
@@ -1600,7 +1602,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 batch_action.append(action)
 
             self.last_batch_obs_eval = data
-            self.last_batch_action = batch_action
+            self.last_batch_action_eval = batch_action
 
         return output
 
@@ -1643,12 +1645,12 @@ class UniZeroPolicy(MuZeroPolicy):
                         # NEW SYSTEM: Use KVCacheManager to clear per-environment cache
                         if eid < world_model.env_num:
                             world_model.kv_cache_manager.init_pools[eid].clear()
-                            print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (NEW system).')
+                            logging.info(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (NEW system).')
                     else:
                         # OLD SYSTEM: Use legacy cache dictionary
                         if eid < len(world_model.past_kv_cache_init_infer_envs):
                             world_model.past_kv_cache_init_infer_envs[eid].clear()
-                            print(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                            logging.info(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
                     # =============================================================================
 
         # Determine the clear interval based on the environment's sample type
@@ -1656,7 +1658,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
-            print(f'clear_interval: {clear_interval}')
+            logging.info(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
@@ -1668,7 +1670,7 @@ class UniZeroPolicy(MuZeroPolicy):
             # Free up GPU memory
             torch.cuda.empty_cache()
 
-            print(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
+            logging.info(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
@@ -1690,7 +1692,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     self._cfg.device,
                     pad_token_id=self.pad_token_id
                 )
-                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+                logging.info(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
             else:
                 self.last_batch_obs_eval = initialize_pad_batch(
@@ -1699,7 +1701,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     self._cfg.device,
                     pad_token_id=self.pad_token_id
                 )
-                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+                logging.info(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
@@ -1721,12 +1723,12 @@ class UniZeroPolicy(MuZeroPolicy):
                         # NEW SYSTEM: Use KVCacheManager to clear per-environment cache
                         if eid < world_model.env_num:
                             world_model.kv_cache_manager.init_pools[eid].clear()
-                            print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (NEW system).')
+                            logging.info(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (NEW system).')
                     else:
                         # OLD SYSTEM: Use legacy cache dictionary
                         if eid < len(world_model.past_kv_cache_init_infer_envs):
                             world_model.past_kv_cache_init_infer_envs[eid].clear()
-                            print(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                            logging.info(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
                     # =============================================================================
 
                 # The recurrent cache is global.
@@ -1735,9 +1737,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 world_model.clear_caches()
                 # ======================================================================================
 
-                if hasattr(world_model, 'keys_values_wm_list'):
-                    world_model.keys_values_wm_list.clear()
-
+                world_model.keys_values_wm_list.clear()
                 torch.cuda.empty_cache()
                 return
 
@@ -1745,7 +1745,7 @@ class UniZeroPolicy(MuZeroPolicy):
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
-            print(f'clear_interval: {clear_interval}')
+            logging.info(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
@@ -1757,8 +1757,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # Free up GPU memory
             torch.cuda.empty_cache()
 
-            print('evaluator: eval_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            logging.info('evaluator: eval_model clear()')
+            logging.info(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """
@@ -1888,7 +1888,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         ]
 
-        # ==================== [FIX] Head-Clip Monitoring Variables Auto-Generation ====================
         head_clip_vars = []
         # Check if head_clip is enabled and manager exists
         if getattr(self, 'use_head_clip', False) and getattr(self, 'head_clip_manager', None) is not None:
@@ -1897,10 +1896,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 head_clip_vars.append(f'head_clip/{head_name}/max_logits')
                 head_clip_vars.append(f'head_clip/{head_name}/threshold')
                 head_clip_vars.append(f'head_clip/{head_name}/scale_factor')
-        # ========================================================================
 
 
-        # ==================== [NEW] Fix4: Enhanced Policy Monitoring Variables ====================
         enhanced_policy_vars = [
             # Policy logits statistics
             'policy_logits/norm',
@@ -1913,19 +1910,10 @@ class UniZeroPolicy(MuZeroPolicy):
             'target_policy_entropy/max',
             'target_policy_entropy/std',
         ]
-        # ==========================================================================================
 
-        # ==================== [NEW] Stability Monitoring Variables ====================
         stability_vars = [
             'stability/warning_count',  # Number of warnings issued in current check
         ]
-        # ==============================================================================
-
-        # Note: We don't add every layer's norm here because too many metrics would clutter the logs.
-        # In practice, if you find issues through total norms, you can temporarily search for specific layer norms in TensorBoard,
-        # or print `norm_log_dict` locally for detailed analysis.
-        # Tools like wandb can better handle large numbers of dynamic metrics.
-        # ========================================================================
 
         return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
 
