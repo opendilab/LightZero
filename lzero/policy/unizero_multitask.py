@@ -440,6 +440,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         root_dirichlet_alpha=0.3,
         # (float) The noise weight at the root node of the search tree.
         root_noise_weight=0.25,
+        # (bool) Whether to use allocated batch size.
+        allocated_batch_sizes=False,
 
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.

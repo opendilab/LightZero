@@ -136,6 +136,7 @@ def create_config(
             ),
             device='cuda',
             game_segment_length=20,
+            update_per_collect=80,  # Corresponds to replay_ratio=0.5 for 8 games (20*8*0.5=80)
             learning_rate=0.0001,
             weight_decay=1e-2,
             batch_size=batch_size,
