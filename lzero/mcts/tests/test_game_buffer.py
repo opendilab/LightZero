@@ -16,6 +16,11 @@ config = EasyDict(
         use_priority=True,
         action_type='fixed_action_space',
         game_segment_length=20,
+        model=dict(
+            action_space_size=6,
+            value_support_range=(-10, 10, 1),
+            reward_support_range=(-10, 10, 1),
+        ),
     )
 )
 

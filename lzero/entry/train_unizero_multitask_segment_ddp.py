@@ -231,7 +231,7 @@ def train_unizero_multitask_segment_ddp(
         # Process each task assigned to the current rank.
         for local_task_id, (task_id, [cfg, create_cfg]) in enumerate(tasks_for_this_rank):
             # Set a unique random seed for each task.
-            cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
+            cfg.policy.device = 'cuda' if cfg.policy.device == 'cuda' and torch.cuda.is_available() else 'cpu'
             cfg = compile_config(cfg, seed=seed + task_id, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
             policy_config = cfg.policy
             policy.collect_mode.get_attribute('cfg').n_episode = policy_config.n_episode

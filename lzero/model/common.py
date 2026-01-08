@@ -734,7 +734,7 @@ class RepresentationNetwork(nn.Module):
             self.downsample_net = DownSample(observation_shape, num_channels, activation, norm_type)
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-            self.norm = build_normalization(norm_type, dim=3)(num_channels, *observation_shape[1:])
+            self.norm = build_normalization(norm_type, dim=2)(num_channels)
 
         self.resblocks = nn.ModuleList([
             ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)

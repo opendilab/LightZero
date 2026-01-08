@@ -3,24 +3,29 @@ import logging
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple, Union
 
+import numpy as np
+import torch
 import torch.nn.functional as F
 import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
+from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
-from lzero.policy import (DiscreteSupport, InverseScalarTransform, from,
-                          import, lzero.policy, mz_network_output_unpack,
-                          phi_transform, prepare_obs,
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          mz_network_output_unpack, phi_transform, prepare_obs,
                           prepare_obs_stack_for_unizero, scalar_transform,
                           select_action, to_torch_float_tensor)
 from lzero.policy.head_clip_manager import (HeadClipConfig, HeadClipManager,
                                             create_head_clip_manager_from_dict)
+from lzero.policy.muzero import MuZeroPolicy
 from lzero.policy.utils import initialize_pad_batch
 from torch.nn.utils.convert_parameters import (parameters_to_vector,
                                                vector_to_parameters)
 
 from .utils import configure_optimizers_nanogpt
 
+
+def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
     Efficiently scale all weights of a module using vectorized operations.
     """
@@ -129,6 +134,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model_cfg=dict(
+                # (str) The encoder type, e.g., 'resnet' or 'vit'.
+                encoder_type='resnet',
                 # (bool) If True, the action space of the environment is continuous, otherwise discrete.
                 continuous_action_space=False,
                 # (int) The number of tokens per block.
@@ -142,7 +149,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (bool) Whether to use GRU gating mechanism.
                 gru_gating=False,
                 # (str) The device to be used for computation, e.g., 'cpu' or 'cuda'.
-                device='cuda',
+                device='cpu',
                 # (bool) Whether to analyze simulation normalization.
                 analysis_sim_norm=False,
                 # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
@@ -235,6 +242,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 num_experts_per_tok=1,
                 # (int) Total number of experts in the transformer MoE.
                 num_experts_of_moe_in_transformer=8,
+                # ****** Priority ******
+                # (bool) Whether to use priority when sampling training data from the buffer.
+                use_priority=False,
             ),
         ),
         # ****** common ******
@@ -298,6 +308,9 @@ class UniZeroPolicy(MuZeroPolicy):
         policy_ls_eps_end=0.01,
         # (int) Number of training steps to decay label smoothing epsilon from start to end
         policy_ls_eps_decay_steps=50000,
+        
+        label_smoothing_eps=0.1,  # TODO: For value
+
         # (bool) Whether to use continuous (fixed) label smoothing throughout training
         use_continuous_label_smoothing=False,
         # (float) Fixed epsilon value for continuous label smoothing (only used when use_continuous_label_smoothing=True)

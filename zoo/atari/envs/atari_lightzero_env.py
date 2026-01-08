@@ -139,8 +139,11 @@ class AtariEnvLightZero(BaseEnv):
                 ),
             })
 
+            # self._reward_space = gym.spaces.Box(
+            #     low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
+            # )
             self._reward_space = gym.spaces.Box(
-                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
+                low=-9999, high=9999, shape=(1,), dtype=np.float32
             )
 
             self._init_flag = True

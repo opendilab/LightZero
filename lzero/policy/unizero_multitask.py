@@ -7,7 +7,6 @@ import numpy as np
 import torch
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
-from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import (DiscreteSupport, InverseScalarTransform,
@@ -16,7 +15,7 @@ from lzero.policy import (DiscreteSupport, InverseScalarTransform,
                           select_action, to_torch_float_tensor)
 from lzero.policy.unizero import UniZeroPolicy, scale_module_weights_vectorized
 
-from .utils import configure_optimizers_nanogpt
+from .utils import configure_optimizers_nanogpt, initialize_zeros_batch
 
 # Please replace the path with the actual location of your LibMTL library.
 sys.path.append('/path/to/your/LibMTL')
@@ -254,7 +253,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 analysis_dormant_ratio_weight_rank=False,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.01,
-
+                share_head=False,
             ),
         ),
         # ****** common ******

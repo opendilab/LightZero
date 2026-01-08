@@ -71,6 +71,8 @@ def main(env_id, seed):
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
                     game_segment_length=game_segment_length,
+                    device='cuda',
+                    use_priority=True,
                 ),
             ),
             # Learning settings
