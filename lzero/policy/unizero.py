@@ -142,7 +142,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (bool) Whether to use GRU gating mechanism.
                 gru_gating=False,
                 # (str) The device to be used for computation, e.g., 'cpu' or 'cuda'.
-                device='cpu',
+                device='cuda',
                 # (bool) Whether to analyze simulation normalization.
                 analysis_sim_norm=False,
                 # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.

@@ -15,7 +15,7 @@ from ding.utils import set_pkg_seed, get_rank, get_world_size, EasyTimer
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, safe_eval, allocate_batch_size
 from lzero.policy import visit_count_temperature
 from lzero.mcts import UniZeroGameBuffer as GameBuffer
 from lzero.worker import MuZeroEvaluator as Evaluator
@@ -26,114 +26,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
-
-
-def safe_eval(
-        evaluator: Evaluator,
-        learner: BaseLearner,
-        collector: Collector,
-        rank: int,
-        world_size: int,
-        timeout: int = 12000
-) -> Tuple[Optional[bool], Optional[float]]:
-    """
-    Overview:
-        Safely evaluates the policy using the evaluator with a specified timeout. This wrapper prevents
-        the entire training process from crashing due to evaluation-related issues like deadlocks.
-    Arguments:
-        - evaluator (:obj:`Evaluator`): The evaluator instance to run.
-        - learner (:obj:`BaseLearner`): The learner instance, used to access checkpoint saving and training iteration.
-        - collector (:obj:`Collector`): The collector instance, used to access the environment step count.
-        - rank (:obj:`int`): The rank of the current process in distributed training.
-        - world_size (:obj:`int`): The total number of processes.
-        - timeout (:obj:`int`): The maximum time in seconds to wait for the evaluation to complete.
-    Returns:
-        - (:obj:`Tuple[Optional[bool], Optional[float]]`): A tuple containing the stop flag and the reward.
-          Returns (None, None) if evaluation times out or an exception occurs.
-    """
-    try:
-        logging.info(f"Rank {rank}/{world_size}: Starting evaluation.")
-        # Ensure the stop_event is clear before starting a new evaluation.
-        evaluator.stop_event.clear()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(
-                evaluator.eval,
-                learner.save_checkpoint,
-                learner.train_iter,
-                collector.envstep
-            )
-            try:
-                stop, reward = future.result(timeout=timeout)
-            except concurrent.futures.TimeoutError:
-                # If evaluation exceeds the timeout, set the evaluator's stop event to terminate it gracefully.
-                evaluator.stop_event.set()
-                logging.warning(f"Rank {rank}/{world_size}: Evaluation timed out after {timeout} seconds.")
-                return None, None
-
-        logging.info(f"Rank {rank}/{world_size}: Evaluation finished successfully.")
-        return stop, reward
-    except Exception as e:
-        logging.error(f"Rank {rank}/{world_size}: An error occurred during evaluation: {e}", exc_info=True)
-        return None, None
-
-
-def allocate_batch_size(
-        cfgs: List[Any],
-        game_buffers: List[GameBuffer],
-        alpha: float = 1.0,
-        clip_scale: int = 1
-) -> List[int]:
-    """
-    Overview:
-        Allocates batch sizes inversely proportional to the number of collected episodes for each task.
-        This dynamic adjustment helps balance training focus across multiple tasks, prioritizing those
-        with less data. The batch sizes are clipped to a dynamic range to maintain stability.
-    Arguments:
-        - cfgs (:obj:`List[Any]`): List of configuration objects for each task.
-        - game_buffers (:obj:`List[GameBuffer]`): List of replay buffer instances for each task.
-        - alpha (:obj:`float`): A hyperparameter controlling the degree of inverse proportionality. Defaults to 1.0.
-        - clip_scale (:obj:`int`): A scaling factor to define the clipping range for the batch size. Defaults to 1.
-    Returns:
-        - (:obj:`List[int]`): A list of allocated batch sizes for each task.
-    """
-    # Extract the number of collected episodes from each task's buffer.
-    buffer_num_of_collected_episodes = [buffer.num_of_collected_episodes for buffer in game_buffers]
-
-    world_size = get_world_size()
-    rank = get_rank()
-
-    # Gather the episode counts from all ranks.
-    all_task_num_of_collected_episodes_obj = [None for _ in range(world_size)]
-    dist.all_gather_object(all_task_num_of_collected_episodes_obj, buffer_num_of_collected_episodes)
-
-    # Concatenate the lists from all ranks into a single flat list.
-    all_task_num_of_collected_episodes = [item for sublist in all_task_num_of_collected_episodes_obj for item in sublist]
-    if rank == 0:
-        logging.info(f'All task collected episodes: {all_task_num_of_collected_episodes}')
-
-    # Calculate the inverse weight for each task. Adding 1 to avoid division by zero.
-    inv_episodes = np.array([1.0 / (episodes + 1) for episodes in all_task_num_of_collected_episodes])
-    inv_sum = np.sum(inv_episodes)
-
-    # The total batch size is defined in the config of the first task.
-    total_batch_size = cfgs[0].policy.total_batch_size
-
-    # Define a dynamic range for batch sizes to prevent extreme values.
-    avg_batch_size = total_batch_size / world_size
-    min_batch_size = avg_batch_size / clip_scale
-    max_batch_size = avg_batch_size * clip_scale
-
-    # Calculate task weights based on inverse proportionality, smoothed by alpha.
-    task_weights = (inv_episodes / inv_sum) ** alpha
-    batch_sizes = total_batch_size * task_weights
-
-    # Clip the batch sizes to the calculated dynamic range.
-    batch_sizes = np.clip(batch_sizes, min_batch_size, max_batch_size)
-
-    # Ensure batch sizes are integers.
-    batch_sizes = [int(size) for size in batch_sizes]
-
-    return batch_sizes
 
 
 def train_unizero_multitask_segment_eval(
