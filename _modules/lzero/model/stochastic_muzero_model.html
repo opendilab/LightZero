@@ -100,7 +100,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">MODEL_REGISTRY</span><span class="p">,</span> <span class="n">SequenceType</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.common</span><span class="w"> </span><span class="kn">import</span> <span class="n">MZNetworkOutput</span><span class="p">,</span> <span class="n">RepresentationNetwork</span><span class="p">,</span> <span class="n">PredictionNetwork</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">renormalize</span><span class="p">,</span> <span class="n">get_params_mean</span><span class="p">,</span> <span class="n">get_dynamic_mean</span><span class="p">,</span> <span class="n">get_reward_mean</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">renormalize</span><span class="p">,</span> <span class="n">get_params_mean</span>
 
 
 <span class="c1"># use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine&#39;s document.</span>
@@ -663,13 +663,7 @@
         <span class="c1"># use the fully connected layer to predict reward</span>
         <span class="n">reward</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_reward_head</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward</span></div>
-
-<div class="viewcode-block" id="DynamicsNetwork.get_dynamic_mean"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.DynamicsNetwork.get_dynamic_mean">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_dynamic_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">get_dynamic_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="DynamicsNetwork.get_reward_mean"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.DynamicsNetwork.get_reward_mean">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_reward_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">get_reward_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div></div>
+        <span class="k">return</span> <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward</span></div></div>
 
 
 <span class="c1"># TODO(pu): customize different afterstate dynamics network</span>

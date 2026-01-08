@@ -104,11 +104,10 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">POLICY_REGISTRY</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">L1Loss</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_zeros_batch</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroMCTSPtree</span> <span class="k">as</span> <span class="n">MCTSPtree</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageTransforms</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">cal_dormant_ratio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">calculate_dormant_ratio</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">cross_entropy_loss</span><span class="p">,</span> <span class="n">phi_transform</span><span class="p">,</span> \
     <span class="n">DiscreteSupport</span><span class="p">,</span> <span class="n">to_torch_float_tensor</span><span class="p">,</span> <span class="n">mz_network_output_unpack</span><span class="p">,</span> <span class="n">select_action</span><span class="p">,</span> <span class="n">negative_cosine_similarity</span><span class="p">,</span> \
     <span class="n">prepare_obs</span><span class="p">,</span> <span class="n">configure_optimizers</span>
@@ -164,7 +163,7 @@
             <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
             <span class="c1"># (bool) Whether to analyze simulation normalization.</span>
             <span class="n">analysis_sim_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-            <span class="c1"># (bool) Whether to analyze dormant ratio.</span>
+            <span class="c1"># (bool) Whether to analyze dormant ratio. More details can be found in https://proceedings.mlr.press/v202/sokar23a/sokar23a.pdf.</span>
             <span class="n">analysis_dormant_ratio</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="c1"># (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.</span>
             <span class="c1"># More details can be found in https://arxiv.org/abs/2310.00344.</span>
@@ -206,7 +205,7 @@
         <span class="c1"># This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.</span>
         <span class="n">eval_offline</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to calculate the dormant ratio.</span>
-        <span class="n">cal_dormant_ratio</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">calculate_dormant_ratio</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to analyze simulation normalization.</span>
         <span class="n">analysis_sim_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to analyze dormant ratio.</span>
@@ -516,8 +515,8 @@
 
         <span class="c1"># ========= logging for analysis =========</span>
         <span class="c1"># calculate dormant ratio of encoder</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">cal_dormant_ratio</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">dormant_ratio_encoder</span> <span class="o">=</span> <span class="n">cal_dormant_ratio</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">obs_batch</span><span class="o">.</span><span class="n">detach</span><span class="p">(),</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">calculate_dormant_ratio</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dormant_ratio_encoder</span> <span class="o">=</span> <span class="n">calculate_dormant_ratio</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">obs_batch</span><span class="o">.</span><span class="n">detach</span><span class="p">(),</span>
                                                            <span class="n">percentage</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">dormant_threshold</span><span class="p">)</span>
         <span class="c1"># calculate L2 norm of latent state</span>
         <span class="n">latent_state_l2_norms</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">latent_state</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">p</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
@@ -563,7 +562,7 @@
             <span class="n">latent_state</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">mz_network_output_unpack</span><span class="p">(</span><span class="n">network_output</span><span class="p">)</span>
 
             <span class="c1"># ========= logging for analysis ===============</span>
-            <span class="k">if</span> <span class="n">step_k</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">-</span> <span class="mi">1</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">cal_dormant_ratio</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">step_k</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">-</span> <span class="mi">1</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">calculate_dormant_ratio</span><span class="p">:</span>
                 <span class="c1"># calculate dormant ratio of encoder</span>
                 <span class="n">action_tmp</span> <span class="o">=</span> <span class="n">action_batch</span><span class="p">[:,</span> <span class="n">step_k</span><span class="p">]</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action_tmp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -579,7 +578,7 @@
                     <span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">policy_logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
                 <span class="p">)</span>
                 <span class="n">state_action_encoding</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">latent_state</span><span class="p">,</span> <span class="n">action_encoding</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">dormant_ratio_dynamics</span> <span class="o">=</span> <span class="n">cal_dormant_ratio</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">dynamics_network</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dormant_ratio_dynamics</span> <span class="o">=</span> <span class="n">calculate_dormant_ratio</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">dynamics_network</span><span class="p">,</span>
                                                                 <span class="n">state_action_encoding</span><span class="o">.</span><span class="n">detach</span><span class="p">(),</span>
                                                                 <span class="n">percentage</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">dormant_threshold</span><span class="p">)</span>
             <span class="c1"># ========= logging for analysis ===============</span>
@@ -1034,12 +1033,13 @@
 
         <span class="k">return</span> <span class="n">output</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._reset_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._reset_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">task_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the observation and action for the collector environment.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).</span>
+<span class="sd">            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;conv_context&quot;</span><span class="p">]:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">initialize_zeros_batch</span><span class="p">(</span>
@@ -1049,12 +1049,13 @@
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._reset_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._reset_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">task_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the observation and action for the evaluator environment.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).</span>
+<span class="sd">            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;conv_context&quot;</span><span class="p">]:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">initialize_zeros_batch</span><span class="p">(</span>
@@ -1063,6 +1064,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span></div>
+    
 <div class="viewcode-block" id="MuZeroPolicy._monitor_vars_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._monitor_vars_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_monitor_vars_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>

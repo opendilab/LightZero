@@ -381,14 +381,16 @@ Save a game segment.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data">
-<span class="sig-name descname"><span class="pre">_sample_orig_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._sample_orig_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_sample_orig_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_priority_logs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._sample_orig_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>Overview:</dt><dd><dl class="simple">
-<dt>sample orig_data that contains:</dt><dd><p>game_segment_list: a list of game segments
-pos_in_game_segment_list: transition index in game (relative index)
-batch_index_list: the index of start transition of sampled minibatch in replay buffer
-weights_list: the weight concerning the priority
-make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)</p>
+<dt>Sample original data which includes:</dt><dd><ul class="simple">
+<li><p>game_segment_list: A list of game segments.</p></li>
+<li><p>pos_in_game_segment_list: Transition index in the game (relative index).</p></li>
+<li><p>batch_index_list: The index of the start transition of the sampled mini-batch in the replay buffer.</p></li>
+<li><p>weights_list: The weight concerning the priority.</p></li>
+<li><p>make_time: The time the batch is made (for correctly updating the replay buffer when data is deleted).</p></li>
+</ul>
 </dd>
 </dl>
 </dd>
@@ -396,8 +398,8 @@ make_time: the time the batch is made (for correctly updating replay buffer when
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>batch_size</strong> (<em>-</em>) – batch size</p></li>
-<li><p><strong>beta</strong> (<em>-</em>) – float the parameter in PER for calculating the priority</p></li>
+<li><p><strong>batch_size</strong> (<em>-</em>) – The size of the batch.</p></li>
+<li><p><strong>print_priority_logs</strong> (<em>-</em>) – Whether to print logs related to priority statistics, defaults to False.</p></li>
 </ul>
 </dd>
 </dl>
@@ -445,18 +447,13 @@ including their positions within each segment and the time the batch was created
 <dd class="field-odd"><p><strong>batch_size</strong> (<em>-</em>) – The number of samples to draw in this batch.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><p>A tuple containing the following elements:
+<dd class="field-even"><p>A tuple containing the following elements:
 - game_segment_list: A list of the sampled game segments.
-- pos_in_game_segment_list: A list of indices representing the position of each transition</p>
-<blockquote>
-<div><p>within its corresponding game segment.</p>
-</div></blockquote>
-<ul class="simple">
-<li><p>batch_index_list: The indices of the sampled game segments in the replay buffer.</p></li>
-<li><p>make_time: A list of timestamps (set to <cite>0</cite> in this implementation) indicating when
-the batch was created.</p></li>
-</ul>
-</p>
+- pos_in_game_segment_list: A list of indices representing the position of each transition
+within its corresponding game segment.
+- batch_index_list: The indices of the sampled game segments in the replay buffer.
+- make_time: A list of timestamps (set to <cite>0</cite> in this implementation) indicating when
+the batch was created.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><ul class="simple">
@@ -466,22 +463,20 @@ the batch was created.</p></li>
 </dd>
 </dl>
 <dl class="simple">
-<dt>Key Details:</dt><dd><ol class="arabic simple">
-<li><p><strong>Priority Sampling</strong>:
+<dt>Key Details:</dt><dd><p>1. <strong>Priority Sampling</strong>:
 Game segments are sampled based on a probability distribution calculated using
 the <cite>reanalyze_time</cite> of each segment. Segments that have been reanalyzed more frequently
-are less likely to be selected.</p></li>
-<li><p><strong>Segment Slicing</strong>:
+are less likely to be selected.
+2. <strong>Segment Slicing</strong>:
 Each selected game segment is sampled at regular intervals determined by the
 <cite>num_unroll_steps</cite> parameter. Up to <cite>samples_per_segment</cite> transitions are sampled
-from each selected segment.</p></li>
-<li><p><strong>Handling Extra Samples</strong>:
+from each selected segment.
+3. <strong>Handling Extra Samples</strong>:
 If the <cite>batch_size</cite> is not perfectly divisible by the number of samples per segment,
-additional segments are sampled to make up the difference.</p></li>
-<li><p><strong>Reanalyze Time Update</strong>:
+additional segments are sampled to make up the difference.
+4. <strong>Reanalyze Time Update</strong>:
 The <cite>reanalyze_time</cite> attribute of each sampled game segment is incremented to reflect
-that it has been selected for reanalysis again.</p></li>
-</ol>
+that it has been selected for reanalysis again.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
