@@ -466,6 +466,8 @@ class UniZeroPolicy(MuZeroPolicy):
         priority_prob_beta=0.4,
         # (int) The initial Env Steps for training.
         train_start_after_envsteps=int(0),
+        # (bool) Whether to use task_exploitation_weight.
+        use_task_exploitation_weight=False,
 
         # ****** UCB ******
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of search tree.

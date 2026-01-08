@@ -106,10 +106,10 @@ def train_unizero_multitask_segment_ddp(
     new_RANDOM_SCORES = RANDOM_SCORES[new_order]
     new_HUMAN_SCORES = HUMAN_SCORES[new_order]
     # Log the reordered results
-    print("Reordered RANDOM_SCORES:")
-    print(new_RANDOM_SCORES)
-    print("\nReordered HUMAN_SCORES:")
-    print(new_HUMAN_SCORES)
+    logging.info("Reordered RANDOM_SCORES:")
+    logging.info(new_RANDOM_SCORES)
+    logging.info("\nReordered HUMAN_SCORES:")
+    logging.info(new_HUMAN_SCORES)
     # ------------------------------------------------------------------------------------
 
     # Initialize the temperature scheduler for task weighting.
@@ -150,7 +150,7 @@ def train_unizero_multitask_segment_ddp(
         # Initialize empty lists to avoid errors later.
         cfgs, game_buffers, collector_envs, evaluator_envs, collectors, evaluators = [], [], [], [], [], []
     else:
-        print(f"Rank {rank}/{world_size} processing tasks {start_idx} to {end_idx - 1}")
+        logging.info(f"Rank {rank}/{world_size} processing tasks {start_idx} to {end_idx - 1}")
 
     cfgs = []
     game_buffers = []
@@ -281,7 +281,7 @@ def train_unizero_multitask_segment_ddp(
             clip_scale = np.clip(1 + (3 * train_epoch / 1000), 1, 4)
             allocated_batch_sizes = allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=clip_scale)
             if rank == 0:
-                print("Allocated batch_sizes: ", allocated_batch_sizes)
+                logging.info("Allocated batch_sizes: ", allocated_batch_sizes)
             # Assign the corresponding batch size to each task config
             for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                     zip(cfgs, collectors, evaluators, game_buffers)):
@@ -323,11 +323,11 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # Check if it's time for evaluation.
-            # if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
-            if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # TODO: Only for debug
+            if learner.train_iter > 10 and learner.train_iter % cfg.policy.eval_freq == 0:
+            # if learner.train_iter == 0 or learner.train_iter % cfg.policy.eval_freq == 0: # TODO: Only for debug
 
-                print('=' * 20)
-                print(f'Rank {rank} evaluating task_id: {cfg.policy.task_id}...')
+                logging.info('=' * 20)
+                logging.info(f'Rank {rank} evaluating task_id: {cfg.policy.task_id}...')
 
                 # TODO: Ensure policy reset logic is optimal for multi-task settings.
                 evaluator._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
@@ -336,28 +336,27 @@ def train_unizero_multitask_segment_ddp(
                 stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
                 # Check if evaluation was successful.
                 if stop is None or reward is None:
-                    print(f"Rank {rank} encountered issues during evaluation, continuing training...")
+                    logging.warning(f"Rank {rank} encountered issues during evaluation, continuing training...")
                     task_returns[cfg.policy.task_id] = float('inf')  # Set task difficulty to max if evaluation fails.
                 else:
                     # Extract 'eval_episode_return_mean' from the reward dictionary.
                     try:
                         eval_mean_reward = reward.get('eval_episode_return_mean', float('inf'))
-                        print(f"Task {cfg.policy.task_id} evaluation reward: {eval_mean_reward}")
+                        logging.info(f"Task {cfg.policy.task_id} evaluation reward: {eval_mean_reward}")
                         task_returns[cfg.policy.task_id] = eval_mean_reward
                     except Exception as e:
-                        print(f"Error extracting evaluation reward: {e}")
+                        logging.error(f"Error extracting evaluation reward: {e}")
                         task_returns[cfg.policy.task_id] = float('inf')  # Set reward to max on error.
 
-            print('=' * 20)
-            print(f'Starting collection for Rank {rank} task_id: {cfg.policy.task_id}...')
-            print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
+            logging.info('=' * 20)
+            logging.info(f'Starting collection for Rank {rank} task_id: {cfg.policy.task_id}...')
+            logging.info(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
             logging.info(f'Rank {rank}: Starting data collection for task {cfg.policy.task_id} at train_iter {learner.train_iter}')
 
             # Reset initial data before each collection, crucial for multi-task settings.
             collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
             # Collect data.
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-
             logging.info(f'Rank {rank}: Finished data collection for task {cfg.policy.task_id}, collected {len(new_data[0]) if new_data else 0} segments')
 
             # Update the replay buffer.
@@ -380,7 +379,7 @@ def train_unizero_multitask_segment_ddp(
             # Log after data collection.
             logging.info(f'Rank {rank}: Completed data collection for task {cfg.policy.task_id}')
 
-        # ========== CRITICAL FIX: Synchronize all ranks after data collection ==========
+        # ========== Synchronize all ranks after data collection ==========
         # Wait for all ranks to complete their data collection before proceeding.
         # This prevents fast-collecting ranks from reaching barriers/all_gather calls
         # while slow-collecting ranks are still in the collection loop.
@@ -394,12 +393,17 @@ def train_unizero_multitask_segment_ddp(
         # ===============================================================================
 
         # Check if there is enough data for training.
-        not_enough_data = any(
+        local_not_enough_data = any(
             replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size / world_size
             for replay_buffer in game_buffers
         )
-
-        print(f"not_enough_data:{not_enough_data}")
+        logging.info(f"Rank {rank} local_not_enough_data:{local_not_enough_data}")
+        flag_tensor = torch.tensor(1.0 if local_not_enough_data else 0.0, device=cfg.policy.device)
+        dist.all_reduce(flag_tensor, op=dist.ReduceOp.MAX)
+        not_enough_data = (flag_tensor.item() > 0.5)
+        if rank == 0:
+            logging.info(f"Global not_enough_data status: {not_enough_data}")
+        
         # Get the current temperature for task weighting.
         current_temperature_task_weight = temperature_scheduler.get_temperature(learner.train_iter)
 
@@ -526,7 +530,7 @@ def train_unizero_multitask_segment_ddp(
                                     )
                                     # Broadcast task weights to all processes.
                                     dist.broadcast_object_list([task_exploitation_weight], src=0)
-                                    print(
+                                    logging.info(
                                         f"rank{rank}, task_exploitation_weight (sorted by task_id): {task_exploitation_weight}")
                                 else:
                                     logging.warning(f"Rank {rank}: Unable to compute global obs_loss task weights, obs_loss data is empty.")
