@@ -260,6 +260,7 @@ class UniZeroPolicy(MuZeroPolicy):
         target_entropy_end_ratio=0.05,
         # (int) Number of training steps to decay target entropy from start to end ratio
         target_entropy_decay_steps=500000,
+
         # ==================== START: Encoder-Clip Annealing Config ====================
         # (bool) Whether to enable annealing for encoder-clip values.
         use_encoder_clip_annealing=True,
@@ -276,6 +277,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # ===================== END: Encoder-Clip Annealing Config =====================
 
         # ==================== START: Head-Clip Annealing Config ====================
+        # NOTE: The usage and implementation of Head-Clip may need to be optimized
         # (bool) Whether to enable head-clip (dynamically clip head output range)
         use_head_clip=False,  # Disabled by default
         # Detailed Head-Clip configuration

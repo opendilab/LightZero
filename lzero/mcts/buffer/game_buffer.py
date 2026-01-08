@@ -207,7 +207,13 @@ class GameBuffer(ABC, object):
                 if pos_in_game_segment >= self._cfg.game_segment_length:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
-                segment_len = len(game_segment.action_segment)
+                # Compatibility handling for both GameSegment objects and list data (for unittests)
+                try:
+                    segment_len = len(game_segment.action_segment)
+                except (AttributeError, TypeError):
+                    # For unittest compatibility: when game_segment is a list instead of GameSegment object
+                    segment_len = len(game_segment)
+
                 if pos_in_game_segment >= segment_len - 1:
                     # If the segment is very short (length 0 or 1), we can't randomly sample a position
                     # before the last one. The only safe position is 0.

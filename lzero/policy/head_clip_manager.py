@@ -14,12 +14,14 @@ Differences from previous Head Weight Scaling:
 """
 
 import logging
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
-from torch.nn.utils.convert_parameters import parameters_to_vector, vector_to_parameters
+from torch.nn.utils.convert_parameters import (parameters_to_vector,
+                                               vector_to_parameters)
 
 logging.getLogger().setLevel(logging.INFO)
 

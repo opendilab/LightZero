@@ -332,8 +332,8 @@ class DownSample(nn.Module):
             - x (:obj:`torch.Tensor`): (B, C_in, H, W)
             - output (:obj:`torch.Tensor`): (B, C_out, H_out, W_out)
         """
-        x = self.norm1(x)
         x = self.conv1(x)
+        x = self.norm1(x)
         x = self.activation(x)
 
         for block in self.resblocks1:
