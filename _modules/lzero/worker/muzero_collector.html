@@ -433,6 +433,7 @@
 
         <span class="c1"># --- Initializations ---</span>
         <span class="n">collected_episode</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">collected_step</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">env_nums</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span>
         <span class="n">retry_waiting_time</span> <span class="o">=</span> <span class="mf">0.05</span>
 
@@ -504,7 +505,7 @@
                 <span class="c1"># Policy Forward Pass</span>
                 <span class="c1"># ==============================================================</span>
                 <span class="n">policy_input</span> <span class="o">=</span> <span class="p">{</span>
-                    <span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">stack_obs_tensor</span><span class="p">,</span>
+                    <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">stack_obs_tensor</span><span class="p">,</span>
                     <span class="s1">&#39;action_mask&#39;</span><span class="p">:</span> <span class="n">action_mask</span><span class="p">,</span>
                     <span class="s1">&#39;temperature&#39;</span><span class="p">:</span> <span class="n">temperature</span><span class="p">,</span>
                     <span class="s1">&#39;to_play&#39;</span><span class="p">:</span> <span class="n">to_play</span><span class="p">,</span>
