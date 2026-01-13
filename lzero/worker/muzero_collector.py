@@ -10,6 +10,7 @@ from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size, \
     allreduce_data
+from ding.rl_utils import gae_data, gae
 from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
 import torch.distributed as dist
@@ -887,11 +888,12 @@ class MuZeroCollector(ISerialCollector):
             if self.policy_config.use_wandb:
                 wandb.log({'{}_step/'.format(self._instance_name) + k: v for k, v in info.items()}, step=self._total_envstep_count)
 
-    def _batch_compute_gae_for_pool(self) -> None:
+    def _batch_compute_gae_for_pool_bak(self) -> None:
         """
         Overview:
             Batch compute GAE (Generalized Advantage Estimation) for all segments in game_segment_pool
             at the end of collect. Process by grouping segments by episode_id.
+            Original implementation using manual GAE computation.
         """
         if len(self.game_segment_pool) == 0:
             return
@@ -971,3 +973,82 @@ class MuZeroCollector(ISerialCollector):
                 self.game_segment_pool[pool_idx] = (segment, priorities, done_flag)
         
         self._logger.info(f"Batch computed GAE for {len(episode_groups)} episodes in game_segment_pool")
+
+    def _batch_compute_gae_for_pool(self) -> None:
+        """
+        Overview:
+            Batch compute GAE (Generalized Advantage Estimation) for all segments in game_segment_pool
+            at the end of collect. Process by grouping segments by episode_id.
+            Uses ding library's GAE functions for computation.
+        """
+        if len(self.game_segment_pool) == 0:
+            return
+        
+        gamma = self.ppo_gamma
+        gae_lambda = self.ppo_gae_lambda
+        
+        # 1. Group all segments by episode_id
+        episode_groups = {}  # {episode_id: [(pool_idx, segment, priorities, done), ...]}
+        
+        for pool_idx in range(len(self.game_segment_pool)):
+            segment, priorities, done_flag = self.game_segment_pool[pool_idx]
+            episode_id = segment.episode_id
+            
+            if episode_id not in episode_groups:
+                episode_groups[episode_id] = []
+            episode_groups[episode_id].append((pool_idx, segment, priorities, done_flag))
+        
+        # 2. Compute GAE for each episode using ding library
+        for episode_id, segments_info in episode_groups.items():
+            # Sort by pool_idx to ensure temporal order
+            segments_info.sort(key=lambda x: x[0])
+            
+            # Extract values and rewards for the entire episode
+            all_values = []
+            all_rewards = []
+            segment_lengths = []
+            
+            for pool_idx, segment, _, _ in segments_info:
+                seg_len = len(segment.action_segment)
+                segment_lengths.append(seg_len)
+                
+                # Extract values and rewards from this segment
+                values = segment.root_value_segment[:seg_len]
+                rewards = segment.reward_segment[:seg_len]
+                
+                all_values.extend(values)
+                all_rewards.extend(rewards)
+            
+            # Convert to torch tensors for ding library
+            value = torch.tensor(all_values, dtype=torch.float32)
+            # Create next_value: [v1, v2, ..., v_{T-1}, 0.0] for last step
+            next_value = torch.cat([value[1:], torch.tensor([0.0], dtype=torch.float32)])
+            reward = torch.tensor(all_rewards, dtype=torch.float32)
+            # Create done flags: False for all steps except the last one in the episode
+            done = torch.zeros(len(all_rewards), dtype=torch.bool)
+            if len(segments_info) > 0:
+                # Mark the last step of the episode as done
+                done[-1] = True
+            
+            # Use ding library's GAE functions
+            compute_adv_data = gae_data(value, next_value, reward, done, None)
+            advantages = gae(compute_adv_data, gamma, gae_lambda)
+            
+            # Convert back to numpy and compute returns
+            advantages_np = advantages.cpu().numpy().astype(np.float32)
+            returns_np = advantages_np + np.array(all_values, dtype=np.float32)
+            
+            # 3. Distribute advantages and returns back to segments
+            offset = 0
+            for i, (pool_idx, segment, priorities, done_flag) in enumerate(segments_info):
+                seg_len = segment_lengths[i]
+                
+                # Assign advantages and returns
+                segment.advantage_segment = advantages_np[offset:offset + seg_len].copy()
+                segment.return_segment = returns_np[offset:offset + seg_len].copy()
+                offset += seg_len
+                
+                # Update segment in pool
+                self.game_segment_pool[pool_idx] = (segment, priorities, done_flag)
+        
+        self._logger.info(f"Batch computed GAE for {len(episode_groups)} episodes in game_segment_pool using ding library")
