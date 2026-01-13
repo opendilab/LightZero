@@ -34,7 +34,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
-    atari_unizero_config = dict(
+    atari_unizero_ppo_config = dict(
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
@@ -82,12 +82,27 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            # Whether to use pure policy (without MCTS) for data collection
+            collect_with_pure_policy=True,
+            # Whether to use pure policy (without MCTS) for evaluation
+            # If not set, will use collect_with_pure_policy value
+            eval_with_pure_policy=True,
+            # Whether to use online learning (clear replay_buffer after each training iteration)
+            online_learning=True,
+            # PPO configuration for GAE computation
+            ppo=dict(
+                gamma=0.99,           # Discount factor
+                gae_lambda=0.95,      # GAE lambda parameter
+                clip_ratio=0.2,       # PPO clipping ratio
+                value_coef=0.5,       # Value loss coefficient
+                entropy_coef=0.01,   # Entropy loss coefficient
+            ),
         ),
     )
-    atari_unizero_config = EasyDict(atari_unizero_config)
-    main_config = atari_unizero_config
+    atari_unizero_ppo_config = EasyDict(atari_unizero_ppo_config)
+    main_config = atari_unizero_ppo_config
 
-    atari_unizero_create_config = dict(
+    atari_unizero_ppo_create_config = dict(
         env=dict(
             type='atari_lightzero',
             import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -98,10 +113,10 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             import_names=['lzero.policy.unizero'],
         ),
     )
-    atari_unizero_create_config = EasyDict(atari_unizero_create_config)
-    create_config = atari_unizero_create_config
+    atari_unizero_ppo_create_config = EasyDict(atari_unizero_ppo_create_config)
+    create_config = atari_unizero_ppo_create_config
 
-    main_config.exp_name = f'data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_lz/data_unizero_ppo/{env_id[:-14]}/{env_id[:-14]}_uz_ppo_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
@@ -114,4 +129,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.env, args.seed)
-

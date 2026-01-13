@@ -131,8 +131,13 @@ class LunarLanderEnv(CartPoleEnv):
         Returns:
             - timestep (:obj:`BaseEnvTimestep`): The timestep information including observation, reward, done flag, and info.
         """
-        if action.shape == (1,):
-            action = action.item()  # 0-dim array
+        # Handle both numpy array and int/float action types
+        if hasattr(action, 'shape'):
+            if action.shape == (1,):
+                action = action.item()  # 0-dim array
+        elif isinstance(action, (int, float, np.integer, np.floating)):
+            # Already a scalar, use as is
+            action = int(action)
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:

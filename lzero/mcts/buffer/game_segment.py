@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 import numpy as np
 from easydict import EasyDict
@@ -31,15 +31,13 @@ class GameSegment:
         - store_search_stats
     """
 
-    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None, task_id: Optional[int] = None) -> None:
+    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None) -> None:
         """
         Overview:
             Init the ``GameSegment`` according to the provided arguments.
         Arguments:
-            - action_space (:obj:`int`): action space
+             action_space (:obj:`int`): action space
             - game_segment_length (:obj:`int`): the transition number of one ``GameSegment`` block
-            - task_id (:obj:`Optional[int]`): The identifier for the task, used to select the correct obs and act space in multi-task settings. Defaults to None.
-
         """
         self.action_space = action_space
         self.game_segment_length = game_segment_length
@@ -47,32 +45,19 @@ class GameSegment:
         self.td_steps = config.td_steps
         self.frame_stack_num = config.model.frame_stack_num
         self.discount_factor = config.discount_factor
-        if not hasattr(config.model, "action_space_size_list"):
-            # for single-task setting or fixed action space in multi-task setting
-            self.action_space_size = config.model.action_space_size
+        self.action_space_size = config.model.action_space_size
         self.gray_scale = config.gray_scale
         self.transform2string = config.transform2string
         self.sampled_algo = config.sampled_algo
         self.gumbel_algo = config.gumbel_algo
         self.use_ture_chance_label_in_chance_encoder = config.use_ture_chance_label_in_chance_encoder
 
-        if task_id is None:
-            if isinstance(config.model.observation_shape, int) or len(config.model.observation_shape) == 1:
-                # for vector obs input, e.g. classical control and box2d environments
-                self.zero_obs_shape = config.model.observation_shape
-            elif len(config.model.observation_shape) == 3:
-                # image obs input, e.g. atari environments
-                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
-        else:
-            if hasattr(config.model, "observation_shape_list"):
-                if isinstance(config.model.observation_shape_list[task_id], int) or len(config.model.observation_shape_list[task_id]) == 1:
-                    # for vector obs input, e.g. classical control and box2d environments
-                    self.zero_obs_shape = config.model.observation_shape_list[task_id]
-                elif len(config.model.observation_shape_list[task_id]) == 3:
-                    # image obs input, e.g. atari environments
-                    self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape_list[task_id][-2], config.model.observation_shape_list[task_id][-1])
-            else:
-                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
+        if isinstance(config.model.observation_shape, int) or len(config.model.observation_shape) == 1:
+            # for vector obs input, e.g. classical control and box2d environments
+            self.zero_obs_shape = config.model.observation_shape
+        elif len(config.model.observation_shape) == 3:
+            # image obs input, e.g. atari environments
+            self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
 
         self.obs_segment = []
         self.action_segment = []
@@ -95,6 +80,12 @@ class GameSegment:
             self.root_sampled_actions = []
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
+
+        # PPO related fields
+        self.episode_id = None  # 标记该 segment 属于哪个 episode
+        self.advantage_segment = []  # 用于存储 GAE advantages
+        self.old_log_prob_segment = []  # 用于存储收集时的 log_prob (PPO 需要)
+        self.return_segment = []  # 用于存储 return (PPO value training 需要)
 
         self.reanalyze_time = 0
 
@@ -320,6 +311,14 @@ class GameSegment:
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = np.array(self.chance_segment)
 
+        # Convert PPO related fields to numpy array
+        if len(self.advantage_segment) > 0:
+            self.advantage_segment = np.array(self.advantage_segment)
+        if len(self.old_log_prob_segment) > 0:
+            self.old_log_prob_segment = np.array(self.old_log_prob_segment)
+        if len(self.return_segment) > 0:
+            self.return_segment = np.array(self.return_segment)
+
     def reset(self, init_observations: np.ndarray) -> None:
         """
         Overview:
@@ -341,6 +340,11 @@ class GameSegment:
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
+
+        # Reset PPO related fields
+        self.advantage_segment = []
+        self.old_log_prob_segment = []
+        self.return_segment = []
 
         assert len(init_observations) == self.frame_stack_num
 
