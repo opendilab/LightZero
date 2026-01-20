@@ -485,7 +485,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         # NOTE: TODO
         model.world_model.reanalyze_phase = True
@@ -658,7 +658,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():

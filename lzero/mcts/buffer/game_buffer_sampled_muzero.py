@@ -272,7 +272,7 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                 [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
@@ -437,7 +437,7 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                 [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         with torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)

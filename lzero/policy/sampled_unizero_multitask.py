@@ -684,7 +684,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
             # 2. Prepare MCTS roots.
             if not self._cfg.model.continuous_action_space:
-                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+                legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_collect_env_num)]
             else:
                 legal_actions = [[-1] * self._cfg.model.world_model_cfg.num_of_sampled_actions for _ in range(active_collect_env_num)]
 
@@ -796,7 +796,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
             # 2. Prepare MCTS roots without noise for deterministic evaluation.
             if not self._cfg.model.continuous_action_space:
-                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
+                legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_eval_env_num)]
             else:
                 legal_actions = [[-1] * self._cfg.model.world_model_cfg.num_of_sampled_actions for _ in range(active_eval_env_num)]
 

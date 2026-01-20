@@ -1544,7 +1544,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_collect_env_num)]
             # The main difference between collect and eval is the addition of Dirichlet noise at the root.
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -1672,7 +1672,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             reward_roots = reward_roots.detach().cpu().numpy().tolist() # TODO=============================
 
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
                 # C++ MCTS tree implementation.
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)

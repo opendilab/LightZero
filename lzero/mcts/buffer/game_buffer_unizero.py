@@ -431,7 +431,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 [-1 for _ in range(self.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         # NOTE: check the effect of reanalyze_phase
         model.world_model.reanalyze_phase = True
