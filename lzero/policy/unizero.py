@@ -25,6 +25,90 @@ from torch.nn.utils.convert_parameters import (parameters_to_vector,
 from .utils import configure_optimizers_nanogpt
 
 
+class SIGReg(torch.nn.Module):
+    """
+    Sketched Isotropic Gaussian Regularization (SIGReg) from LeJEPA.
+
+    This regularization constrains learned embeddings to an optimal isotropic Gaussian distribution,
+    which helps prevent representation collapse and improves the quality of latent states.
+
+    Reference: LeJEPA (https://arxiv.org/abs/2511.08544)
+
+    Args:
+        knots (int): Number of integration points for the quadrature. Default: 17
+        t_max (float): Maximum t value for integration. Default: 3.0
+        num_slices (int): Number of random projections for slicing. Default: 256
+    """
+    def __init__(self, knots=17, t_max=3.0, num_slices=256):
+        super().__init__()
+        # Create integration points from 0 to t_max
+        t = torch.linspace(0, t_max, knots, dtype=torch.float32)
+        dt = t_max / (knots - 1)
+
+        # Trapezoidal rule weights
+        weights = torch.full((knots,), 2 * dt, dtype=torch.float32)
+        weights[[0, -1]] = dt
+
+        # Gaussian window function
+        window = torch.exp(-t.square() / 2.0)
+
+        # Register as buffers (not trainable parameters)
+        self.register_buffer("t", t)
+        self.register_buffer("phi", window)
+        self.register_buffer("weights", weights * window)
+        self.num_slices = num_slices
+
+    def forward(self, embeddings):
+        """
+        Compute SIGReg loss for the given embeddings.
+
+        Args:
+            embeddings (torch.Tensor): Input embeddings of shape (batch_size, seq_len, embed_dim)
+                                       or (batch_size, embed_dim)
+
+        Returns:
+            torch.Tensor: Scalar SIGReg loss value
+        """
+        # Handle different input shapes
+        if embeddings.dim() == 3:
+            # Shape: (batch_size, seq_len, embed_dim) -> (batch_size * seq_len, embed_dim)
+            batch_size, seq_len, embed_dim = embeddings.shape
+            proj = embeddings.reshape(-1, embed_dim)
+        elif embeddings.dim() == 2:
+            # Shape: (batch_size, embed_dim)
+            proj = embeddings
+        else:
+            raise ValueError(f"Expected embeddings to have 2 or 3 dimensions, got {embeddings.dim()}")
+
+        num_samples, embed_dim = proj.shape
+
+        # Generate random projection matrix A with shape (embed_dim, num_slices)
+        A = torch.randn(embed_dim, self.num_slices, device=proj.device, dtype=proj.dtype)
+        A = A / A.norm(p=2, dim=0, keepdim=True)  # Normalize columns
+
+        # Project embeddings: (num_samples, embed_dim) @ (embed_dim, num_slices) = (num_samples, num_slices)
+        x_proj = proj @ A
+
+        # Compute characteristic function at different t values
+        # x_proj: (num_samples, num_slices), t: (knots,)
+        # x_t: (num_samples, num_slices, knots)
+        x_t = x_proj.unsqueeze(-1) * self.t
+
+        # Compute empirical characteristic function
+        # cos_part: (num_slices, knots), sin_part: (num_slices, knots)
+        cos_part = x_t.cos().mean(0)  # Average over samples
+        sin_part = x_t.sin().mean(0)
+
+        # Compute error from target Gaussian (phi is the target)
+        err = (cos_part - self.phi).square() + sin_part.square()
+
+        # Integrate using quadrature weights
+        statistic = (err * self.weights).sum() * num_samples
+
+        # Average over slices
+        return statistic / self.num_slices
+
+
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
     Efficiently scale all weights of a module using vectorized operations.
@@ -781,6 +865,33 @@ class UniZeroPolicy(MuZeroPolicy):
         self.policy_ls_eps_decay_steps = self._cfg.policy_ls_eps_decay_steps
         logging.info(f"self.policy_ls_eps_start: {self.policy_ls_eps_start}")
 
+        # ==================== START: SIGReg Initialization ====================
+        # Initialize SIGReg (Sketched Isotropic Gaussian Regularization) for latent state regularization
+        self.use_sigreg = self._cfg.model.world_model_cfg.get('use_sigreg', False)
+        if self.use_sigreg:
+            sigreg_knots = self._cfg.model.world_model_cfg.get('sigreg_knots', 17)
+            sigreg_t_max = self._cfg.model.world_model_cfg.get('sigreg_t_max', 3.0)
+            sigreg_num_slices = self._cfg.model.world_model_cfg.get('sigreg_num_slices', 256)
+            self.sigreg_weight = self._cfg.model.world_model_cfg.get('sigreg_weight', 0.02)
+
+            self.sigreg = SIGReg(
+                knots=sigreg_knots,
+                t_max=sigreg_t_max,
+                num_slices=sigreg_num_slices
+            ).to(self._cfg.device)
+
+            logging.info("=" * 60)
+            logging.info(">>> SIGReg (Sketched Isotropic Gaussian Regularization) Enabled <<<")
+            logging.info(f"    SIGReg Weight (lambda): {self.sigreg_weight:.4f}")
+            logging.info(f"    Integration Knots: {sigreg_knots}")
+            logging.info(f"    T_max: {sigreg_t_max}")
+            logging.info(f"    Number of Slices: {sigreg_num_slices}")
+            logging.info("=" * 60)
+        else:
+            self.sigreg = None
+            self.sigreg_weight = 0.0
+        # ===================== END: SIGReg Initialization =====================
+
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -990,6 +1101,19 @@ class UniZeroPolicy(MuZeroPolicy):
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
 
         weighted_total_loss = (weights * losses.loss_total).mean()
+
+        # ==================== START: SIGReg Loss Computation ====================
+        # Compute SIGReg regularization loss on latent states if enabled
+        sigreg_loss = torch.tensor(0.0, device=self._cfg.device)
+        if self.use_sigreg and self.sigreg is not None:
+            # Get obs_embeddings from intermediate losses
+            if 'obs_embeddings' in losses.intermediate_losses:
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                # Compute SIGReg loss
+                sigreg_loss = self.sigreg(obs_embeddings)
+                # Add SIGReg loss to total loss
+                weighted_total_loss = weighted_total_loss + self.sigreg_weight * sigreg_loss
+        # ===================== END: SIGReg Loss Computation =====================
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
@@ -1249,6 +1373,39 @@ class UniZeroPolicy(MuZeroPolicy):
 
             "current_policy_label_eps":current_policy_label_eps,
         }
+
+        # ==================== START: Add SIGReg Statistics ====================
+        if self.use_sigreg:
+            return_log_dict['sigreg/loss'] = sigreg_loss.item()
+            return_log_dict['sigreg/weight'] = self.sigreg_weight
+            return_log_dict['sigreg/weighted_loss'] = (self.sigreg_weight * sigreg_loss).item()
+
+            # Additional statistics for debugging
+            if 'obs_embeddings' in losses.intermediate_losses:
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                with torch.no_grad():
+                    # Compute embedding statistics
+                    emb_mean = obs_embeddings.mean().item()
+                    emb_std = obs_embeddings.std().item()
+                    emb_norm = obs_embeddings.norm(p=2, dim=-1).mean().item()
+
+                    return_log_dict['sigreg/embedding_mean'] = emb_mean
+                    return_log_dict['sigreg/embedding_std'] = emb_std
+                    return_log_dict['sigreg/embedding_norm'] = emb_norm
+
+                    # Check for isotropy: compute variance along each dimension
+                    if obs_embeddings.dim() == 3:
+                        # Shape: (batch, seq, dim)
+                        flat_emb = obs_embeddings.reshape(-1, obs_embeddings.shape[-1])
+                    else:
+                        flat_emb = obs_embeddings
+
+                    dim_vars = flat_emb.var(dim=0)
+                    return_log_dict['sigreg/dim_var_mean'] = dim_vars.mean().item()
+                    return_log_dict['sigreg/dim_var_std'] = dim_vars.std().item()
+                    return_log_dict['sigreg/dim_var_max'] = dim_vars.max().item()
+                    return_log_dict['sigreg/dim_var_min'] = dim_vars.min().item()
+        # ===================== END: Add SIGReg Statistics =====================
 
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
