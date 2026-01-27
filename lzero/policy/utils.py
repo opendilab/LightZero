@@ -800,3 +800,87 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, reward, value, policy_logits
+
+
+class SIGReg(nn.Module):
+    """
+    Sketched Isotropic Gaussian Regularization (SIGReg) from LeJEPA.
+
+    This regularization constrains learned embeddings to an optimal isotropic Gaussian distribution,
+    which helps prevent representation collapse and improves the quality of latent states.
+
+    Reference: LeJEPA (https://arxiv.org/abs/2511.08544)
+
+    Args:
+        knots (int): Number of integration points for the quadrature. Default: 17
+        t_max (float): Maximum t value for integration. Default: 3.0
+        num_slices (int): Number of random projections for slicing. Default: 256
+    """
+    def __init__(self, knots=17, t_max=3.0, num_slices=256):
+        super().__init__()
+        # Create integration points from 0 to t_max
+        t = torch.linspace(0, t_max, knots, dtype=torch.float32)
+        dt = t_max / (knots - 1)
+
+        # Trapezoidal rule weights
+        weights = torch.full((knots,), 2 * dt, dtype=torch.float32)
+        weights[[0, -1]] = dt
+
+        # Gaussian window function
+        window = torch.exp(-t.square() / 2.0)
+
+        # Register as buffers (not trainable parameters)
+        self.register_buffer("t", t)
+        self.register_buffer("phi", window)
+        self.register_buffer("weights", weights * window)
+        self.num_slices = num_slices
+
+    def forward(self, embeddings):
+        """
+        Compute SIGReg loss for the given embeddings.
+
+        Args:
+            embeddings (torch.Tensor): Input embeddings of shape (batch_size, seq_len, embed_dim)
+                                       or (batch_size, embed_dim)
+
+        Returns:
+            torch.Tensor: Scalar SIGReg loss value
+        """
+        # Handle different input shapes
+        if embeddings.dim() == 3:
+            # Shape: (batch_size, seq_len, embed_dim) -> (batch_size * seq_len, embed_dim)
+            batch_size, seq_len, embed_dim = embeddings.shape
+            proj = embeddings.reshape(-1, embed_dim)
+        elif embeddings.dim() == 2:
+            # Shape: (batch_size, embed_dim)
+            proj = embeddings
+        else:
+            raise ValueError(f"Expected embeddings to have 2 or 3 dimensions, got {embeddings.dim()}")
+
+        num_samples, embed_dim = proj.shape
+
+        # Generate random projection matrix A with shape (embed_dim, num_slices)
+        A = torch.randn(embed_dim, self.num_slices, device=proj.device, dtype=proj.dtype)
+        A = A / A.norm(p=2, dim=0, keepdim=True)  # Normalize columns
+
+        # Project embeddings: (num_samples, embed_dim) @ (embed_dim, num_slices) = (num_samples, num_slices)
+        x_proj = proj @ A
+
+        # Compute characteristic function at different t values
+        # x_proj: (num_samples, num_slices), t: (knots,)
+        # x_t: (num_samples, num_slices, knots)
+        x_t = x_proj.unsqueeze(-1) * self.t
+
+        # Compute empirical characteristic function
+        # cos_part: (num_slices, knots), sin_part: (num_slices, knots)
+        cos_part = x_t.cos().mean(0)  # Average over samples
+        sin_part = x_t.sin().mean(0)
+
+        # Compute error from target Gaussian (phi is the target)
+        err = (cos_part - self.phi).square() + sin_part.square()
+
+        # Integrate using quadrature weights
+        statistic = (err * self.weights).sum() * num_samples
+
+        # Average over slices
+        return statistic / self.num_slices
