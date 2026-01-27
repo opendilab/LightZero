@@ -22,7 +22,7 @@ from lzero.policy.utils import initialize_pad_batch
 from torch.nn.utils.convert_parameters import (parameters_to_vector,
                                                vector_to_parameters)
 
-from .utils import configure_optimizers_nanogpt
+from .utils import configure_optimizers_nanogpt, SIGReg
 
 
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
@@ -781,6 +781,33 @@ class UniZeroPolicy(MuZeroPolicy):
         self.policy_ls_eps_decay_steps = self._cfg.policy_ls_eps_decay_steps
         logging.info(f"self.policy_ls_eps_start: {self.policy_ls_eps_start}")
 
+        # ==================== START: SIGReg Initialization ====================
+        # Initialize SIGReg (Sketched Isotropic Gaussian Regularization) for latent state regularization
+        self.use_sigreg = self._cfg.model.world_model_cfg.get('use_sigreg', False)
+        if self.use_sigreg:
+            sigreg_knots = self._cfg.model.world_model_cfg.get('sigreg_knots', 17)
+            sigreg_t_max = self._cfg.model.world_model_cfg.get('sigreg_t_max', 3.0)
+            sigreg_num_slices = self._cfg.model.world_model_cfg.get('sigreg_num_slices', 256)
+            self.sigreg_weight = self._cfg.model.world_model_cfg.get('sigreg_weight', 0.02)
+
+            self.sigreg = SIGReg(
+                knots=sigreg_knots,
+                t_max=sigreg_t_max,
+                num_slices=sigreg_num_slices
+            ).to(self._cfg.device)
+
+            logging.info("=" * 60)
+            logging.info(">>> SIGReg (Sketched Isotropic Gaussian Regularization) Enabled <<<")
+            logging.info(f"    SIGReg Weight (lambda): {self.sigreg_weight:.4f}")
+            logging.info(f"    Integration Knots: {sigreg_knots}")
+            logging.info(f"    T_max: {sigreg_t_max}")
+            logging.info(f"    Number of Slices: {sigreg_num_slices}")
+            logging.info("=" * 60)
+        else:
+            self.sigreg = None
+            self.sigreg_weight = 0.0
+        # ===================== END: SIGReg Initialization =====================
+
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -990,6 +1017,19 @@ class UniZeroPolicy(MuZeroPolicy):
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
 
         weighted_total_loss = (weights * losses.loss_total).mean()
+
+        # ==================== START: SIGReg Loss Computation ====================
+        # Compute SIGReg regularization loss on latent states if enabled
+        sigreg_loss = torch.tensor(0.0, device=self._cfg.device)
+        if self.use_sigreg and self.sigreg is not None:
+            # Get obs_embeddings from intermediate losses
+            if 'obs_embeddings' in losses.intermediate_losses:
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                # Compute SIGReg loss
+                sigreg_loss = self.sigreg(obs_embeddings)
+                # Add SIGReg loss to total loss
+                weighted_total_loss = weighted_total_loss + self.sigreg_weight * sigreg_loss
+        # ===================== END: SIGReg Loss Computation =====================
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
@@ -1249,6 +1289,39 @@ class UniZeroPolicy(MuZeroPolicy):
 
             "current_policy_label_eps":current_policy_label_eps,
         }
+
+        # ==================== START: Add SIGReg Statistics ====================
+        if self.use_sigreg:
+            return_log_dict['sigreg/loss'] = sigreg_loss.item()
+            return_log_dict['sigreg/weight'] = self.sigreg_weight
+            return_log_dict['sigreg/weighted_loss'] = (self.sigreg_weight * sigreg_loss).item()
+
+            # Additional statistics for debugging
+            if 'obs_embeddings' in losses.intermediate_losses:
+                obs_embeddings = losses.intermediate_losses['obs_embeddings']
+                with torch.no_grad():
+                    # Compute embedding statistics
+                    emb_mean = obs_embeddings.mean().item()
+                    emb_std = obs_embeddings.std().item()
+                    emb_norm = obs_embeddings.norm(p=2, dim=-1).mean().item()
+
+                    return_log_dict['sigreg/embedding_mean'] = emb_mean
+                    return_log_dict['sigreg/embedding_std'] = emb_std
+                    return_log_dict['sigreg/embedding_norm'] = emb_norm
+
+                    # Check for isotropy: compute variance along each dimension
+                    if obs_embeddings.dim() == 3:
+                        # Shape: (batch, seq, dim)
+                        flat_emb = obs_embeddings.reshape(-1, obs_embeddings.shape[-1])
+                    else:
+                        flat_emb = obs_embeddings
+
+                    dim_vars = flat_emb.var(dim=0)
+                    return_log_dict['sigreg/dim_var_mean'] = dim_vars.mean().item()
+                    return_log_dict['sigreg/dim_var_std'] = dim_vars.std().item()
+                    return_log_dict['sigreg/dim_var_max'] = dim_vars.max().item()
+                    return_log_dict['sigreg/dim_var_min'] = dim_vars.min().item()
+        # ===================== END: Add SIGReg Statistics =====================
 
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
@@ -1919,7 +1992,23 @@ class UniZeroPolicy(MuZeroPolicy):
             'stability/warning_count',  # Number of warnings issued in current check
         ]
 
-        return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
+        sigreg_vars = []
+        # Check if SIGReg is enabled
+        if self.use_sigreg:
+            sigreg_vars = [
+                'sigreg/loss',
+                'sigreg/weight',
+                'sigreg/weighted_loss',
+                'sigreg/embedding_mean',
+                'sigreg/embedding_std',
+                'sigreg/embedding_norm',
+                'sigreg/dim_var_mean',
+                'sigreg/dim_var_std',
+                'sigreg/dim_var_max',
+                'sigreg/dim_var_min',
+            ]
+
+        return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars + sigreg_vars
 
 
     def _state_dict_learn(self) -> Dict[str, Any]:
