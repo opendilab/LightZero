@@ -297,7 +297,11 @@ class DownSample(nn.Module):
 
         # Initial convolution: stride 2
         self.conv1 = nn.Conv2d(observation_shape[0], out_channels // 2, kernel_size=3, stride=2, padding=1, bias=False)
-        self.norm1 = build_normalization(norm_type, dim=2)(out_channels // 2)
+        if norm_type == 'BN':
+            self.norm1 = nn.BatchNorm2d(out_channels // 2)
+        elif norm_type == 'LN':
+            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2],
+                                      eps=1e-5)
 
         # Stage 1 with residual blocks
         self.resblocks1 = nn.ModuleList([
@@ -734,7 +738,15 @@ class RepresentationNetwork(nn.Module):
             self.downsample_net = DownSample(observation_shape, num_channels, activation, norm_type)
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-            self.norm = build_normalization(norm_type, dim=2)(num_channels)
+            if norm_type == 'BN':
+                self.norm = nn.BatchNorm2d(num_channels)
+            elif norm_type == 'LN':
+                if downsample:
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                        eps=1e-5)
+                else:
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
         self.resblocks = nn.ModuleList([
             ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
