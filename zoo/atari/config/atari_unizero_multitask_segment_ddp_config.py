@@ -135,6 +135,17 @@ def create_config(
                     encoder_type='vit',
                     device='cuda',
                     game_segment_length=20,
+                    # MoE: multiplication-based MoE in transformer, 8 experts, 2 per token, 1 shared expert
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=1,
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=True,
+                    n_shared_experts=1,
+                    num_experts_per_tok=2,
+                    num_experts_of_moe_in_transformer=8,
+                    moe_use_lora=False,
                 ),
             ),
             device='cuda',
@@ -238,13 +249,13 @@ if __name__ == "__main__":
 
     # ==================== Main Experiment Settings ====================
     num_games = 8  # Options: 3, 8, 26
-    num_layers = 2
+    num_layers = 1  # Transformer depth (reduced for faster iteration)
     action_space_size = 18
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
-    num_simulations = 50
+    num_simulations = 25  # MCTS simulations per step
     max_env_step = int(5e6)
     reanalyze_ratio = 0.0
 
@@ -271,14 +282,16 @@ if __name__ == "__main__":
 
     # ==================== Batch Size Calculation ====================
     if len(env_id_list) == 8:
-        if num_layers in [2, 4]:
-            effective_batch_size = 1024
+        if num_layers in [1, 4]:
+            effective_batch_size = 10
         elif num_layers == 8:
-            effective_batch_size = 512
+            effective_batch_size = 10
+        else:
+            effective_batch_size = 10
     elif len(env_id_list) == 26:
         effective_batch_size = 512
     elif len(env_id_list) == 3:
-        effective_batch_size = 10  # For debugging
+        effective_batch_size = 10  # Reduced for debugging; use 512 for full training
     else:
         raise ValueError(f"Batch size not configured for {len(env_id_list)} environments.")
 
