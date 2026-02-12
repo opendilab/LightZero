@@ -906,11 +906,13 @@ def _fast_tensor_heatmap(matrix_np, tag):
                 img_tensor = torch.from_numpy(img_array).permute(2, 0, 1).float() / 255.0
             except Exception:
                 h, w = matrix_no_diag.shape
-                img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
+                # Fallback: simple upsampling for visualization
+                img_tensor = torch.zeros(3, h*50, w*50)
                 img_tensor[2] = torch.from_numpy(matrix_no_diag).repeat_interleave(50, 0).repeat_interleave(50, 1)
     except Exception:
         h, w = matrix_no_diag.shape
-        img_tensor = torch.zeros(3, h*50, w*50)  # 简单放大
+        # Fallback: simple upsampling for visualization
+        img_tensor = torch.zeros(3, h*50, w*50)
         img_tensor[2] = torch.from_numpy(matrix_no_diag).repeat_interleave(50, 0).repeat_interleave(50, 1)
     finally:
         plt.close(fig)
@@ -1059,10 +1061,10 @@ def compute_gradient_conflicts(gradients: List[torch.Tensor]) -> dict:
     stacked_grads = torch.stack([g.flatten() for g in gradients])
     normalized_grads = F.normalize(stacked_grads, p=2, dim=1)
     
-    # 一次性计算余弦相似度矩阵
+    # Compute full pairwise cosine similarity matrix in one step
     cosine_sim_matrix = torch.mm(normalized_grads, normalized_grads.t())
     
-    # 排除对角线元素
+    # Exclude diagonal elements
     mask = ~torch.eye(n_gradients, device=device, dtype=torch.bool)
     conflict_scores = -cosine_sim_matrix[mask]
     
@@ -1100,7 +1102,7 @@ def compute_gradient_conflict_distributed(local_grads, multi_gpu=True, device=0)
         >>> print(f"Average conflict: {conflicts['avg_conflict_score']:.4f}")
     """
     if not multi_gpu:
-        # 单GPU模式：直接使用优化的单机版本
+        # Single-GPU mode: use optimized single-node version
         norms = torch.norm(local_grads, dim=1)
         valid_grads = local_grads[norms > 1e-8]
         if valid_grads.shape[0] <= 1:
@@ -1221,7 +1223,7 @@ def compute_gradient_conflicts_batch(gradient_groups: Dict[str, torch.Tensor], d
     results = {}
     
     if world_size == 1:
-        # 单GPU模式
+        # Single-GPU mode
         for group_name, local_grads in gradient_groups.items():
             if local_grads.numel() == 0:
                 results[group_name] = EasyDict({'avg_conflict_score': 0.0})
@@ -1260,17 +1262,17 @@ def compute_gradient_conflicts_batch(gradient_groups: Dict[str, torch.Tensor], d
         local_filtered_groups[group_name] = filtered
         local_valid_counts[group_name] = filtered.shape[0]
     
-    # 收集所有rank的有效数量
+    # Collect valid sample counts from all ranks
     all_valid_counts = [None for _ in range(world_size)]
     dist.all_gather_object(all_valid_counts, local_valid_counts)
     
-    # 计算每组的最大任务数，用于填充
+    # Compute per-group maximum task counts for padding
     max_counts = {}
     for group_name in gradient_groups.keys():
         counts = [counts_dict.get(group_name, 0) for counts_dict in all_valid_counts]
         max_counts[group_name] = max(counts) if counts else 0
     
-    # 填充并准备发送数据
+    # Pad local groups to the maximum count and prepare for communication
     local_padded_groups = {}
     for group_name, filtered_grads in local_filtered_groups.items():
         max_count = max_counts[group_name]
@@ -1292,7 +1294,7 @@ def compute_gradient_conflicts_batch(gradient_groups: Dict[str, torch.Tensor], d
             
         local_padded_groups[group_name] = padded.cpu()
     
-    # 一次性收集所有组的数据
+    # Gather all padded gradient groups from all ranks in one shot
     all_gradient_groups = [None for _ in range(world_size)]
     dist.all_gather_object(all_gradient_groups, local_padded_groups)
     
@@ -1318,7 +1320,7 @@ def compute_gradient_conflicts_batch(gradient_groups: Dict[str, torch.Tensor], d
     else:
         results = None
     
-    # 广播结果到所有rank
+    # Broadcast final results to all ranks
     results_list = [results]
     dist.broadcast_object_list(results_list, src=0)
     return results_list[0]
