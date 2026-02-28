@@ -1123,7 +1123,6 @@ namespace tree
             null_value.push_back(i + 0.1);
         }
         std::vector<float> last_action;
-        float parent_q = 0.0;
         results.search_lens = std::vector<int>();
 
         int players = 0;
@@ -1135,6 +1134,7 @@ namespace tree
 
         for (int i = 0; i < results.num; ++i)
         {
+            float parent_q = 0.0;
             CNode *node = &(roots->roots[i]);
             int is_root = 1;
             int search_len = 0;
