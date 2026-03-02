@@ -1,6 +1,12 @@
 import os
+import sys
 import argparse
 from typing import Any, Dict
+
+# Force Python to use the correct LightZero path
+LIGHTZERO_ROOT = '/mnt/shared-storage-user/puyuan/code/LightZero'
+if LIGHTZERO_ROOT not in sys.path:
+    sys.path.insert(0, LIGHTZERO_ROOT)
 
 from easydict import EasyDict
 
@@ -64,7 +70,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     if encoder_option == 'qwen':
         model_name: str = 'Qwen/Qwen3-0.6B'
     elif encoder_option == 'legacy':
-        model_name: str = 'BAAI/bge-base-en-v1.5'
+        # model_name: str = 'BAAI/bge-base-en-v1.5'
+        model_name="/mnt/shared-storage-user/puyuan/code/LightZero/pretrained_models/bge-base-en-v1.5"
+
     else:
         raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
@@ -156,7 +164,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             ),
             update_per_collect=int(collector_env_num*max_steps*replay_ratio ),  # Important for DDP
             action_type="varied_action_space",
-            model_path=None,
+            # model_path=None,
+            model_path="/mnt/shared-storage-user/puyuan/code/LightZero/zoo/jericho/configs/wm_best.pth.tar",
             num_unroll_steps=num_unroll_steps,
             reanalyze_ratio=0,
             replay_ratio=replay_ratio,

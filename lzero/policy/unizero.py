@@ -1487,6 +1487,14 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
+
+
+        # Load model and target_model state_dicts
+        # The checkpoint is saved with strict=True by default, which should work correctly
+        # if the model structure matches
+        # self._learn_model.load_state_dict(state_dict['model'], strict=True)
+        # self._target_model.load_state_dict(state_dict['target_model'], strict=True)
+
         # self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
         # ==================== START: 加载Alpha优化器状态 ====================

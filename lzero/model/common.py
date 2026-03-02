@@ -535,7 +535,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # ==================== 修复开始 ====================
         # 1. 显式地创建 token_type_ids
         # 对于单句输入，token_type_ids 是一个与 input_ids 形状相同的全零张量。
-        token_type_ids = torch.zeros_like(x, device=x.device)
+        # token_type_ids = torch.zeros_like(x, device=x.device)
 
         # 2. 移除危险的内部状态修改
         # 下面的代码块是导致错误的根源，必须删除。
@@ -546,11 +546,13 @@ class HFLanguageRepresentationNetwork(nn.Module):
         if no_grad:
             with torch.no_grad():
                 # 3. 在模型调用时传入 token_type_ids
-                outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
+                # outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
+                outputs = self.pretrained_model(x, attention_mask=attention_mask)
                 cls_embedding = outputs.last_hidden_state[:, 0, :]
         else:
             # 3. 在模型调用时传入 token_type_ids
-            outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            # outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            outputs = self.pretrained_model(x, attention_mask=attention_mask)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
 
         cls_embedding = self.embed_proj_head(cls_embedding)

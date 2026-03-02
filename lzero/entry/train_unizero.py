@@ -99,11 +99,81 @@ def train_unizero(
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
     logging.info("Policy created successfully!")
 
+    # Verify we're using the correct LightZero path
+    import lzero
+    print(f"\n{'='*80}")
+    print(f"VERIFICATION: Using LightZero from: {lzero.__file__}")
+    print(f"Expected path: /mnt/shared-storage-user/puyuan/code/LightZero")
+    print(f"{'='*80}\n")
+
+    print(f"debug 0303!!!!!!!!!"*20)
+
     # Load pretrained model if specified
     if model_path is not None:
         logging.info(f"Loading pretrained model from {model_path}...")
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
         logging.info("Pretrained model loaded successfully!")
+                
+        # 1. 加载原始 state_dict
+        # checkpoint = torch.load(model_path, map_location=cfg.policy.device)
+        
+        # import ipdb;ipdb.set_trace()
+
+        # # 2. 定义清洗函数：专门去除 _orig_mod. 和 module. 前缀
+        # def remove_compile_prefix(state_dict):
+        #     new_sd = {}
+        #     for k, v in state_dict.items():
+        #         # 去除 torch.compile 产生的 _orig_mod. 前缀
+        #         new_k = k.replace('_orig_mod.', '')
+        #         # 去除 DDP 产生的 module. 前缀
+        #         new_k = new_k.replace('module.', '')
+        #         new_sd[new_k] = v
+        #     return new_sd
+
+        # # 3. 构建符合 _load_state_dict_learn 要求的结构
+        # # 它需要 {'model': ..., 'target_model': ...}
+        # new_state_dict = {}
+        
+        # # 处理 'model' 部分
+        # if 'model' in checkpoint:
+        #     logging.info("Processing 'model' keys in checkpoint...")
+        #     new_state_dict['model'] = remove_compile_prefix(checkpoint['model'])
+        # else:
+        #     # 如果 checkpoint 本身就是扁平的 state_dict (兼容旧格式)，则视为 model
+        #     # 但根据你的描述，应该是有 model key 的
+        #     logging.warning("Key 'model' not found in checkpoint, assuming flat dict.")
+        #     new_state_dict['model'] = remove_compile_prefix(checkpoint)
+
+        # # 处理 'target_model' 部分
+        # if 'target_model' in checkpoint:
+        #     logging.info("Processing 'target_model' keys in checkpoint...")
+        #     new_state_dict['target_model'] = remove_compile_prefix(checkpoint['target_model'])
+        # elif 'model' in new_state_dict:
+        #     # 如果没有 target_model，通常可以复用 model 的权重
+        #     logging.info("Key 'target_model' not found, copying from 'model'.")
+        #     new_state_dict['target_model'] = new_state_dict['model']
+
+        # # 4. 调用 Policy 的加载方法
+        # # 此时传入的 new_state_dict 结构正确，且内部 key 已清洗
+        # try:
+        #     # policy.learn_mode.load_state_dict(new_state_dict)
+        #     policy.learn_mode.load_state_dict(checkpoint)
+
+        #     logging.info("Pretrained model loaded successfully (Prefixes cleaned)!")
+        # except RuntimeError as e:
+        #     logging.error(f"Strict loading failed! Please check model definition vs checkpoint. Error: {e}")
+        #     raise e
+
+       
+        # # Verify that weights were actually loaded by checking a sample weight
+        # try:
+        #     sample_weight = policy._learn_model._orig_mod.representation_network.pretrained_model.embeddings.word_embeddings.weight
+        #     logging.info(f"Loaded weight verification - mean: {sample_weight.mean().item():.6f}, std: {sample_weight.std().item():.6f}")
+        # except Exception as e:
+        #     logging.warning(f"Could not verify loaded weights: {e}")
+
+        # from .analyze_model import analyze_model_structure
+        # analyze_model_structure(policy._learn_model._orig_mod)
 
     # Create core components for training
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
