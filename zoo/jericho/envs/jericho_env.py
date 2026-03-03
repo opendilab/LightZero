@@ -364,6 +364,12 @@ class JerichoEnv(BaseEnv):
 
         observation, reward, done, info = self._env.step(action_str)
         info['action_str'] = action_str
+        
+        # if self._timestep%5==0:
+        #     print(f'rank {self.rank} step:{self._timestep} observation:{observation} reward:{reward} done:{reward}')
+        # if self._timestep%10==0:
+
+        print(f'rank {self.rank} step:{self._timestep} action:{action_str} observation:{observation} reward:{reward} done:{reward}')
 
         self._timestep += 1
         if not self.for_unizero:

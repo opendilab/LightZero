@@ -111,69 +111,147 @@ def train_unizero(
     # Load pretrained model if specified
     if model_path is not None:
         logging.info(f"Loading pretrained model from {model_path}...")
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
+
+        # policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
+        # policy._learn_model.world_model.precompute_pos_emb_diff_kv()
+        # policy.recompute_pos_emb_diff_and_clear_cache()
+
+        checkpoint = torch.load(model_path, map_location=cfg.policy.device)
+        # ===== 添加调试代码 - 检查加载前后的状态 =====
+        print("\n" + "="*80)
+        print("=== 加载前检查 ===")
+        print("="*80)
+        ckpt_sample_keys = list(checkpoint['model'].keys())[:3]
+        model_sample_keys = list(policy._learn_model.state_dict().keys())[:3]
+        print(f"Checkpoint keys示例: {ckpt_sample_keys}")
+        print(f"Model keys示例: {model_sample_keys}")
+
+        # 检查前缀是否匹配
+        ckpt_has_prefix = any('_orig_mod.' in k for k in checkpoint['model'].keys())
+        model_has_prefix = any('_orig_mod.' in k for k in policy._learn_model.state_dict().keys())
+        print(f"Checkpoint有_orig_mod.前缀: {ckpt_has_prefix}")
+        print(f"Model有_orig_mod.前缀: {model_has_prefix}")
+
+        if ckpt_has_prefix != model_has_prefix:
+            print("⚠️ WARNING: 前缀不匹配！可能导致加载失败！")
+        else:
+            print("✓ 前缀匹配")
+
+        # 加载前记录head权重
+        head_before = policy._learn_model.world_model.head_policy.head_module[4].weight.clone()
+        print(f"加载前head_policy权yiyi重统计: mean={head_before.mean():.6f}, std={head_before.std():.6f}")
+        print("="*80 + "\n")
+        # ===== 调试代码结束 =====
+
+        # 🔥🔥🔥 关键修复：兼容旧格式的checkpoint
+        # Jericho的checkpoint用的是'optimizer_world_model'而不是'optimizer'
+        if 'optimizer' not in checkpoint and 'optimizer_world_model' in checkpoint:
+            print("⚠️ 检测到旧格式checkpoint，将'optimizer_world_model'映射为'optimizer'")
+            checkpoint['optimizer'] = checkpoint['optimizer_world_model']
+
+        try:
+            policy.learn_mode.load_state_dict(checkpoint)
+        except Exception as e:
+            print(f"\n❌ 加载checkpoint时出错: {e}")
+            print(f"   异常类型: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            raise  # re-raise以便调试
+
+        # ===== 添加加载后检查 =====
+        print("\n" + "="*80)
+        print("=== 加载后检查 ===")
+        print("="*80)
+        head_after = policy._learn_model.world_model.head_policy.head_module[4].weight
+        print(f"加载后head_policy权重统计: mean={head_after.mean():.6f}, std={head_after.std():.6f}")
+
+        if torch.equal(head_before, head_after):
+            print("❌ 致命错误：加载失败！权重没有改变！")
+            print("   可能原因：")
+            print("   1. 前缀不匹配导致key无法匹配")
+            print("   2. strict=True导致加载被拒绝")
+            print("   3. 需要启用前缀清洗代码")
+        else:
+            print("✓ 加载成功！权重已更新")
+            print(f"  权重变化: Δmean={abs(head_after.mean() - head_before.mean()):.6f}")
+        print("="*80 + "\n")
+        # ===== 检查结束 =====
+
+        # ===== 🔥 关键修复：重新计算position embedding缓存 =====
+        print("\n" + "="*80)
+        print("=== 重新计算Position Embedding缓存 ===")
+        print("="*80)
+        try:
+            if hasattr(policy._learn_model, 'world_model') and hasattr(policy._learn_model.world_model, 'precompute_pos_emb_diff_kv'):
+                logging.info("Recomputing position embedding differences after loading checkpoint...")
+                
+                policy._learn_model.world_model.precompute_pos_emb_diff_kv()
+                policy.recompute_pos_emb_diff_and_clear_cache()
+
+                print("✅ Position embedding缓存已重新计算")
+                print("   这确保了加载的pos_emb权重与缓存一致")
+            else:
+                print("⊘ 未找到precompute_pos_emb_diff_kv方法，跳过")
+        except Exception as e:
+            print(f"⚠️ 重新计算position embedding时出错: {e}")
+            logging.warning(f"Failed to recompute position embeddings: {e}")
+        print("="*80 + "\n")
+        # ===== 修复结束 =====
+
+
+        # ============
+        # 🔥🔥🔥 新增：诊断torch.compile和对象关系
+        print("\n" + "="*80)
+        print("=== torch.compile和对象关系诊断 ===")
+        print("="*80)
+        print(f"_learn_model is _eval_model: {policy._learn_model is policy._eval_model}")
+        print(f"_learn_model is _model: {policy._learn_model is policy._model}")
+        print(f"_eval_model is _model: {policy._eval_model is policy._model}")
+        print(f"_learn_model type: {type(policy._learn_model).__name__}")
+        print(f"_eval_model type: {type(policy._eval_model).__name__}")
+
+        # 检查world_model
+        print(f"\nworld_model对象:")
+        print(f"  _learn_model.world_model is _eval_model.world_model: {policy._learn_model.world_model is policy._eval_model.world_model}")
+
+        # 检查position embedding
+        print(f"\nPosition Embedding:")
+        print(f"  rotary_emb配置: {cfg.policy.model.world_model_cfg.rotary_emb}")
+        pos_emb_weight_learn = policy._learn_model.world_model.pos_emb.weight
+        pos_emb_weight_eval = policy._eval_model.world_model.pos_emb.weight
+        print(f"  _learn pos_emb.weight mean: {pos_emb_weight_learn.mean():.6f}")
+        print(f"  _eval pos_emb.weight mean: {pos_emb_weight_eval.mean():.6f}")
+        print(f"  是否相同对象: {pos_emb_weight_learn.data_ptr() == pos_emb_weight_eval.data_ptr()}")
+
+        # 检查precompute cache
+        print(f"\nPrecompute缓存:")
+        if hasattr(policy._learn_model.world_model, 'positional_embedding_k'):
+            print(f"  _learn_model有positional_embedding_k缓存")
+            print(f"    cache[0] mean: {policy._learn_model.world_model.positional_embedding_k[0].mean():.6f}")
+        else:
+            print(f"  ❌ _learn_model没有positional_embedding_k缓存！")
+
+        if hasattr(policy._eval_model.world_model, 'positional_embedding_k'):
+            print(f"  _eval_model有positional_embedding_k缓存")
+            print(f"    cache[0] mean: {policy._eval_model.world_model.positional_embedding_k[0].mean():.6f}")
+        else:
+            print(f"  ❌ _eval_model没有positional_embedding_k缓存！")
+
+        # 检查last_batch_obs_eval
+        print(f"\nlast_batch状态:")
+        print(f"  hasattr last_batch_obs_eval: {hasattr(policy, 'last_batch_obs_eval')}")
+        if hasattr(policy, 'last_batch_obs_eval'):
+            print(f"    shape: {policy.last_batch_obs_eval.shape}")
+            print(f"    mean: {policy.last_batch_obs_eval.float().mean():.6f}")
+        else:
+            print(f"  ❌ last_batch_obs_eval不存在！这是个严重问题！")
+
+        print("="*80 + "\n")
+        # 🔥 诊断结束
+
         logging.info("Pretrained model loaded successfully!")
                 
-        # 1. 加载原始 state_dict
-        # checkpoint = torch.load(model_path, map_location=cfg.policy.device)
-        
-        # import ipdb;ipdb.set_trace()
-
-        # # 2. 定义清洗函数：专门去除 _orig_mod. 和 module. 前缀
-        # def remove_compile_prefix(state_dict):
-        #     new_sd = {}
-        #     for k, v in state_dict.items():
-        #         # 去除 torch.compile 产生的 _orig_mod. 前缀
-        #         new_k = k.replace('_orig_mod.', '')
-        #         # 去除 DDP 产生的 module. 前缀
-        #         new_k = new_k.replace('module.', '')
-        #         new_sd[new_k] = v
-        #     return new_sd
-
-        # # 3. 构建符合 _load_state_dict_learn 要求的结构
-        # # 它需要 {'model': ..., 'target_model': ...}
-        # new_state_dict = {}
-        
-        # # 处理 'model' 部分
-        # if 'model' in checkpoint:
-        #     logging.info("Processing 'model' keys in checkpoint...")
-        #     new_state_dict['model'] = remove_compile_prefix(checkpoint['model'])
-        # else:
-        #     # 如果 checkpoint 本身就是扁平的 state_dict (兼容旧格式)，则视为 model
-        #     # 但根据你的描述，应该是有 model key 的
-        #     logging.warning("Key 'model' not found in checkpoint, assuming flat dict.")
-        #     new_state_dict['model'] = remove_compile_prefix(checkpoint)
-
-        # # 处理 'target_model' 部分
-        # if 'target_model' in checkpoint:
-        #     logging.info("Processing 'target_model' keys in checkpoint...")
-        #     new_state_dict['target_model'] = remove_compile_prefix(checkpoint['target_model'])
-        # elif 'model' in new_state_dict:
-        #     # 如果没有 target_model，通常可以复用 model 的权重
-        #     logging.info("Key 'target_model' not found, copying from 'model'.")
-        #     new_state_dict['target_model'] = new_state_dict['model']
-
-        # # 4. 调用 Policy 的加载方法
-        # # 此时传入的 new_state_dict 结构正确，且内部 key 已清洗
-        # try:
-        #     # policy.learn_mode.load_state_dict(new_state_dict)
-        #     policy.learn_mode.load_state_dict(checkpoint)
-
-        #     logging.info("Pretrained model loaded successfully (Prefixes cleaned)!")
-        # except RuntimeError as e:
-        #     logging.error(f"Strict loading failed! Please check model definition vs checkpoint. Error: {e}")
-        #     raise e
-
        
-        # # Verify that weights were actually loaded by checking a sample weight
-        # try:
-        #     sample_weight = policy._learn_model._orig_mod.representation_network.pretrained_model.embeddings.word_embeddings.weight
-        #     logging.info(f"Loaded weight verification - mean: {sample_weight.mean().item():.6f}, std: {sample_weight.std().item():.6f}")
-        # except Exception as e:
-        #     logging.warning(f"Could not verify loaded weights: {e}")
-
-        # from .analyze_model import analyze_model_structure
-        # analyze_model_structure(policy._learn_model._orig_mod)
 
     # Create core components for training
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -238,7 +316,11 @@ def train_unizero(
         # Evaluate policy performance
         if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
             logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
+
             _ = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+        
+        # TODO
+        return None
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)

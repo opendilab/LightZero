@@ -928,13 +928,13 @@ class UniZeroPolicy(MuZeroPolicy):
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_obs_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.full(
+            self.last_batch_obs_collect = torch.full(
                 [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
             ).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
 
     # @profile
     def _forward_collect(
@@ -984,7 +984,7 @@ class UniZeroPolicy(MuZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs_collect, self.last_batch_action_collect, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -1062,8 +1062,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs = data
-            self.last_batch_action = batch_action
+            self.last_batch_obs_collect = data
+            self.last_batch_action_collect = batch_action
 
             # ========= TODO: This logic is a temporary workaround specific to the muzero_segment_collector. =========
             if active_collect_env_num < self.collector_env_num:
@@ -1106,13 +1106,13 @@ class UniZeroPolicy(MuZeroPolicy):
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_obs_eval = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action_eval = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.full(
+            self.last_batch_obs_eval = torch.full(
                 [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
             ).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
+            self.last_batch_action_eval = [-1 for i in range(self.collector_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, timestep: List = [0], task_id: int = None,) -> Dict:
@@ -1147,7 +1147,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data, timestep)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action_eval, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward
@@ -1208,7 +1208,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 batch_action.append(action)
 
             self.last_batch_obs_eval = data
-            self.last_batch_action = batch_action
+            self.last_batch_action_eval = batch_action
 
         return output
 
@@ -1225,13 +1225,13 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_pad_batch(
+            self.last_batch_obs_collect = initialize_pad_batch(
                 self._cfg.model.observation_shape,
                 self._cfg.collector_env_num,
                 self._cfg.device,
                 pad_token_id=self.pad_token_id
             )
-            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+            self.last_batch_action_collect = [-1 for _ in range(self._cfg.collector_env_num)]
 
 
         # We must handle both single int and list of ints for env_id.
@@ -1303,7 +1303,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 )
                 print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
-            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+            self.last_batch_action_eval = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
         # --- BEGIN ROBUST FIX ---
         # This logic handles the crucial end-of-episode cache clearing for evaluation.

@@ -1,8 +1,8 @@
 import os
-import sys
 import argparse
 from typing import Any, Dict
 
+import sys
 # Force Python to use the correct LightZero path
 LIGHTZERO_ROOT = '/mnt/shared-storage-user/puyuan/code/LightZero'
 if LIGHTZERO_ROOT not in sys.path:
@@ -46,6 +46,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # User frequently modified configurations
     # ------------------------------------------------------------------
     evaluator_env_num: int = 3       # Number of evaluator environments
+    # evaluator_env_num: int = 1       # Number of evaluator environments
+
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters

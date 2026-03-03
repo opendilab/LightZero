@@ -99,6 +99,8 @@ class UniZeroModel(nn.Module):
         elif world_model_cfg.obs_type == 'text':
             # [FIX] Get encoder_option with default fallback
             encoder_option = kwargs.get('encoder_option', 'BGE')
+            print(f"encoder_option:{encoder_option}"*20)
+
             if encoder_option == 'legacy':
                 if world_model_cfg.decode_loss_mode is None or world_model_cfg.decode_loss_mode.lower() == 'none':
                     self.decoder_network = None
@@ -118,6 +120,7 @@ class UniZeroModel(nn.Module):
                 # [FIX] Remove tokenizer=self.tokenizer because self.tokenizer is not yet created
                 # HFLanguageRepresentationNetwork will load its own tokenizer if not provided
                 encoder_url = kwargs.get('encoder_url', 'BAAI/bge-base-en-v1.5')
+                print(f"encoder_url:{encoder_url}"*20)
                 self.representation_network = HFLanguageRepresentationNetwork(
                     model_path=encoder_url,
                     embedding_size=world_model_cfg.embed_dim,
