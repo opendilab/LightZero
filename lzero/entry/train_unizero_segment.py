@@ -154,12 +154,14 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
+        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+        # if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
         
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            if stop:
-                break
+            # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            info = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
+            # if stop:
+            #     break
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)

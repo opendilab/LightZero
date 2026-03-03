@@ -1,6 +1,12 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
+import sys
+# Force Python to use the correct LightZero path
+LIGHTZERO_ROOT = '/mnt/shared-storage-user/puyuan/code/LightZero'
+if LIGHTZERO_ROOT not in sys.path:
+    sys.path.insert(0, LIGHTZERO_ROOT)
+
 
 def main(env_id, seed):
     action_space_size = atari_env_action_space_map[env_id]
@@ -17,8 +23,8 @@ def main(env_id, seed):
     evaluator_env_num = 3
     num_simulations = 50
     # max_env_step = int(4e5)
-    max_env_step = int(5e6) # TODO
-    # max_env_step = int(1e6) # TODO pong
+    # max_env_step = int(5e6) # TODO
+    max_env_step = int(1e6) # TODO pong
 
     # batch_size = 2 # only for debug
     # batch_size = 64
@@ -69,7 +75,8 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),  # default is 10000
+            # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
@@ -112,8 +119,8 @@ def main(env_id, seed):
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
                     game_segment_length=game_segment_length,
-                    # use_priority=False,
-                    use_priority=True,
+                    use_priority=False,
+                    # use_priority=True,
                     rotary_emb=False,
                     encoder_type='resnet',
                     use_normal_head=True,
@@ -136,10 +143,13 @@ def main(env_id, seed):
             learning_rate=0.0001,
 
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
-            model_path=None,
+            # model_path=None,
+            model_path="/mnt/shared-storage-user/puyuan/code/LightZero/data_unizero_st_20260304/Pong/Pong_uz_ch64-res1_adamw-wd1e-2-encoder5-trans1-head0_brf2e-10-rbs160-rp0.75_nlayer2_numsegments-8_gsl20_rr0.1_Htrain10-Hinfer4_bs256_seed0_260306_124117/ckpt/WM_ckpt_best.pth.tar",
 
             # (bool) 是否启用自适应策略熵权重 (alpha)
-            use_adaptive_entropy_weight=True,
+            # use_adaptive_entropy_weight=True,
+            use_adaptive_entropy_weight=False,
+
             # (float) 自适应alpha优化器的学习率
             adaptive_entropy_alpha_lr=1e-4,
             # adaptive_entropy_alpha_lr=1e-3,
@@ -178,8 +188,8 @@ def main(env_id, seed):
             use_augmentation=False,
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
-            # use_priority=False,
-            use_priority=True,
+            use_priority=False,
+            # use_priority=True,
             priority_prob_alpha=1,
             priority_prob_beta=1,
             num_unroll_steps=num_unroll_steps,
@@ -225,7 +235,10 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_st_refactor1010/{env_id[:-14]}/{env_id[:-14]}_uz_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_label-smooth_resnet-encoder_priority_adamw-wd1e-2-encoder5-trans1-head0-true_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_20260304_loadckpt/{env_id[:-14]}/{env_id[:-14]}_uz_ch64-res1_adamw-wd1e-2-encoder5-trans1-head0_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+
+    # main_config.exp_name = f'data_unizero_st_20260304/{env_id[:-14]}/{env_id[:-14]}_uz_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_label-smooth_resnet-encoder_priority_adamw-wd1e-2-encoder5-trans1-head0-true_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # main_config.exp_name = f'data_unizero_st_refactor1010/{env_id[:-14]}/{env_id[:-14]}_uz_ch64-res1_targetentropy-alpha-100k-098-07-encoder-clip30-10-100k_label-smooth_resnet-encoder_priority_adamw-wd1e-2-encoder5-trans1-head0-true_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
 
     # main_config.exp_name = f'data_unizero_st_refactor1010/{env_id[:-14]}/{env_id[:-14]}_uz_ch128-res2_targetentropy-alpha-100k-098-07-encoder-clip30-10-400k_label-smooth_resnet-encoder_priority_adamw-wd1e-2-encoder1-trans1-head1_ln-inner-ln_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
@@ -241,8 +254,10 @@ if __name__ == "__main__":
 
 
     # 测试的atari8中的4个base环境
-    # args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
-    args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
+    args.env = 'PongNoFrameskip-v4' # 反应型环境 密集奖励
+    # args.env = 'ALE/Pong-v5' # 反应型环境 密集奖励
+
+    # args.env = 'MsPacmanNoFrameskip-v4' # 记忆规划型环境 稀疏奖励
 
     # args.env = 'SeaquestNoFrameskip-v4'  # 记忆规划型环境 稀疏奖励
     # args.env = 'HeroNoFrameskip-v4' # 记忆规划型环境 稀疏奖励

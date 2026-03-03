@@ -49,7 +49,9 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             # eval_max_episode_steps=int(50),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),  # default is 10000
+
+            # learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
@@ -67,6 +69,19 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     rotary_emb=False,
+                    encoder_type='resnet',
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
+                    num_experts_of_moe_in_transformer=4,
+                    # LoRA 参数：
+                    lora_r= 0,
+                    lora_alpha =1,
+                    lora_dropout= 0.0,
+                    optim_type='AdamW_mix_lr_wdecay', # only for tsne plot
                 ),
             ),
             model_path=None,
@@ -101,7 +116,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_st_20260304/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

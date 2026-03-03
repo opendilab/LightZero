@@ -113,7 +113,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             learn=dict(
                 learner=dict(
                     hook=dict(
-                        save_ckpt_after_iter=1000000, # To save memory, set a large value. If intermediate checkpoints are needed, reduce this value.
+                        save_ckpt_after_iter=5000, # To save memory, set a large value. If intermediate checkpoints are needed, reduce this value.
+                        # save_ckpt_after_iter=1000000, # To save memory, set a large value. If intermediate checkpoints are needed, reduce this value.
                     ),
                 ),
             ),
@@ -167,7 +168,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             update_per_collect=int(collector_env_num*max_steps*replay_ratio ),  # Important for DDP
             action_type="varied_action_space",
             # model_path=None,
-            model_path="/mnt/shared-storage-user/puyuan/code/LightZero/zoo/jericho/configs/wm_best.pth.tar",
+            model_path="/mnt/shared-storage-user/puyuan/code/LightZero/data_unizero_jericho/bge-base-en-v1.5/detective.z5/uz_gpu_cen4_rr0.1_ftemp025_detectiv_ms100_ass-12_nlayer2_embed768_Htrain10-Hinfer4_bs64_seed0/ckpt/WM_ckpt_best.pth.tar",
+            # model_path="/mnt/shared-storage-user/puyuan/code/LightZero/zoo/jericho/configs/wm_best.pth.tar",
             num_unroll_steps=num_unroll_steps,
             reanalyze_ratio=0,
             replay_ratio=replay_ratio,
@@ -215,7 +217,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )
@@ -256,4 +258,4 @@ if __name__ == "__main__":
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
     # Start the main process with the provided arguments
-    main(args.env, args.seed)
+    main(args.env, args.seed, int(4e5))
