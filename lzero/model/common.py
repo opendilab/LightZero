@@ -502,15 +502,20 @@ class HFLanguageRepresentationNetwork(nn.Module):
             torch.distributed.barrier()
         if get_rank() != 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
-
-        if get_rank() != 0:
-            logging.info(f"Worker process is loading model from cache: {model_path}")
-            self.model = AutoModel.from_pretrained(model_path)
-            if tokenizer is None:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         
-        if tokenizer is not None:
+        if tokenizer is None:
+            # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
+            if get_rank() == 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            if get_world_size() > 1:
+                torch.distributed.barrier()
+            if get_rank() != 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        else:
             self.tokenizer = tokenizer
+        
+        for p in self.pretrained_model.parameters():
+            p.requires_grad_(False)
 
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)

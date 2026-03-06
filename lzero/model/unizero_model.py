@@ -129,12 +129,12 @@ class UniZeroModel(nn.Module):
             else:
                 raise ValueError(f"Unsupported encoder option: {kwargs['encoder_option']}")     
             
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer,
-                                    with_lpips=False, projection=projection, encoder_option=kwargs['encoder_option'])
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network,
+                                    with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
 
             # --- Log parameter counts for analysis ---
-            self._log_model_parameters(obs_type)
+            self._log_model_parameters(world_model_cfg.obs_type)
 
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             logging.info('==' * 20)

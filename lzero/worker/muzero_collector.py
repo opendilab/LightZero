@@ -87,7 +87,7 @@ class MuZeroCollector(ISerialCollector):
             self._logger, _ = build_logger(
                 path=f'./{self._exp_name}/log/{self._instance_name}', name=self._instance_name, need_tb=False
             )
-            self._tb_logger = None
+            self._tb_logger = tb_logger
 
         self.policy_config = policy_config
         self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
@@ -126,7 +126,7 @@ class MuZeroCollector(ISerialCollector):
             self._logger.debug(
                 f"Set default n_episode mode(n_episode({self._default_n_episode}), env_num({self._env_num}))"
             )
-        self._policy.reset()
+        self._policy.reset(task_id=self.task_id)
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -359,7 +359,7 @@ class MuZeroCollector(ISerialCollector):
             chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
         # Initialize game segments and observation stacks for each environment.
-        game_segments = [GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config) for _ in range(env_nums)]
+        game_segments = [GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config, task_id=self.task_id) for _ in range(env_nums)]
         observation_window_stack = [deque(maxlen=self.policy_config.model.frame_stack_num) for _ in range(env_nums)]
         for env_id in range(env_nums):
             for _ in range(self.policy_config.model.frame_stack_num):
@@ -525,7 +525,7 @@ class MuZeroCollector(ISerialCollector):
                         last_game_priorities[env_id] = priorities
 
                         # Start a new game segment.
-                        game_segments[env_id] = GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config)
+                        game_segments[env_id] = GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config, task_id=self.task_id)
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
@@ -570,7 +570,7 @@ class MuZeroCollector(ISerialCollector):
                            chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                         # Reset game segment and observation stack.
-                        game_segments[env_id] = GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config)
+                        game_segments[env_id] = GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config, task_id=self.task_id)
                         observation_window_stack[env_id].clear()
                         for _ in range(self.policy_config.model.frame_stack_num):
                             observation_window_stack[env_id].append(init_obs[env_id]['observation'])
@@ -585,7 +585,7 @@ class MuZeroCollector(ISerialCollector):
                         completed_value_lst[env_id] = 0
 
                     # Reset policy and collector stats for the finished environment.
-                    self._policy.reset([env_id])
+                    self._policy.reset([env_id], task_id=self.task_id)
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
@@ -628,9 +628,6 @@ class MuZeroCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): The current training iteration number, used as the logging step.
         """
-        if self._rank != 0:
-            return
-        
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)
@@ -663,21 +660,18 @@ class MuZeroCollector(ISerialCollector):
 
             self._episode_info.clear()
             
-            # Log to console
-            self._logger.info("Collector Training Summary:\n{}".format('\n'.join([f'  {k}: {v}' for k, v in info.items()])))
-            
+            self._logger.info(f"Collector log (rank {self._rank}, task_id {self.task_id}):\n" + '\n'.join([f'{k}: {v}' for k, v in info.items()]))
             # Log to TensorBoard and WandB
             for k, v in info.items():
+                if k in ['each_reward']:
+                    continue
                 if self.task_id is None:
-                    tb_prefix_iter = f'{self._instance_name}_iter/'
-                    tb_prefix_step = f'{self._instance_name}_step/'
+                    # Log for single-task setting
+                    self._tb_logger.add_scalar(f'{self._instance_name}_iter/{k}', v, train_iter)
+                    if k not in ['total_envstep_count', 'total_episode_count', 'total_duration']:
+                        self._tb_logger.add_scalar(f'{self._instance_name}_step/{k}', v, self._total_envstep_count)
                 else:
-                    tb_prefix_iter = f'{self._instance_name}_iter_task{self.task_id}/'
-                    tb_prefix_step = f'{self._instance_name}_step_task{self.task_id}/'
-                
-                self._tb_logger.add_scalar(tb_prefix_iter + k, v, train_iter)
-                self._tb_logger.add_scalar(tb_prefix_step + k, v, self._total_envstep_count)
-            
-            if self.policy_config.use_wandb:
-                wandb_log_data = {tb_prefix_step + k: v for k, v in info.items()}
-                wandb.log(wandb_log_data, step=self._total_envstep_count)
+                    # Log for multi-task setting
+                    self._tb_logger.add_scalar(f'{self._instance_name}_iter_task{self.task_id}/{k}', v, train_iter)
+                    if k not in ['total_envstep_count', 'total_episode_count', 'total_duration']:
+                        self._tb_logger.add_scalar(f'{self._instance_name}_step_task{self.task_id}/{k}', v, self._total_envstep_count)

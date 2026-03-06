@@ -34,9 +34,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     else:
         raise ValueError(f"Unsupported encoder option: {encoder_option}")    
 
-    # TODO
-    # batch_size = batch_size * 2
-
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
     # ------------------------------------------------------------------
@@ -115,7 +112,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     ),
                 ),
             ),
-            accumulation_steps=accumulation_steps,  # TODO: Accumulated gradient steps (currently default)
+            accumulation_steps=accumulation_steps, 
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
@@ -138,13 +135,14 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     num_layers=num_layers,
                     num_heads=24,
                     embed_dim=embed_dim,
-                    obs_type="text",  # TODO: Modify as needed.
+                    obs_type="text", 
                     env_num=max(collector_env_num, evaluator_env_num),
                     decode_loss_mode=None, # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
-                    latent_recon_loss_weight=0.1 # TODO: decoder loss weight
+                    latent_recon_loss_weight=0, # TODO: decoder loss weight
+                    game_segment_length=50,
+                    use_priority=False,
                 ),
             ),
-            # TODO 
             update_per_collect=int(collector_env_num*max_steps*replay_ratio*accumulation_steps),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
@@ -159,7 +157,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
             num_simulations=num_simulations,
             n_episode=n_episode,
-            train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
+            train_start_after_envsteps=0,
             replay_buffer_size=int(5e5),
             eval_freq=int(3e4),
             collector_env_num=collector_env_num,

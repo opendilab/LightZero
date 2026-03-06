@@ -1708,7 +1708,13 @@ class WorldModelMT(WorldModel):
                                              dtype=batch['observations'].dtype)
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
+        
+        elif self.obs_type == 'text':
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device,
+                                           dtype=torch.float32)
+            latent_recon_loss = self.latent_recon_loss
 
+        
         # Action tokens
         if self.continuous_action_space:
             act_tokens = batch['actions']

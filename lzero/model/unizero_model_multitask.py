@@ -6,7 +6,8 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
+    HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 from .vit import ViT, ViTConfig
@@ -84,6 +85,8 @@ class UniZeroMTModel(nn.Module):
             self._init_image_components(world_model_cfg, observation_shape, num_res_blocks, num_channels, obs_act_embed_dim)
         elif obs_type == 'image_memory':
             self._init_image_memory_components(world_model_cfg)
+        elif obs_type == 'text':
+            self._init_text_components(world_model_cfg, encoder_url=kwargs['encoder_url'])
         else:
             raise ValueError(f"Unsupported observation type: {obs_type}")
 
@@ -93,6 +96,20 @@ class UniZeroMTModel(nn.Module):
         # --- Log parameter counts for analysis ---
         self._log_model_parameters(obs_type)
 
+    def _init_text_components(self, world_model_cfg: EasyDict, encoder_url: str) -> None:
+        """Initializes components for 'text' observation type."""
+        self.representation_network = HFLanguageRepresentationNetwork(
+                model_path=encoder_url, 
+                embedding_size=world_model_cfg.embed_dim,
+                final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
+            )
+        self.tokenizer = Tokenizer(
+            encoder=self.representation_network,
+            decoder=None,
+            with_lpips=False,
+            obs_type=world_model_cfg.obs_type
+        )
+    
     def _init_vector_components(self, world_model_cfg: EasyDict, obs_act_embed_dim: int) -> None:
         """Initializes components for 'vector' observation type."""
         self.representation_network = RepresentationNetworkMLP(

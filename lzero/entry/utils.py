@@ -608,8 +608,8 @@ def safe_eval(
     evaluator: Evaluator,
     learner: BaseLearner,
     collector: Collector,
-    rank: int,
-    world_size: int,
+    rank: int = 0,
+    world_size: int = 1,
     timeout: int = EVALUATION_TIMEOUT
 ) -> Tuple[Optional[bool], Optional[Any]]:
     """
