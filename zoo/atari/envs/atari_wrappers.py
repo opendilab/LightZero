@@ -3,8 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 import cv2
-import gym  # For legacy API wrapper base class
-import gymnasium  # For creating environments
+import gymnasium as gym
 import ale_py
 import numpy as np
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
@@ -13,6 +12,55 @@ from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, 
 from ding.utils.compression_helper import jpeg_data_compressor
 from easydict import EasyDict
 from gymnasium.wrappers import RecordVideo
+
+
+class _LegacyEnvAdapter(gym.Env):
+    """
+    Adapt legacy env objects so they satisfy gymnasium's ``Env`` type checks.
+    """
+
+    metadata = {}
+    reward_range = (-float("inf"), float("inf"))
+    spec = None
+    render_mode = None
+
+    def __init__(self, env) -> None:
+        self.legacy_env = env
+        self.action_space = env.action_space
+        self.observation_space = env.observation_space
+        if hasattr(env, "metadata"):
+            self.metadata = env.metadata
+        if hasattr(env, "reward_range"):
+            self.reward_range = env.reward_range
+        if hasattr(env, "spec"):
+            self.spec = env.spec
+        if hasattr(env, "render_mode"):
+            self.render_mode = env.render_mode
+
+    def reset(self, **kwargs):
+        return self.legacy_env.reset(**kwargs)
+
+    def step(self, action):
+        return self.legacy_env.step(action)
+
+    def render(self):
+        return self.legacy_env.render()
+
+    def close(self):
+        return self.legacy_env.close()
+
+    @property
+    def unwrapped(self):
+        return getattr(self.legacy_env, "unwrapped", self.legacy_env)
+
+    def __getattr__(self, name):
+        return getattr(self.legacy_env, name)
+
+
+def _coerce_gymnasium_env(env):
+    if isinstance(env, gym.Env):
+        return env
+    return _LegacyEnvAdapter(env)
 
 
 # only for reference now
@@ -30,7 +78,7 @@ def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, s
     :return: the wrapped atari environment.
     """
     # assert 'NoFrameskip' in env_id
-    env = gymnasium.make(env_id)
+    env = gym.make(env_id)
     env = GymnasiumToGymWrapper(env)  # Add compatibility layer
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=1)
@@ -63,7 +111,7 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     :return: the wrapped atari environment.
     """
     # assert 'MontezumaRevenge' in env_id
-    env = gymnasium.make(env_id)
+    env = gym.make(env_id)
     env = GymnasiumToGymWrapper(env)  # Add compatibility layer
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=1)
@@ -90,7 +138,7 @@ class TimeLimit(gym.Wrapper):
         A wrapper that limits the maximum number of steps in an episode.
     """
     def __init__(self, env: gym.Env, max_episode_steps: Optional[int] = None):
-        super(TimeLimit, self).__init__(env)
+        super(TimeLimit, self).__init__(_coerce_gymnasium_env(env))
         self._max_episode_steps = max_episode_steps
         self._elapsed_steps = 0
 
@@ -120,9 +168,9 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     """
     # Step 1: Create base environment using gymnasium
     if config.render_mode_human:
-        env = gymnasium.make(config.env_id, render_mode='human', full_action_space=config.full_action_space)
+        env = gym.make(config.env_id, render_mode='human', full_action_space=config.full_action_space)
     else:
-        env = gymnasium.make(config.env_id, render_mode='rgb_array', full_action_space=config.full_action_space)
+        env = gym.make(config.env_id, render_mode='rgb_array', full_action_space=config.full_action_space)
 
     # (Optional) Apply gymnasium native wrappers
     if hasattr(config, 'save_replay') and config.save_replay \
@@ -178,7 +226,7 @@ class WarpFrame(gym.ObservationWrapper):
             - grayscale (:obj:`bool`): If True, convert frames to grayscale.
             - dict_space_key (:obj:`Optional[str]`): If specified, indicates which observation should be warped.
         """
-        super().__init__(env)
+        super().__init__(_coerce_gymnasium_env(env))
         self._width = width
         self._height = height
         self._grayscale = grayscale
@@ -234,7 +282,7 @@ class JpegWrapper(gym.Wrapper):
             - env (:obj:`gym.Env`): The environment to wrap.
             - transform2string (:obj:`bool`): If True, transform the observations to string.
         """
-        super().__init__(env)
+        super().__init__(_coerce_gymnasium_env(env))
         self.transform2string = transform2string
 
     def step(self, action):
@@ -265,7 +313,7 @@ class GameWrapper(gym.Wrapper):
         Arguments:
             - env (:obj:`gym.Env`): The environment to wrap.
         """
-        super().__init__(env)
+        super().__init__(_coerce_gymnasium_env(env))
 
     def legal_actions(self):
         return [_ for _ in range(self.env.action_space.n)]
@@ -279,7 +327,7 @@ class GymnasiumToGymWrapper(gym.Wrapper):
     """
     def __init__(self, env):
         # Ensure the input is a gymnasium environment
-        assert isinstance(env, gymnasium.Env), f"Expected env to be a `gymnasium.Env` but got {type(env)}"
+        assert isinstance(env, gym.Env), f"Expected env to be a `gymnasium.Env` but got {type(env)}"
         super().__init__(env)
         self._seed = None
 

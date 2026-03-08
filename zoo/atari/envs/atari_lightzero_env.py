@@ -2,7 +2,7 @@ import copy
 from ditk import logging
 from typing import List
 
-import gym
+import gymnasium as gym
 import ale_py
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep

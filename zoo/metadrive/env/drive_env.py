@@ -1,9 +1,8 @@
 import copy
-import gym
+import gymnasium as gym
 import numpy as np
 from ditk import logging
 from typing import Union, Dict, AnyStr, Tuple, Optional
-from gym.envs.registration import register
 from metadrive.manager.traffic_manager import TrafficMode
 from metadrive.obs.top_down_obs_multi_channel import TopDownMultiChannel
 from metadrive.constants import RENDER_MODE_NONE, DEFAULT_AGENT, REPLAY_DONE, TerminationState

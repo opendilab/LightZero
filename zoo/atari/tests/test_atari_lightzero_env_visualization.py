@@ -1,20 +1,22 @@
 import pytest
 from lzero.entry import eval_muzero
 from test_atari_sampled_efficientzero_config import create_config, main_config
-from gym.wrappers import RecordVideo
+from gymnasium.wrappers import RecordVideo
 
 @pytest.mark.envtest
 class TestAtariEnvLightZeroVisualization:
 
     def test_naive_env(self):
-        import gym, random
+        import random
+        import gymnasium as gym
         env = gym.make('BreakoutNoFrameskip-v4', render_mode='human')
         env = RecordVideo(env, video_folder='./', name_prefix='navie')
         env.reset()
         score=0
         while True:
             action = random.choice([0,1,2,3])
-            obs, reward, done, info = env.step(action)       
+            obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
             score+=reward
             if done:
                 break

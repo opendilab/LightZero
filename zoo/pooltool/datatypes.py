@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 from ding.envs import BaseEnv
 from easydict import EasyDict
-from gym import spaces
+from gymnasium import spaces
 from numpy.typing import NDArray
 
 import pooltool as pt

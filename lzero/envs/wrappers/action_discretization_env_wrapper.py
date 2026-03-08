@@ -1,12 +1,61 @@
 from itertools import product
 
-import gym
+import gymnasium as gym
 import numpy as np
 from easydict import EasyDict
 
 from ding.envs import BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_WRAPPER_REGISTRY
+
+
+class _LegacyEnvAdapter(gym.Env):
+    """
+    Adapt legacy env objects so they satisfy gymnasium's ``Env`` type checks.
+    """
+
+    metadata = {}
+    reward_range = (-float("inf"), float("inf"))
+    spec = None
+    render_mode = None
+
+    def __init__(self, env) -> None:
+        self.legacy_env = env
+        self.action_space = env.action_space
+        self.observation_space = env.observation_space
+        if hasattr(env, "metadata"):
+            self.metadata = env.metadata
+        if hasattr(env, "reward_range"):
+            self.reward_range = env.reward_range
+        if hasattr(env, "spec"):
+            self.spec = env.spec
+        if hasattr(env, "render_mode"):
+            self.render_mode = env.render_mode
+
+    def reset(self, **kwargs):
+        return self.legacy_env.reset(**kwargs)
+
+    def step(self, action):
+        return self.legacy_env.step(action)
+
+    def render(self):
+        return self.legacy_env.render()
+
+    def close(self):
+        return self.legacy_env.close()
+
+    @property
+    def unwrapped(self):
+        return getattr(self.legacy_env, "unwrapped", self.legacy_env)
+
+    def __getattr__(self, name):
+        return getattr(self.legacy_env, name)
+
+
+def _coerce_gymnasium_env(env):
+    if isinstance(env, gym.Env):
+        return env
+    return _LegacyEnvAdapter(env)
 
 
 @ENV_WRAPPER_REGISTRY.register('action_discretization_env_wrapper')
@@ -30,7 +79,7 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
         Arguments:
             - env (:obj:`gym.Env`): the environment to wrap.
         """
-        super().__init__(env)
+        super().__init__(_coerce_gymnasium_env(env))
         assert 'is_train' in cfg, '`is_train` flag must set in the config of env'
         self.is_train = cfg.is_train
         self.cfg = cfg
@@ -46,7 +95,11 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
         Returns:
             - observation (:obj:`Any`): New observation after reset
         """
-        obs = self.env.reset(**kwargs)
+        reset_result = self.env.reset(**kwargs)
+        if isinstance(reset_result, tuple):
+            obs, _ = reset_result
+        else:
+            obs = reset_result
         self._raw_action_space = self.env.action_space
 
         if self.cfg.manually_discretization:
@@ -84,7 +137,15 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
             action = to_ndarray(action)
 
         # The core original env step.
-        obs, rew, done, info = self.env.step(action)
+        step_result = self.env.step(action)
+        if len(step_result) == 5:
+            obs, rew, terminated, truncated, info = step_result
+            done = terminated or truncated
+            if truncated:
+                info = dict(info)
+                info.setdefault('TimeLimit.truncated', True)
+        else:
+            obs, rew, done, info = step_result
 
         return BaseEnvTimestep(obs, rew, done, info)
 

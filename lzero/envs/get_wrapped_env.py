@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 from easydict import EasyDict
 
 from ding.envs import DingEnvWrapper

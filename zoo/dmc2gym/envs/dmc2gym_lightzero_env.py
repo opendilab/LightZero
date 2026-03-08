@@ -5,8 +5,7 @@ from typing import Callable, Union, Dict, List
 from typing import Optional
 
 import dmc2gym
-# import gymnasium as gym
-import gym
+import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep, WarpFrameWrapper, ScaledFloatFrameWrapper, \
@@ -15,7 +14,8 @@ from ding.envs.common.common_function import affine_transform
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
-from gym.spaces import Box
+from gymnasium.spaces import Box
+from gymnasium.wrappers import RecordVideo
 from matplotlib import animation
 import imageio
 import logging
@@ -332,7 +332,7 @@ class DMC2GymEnv(BaseEnv):
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'
-                self._env = gym.wrappers.RecordVideo(
+                self._env = RecordVideo(
                     self._env,
                     video_folder=self._replay_path,
                     episode_trigger=lambda episode_id: True,
@@ -341,14 +341,25 @@ class DMC2GymEnv(BaseEnv):
 
             self._init_flag = True
 
+        reset_kwargs = {}
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
+            reset_kwargs['seed'] = self._seed + np_seed
         elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
+            reset_kwargs['seed'] = self._seed
 
         self._eval_episode_return = 0
-        obs = self._env.reset()  # This line will cause errors when subprocess_env_manager is used
+        try:
+            reset_result = self._env.reset(**reset_kwargs)  # This line will cause errors when subprocess_env_manager is used
+        except TypeError:
+            if 'seed' in reset_kwargs and hasattr(self._env, 'seed'):
+                self._env.seed(reset_kwargs['seed'])
+            reset_result = self._env.reset()
+
+        if isinstance(reset_result, tuple):
+            obs, _ = reset_result
+        else:
+            obs = reset_result
 
         if self._cfg["from_pixels"]:
             obs = obs
@@ -395,14 +406,22 @@ class DMC2GymEnv(BaseEnv):
         #     action = np.where(action > 0.9500, 0.9999, action)
         #     action = np.where(action < -0.9500, -0.9999, action)
 
-        obs, rew, done, info = self._env.step(action)
+        step_result = self._env.step(action)
+        if len(step_result) == 5:
+            obs, rew, terminated, truncated, info = step_result
+            done = terminated or truncated
+            if truncated:
+                info = dict(info)
+                info.setdefault('TimeLimit.truncated', True)
+        else:
+            obs, rew, done, info = step_result
         self._timestep += 1
 
         # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
         # print(f'step {self._timestep}: action: {action}, rew: {rew}, done: {done}')
 
         if self._cfg["from_pixels"]:
-            obs = obs
+            image_obs = obs
         else:
             info['image_obs'] = info['image_obs'].copy()
             image_obs = info['image_obs']

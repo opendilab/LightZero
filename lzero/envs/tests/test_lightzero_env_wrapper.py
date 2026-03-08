@@ -3,7 +3,7 @@ import pytest
 from ding.envs import DingEnvWrapper
 from lzero.envs.wrappers import ActionDiscretizationEnvWrapper, LightZeroEnvWrapper
 from easydict import EasyDict
-import gym
+import gymnasium as gym
 import numpy as np
 
 
