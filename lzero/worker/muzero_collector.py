@@ -994,19 +994,17 @@ class MuZeroCollector(ISerialCollector):
             # Use ding library's GAE functions
             compute_adv_data = gae_data(value, next_value, reward, done, None)
             advantages = gae(compute_adv_data, gamma, gae_lambda)
-            
+
+            # Return = Value + Advantage (before normalization)
+            returns = value + advantages
+            returns_np = returns.cpu().numpy().astype(np.float32)
+
             # Advantage Normalization (based on ppo_bak.py: adv_norm=True)
             # Normalize advantages in the current episode to stabilize training
             adv_mean = advantages.mean()
             adv_std = advantages.std() + 1e-8
             advantages = (advantages - adv_mean) / adv_std
-            
-            # 计算未归一化的 return
-            unnormalized_returns = value + advantages
-            
-            # Returns (raw values, no normalization)
-            returns_np = unnormalized_returns.cpu().numpy().astype(np.float32)
-            
+
             # Convert back to numpy
             advantages_np = advantages.cpu().numpy().astype(np.float32)
             
