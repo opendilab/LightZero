@@ -163,6 +163,7 @@ class GameSegment:
     def pad_over(
             self, next_segment_observations: List, next_segment_rewards: List, next_segment_actions: List, next_segment_root_values: List,
             next_segment_child_visits: List, next_segment_improved_policy: List = None, next_chances: List = None,
+            next_segment_old_log_prob: List = None,
     ) -> None:
         """
         Overview:
@@ -177,6 +178,7 @@ class GameSegment:
             - next_segment_root_values (:obj:`list`): root values of MCTS from the next game_segment
             - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
             - next_segment_improved_policy (:obj:`list`): root children select policy of MCTS from the next game_segment (Only used in Gumbel MuZero)
+            - next_segment_old_log_prob (:obj:`list`): PPO old policy logits from the next game_segment (optional)
         """
         assert len(next_segment_observations) <= self.num_unroll_steps + self.td_steps
         assert len(next_segment_child_visits) <= self.num_unroll_steps + self.td_steps
@@ -210,6 +212,9 @@ class GameSegment:
         if self.use_ture_chance_label_in_chance_encoder:
             for chances in next_chances:
                 self.chance_segment.append(chances)
+        if next_segment_old_log_prob is not None:
+            for logits in next_segment_old_log_prob:
+                self.old_log_prob_segment.append(copy.deepcopy(logits))
 
     def get_targets(self, timestep: int) -> Tuple:
         """

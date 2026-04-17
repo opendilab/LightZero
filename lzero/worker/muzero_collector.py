@@ -91,6 +91,13 @@ class MuZeroCollector(ISerialCollector):
         self.ppo_gamma = policy_config.ppo.gamma
         self.ppo_gae_lambda = policy_config.ppo.gae_lambda
 
+        # Value normalization configuration
+        self.value_norm = getattr(policy_config, 'value_norm', True)
+        if self.value_norm:
+            from ding.utils import RunningMeanStd
+            self._running_mean_std = RunningMeanStd(epsilon=1e-4, device='cpu')
+            self._logger.info("Value normalization enabled in MuZeroCollector")
+
         self.reset(policy, env)
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
@@ -161,7 +168,7 @@ class MuZeroCollector(ISerialCollector):
         self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
 
         # Global episode_id counter for tracking segments belonging to the same episode
-        self._global_episode_id = 0
+        self._global_episode_id = 0 
 
     def _reset_stat(self, env_id: int) -> None:
         """
@@ -289,16 +296,29 @@ class MuZeroCollector(ISerialCollector):
         if self.policy_config.gumbel_algo:
             pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index:end_index]
 
+        # PPO: pad old_log_prob 与 action 等对齐，取下一段开头的 unroll_plus_td 个
+        if hasattr(game_segments[i], 'old_log_prob_segment') and len(game_segments[i].old_log_prob_segment) > 0:
+            pad_old_log_prob_lst = list(game_segments[i].old_log_prob_segment[beg_index:end_index])
+        else:
+            # 当前段无 old_log_prob（例如新建段后仅遇到 abnormal step 即 done），用零 logits 占位
+            action_space_size = getattr(
+                self._env.action_space, 'n',
+                getattr(self.policy_config.model, 'action_space_size', 6)
+            )
+            pad_old_log_prob_lst = [[0.0] * action_space_size for _ in range(self.unroll_plus_td_steps)]
+
         # pad over and save
         if self.policy_config.gumbel_algo:
             last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
-                                           next_segment_improved_policy=pad_improved_policy_prob)
+                                           next_segment_improved_policy=pad_improved_policy_prob,
+                                           next_segment_old_log_prob=pad_old_log_prob_lst)
         else:
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
                 last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
-                                               next_chances=chance_lst)
+                                               next_chances=chance_lst, next_segment_old_log_prob=pad_old_log_prob_lst)
             else:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst)
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
+                                               next_segment_old_log_prob=pad_old_log_prob_lst)
         """
         Note:
             game_segment element shape:
@@ -460,7 +480,7 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # Key policy forward step
                 # ==============================================================
-                # print(f'ready_env_id:{ready_env_id}')
+                # print(f'ready_env_id:{ready_env_id}') # todo collect forward function
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
                 
                 pred_next_text_with_env_id = {k: v['predicted_next_text'] if 'predicted_next_text' in v else -1 for k, v in policy_output.items()}
@@ -472,26 +492,13 @@ class MuZeroCollector(ISerialCollector):
                 timestep_dict_with_env_id = {
                         k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
                 }
-                # PPO: calculate log_prob from policy_logits and action
-                # Use predicted_policy_logits to compute log probability of the selected action
-                log_prob_dict_with_env_id = {}
-                # import pudb;pudb.set_trace()
-                
+                # PPO: store complete policy_logits for ppo_error
+                # Store the full [A] logits instead of just log_prob
+                policy_logits_dict_with_env_id = {}
                 for k, v in policy_output.items():
-                    if 'predicted_policy_logits' in v:
-                        # Compute log_prob from policy_logits: log(softmax(logits)[action])
-                        policy_logits = np.array(v['predicted_policy_logits'])
-                        action = v['action']
-                        # Apply softmax to get probabilities (with numerical stability)
-                        exp_logits = np.exp(policy_logits - np.max(policy_logits))
-                        probs = exp_logits / (np.sum(exp_logits) + 1e-8)
-                        # Get log probability of the selected action
-                        log_prob = np.log(probs[action] + 1e-8)
-                        log_prob_dict_with_env_id[k] = float(log_prob)
-                    else:
-                        # Fallback: if no policy_logits available, set to 0.0
-                        log_prob_dict_with_env_id[k] = 0.0
-
+                    policy_logits = np.array(v['predicted_policy_logits'])
+                    policy_logits_dict_with_env_id[k] = policy_logits
+                    
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
                         k: v['root_sampled_actions'] for k, v in policy_output.items()
@@ -514,7 +521,7 @@ class MuZeroCollector(ISerialCollector):
                 pred_value_dict = {}
                 timestep_dict = {}
                 pred_next_text = {}
-                log_prob_dict = {}  # PPO: log_prob dictionary
+                policy_logits_dict = {}  # PPO: policy_logits dictionary [A]
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -534,7 +541,7 @@ class MuZeroCollector(ISerialCollector):
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
                     timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
                     pred_next_text[env_id] = pred_next_text_with_env_id.pop(env_id)
-                    log_prob_dict[env_id] = log_prob_dict_with_env_id.pop(env_id)  # PPO: populate log_prob
+                    policy_logits_dict[env_id] = policy_logits_dict_with_env_id.pop(env_id)  # PPO: populate policy_logits
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -582,21 +589,19 @@ class MuZeroCollector(ISerialCollector):
                             with open("./log/bleu_match.txt", "a", encoding="utf-8") as f:
                                 f.write(f"pred_text={pred_next_text[env_id]}\ngroundtruth_text={groundtrut_next_text[env_id]}\ntext_bleu={text_bleu:.4f}\n\n")
                     
-                    if collect_with_pure_policy:
-                        game_segments[env_id].store_search_stats(temp_visit_list, 0)
-                    else:
-                        if self.policy_config.sampled_algo:
-                            game_segments[env_id].store_search_stats(
-                                distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
-                            )
-                        elif self.policy_config.gumbel_algo:
-                            game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id],
-                                                                     improved_policy=improved_policy_dict[env_id])
-                        else:
-                            game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+                    # === Online PPO: Only pure policy, no MCTS ===
+                    # Store dummy MCTS data for structure consistency
+                    # In Online PPO, we don't have MCTS search, so visit counts are all zero
+                    raw_value = value_dict[env_id]
                     
-                    # PPO: store log_prob for PPO training
-                    game_segments[env_id].old_log_prob_segment.append(log_prob_dict[env_id])
+    
+                    game_segments[env_id].store_search_stats(
+                        [0.0] * len(temp_visit_list),  # Dummy MCTS visit distribution
+                        raw_value  # Use raw value
+                    )
+                    
+                    # PPO: store policy_logits for PPO training (ppo_error needs full logits)
+                    game_segments[env_id].old_log_prob_segment.append(policy_logits_dict[env_id])
 
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                     # in ``game_segments[env_id].init``, we have appended o_{t} in ``self.obs_segment``
@@ -793,6 +798,15 @@ class MuZeroCollector(ISerialCollector):
                     self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
+                    
+                    # 统计 game_segment_pool 中各个 episode_id 的 segment 数量
+                    from collections import Counter
+                    episode_ids = [seg.episode_id for seg, _, _ in self.game_segment_pool]
+                    episode_segment_count = Counter(episode_ids)
+                    
+                    self._logger.info(f"[Episode Stats] Total segments in pool: {len(self.game_segment_pool)}")
+                    for ep_id in sorted(episode_segment_count.keys()):
+                        self._logger.info(f"  Episode {ep_id}: {episode_segment_count[ep_id]} segments")
 
             if collected_episode >= n_episode:
                 # Batch compute GAE for all episodes in the pool
@@ -887,93 +901,7 @@ class MuZeroCollector(ISerialCollector):
 
             if self.policy_config.use_wandb:
                 wandb.log({'{}_step/'.format(self._instance_name) + k: v for k, v in info.items()}, step=self._total_envstep_count)
-
-    def _batch_compute_gae_for_pool_bak(self) -> None:
-        """
-        Overview:
-            Batch compute GAE (Generalized Advantage Estimation) for all segments in game_segment_pool
-            at the end of collect. Process by grouping segments by episode_id.
-            Original implementation using manual GAE computation.
-        """
-        if len(self.game_segment_pool) == 0:
-            return
-        
-        gamma = self.ppo_gamma
-        gae_lambda = self.ppo_gae_lambda
-        
-        # 1. Group all segments by episode_id
-        episode_groups = {}  # {episode_id: [(pool_idx, segment, priorities, done), ...]}
-        
-        for pool_idx in range(len(self.game_segment_pool)):
-            segment, priorities, done_flag = self.game_segment_pool[pool_idx]
-            episode_id = segment.episode_id
-            
-            if episode_id not in episode_groups:
-                episode_groups[episode_id] = []
-            episode_groups[episode_id].append((pool_idx, segment, priorities, done_flag))
-        
-        # 2. Compute GAE for each episode
-        for episode_id, segments_info in episode_groups.items():
-            # Sort by pool_idx to ensure temporal order
-            segments_info.sort(key=lambda x: x[0])
-            
-            # Extract values and rewards for the entire episode
-            all_values = []
-            all_rewards = []
-            segment_lengths = []
-            
-            for pool_idx, segment, _, _ in segments_info:
-                seg_len = len(segment.action_segment)
-                segment_lengths.append(seg_len)
-                
-                # Extract values and rewards from this segment
-                values = segment.root_value_segment[:seg_len]
-                rewards = segment.reward_segment[:seg_len]
-                
-                all_values.extend(values)
-                all_rewards.extend(rewards)
-            
-            # Convert to numpy arrays
-            all_values = np.array(all_values, dtype=np.float32)
-            all_rewards = np.array(all_rewards, dtype=np.float32)
-            
-            # Compute GAE from back to front
-            advantages = np.zeros_like(all_rewards, dtype=np.float32)
-            returns = np.zeros_like(all_rewards, dtype=np.float32)  # PPO: compute return simultaneously
-            gae = 0.0
-            
-            for t in reversed(range(len(all_rewards))):
-                # Get next value
-                if t == len(all_rewards) - 1:
-                    next_value = 0.0  # Episode end
-                else:
-                    next_value = all_values[t + 1]
-                
-                # TD error: δ_t = r_t + γ*V(s_{t+1}) - V(s_t)
-                delta = all_rewards[t] + gamma * next_value - all_values[t]
-                
-                # GAE: A_t = δ_t + γ*λ*A_{t+1}
-                gae = delta + gamma * gae_lambda * gae
-                advantages[t] = gae
-                
-                # PPO: Return = Advantage + Value
-                returns[t] = gae + all_values[t]
-            
-            # 3. Distribute advantages and returns back to segments
-            offset = 0
-            for i, (pool_idx, segment, priorities, done_flag) in enumerate(segments_info):
-                seg_len = segment_lengths[i]
-                
-                # Assign advantages and returns
-                segment.advantage_segment = advantages[offset:offset + seg_len].copy()
-                segment.return_segment = returns[offset:offset + seg_len].copy()  # PPO: assign returns
-                offset += seg_len
-                
-                # Update segment in pool
-                self.game_segment_pool[pool_idx] = (segment, priorities, done_flag)
-        
-        self._logger.info(f"Batch computed GAE for {len(episode_groups)} episodes in game_segment_pool")
-
+    
     def _batch_compute_gae_for_pool(self) -> None:
         """
         Overview:
@@ -1006,26 +934,59 @@ class MuZeroCollector(ISerialCollector):
             # Extract values and rewards for the entire episode
             all_values = []
             all_rewards = []
-            segment_lengths = []
+            segment_lengths_action = []  # Store action lengths for final trimming
+            segment_lengths_reward = []  # Store reward lengths for computation alignment
             
             for pool_idx, segment, _, _ in segments_info:
-                seg_len = len(segment.action_segment)
-                segment_lengths.append(seg_len)
+                # ✅ 只取【原始部分】，避免重复
+                # segment.game_segment_length 是该 segment 的原始长度（不含 padding）
+                original_seg_len = segment.game_segment_length
                 
-                # Extract values and rewards from this segment
-                values = segment.root_value_segment[:seg_len]
-                rewards = segment.reward_segment[:seg_len]
+                # Extract only the original part (no padding)
+                # root_value_segment: [original_len] + [num_unroll_steps + td_steps]
+                # reward_segment: [original_len] + [num_unroll_steps + td_steps - 1]
+                values = segment.root_value_segment[:original_seg_len]  # 只取原始部分
+                rewards = segment.reward_segment[:original_seg_len]
                 
-                all_values.extend(values)
-                all_rewards.extend(rewards)
-            
+                # Store segment lengths for later distribution
+                segment_lengths_action.append(original_seg_len)
+                segment_lengths_reward.append(original_seg_len)
+
+                # Flatten/squeeze if needed (handle both 1D and 2D cases)
+                if hasattr(values, 'shape') and len(values.shape) > 1:
+                    values = values.flatten()
+                if hasattr(rewards, 'shape') and len(rewards.shape) > 1:
+                    rewards = rewards.flatten()
+
+                # Convert to Python list for proper scalar conversion
+                all_values.extend(values.tolist() if hasattr(values, 'tolist') else values)
+                all_rewards.extend(rewards.tolist() if hasattr(rewards, 'tolist') else rewards)
+
             # Convert to torch tensors for ding library
-            value = torch.tensor(all_values, dtype=torch.float32)
-            # Create next_value: [v1, v2, ..., v_{T-1}, 0.0] for last step
-            next_value = torch.cat([value[1:], torch.tensor([0.0], dtype=torch.float32)])
+            # Align all tensors to have the same length as reward sequence
+            T = len(all_rewards)
+            
+            # Extract value at time t (ensure alignment with reward length)
+            value_list = []
+            for t in range(T):
+                if t < len(all_values):
+                    value_list.append(all_values[t])
+                else:
+                    value_list.append(0.0)
+            value = torch.tensor(value_list, dtype=torch.float32)
+            
+            # Extract next_value at time t+1
+            next_value_list = []
+            for t in range(T):
+                if t + 1 < len(all_values):
+                    next_value_list.append(all_values[t + 1])
+                else:
+                    next_value_list.append(0.0)  # Terminal state has value 0
+            next_value = torch.tensor(next_value_list, dtype=torch.float32)
+            
             reward = torch.tensor(all_rewards, dtype=torch.float32)
             # Create done flags: False for all steps except the last one in the episode
-            done = torch.zeros(len(all_rewards), dtype=torch.bool)
+            done = torch.zeros(T, dtype=torch.bool)
             if len(segments_info) > 0:
                 # Mark the last step of the episode as done
                 done[-1] = True
@@ -1034,21 +995,47 @@ class MuZeroCollector(ISerialCollector):
             compute_adv_data = gae_data(value, next_value, reward, done, None)
             advantages = gae(compute_adv_data, gamma, gae_lambda)
             
-            # Convert back to numpy and compute returns
+            # Advantage Normalization (based on ppo_bak.py: adv_norm=True)
+            # Normalize advantages in the current episode to stabilize training
+            adv_mean = advantages.mean()
+            adv_std = advantages.std() + 1e-8
+            advantages = (advantages - adv_mean) / adv_std
+            
+            # 计算未归一化的 return
+            unnormalized_returns = value + advantages
+            
+            # Returns (raw values, no normalization)
+            returns_np = unnormalized_returns.cpu().numpy().astype(np.float32)
+            
+            # Convert back to numpy
             advantages_np = advantages.cpu().numpy().astype(np.float32)
-            returns_np = advantages_np + np.array(all_values, dtype=np.float32)
             
             # 3. Distribute advantages and returns back to segments
+            # 每个 segment 分配 original_seg_len 个，再按 action pad_over 逻辑用下一段开头做 padding（不补 0）
             offset = 0
+            pad_len = self.unroll_plus_td_steps
             for i, (pool_idx, segment, priorities, done_flag) in enumerate(segments_info):
-                seg_len = segment_lengths[i]
-                
-                # Assign advantages and returns
-                segment.advantage_segment = advantages_np[offset:offset + seg_len].copy()
-                segment.return_segment = returns_np[offset:offset + seg_len].copy()
-                offset += seg_len
-                
-                # Update segment in pool
+                original_seg_len = segment.game_segment_length
+                num_to_take = min(original_seg_len, len(advantages_np) - offset)
+                if num_to_take <= 0:
+                    offset += original_seg_len
+                    self.game_segment_pool[pool_idx] = (segment, priorities, done_flag)
+                    continue
+                segment.advantage_segment = advantages_np[offset:offset + num_to_take].copy()
+                segment.return_segment = returns_np[offset:offset + num_to_take].copy()
+                next_start = offset + num_to_take
+                take_from_next = min(pad_len, max(0, len(advantages_np) - next_start))
+                if take_from_next > 0:
+                    segment.advantage_segment = np.concatenate([
+                        segment.advantage_segment,
+                        advantages_np[next_start:next_start + take_from_next].copy()
+                    ])
+                    segment.return_segment = np.concatenate([
+                        segment.return_segment,
+                        returns_np[next_start:next_start + take_from_next].copy()
+                    ])
+                offset += original_seg_len
                 self.game_segment_pool[pool_idx] = (segment, priorities, done_flag)
         
         self._logger.info(f"Batch computed GAE for {len(episode_groups)} episodes in game_segment_pool using ding library")
+        

@@ -51,35 +51,33 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
-    def sample(
+    def _sample_original(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
         """
         Overview:
-            sample data from ``GameBuffer`` and prepare the current and target batch for training.
-        Arguments:
-            - batch_size (:obj:`int`): batch size.
-            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
-        Returns:
-            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
+            Original sampling logic (before mixed sampling).
         """
-        policy._target_model.to(self._cfg.device)
-        policy._target_model.eval()
-
         # obtain the current_batch and prepare target context
         reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
             batch_size, self._cfg.reanalyze_ratio
         )
 
-        # current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        # Unpack for readability:
+        # 0: obs_list, 1: action_list, 2: bootstrap_action_list, 3: mask_list,
+        # 4: batch_index_list, 5: weights_list, 6: make_time_list,
+        # 7: timestep_list, 8: advantage_list, 9: old_log_prob_list, 10: return_list
+        timestep_list = current_batch[7]
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2], current_batch[-1]  # current_batch[2] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[2], timestep_list
         )
 
         # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1]) # current_batch[1] is batch_action
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(
+            policy_re_context, policy._target_model, current_batch[1], timestep_list
+        )
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -93,11 +91,84 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             batch_target_policies = batch_target_policies_non_re
 
         target_batch = [batch_rewards, batch_target_values, batch_target_policies]
-
-        # a batch contains the current_batch and the target_batch
         train_data = [current_batch, target_batch]
         return train_data
 
+    def _sample_from_segment_range(self, batch_size: int, policy, start_idx: int, end_idx: int) -> List[Any]:
+        """
+        Overview:
+            Sample from a specific range of segments.
+        Arguments:
+            - batch_size: Number of samples to draw
+            - policy: Policy model
+            - start_idx: Start index of segment range (inclusive)
+            - end_idx: End index of segment range (exclusive)
+        Returns:
+            - train_data: [current_batch, target_batch]
+        """
+        # 临时修改 buffer 以仅从指定范围采样，用完后必须恢复
+        original_buffer = self.game_segment_buffer
+        original_game_pos_priorities = self.game_pos_priorities
+        try:
+            self.game_segment_buffer = original_buffer[start_idx:end_idx]
+            self.game_pos_priorities = original_game_pos_priorities[start_idx:end_idx]
+            train_data = self._sample_original(batch_size, policy)
+            return train_data
+        finally:
+            self.game_segment_buffer = original_buffer
+            self.game_pos_priorities = original_game_pos_priorities
+     
+
+    def sample(
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
+    ) -> Tuple[List[Any], List[Any]]:
+        """
+        Overview:
+            Sample data from buffer with mixed strategy: part from new data, part from old data.
+        Arguments:
+            - batch_size (:obj:`int`): batch size.
+            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
+        Returns:
+            - (train_data_new, train_data_old): Tuple of train data
+              - train_data_new: Data sampled from latest pushed segments
+              - train_data_old: Data sampled from older segments
+              - Each train_data is [current_batch, target_batch] format
+        """
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
+        
+        total_segments = len(self.game_segment_buffer)
+        
+        # ✅ 检查是否有足够的新旧数据分离
+        # if self.latest_push_count > 0 and total_segments > self.latest_push_count:
+        #     print("有足够数据进行新旧数据分离")
+        #     # 计算新旧数据的 batch_size 分配
+        #     new_batch_size = int(batch_size * self.new_data_ratio)
+        #     old_batch_size = batch_size - new_batch_size
+            
+        #     # 新数据：最后 latest_push_count 个 segments
+        #     new_start_idx = total_segments - self.latest_push_count
+            
+        #     # 从新数据采样
+        #     train_data_new = self._sample_from_segment_range(
+        #         new_batch_size, policy, new_start_idx, total_segments
+        #     )
+            
+        #     # 从老数据采样
+        #     train_data_old = self._sample_from_segment_range(
+        #         old_batch_size, policy, 0, new_start_idx
+        #     )
+            
+        #     return (train_data_new, train_data_old)
+        # else:
+        print("没有足够数据进行新旧数据分离")
+        # Fallback: 没有足够的新旧数据区分，使用原始方法
+        train_data = self._sample_original(batch_size, policy)
+        return (train_data, None)
+
+
+    
+    
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -114,6 +185,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
+        # import pudb;pudb.set_trace()
         if self.sample_type == 'transition':
             orig_data = self._sample_orig_data(batch_size)
         elif self.sample_type == 'episode':
@@ -178,26 +250,24 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             bootstrap_action_list.append(bootstrap_action_tmp)
 
             # import pudb;pudb.set_trace()
-            # PPO: extract GAE advantages if available
-            if hasattr(game, 'advantage_segment') and len(game.advantage_segment) > 0:
-                # Extract advantages for the sampled positions
-                advantage_tmp = game.advantage_segment[pos_in_game_segment:pos_in_game_segment +
-                                                                      self._cfg.num_unroll_steps].tolist()
-                # Pad with zeros if not enough advantages (shouldn't happen if GAE is computed correctly)
-                advantage_tmp += [0.0 for _ in range(self._cfg.num_unroll_steps - len(advantage_tmp))]
-            else:
-                # If no advantage computed, fill with zeros
-                advantage_tmp = [0.0 for _ in range(self._cfg.num_unroll_steps)]
+            
+            # Extract advantages for the sampled positions
+            advantage_tmp = game.advantage_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                    self._cfg.num_unroll_steps].tolist()
+            # Pad with zeros if not enough advantages (shouldn't happen if GAE is computed correctly)
+            advantage_tmp += [0.0 for _ in range(self._cfg.num_unroll_steps - len(advantage_tmp))]
+         
             advantage_list.append(advantage_tmp)
             
-            # PPO: extract old_log_prob if available
-            if hasattr(game, 'old_log_prob_segment') and len(game.old_log_prob_segment) > 0:
-                log_prob_tmp = game.old_log_prob_segment[pos_in_game_segment:pos_in_game_segment +
-                                                                      self._cfg.num_unroll_steps].tolist()
-                log_prob_tmp += [0.0 for _ in range(self._cfg.num_unroll_steps - len(log_prob_tmp))]
-            else:
-                log_prob_tmp = [0.0 for _ in range(self._cfg.num_unroll_steps)]
-            old_log_prob_list.append(log_prob_tmp)
+            logits_tmp = game.old_log_prob_segment[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps]  # [T, A]
+            logits_tmp = logits_tmp.tolist()  # Convert to list
+            # Pad if necessary: add zero logits [0, 0, ..., 0] for missing timesteps
+            action_space_size = len(logits_tmp[0]) if len(logits_tmp) > 0 else 6
+            num_pad = self._cfg.num_unroll_steps - len(logits_tmp)
+            if num_pad > 0:
+                logits_tmp += [[0.0] * action_space_size for _ in range(num_pad)]
+    
+            old_log_prob_list.append(logits_tmp)
             
             # PPO: extract return if available
             if hasattr(game, 'return_segment') and len(game.return_segment) > 0:
@@ -273,7 +343,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # obtain the current_batch and prepare target context
         policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size)
         # target policy
-        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1])
+        # current_batch structure is aligned with _make_batch: index 7 is timestep_list
+        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[7])
 
     def _make_batch_for_reanalyze(self, batch_size: int) -> Tuple[Any]:
         """
@@ -362,14 +433,21 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 advantage_tmp = [0.0 for _ in range(self._cfg.num_unroll_steps)]
             advantage_list.append(advantage_tmp)
             
-            # PPO: extract old_log_prob if available
+            # PPO: extract policy_logits if available (now [T, A] instead of [T])
             if hasattr(game, 'old_log_prob_segment') and len(game.old_log_prob_segment) > 0:
-                log_prob_tmp = game.old_log_prob_segment[pos_in_game_segment:pos_in_game_segment +
-                                                                      self._cfg.num_unroll_steps].tolist()
-                log_prob_tmp += [0.0 for _ in range(self._cfg.num_unroll_steps - len(log_prob_tmp))]
+                logits_tmp = game.old_log_prob_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                      self._cfg.num_unroll_steps]  # [T, A]
+                logits_tmp = logits_tmp.tolist()  # Convert to list
+                # Pad if necessary: add zero logits [0, 0, ..., 0] for missing timesteps
+                action_space_size = len(logits_tmp[0]) if len(logits_tmp) > 0 else 6
+                num_pad = self._cfg.num_unroll_steps - len(logits_tmp)
+                if num_pad > 0:
+                    logits_tmp += [[0.0] * action_space_size for _ in range(num_pad)]
             else:
-                log_prob_tmp = [0.0 for _ in range(self._cfg.num_unroll_steps)]
-            old_log_prob_list.append(log_prob_tmp)
+                # Default: zero logits for all timesteps
+                action_space_size = 6  # Default action space size
+                logits_tmp = [[0.0] * action_space_size for _ in range(self._cfg.num_unroll_steps)]
+            old_log_prob_list.append(logits_tmp)
             
             # PPO: extract return if available
             if hasattr(game, 'return_segment') and len(game.return_segment) > 0:

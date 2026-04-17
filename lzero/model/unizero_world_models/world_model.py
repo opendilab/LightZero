@@ -1338,7 +1338,7 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
 
-    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
+    def compute_loss_unizero(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
         start_pos = batch['timestep']
         # Encode observations into latent state representations
@@ -1529,21 +1529,34 @@ class WorldModel(nn.Module):
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
 
-        if not self.continuous_action_space:
-            loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy,
-                                                                                            batch,
-                                                                                            element='policy')
-        else:
-            # NOTE: for continuous action space
-            if self.config.policy_loss_type == 'simple':
-                orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_simple(outputs, batch)
-            else:
-                orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(outputs, batch)
-            
-            loss_policy = orig_policy_loss + self.policy_entropy_weight * policy_entropy_loss
-            policy_entropy = - policy_entropy_loss
+        # ========== Policy Loss (COMMENTED OUT - using compute_loss_ppo instead) ==========
+        # if not self.continuous_action_space:
+        #     loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy,
+        #                                                                                     batch,
+        #                                                                                     element='policy')
+        # else:
+        #     # NOTE: for continuous action space
+        #     if self.config.policy_loss_type == 'simple':
+        #         orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_simple(outputs, batch)
+        #     else:
+        #         orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(outputs, batch)
+        #     
+        #     loss_policy = orig_policy_loss + self.policy_entropy_weight * policy_entropy_loss
+        #     policy_entropy = - policy_entropy_loss
+        
+        # Set to zero for now (using PPO losses instead)
+        loss_policy = torch.tensor(0.0, device=batch['actions'].device)
+        orig_policy_loss = torch.tensor(0.0, device=batch['actions'].device)
+        policy_entropy = torch.tensor(0.0, device=batch['actions'].device)
 
-        loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
+        # ========== Value Loss (changed to use returns_categorical like PPO) ==========
+        # Use returns_categorical as target instead of target_value
+        returns_categorical = batch['returns_categorical']  # [B, T, support_size]
+        
+        # Use compute_cross_entropy_loss with returns_categorical as target
+        value_loss = self.compute_cross_entropy_loss(outputs, returns_categorical, batch, element='value')
+        # Normalize by mask
+        value_loss = value_loss.sum() / (batch['mask_padding'].sum() + 1e-8)
 
         # ==== TODO: calculate the new priorities for each transition. ====
         # value_priority = L1Loss(reduction='none')(labels_value.squeeze(-1), outputs['logits_value'][:, 0])
@@ -1643,6 +1656,8 @@ class WorldModel(nn.Module):
                 dormant_ratio_world_model=dormant_ratio_world_model,
                 latent_state_l2_norms=latent_state_l2_norms,
             )
+    
+    
     def compute_loss_ppo(
         self,
         batch: Dict[str, torch.Tensor],
@@ -1670,6 +1685,9 @@ class WorldModel(nn.Module):
         start_pos = batch['timestep']
         # ========== 1. Observation encoding and forward pass (same as compute_loss) ==========
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
+        
+        latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
+
         
         # Action tokens
         if self.continuous_action_space:
@@ -1716,7 +1734,7 @@ class WorldModel(nn.Module):
             target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
         
         labels_observations, labels_rewards, _ = self.compute_labels_world_model(
-            target_obs_embeddings, batch['rewards'], batch['ends'], batch['mask_padding']
+            target_obs_embeddings, batch['rewards_categorical'], batch['ends'], batch['mask_padding']
         )
         
         # Observation loss
@@ -1735,22 +1753,29 @@ class WorldModel(nn.Module):
             loss_obs = torch.tensor(0.0, device=logits_observations.device)
         
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
-        loss_obs = (loss_obs * mask_padding_expanded)
+        loss_obs = (loss_obs * mask_padding_expanded) # obs loss
         
-        # Reward loss
+        # Reward loss 计算
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
-        
+        # loss_rewards= torch.Tensor(0.0, device=batch['rewards_categorical'].device)
         # ========== 3. PPO Policy Loss ==========
         # Get PPO data from batch
         advantages = batch['advantages'].float()  # [B, T]
-        old_log_prob = batch['old_log_prob'].float()  # [B, T]
-        actions = batch['actions'].long()  # [B, T] for discrete
+        old_log_prob_raw = batch['old_log_prob'].float()  # [B, T, A] for discrete, [B, T] for continuous
+        actions = batch['actions'].long() if not self.continuous_action_space else batch['actions']  # [B, T]
         
         # Get policy logits and create distribution
-        policy_logits = outputs.logits_policy  # [B, T, A]
+        policy_logits = outputs.logits_policy  # [B, T, A] for discrete, [B, T, action_dim*2] for continuous
         
         if not self.continuous_action_space:
             # Discrete action space
+            # batch['old_log_prob'] is actually [B, T, A] logits from collector; compute log π_old(a)
+            log_probs_old = F.log_softmax(old_log_prob_raw, dim=-1)  # [B, T, A]
+            old_log_prob = log_probs_old.gather(
+                dim=-1,
+                index=actions.unsqueeze(-1)
+            ).squeeze(-1)  # [B, T]
+            
             # Apply action mask if available
             if 'action_mask' in batch:
                 action_mask = batch['action_mask'].bool()
@@ -1763,7 +1788,22 @@ class WorldModel(nn.Module):
             log_prob = dist.log_prob(actions)  # [B, T]
             entropy = dist.entropy()  # [B, T]
         else:
-            # Continuous action space - extract mu and sigma
+            # Continuous action space
+            # old_log_prob_raw should already be [B, T] (log_prob of taken actions)
+            # But if it's stored as logits, we need to compute log_prob from old distribution
+            # For now, assume old_log_prob_raw is already the log_prob [B, T]
+            if old_log_prob_raw.dim() == 3:
+                # If it's [B, T, action_dim*2], extract mu/sigma and compute log_prob
+                action_space_size = self.config.action_space_size
+                old_mu = old_log_prob_raw[:, :, :action_space_size]
+                old_sigma = old_log_prob_raw[:, :, action_space_size:]
+                old_dist = Independent(Normal(old_mu, old_sigma), 1)
+                old_log_prob = old_dist.log_prob(actions)  # [B, T]
+            else:
+                # Already log_prob [B, T]
+                old_log_prob = old_log_prob_raw
+            
+            # Extract mu and sigma from current policy
             action_space_size = self.config.action_space_size
             mu = policy_logits[:, :, :action_space_size]
             sigma = policy_logits[:, :, action_space_size:]
@@ -1786,36 +1826,37 @@ class WorldModel(nn.Module):
         # Policy entropy (for logging)
         policy_entropy = (entropy * mask_padding).sum() / (mask_padding.sum() + 1e-8)
         
-        # ========== 4. PPO Value Loss (使用交叉熵，与 compute_loss 一致) ==========
-        returns_categorical = batch['returns']  # [B, T, support_size] - 已经是分类分布
+        # ========== PPO Metrics (from ppo_bak) ==========
+        # 1. Approximate KL divergence (监控策略变化幅度) - use mask for accurate metrics
+        with torch.no_grad():
+            approx_kl = ((old_log_prob - log_prob) * mask_padding).sum() / (mask_padding.sum() + 1e-8)
+            # 2. Clipped fraction (监控裁剪有效性) - use mask for accurate metrics
+            clipfrac = (((ratio < 1.0 - clip_ratio) | (ratio > 1.0 + clip_ratio)).float() * mask_padding).sum() / (mask_padding.sum() + 1e-8)
         
-        # 使用 compute_cross_entropy_loss 计算损失（与 compute_loss 一致）
-        # 准备 labels_value 格式
-        labels_returns = returns_categorical.reshape(-1, self.support_size)  # [B*T, support_size]
+        # ========== 4. PPO Value Loss (与 UniZero compute_loss_unizero 对齐：交叉熵 + 按步 discount) ==========
+        returns_categorical = batch['returns_categorical']  # [B, T, support_size] - 已经是分类分布
         
-        # 使用现有的 compute_cross_entropy_loss 函数
-        value_loss = self.compute_cross_entropy_loss(outputs, returns_categorical, batch, element='value')
-        # value_loss 已经是 masked 的，需要取平均
-        value_loss = value_loss.sum() / (batch['mask_padding'].sum() + 1e-8)
+        # 逐元素交叉熵（与 compute_loss 一致）
+        loss_value_elem = self.compute_cross_entropy_loss(outputs, returns_categorical, batch, element='value')
+        # 与 UniZero 一致：按 timestep 做 gamma^t 折扣再求平均
+        timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
+        discounts = self.gamma ** timesteps
+        discounted_loss_value = (loss_value_elem.view(-1, batch['actions'].shape[1]) * discounts).sum() / (batch['mask_padding'].sum() + 1e-8)
         
         # ========== 5. Entropy Loss ==========
         entropy_loss = -policy_entropy  # Negative entropy to encourage exploration
         
         # ========== 6. Total Loss ==========
-        # Discount coefficients
-        timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
-        discounts = self.gamma ** timesteps
-        
-        # Discounted losses
+        # Discount coefficients (reuse for obs/rewards)
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum() / (batch['mask_padding'][:, 1:].sum() + 1e-8)
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum() / (batch['mask_padding'].sum() + 1e-8)
         
-        # Total loss
+        # Total loss（value 使用与 UniZero 一致的 discounted_loss_value）
         loss_total = (
             discounted_loss_obs * self.latent_recon_loss_weight +
             discounted_loss_rewards +
             policy_loss +
-            value_coef * value_loss +
+            value_coef * discounted_loss_value +
             entropy_coef * entropy_loss
         )
         
@@ -1826,12 +1867,15 @@ class WorldModel(nn.Module):
             continuous_action_space=self.continuous_action_space,
             loss_obs=discounted_loss_obs,
             loss_rewards=discounted_loss_rewards,
-            loss_value=value_loss,
+            loss_value=discounted_loss_value,
             loss_policy=policy_loss,
             latent_recon_loss=discounted_loss_obs,  # Using obs loss as latent recon loss
             perceptual_loss=perceptual_loss,
             orig_policy_loss=policy_loss,
             policy_entropy=policy_entropy,
+            # PPO BAK metrics
+            approx_kl=approx_kl,
+            clipfrac=clipfrac,
             first_step_losses={},
             middle_step_losses={},
             last_step_losses={},
@@ -1841,52 +1885,7 @@ class WorldModel(nn.Module):
             loss_total=loss_total,
         )
 
-    
-    # def compute_loss_ppo(
-    #         self,
-    #         batch: Dict[str, torch.Tensor],
-    #         inverse_scalar_transform_handle,
-    #         clip_ratio: float,
-    #         value_coef: float,
-    #         entropy_coef: float,
-    # ) -> Dict[str, torch.Tensor]:
-    #     """Compute PPO losses given policy logits and associated targets."""
-    #     policy_logits = batch['policy_logits']
-    #     action_mask = batch['action_mask'].bool()
-    #     actions = batch['actions'].long()
-    #     old_log_prob = batch['old_log_prob'].float()
-    #     advantages = batch['advantages'].float()
-    #     returns = batch['returns'].float()
-        
-    #     # import pudb;pudb.set_trace()
-        
-    #     pred_values = inverse_scalar_transform_handle(batch['values']).squeeze(-1)
 
-    #     masked_logits = policy_logits.masked_fill(~action_mask, -1e9)
-    #     dist = Categorical(logits=masked_logits)
-    #     log_prob = dist.log_prob(actions)
-    #     entropy = dist.entropy()
-
-    #     ratio = torch.exp(log_prob - old_log_prob)
-    #     surrogate1 = ratio * advantages
-    #     surrogate2 = torch.clamp(ratio, 1.0 - clip_ratio, 1.0 + clip_ratio) * advantages
-    #     policy_loss = -torch.min(surrogate1, surrogate2).mean()
-    #     value_loss = F.mse_loss(pred_values, returns)
-    #     entropy_mean = entropy.mean()
-    #     entropy_loss = -entropy_mean
-
-    #     loss_total = policy_loss + value_coef * value_loss + entropy_coef * entropy_loss
-
-    #     return {
-    #         'loss_total': loss_total,
-    #         'loss_policy': policy_loss,
-    #         'loss_value': value_loss,
-    #         'loss_entropy': entropy_loss,
-    #         'entropy_mean': entropy_mean,
-    #         'ratio_mean': ratio.mean(),
-    #         'advantage_mean': advantages.mean(),
-    #         'return_mean': returns.mean(),
-    #     }
     # TODO: test correctness
     def _calculate_policy_loss_cont_simple(self, outputs, batch: dict):
         """

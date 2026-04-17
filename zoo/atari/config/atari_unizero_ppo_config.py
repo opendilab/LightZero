@@ -10,15 +10,18 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
-    game_segment_length = 20
+    n_episode = 8
     evaluator_env_num = 3
-    num_simulations = 50
+    num_simulations = 50          # 保持（虽然不用，但不影响）
+    reanalyze_ratio = 0.          # 保持
+    update_per_collect = 10       # 根据 ppo_bak: epoch_per_collect=10
+    replay_ratio = 0.0            # 改为 0：online 不需要回放
     max_env_step = int(5e5)
     batch_size = 64
     num_unroll_steps = 10
     infer_context_length = 4
     num_layers = 2
-    replay_ratio = 0.25
+    game_segment_length = 20     # 改为 100：online 不需要长 segment
 
     # TODO: only for debug
     # collector_env_num = 2
@@ -73,7 +76,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             num_unroll_steps=num_unroll_steps,
             replay_ratio=replay_ratio,
             batch_size=batch_size,
-            learning_rate=0.0001,
+            learning_rate=3e-4,
             num_simulations=num_simulations,
             train_start_after_envsteps=2000,
             # train_start_after_envsteps=0, # TODO: only for debug
@@ -89,7 +92,11 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             eval_with_pure_policy=True,
             # Whether to use online learning (clear replay_buffer after each training iteration)
             online_learning=True,
-            # PPO configuration for GAE computation
+            # Value normalization for stable training (based on ppo_bak.py)
+            value_norm=True,
+            # Gradient clipping for training stability (based on ppo_bak.py defaults)
+            # grad_clip_value=0.5,             # PPO 标准值（防止梯度爆炸）
+            # PPO configuration for GAE computation (based on ppo_bak.py defaults)
             ppo=dict(
                 gamma=0.99,           # Discount factor
                 gae_lambda=0.95,      # GAE lambda parameter
@@ -116,7 +123,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_ppo_create_config = EasyDict(atari_unizero_ppo_create_config)
     create_config = atari_unizero_ppo_create_config
 
-    main_config.exp_name = f'data_lz/data_unizero_ppo/{env_id[:-14]}/{env_id[:-14]}_uz_ppo_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_lz/data_unizero_ppo/{env_id[:-14]}/{env_id[:-14]}_uz_ppo_nlayer{num_layers}_gsl{1}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

@@ -398,7 +398,6 @@ class UniZeroPolicy(MuZeroPolicy):
         # PPO: current_batch now contains 11 elements: obs, action, bootstrap_action, mask, indices, weights, make_time, timestep, advantage, old_log_prob, return
         obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch, advantage_batch, old_log_prob_batch, return_batch = current_batch
         target_reward, target_value, target_policy = target_batch
-        
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num > 1:
             obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
@@ -450,13 +449,19 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
         batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
 
-        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
+        # Original scalar forms (for PPO)
+        batch_for_gpt['rewards'] = target_reward[:, :-1]  # [B, T-1] scalar
+        batch_for_gpt['target_value'] = target_value[:, :-1]  # [B, T-1] scalar
+        
+        # Categorical distribution forms (for observation/reward/value losses)
+        batch_for_gpt['rewards_categorical'] = target_reward_categorical[:, :-1]  # [B, T-1, support_size]
+        batch_for_gpt['target_value_categorical'] = target_value_categorical[:, :-1]  # [B, T-1, support_size]
+        
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
         batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
                                             device=self._cfg.device)
-        batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
         # PPO: Add PPO-specific data to batch_for_gpt
@@ -464,15 +469,15 @@ class UniZeroPolicy(MuZeroPolicy):
         advantage_batch_tensor = torch.from_numpy(advantage_batch).to(self._cfg.device).float()
         old_log_prob_batch_tensor = torch.from_numpy(old_log_prob_batch).to(self._cfg.device).float()
 
-        # Align shapes: [B, num_unroll_steps] -> [B, T] where T matches target_value_categorical
-        # target_value_categorical is [B, num_unroll_steps+1, support_size], we take [:, :-1] to get [B, num_unroll_steps, support_size]
-        # returns_categorical is [B, num_unroll_steps, support_size], we need to align with target_value_categorical[:, :-1]
+        # Align shapes: [B, num_unroll_steps] -> [B, T] where T matches target_value
         target_seq_len = batch_for_gpt['target_value'].shape[1]  # This is num_unroll_steps (after [:, :-1])
         batch_for_gpt['advantages'] = advantage_batch_tensor[:, :target_seq_len]
         batch_for_gpt['old_log_prob'] = old_log_prob_batch_tensor[:, :target_seq_len]
-        # Use categorical distribution version of returns (already transformed above)
-        # returns_categorical is [B, num_unroll_steps, support_size], align with target_seq_len
-        batch_for_gpt['returns'] = returns_categorical[:, :target_seq_len]  # [B, T, support_size]
+        
+        # Original scalar form (for PPO MSE loss)
+        batch_for_gpt['returns'] = return_batch_tensor[:, :target_seq_len]  # [B, T] scalar
+        # Categorical distribution form (for reference/analysis)
+        batch_for_gpt['returns_categorical'] = returns_categorical[:, :target_seq_len]  # [B, T, support_size]
 
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
@@ -507,6 +512,15 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
+        
+        # PPO BAK 验证过的指标
+        approx_kl_value = self.intermediate_losses.get('approx_kl', 0.0)
+        clipfrac_value = self.intermediate_losses.get('clipfrac', 0.0)
+        # 处理张量或标量
+        approx_kl = approx_kl_value.item() if isinstance(approx_kl_value, torch.Tensor) else approx_kl_value
+        clipfrac = clipfrac_value.item() if isinstance(clipfrac_value, torch.Tensor) else clipfrac_value
+        adv_max = advantage_batch_tensor.max().item()
+        adv_mean = advantage_batch_tensor.mean().item()
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -607,6 +621,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
+            
+            # PPO BAK 验证过的关键指标
+            'ppo/approx_kl': approx_kl,
+            'ppo/clipfrac': clipfrac,
+            'ppo/adv_max': adv_max,
+            'ppo/adv_mean': adv_mean,
         }
         
         if self._cfg.use_wandb:
@@ -701,7 +721,7 @@ class UniZeroPolicy(MuZeroPolicy):
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
-            
+            # import pudb;pudb.set_trace()
             if self._cfg.collect_with_pure_policy:
                 # 纯策略模式：直接使用 policy_logits，跳过 MCTS
                 batch_action = []
@@ -718,12 +738,20 @@ class UniZeroPolicy(MuZeroPolicy):
                     probs = exp_logits / (np.sum(exp_logits) + 1e-8)
                     
                     # 4. 采样动作（或 argmax，根据 eps_greedy 配置）
+                    # 确保只从合法动作中采样
+                    # legal_mask = action_mask[i] == 1.0
+                    # legal_probs = probs[legal_mask]
+                    # legal_action_indices = np.where(legal_mask)[0]
+                    
                     if self._cfg.eps.eps_greedy_exploration_in_collect:
-                        action = np.argmax(probs)
+                        action = legal_action_indices[np.argmax(legal_probs)]
                         if np.random.rand() < self._collect_epsilon:
                             action = np.random.choice(legal_actions[i])
                     else:
-                        # 采样
+                        # 从合法动作中采样
+                        # legal_probs_normalized = legal_probs / (legal_probs.sum() + 1e-8)
+                        # action_index_in_legal = np.random.choice(len(legal_action_indices), p=legal_probs_normalized)
+                        # action = legal_action_indices[action_index_in_legal]
                         action = np.random.choice(len(probs), p=probs)
                     
                     # 5. 计算熵
@@ -736,19 +764,19 @@ class UniZeroPolicy(MuZeroPolicy):
                     # 7. 处理 predicted_next_text（如果需要，可以通过 recurrent_inference 获取，这里先设为 None）
                     # 注意：如果需要 predicted_next_text，可以在这里添加 recurrent_inference 调用
                     predicted_next = None
-                    
+
                     output[env_id] = {
-                        'action': int(action),
-                        'visit_count_distributions': distributions,
-                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                        'searched_value': value,
-                        'predicted_value': pred_values[i],
-                        'predicted_policy_logits': policy_logits[i],
-                        'timestep': timestep[i],
-                        'predicted_next_text': predicted_next,
+                        'action': int(action),  # shape: (). 本步选出的动作（用于环境 step）
+                        'visit_count_distributions': distributions,  # shape: (A,) 或 (len(legal),). 纯策略=全动作空间，非法位置概率≈0；MCTS ptree=仅合法动作，不含非法. 动作分布
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,  # shape: () float. 该分布的熵，用于 loss/正则
+                        'searched_value': value,  # shape: (1,) 或 scalar. 当前状态的价值估计（MCTS 为根节点 value，纯策略为 pred_value）
+                        'predicted_value': pred_values[i],  # shape: (1,) 或 scalar. 网络直接预测的 value（initial_inference 输出）
+                        'predicted_policy_logits': policy_logits[i],  # shape: (A,) list. 网络直接预测的 policy logits（未归一化）
+                        'timestep': timestep[i],  # shape: () int. 当前环境在本 episode 中的步数
+                        'predicted_next_text': predicted_next,  # shape: None | str. 若支持文本解码，则为下一状态解码出的文本，否则 None
                     }
                     batch_action.append(int(action))
-                
+
                 self.last_batch_obs = data
                 self.last_batch_action = batch_action
             else:
@@ -1143,6 +1171,13 @@ class UniZeroPolicy(MuZeroPolicy):
             'target_reward',
             'target_value',
             'total_grad_norm_before_clip_wm',
+            
+            # PPO BAK 验证过的关键指标
+            'ppo/approx_kl',
+            'ppo/clipfrac',
+            'ppo/adv_max',
+            'ppo/adv_mean',
+            
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',

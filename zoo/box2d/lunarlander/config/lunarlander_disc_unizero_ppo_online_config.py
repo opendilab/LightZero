@@ -1,16 +1,19 @@
 from easydict import EasyDict
 # ==============================================================
+# Online PPO Configuration for LunarLander
+# Based on ppo_bak.py default hyperparameters
+# ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+collector_env_num = 4
+n_episode = 4
 evaluator_env_num = 3
-num_simulations = 50
-reanalyze_ratio = 0.
-update_per_collect = None
-replay_ratio = 0.25
+num_simulations = 50          # 保持（虽然不用，但不影响）
+reanalyze_ratio = 0.          # 保持
+update_per_collect = 10       # 根据 ppo_bak: epoch_per_collect=10
+replay_ratio = 0.0            # 改为 0：online 不需要回放
 max_env_step = int(5e5)
-batch_size = 256
+batch_size = 64               # 根据 ppo_bak: batch_size=64
 num_unroll_steps = 10
 infer_context_length = 4
 norm_type = 'BN'
@@ -25,8 +28,8 @@ norm_type = 'BN'
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-lunarlander_unizero_ppo_config = dict(
-    exp_name=f'data_unizero_ppo/lunarlander_unizero_ppo_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
+lunarlander_unizero_ppo_online_config = dict(
+    exp_name=f'data_unizero_ppo/lunarlander_ppo_bak_upc{update_per_collect}_bs{batch_size}_lr3e4_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -62,16 +65,16 @@ lunarlander_unizero_ppo_config = dict(
         model_path=None,
         num_unroll_steps=num_unroll_steps,
         cuda=True,
-        game_segment_length=200,
+        game_segment_length=100,        # 改为 100：online 不需要长 segment
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
         piecewise_decay_lr_scheduler=False,
-        learning_rate=0.0001,
+        learning_rate=5e-4,             # 根据 ppo_bak: learning_rate=3e-4
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        replay_buffer_size=int(1e6),
+        replay_buffer_size=int(1e5),    # 改为 1e5：online 不需要大缓冲
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         # Whether to use pure policy (without MCTS) for data collection
@@ -81,26 +84,23 @@ lunarlander_unizero_ppo_config = dict(
         eval_with_pure_policy=True,
         # Whether to use online learning (clear replay_buffer after each training iteration)
         online_learning=True,
-        # Value normalization for stable training
+        # Value normalization for stable training (based on ppo_bak.py)
         value_norm=True,
-        # Gradient clipping for training stability (based on ppo_bak.py defaults)
-        grad_clip_value=0.5,             # PPO 标准值（防止梯度爆炸）
-        # Weight decay (L2 regularization) for training stability
-        weight_decay=0.0,                # PPO 标准（禁用 L2 正则化）
-        # PPO configuration for GAE computation
+        # PPO configuration for GAE computation (based on ppo_bak.py defaults)
+        grad_clip_value=20,   
         ppo=dict(
-            gamma=0.99,           # Discount factor
-            gae_lambda=0.95,      # GAE lambda parameter
-            clip_ratio=0.2,       # PPO clipping ratio
-            value_coef=0.5,       # Value loss coefficient
-            entropy_coef=0.01,   # Entropy loss coefficient
+            gamma=0.99,           # 根据 ppo_bak: discount_factor=0.99
+            gae_lambda=0.95,      # 根据 ppo_bak: gae_lambda=0.95
+            clip_ratio=0.2,       # 根据 ppo_bak: clip_ratio=0.2
+            value_coef=0.5,       # 根据 ppo_bak: value_weight=0.5
+            entropy_coef=0.01,     # 根据 ppo_bak: entropy_weight=0.0
         ),
     ),
 )
-lunarlander_unizero_ppo_config = EasyDict(lunarlander_unizero_ppo_config)
-main_config = lunarlander_unizero_ppo_config
+lunarlander_unizero_ppo_online_config = EasyDict(lunarlander_unizero_ppo_online_config)
+main_config = lunarlander_unizero_ppo_online_config
 
-lunarlander_unizero_ppo_create_config = dict(
+lunarlander_unizero_ppo_online_create_config = dict(
     env=dict(
         type='lunarlander',
         import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
@@ -111,10 +111,11 @@ lunarlander_unizero_ppo_create_config = dict(
         import_names=['lzero.policy.unizero'],
     ),
 )
-lunarlander_unizero_ppo_create_config = EasyDict(lunarlander_unizero_ppo_create_config)
-create_config = lunarlander_unizero_ppo_create_config
+lunarlander_unizero_ppo_online_create_config = EasyDict(lunarlander_unizero_ppo_online_create_config)
+create_config = lunarlander_unizero_ppo_online_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
 

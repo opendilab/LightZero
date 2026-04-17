@@ -695,3 +695,172 @@ def mz_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, reward, value, policy_logits
+
+
+# ============================================================
+# PPO 相关函数 (从 ding.rl_utils 提取，便于调试和自定义)
+# ============================================================
+from collections import namedtuple
+from typing import Optional
+
+# 定义 PPO 数据结构
+ppo_data = namedtuple(
+    'ppo_data', ['logit_new', 'logit_old', 'action', 'value_new', 'value_old', 'adv', 'return_', 'weight']
+)
+ppo_policy_data = namedtuple('ppo_policy_data', ['logit_new', 'logit_old', 'action', 'adv', 'weight'])
+ppo_value_data = namedtuple('ppo_value_data', ['value_new', 'value_old', 'return_', 'weight'])
+ppo_loss = namedtuple('ppo_loss', ['policy_loss', 'value_loss', 'entropy_loss'])
+ppo_info = namedtuple('ppo_info', ['approx_kl', 'clipfrac'])
+
+
+def ppo_policy_error(
+    data: namedtuple,
+    clip_ratio: float = 0.2,
+    dual_clip: Optional[float] = None
+) -> Tuple[namedtuple, namedtuple]:
+    """
+    计算 PPO 策略损失和熵损失
+    
+    Args:
+        data: ppo_policy_data namedtuple
+        clip_ratio: 剪辑比率，默认 0.2
+        dual_clip: 对于 negative advantage 的额外剪辑参数，默认 None
+    
+    Returns:
+        policy_loss: PPO 策略损失
+        entropy_loss: 熵损失
+        approx_kl: 近似 KL 散度
+        clipfrac: 被剪辑的比例
+    """
+    logit_new, logit_old, action, adv, weight = data
+    
+    if weight is None:
+        weight = torch.ones_like(adv)
+    
+    # 构建分布并计算对数概率
+    dist_new = torch.distributions.categorical.Categorical(logits=logit_new)
+    dist_old = torch.distributions.categorical.Categorical(logits=logit_old)
+    
+    logp_new = dist_new.log_prob(action)
+    logp_old = dist_old.log_prob(action)
+    dist_new_entropy = dist_new.entropy()
+    
+    if dist_new_entropy.shape != weight.shape:
+        dist_new_entropy = dist_new.entropy().mean(dim=1)
+    
+    entropy_loss = (dist_new_entropy * weight).mean()
+    
+    # 计算 policy loss (with clipping)
+    ratio = torch.exp(logp_new - logp_old)
+    if ratio.shape != adv.shape:
+        ratio = ratio.mean(dim=1)
+    
+    surr1 = ratio * adv
+    surr2 = ratio.clamp(1 - clip_ratio, 1 + clip_ratio) * adv
+    
+    if dual_clip is not None:
+        clip1 = torch.min(surr1, surr2)
+        clip2 = torch.max(clip1, dual_clip * adv)
+        # 仅在 adv < 0 时使用 dual_clip
+        policy_loss = -(torch.where(adv < 0, clip2, clip1) * weight).mean()
+    else:
+        policy_loss = (-torch.min(surr1, surr2) * weight).mean()
+    
+    # 计算监控指标
+    with torch.no_grad():
+        approx_kl = (logp_old - logp_new).mean().item()
+        clipped = ratio.gt(1 + clip_ratio) | ratio.lt(1 - clip_ratio)
+        clipfrac = clipped.float().mean().item()
+    
+    policy_output = namedtuple('policy_output', ['policy_loss', 'entropy_loss'])
+    return (
+        policy_output(policy_loss, entropy_loss),
+        ppo_info(approx_kl, clipfrac)
+    )
+
+
+def ppo_value_error(
+    data: namedtuple,
+    clip_ratio: float = 0.2,
+    use_value_clip: bool = True
+) -> torch.Tensor:
+    """
+    计算 PPO 值函数损失
+    
+    Args:
+        data: ppo_value_data namedtuple
+        clip_ratio: 剪辑比率
+        use_value_clip: 是否使用值剪辑
+    
+    Returns:
+        value_loss: 值函数损失
+    """
+    value_new, value_old, return_, weight = data
+    
+    if weight is None:
+        weight = torch.ones_like(value_new)
+    
+    # 计算原始 MSE loss
+    loss = F.mse_loss(value_new, return_, reduction='none')
+    loss = loss * weight
+    
+    if use_value_clip:
+        # 剪辑值预测，范围在 [value_old - clip, value_old + clip]
+        value_clipped = torch.clamp(
+            value_new,
+            value_old - clip_ratio,
+            value_old + clip_ratio
+        )
+        loss_clipped = F.mse_loss(value_clipped, return_, reduction='none')
+        loss_clipped = loss_clipped * weight
+        
+        # 取较大的损失（类似 PPO 的 min 操作）
+        loss = torch.max(loss, loss_clipped)
+    
+    return loss.mean()
+
+
+def ppo_error(
+    data: namedtuple,
+    clip_ratio: float = 0.2,
+    use_value_clip: bool = True,
+    dual_clip: Optional[float] = None
+) -> Tuple[namedtuple, namedtuple]:
+    """
+    计算完整的 PPO 损失（策略、值、熵）
+    
+    Args:
+        data: ppo_data namedtuple，包含：
+            - logit_new: [B, A] 新策略的 logits
+            - logit_old: [B, A] 旧策略的 logits
+            - action: [B] 执行的动作
+            - value_new: [B] 新值函数估计
+            - value_old: [B] 旧值函数估计
+            - adv: [B] 优势估计（已归一化）
+            - return_: [B] 返回值（目标）
+            - weight: [B] 样本权重
+        clip_ratio: 剪辑比率，默认 0.2
+        use_value_clip: 是否在值损失中使用剪辑，默认 True
+        dual_clip: 对偶剪辑参数，默认 None
+    
+    Returns:
+        ppo_loss: 包含 (policy_loss, value_loss, entropy_loss) 的 namedtuple
+        ppo_info: 包含 (approx_kl, clipfrac) 的 namedtuple
+    """
+    assert dual_clip is None or dual_clip > 1.0, \
+        "dual_clip must be > 1.0, got {}".format(dual_clip)
+    
+    logit_new, logit_old, action, value_new, value_old, adv, return_, weight = data
+    
+    # 计算策略损失
+    policy_data = ppo_policy_data(logit_new, logit_old, action, adv, weight)
+    policy_output, policy_info = ppo_policy_error(policy_data, clip_ratio, dual_clip)
+    
+    # 计算值损失
+    value_data = ppo_value_data(value_new, value_old, return_, weight)
+    value_loss = ppo_value_error(value_data, clip_ratio, use_value_clip)
+    
+    return (
+        ppo_loss(policy_output.policy_loss, value_loss, policy_output.entropy_loss),
+        policy_info
+    )

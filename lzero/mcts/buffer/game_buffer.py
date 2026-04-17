@@ -70,6 +70,10 @@ class GameBuffer(ABC, object):
         self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
+        
+        # ✅ 记录最新 push 的 segment 数量
+        self.latest_push_count = 0
+        self.new_data_ratio = self._cfg.get('new_data_ratio', 0.5)  # 默认 50% 新数据
 
     @abstractmethod
     def sample(
@@ -123,7 +127,14 @@ class GameBuffer(ABC, object):
         # +1e-6 for numerical stability
         probs = self.game_pos_priorities ** self._alpha + 1e-6
         probs /= probs.sum()
-
+        if num_of_transitions != len(probs):
+            print(
+                "[game_buffer] _sample_orig_data size mismatch: num_of_transitions=%s, len(probs)=%s, "
+                "len(game_pos_priorities)=%s, len(game_segment_game_pos_look_up)=%s, len(game_segment_buffer)=%s"
+                % (num_of_transitions, len(probs), len(self.game_pos_priorities),
+                   len(self.game_segment_game_pos_look_up), len(self.game_segment_buffer))
+            )
+            exit()
         # sample according to transition index
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
@@ -560,6 +571,10 @@ class GameBuffer(ABC, object):
                 - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.
         """
         data, meta = data_and_meta
+        
+        # ✅ 记录本次 push 的 segment 数量
+        self.latest_push_count = len(data)
+        
         for (data_game, meta_game) in zip(data, meta):
             self._push_game_segment(data_game, meta_game)
 
