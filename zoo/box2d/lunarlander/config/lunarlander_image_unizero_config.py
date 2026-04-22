@@ -14,12 +14,12 @@ reanalyze_ratio = 0.
 update_per_collect = None
 replay_ratio = 0.25
 # replay_ratio = 0.1
-max_env_step = int(5e5)
+max_env_step = int(1e6)
 batch_size = 256
 num_unroll_steps = 10
 infer_context_length = 4
-num_layers = 4
-norm_type = 'LN'
+num_layers = 2
+norm_type = 'BN'
 game_segment_length = 200
 
 buffer_reanalyze_freq = 1/5000000000
@@ -37,7 +37,7 @@ reanalyze_partition = 0.75
 # ==============================================================
 
 lunarlander_image_unizero_config = dict(
-    exp_name=f'data_unizero_0328/lunarlander_image_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
+    exp_name=f'data_unizero_0422/lunarlander_image_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
     env=dict(
         env_id='LunarLander-v2',
         observation_shape=(3, 64, 64),
@@ -70,8 +70,8 @@ lunarlander_image_unizero_config = dict(
                 device='cuda',
                 action_space_size=4,
                 num_layers=num_layers,
-                num_heads=8,
-                embed_dim=768,
+                num_heads=4,
+                embed_dim=256,
                 obs_type='image',
                 encoder_type='resnet',
                 group_size=8,
@@ -153,7 +153,7 @@ lunarlander_image_unizero_config = dict(
         eval_freq=int(5e3),
         td_steps=5,
         train_start_after_envsteps=0,
-        use_augmentation=False,
+        use_augmentation=True,
         manual_temperature_decay=False,
         # ============= Reanalyze =============
         buffer_reanalyze_freq=buffer_reanalyze_freq,

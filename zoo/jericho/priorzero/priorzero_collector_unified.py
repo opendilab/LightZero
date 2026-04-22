@@ -167,7 +167,17 @@ class PriorZeroCollector(OriginalCollector):
 
         # Extract results
         prior_per_seq = [result['action_probs'] for result in prior_results]
-        prior_per_tok = [result.get('action_logits', None) for result in prior_results]
+        # [BUG FIX] prior_per_tok must contain the full token-level logprob dict
+        # (rollout_action_logprob, full_ids, label_ids) for PPO training,
+        # not just the per-sequence action_logits.
+        prior_per_tok = [
+            {
+                'rollout_action_logprob': result.get('rollout_action_logprob', {}),
+                'full_ids': result.get('full_ids', {}),
+                'label_ids': result.get('label_ids', {}),
+            }
+            for result in prior_results
+        ]
         cot_prefixes = [result.get('raw_output', None) for result in prior_results]
 
         return prior_per_seq, prior_per_tok, cot_prefixes

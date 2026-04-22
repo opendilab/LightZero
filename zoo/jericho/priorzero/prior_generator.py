@@ -181,7 +181,7 @@ class VLPriorGenerator(PriorGenerator):
         game_description: str = "",
         vlm_image_mode: str = "current_only",
         prompt_style: str = "concise",
-        logprob_extraction_mode: str = "approximate",
+        logprob_extraction_mode: str = "exact",
         **kwargs
     ):
         """
@@ -193,7 +193,7 @@ class VLPriorGenerator(PriorGenerator):
             game_description: Game-specific description for prompts
             vlm_image_mode: Image mode - "current_only", "first_and_current", or "all_history"
             prompt_style: "concise" (shorter, better for small VLMs) or "legacy" (verbose, original)
-            logprob_extraction_mode: "approximate" (fallback) or "exact" (LLM-aligned)
+            logprob_extraction_mode: "exact" (LLM-aligned, default) or "approximate" (fallback with pseudo logprobs)
         """
         super().__init__(model_name, obs_type='image')
         self.vl_engine = vl_engine
