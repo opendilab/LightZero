@@ -271,6 +271,7 @@ def get_priorzero_config(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(
             shared_memory=False,
+            step_timeout=30 if env_id in ['zork1.z5'] else None,  # zork1 需要更长的 step_timeout
         ),
         use_cache=True,
         cache_size=100000,

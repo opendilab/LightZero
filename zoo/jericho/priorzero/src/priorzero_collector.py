@@ -64,7 +64,6 @@ def extract_raw_obs_text(obs_dict: Dict[str, Any]) -> str:
     # Fallback: return str representation
     return str(obs_dict)
 
-
 # ==============================================================================
 # PriorZero Collector Class
 # ==============================================================================
@@ -373,7 +372,41 @@ class PriorZeroCollector(OriginalCollector):
                     for env_id in ready_env_id
                 }
                 with self.prof.block("collect_step", rank=self._rank):
-                    timesteps = self._env.step(actions)
+                    try:
+                        timesteps = self._env.step(actions)
+                        timed_out = False
+                    except RuntimeError as e:
+                        timed_out = True
+                if timed_out:
+                    self._logger.error(
+                        f"[RANK {self._rank}] step TIMEOUT → break collect loop"
+                    )
+                    self._env.reset()
+                    self.history_buffers.clear()
+                    for env_id in ready_env_id:
+                        self._policy.reset([env_id])
+                        self._reset_stat(env_id)
+                        if last_game_segments[env_id] is not None:
+                            self.pad_and_save_last_trajectory( env_id, last_game_segments, last_game_priorities, game_segments, self.dones
+                            )
+                        if len(game_segments[env_id].reward_segment) > 0:
+                            game_segments[env_id].game_segment_to_array()
+                            self.game_segment_pool.append((
+                                game_segments[env_id], None, True
+                            ))
+                    return_data = [
+                        [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))],
+                        [
+                            {
+                                'priorities': self.game_segment_pool[i][1],
+                                'done': self.game_segment_pool[i][2],
+                                'unroll_plus_td_steps': self.unroll_plus_td_steps
+                            }
+                            for i in range(len(self.game_segment_pool))
+                        ]
+                    ]
+                    self.game_segment_pool.clear()
+                    break
 
             interaction_duration = self._timer.value / len(timesteps)
 

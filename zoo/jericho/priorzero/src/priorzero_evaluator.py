@@ -394,7 +394,24 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 # ==============================================================
                 # Environment Interaction
                 # ==============================================================
-                timesteps = self._env.step(actions)
+                try:
+                    timesteps = self._env.step(actions)
+                    timed_out = False
+                except RuntimeError as e:
+                    timed_out = True
+                    
+                if timed_out:
+                    self._logger.error(
+                        f"[RANK {self._rank}] step TIMEOUT → break evaluate loop"
+                    )
+                    self._env.reset()
+                    self.history_buffers.clear()
+                    for env_id in ready_env_id:
+                        self._policy.reset([env_id])
+                        eval_monitor.update_info(env_id, 0.0)
+                        eval_monitor.update_reward(env_id, 0.0)
+                    break
+                
                 timesteps = to_tensor(timesteps, dtype=torch.float32)
                 for env_id, episode_timestep in timesteps.items():
                     obs_new, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
@@ -551,8 +568,21 @@ class PriorZeroEvaluator(OriginalEvaluator):
                     actions[env_id] = 0
 
             # ============================================
-
-            timesteps = self._env.step(actions)
+            try:
+                timesteps = self._env.step(actions)
+                timed_out = False
+            except RuntimeError as e:
+                timed_out = True
+                    
+            if timed_out:
+                self._logger.error(
+                    f"[RANK {self._rank}] step TIMEOUT → break evaluate loop"
+                )
+                self._env.reset()
+                self.history_buffers.clear()
+                episode_return.append(0.0)
+                break
+            
             timesteps = to_tensor(timesteps, dtype=torch.float32)
             for env_id, episode_timestep in timesteps.items():
                 obs_new, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info

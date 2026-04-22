@@ -232,17 +232,22 @@ class DataProcessor:
             for t in range(T - 1):
                 current_obs = raw_obs_list[b][t]
                 current_hist = history_obs_list[b][t]
-
-                instruction = self.get_user_prompt(
-                    history=current_hist,
-                    current_obs=current_obs,
-                )
-                prompt = self.build_chat_context(instruction)
                 
                 true_action = llm_action_list[b][t+1]
                 rollout_logprob = llm_prior_per_tok_list[b][t+1]['rollout_action_logprob'][true_action]
                 full_ids = llm_prior_per_tok_list[b][t+1]['full_ids'][true_action]
                 label_ids = llm_prior_per_tok_list[b][t+1]['label_ids'][true_action]
+                valid_actions = list(llm_prior_per_tok_list[b][t+1]['rollout_action_logprob'].keys())
+                if 'go' in valid_actions:
+                    valid_actions.remove('go')
+                
+                instruction = self.get_user_prompt(
+                    history=current_hist,
+                    current_obs=current_obs,
+                    valid_actions=valid_actions
+                )
+                prompt = self.build_chat_context(instruction)
+                
                 if len(label_ids) == 0:
                     continue
                 target_value = None
@@ -581,8 +586,8 @@ class DataProcessor:
         """
         prompt_list = []
         assert len(states) == len(histories) == len(valid_actions_list)
-        for state, history in zip(states, histories):
-            prompt = self.get_user_prompt(current_obs=state, history=history)
+        for state, history, valid_actions in zip(states, histories, valid_actions_list):
+            prompt = self.get_user_prompt(current_obs=state, history=history, valid_actions=valid_actions)
             prompt_list.append(prompt)
 
         if self.use_cot:
