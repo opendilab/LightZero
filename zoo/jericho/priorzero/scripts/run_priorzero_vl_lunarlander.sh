@@ -19,8 +19,7 @@ VL_MODEL=${2:-"Qwen2.5-VL-3b"}
 SEED=${3:-0}
 EXTRA_ARGS="${@:4}"
 # CUDA_DEVICES=${CUDA_DEVICES:-"0,1,2,3"}
-# CUDA_DEVICES=${CUDA_DEVICES:-"0,1"}
-CUDA_DEVICES=${CUDA_DEVICES:-"1,2"}
+CUDA_DEVICES=${CUDA_DEVICES:-"0,1"}
 # MASTER_PORT=${MASTER_PORT:-29500}
 MASTER_PORT=${MASTER_PORT:-29501}
 
@@ -89,5 +88,6 @@ torchrun \
     --env_id "${ENV_ID}" \
     --vl_model "${VL_MODEL}" \
     --seed "${SEED}" \
+    --max_iter 1e6 \
     ${EXTRA_ARGS} \
     2>&1 | tee "${LOG_FILE}"

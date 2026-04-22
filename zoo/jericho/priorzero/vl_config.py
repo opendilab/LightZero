@@ -402,12 +402,14 @@ def get_priorzero_vl_config(
         game_segment_length = 200
         evaluator_env_num = 3
         num_simulations = 25
-        collect_num_simulations = 25
+        # collect_num_simulations = 25
+        collect_num_simulations = 50
         eval_num_simulations = 25
         # eval_num_simulations = 50
 
         batch_size = 256
-        num_layers = 4
+        # num_layers = 4
+        num_layers = 2
         replay_ratio = 0.25
 
     num_unroll_steps = 10
@@ -415,8 +417,8 @@ def get_priorzero_vl_config(
 
     # Episode step limits
     if is_lunarlander:
-        collect_max_episode_steps = int(1000)
-        eval_max_episode_steps = int(1000)
+        collect_max_episode_steps = int(10000)
+        eval_max_episode_steps = int(10000)
     else:
         collect_max_episode_steps = int(5e3)
         eval_max_episode_steps = int(5e3)
@@ -425,7 +427,9 @@ def get_priorzero_vl_config(
     env_config = dict(
         stop_value=int(1e6),
         env_id=env_id,
-        observation_shape=(3, 64, 64),
+        # observation_shape=(3, 64, 64),
+        observation_shape=(3, 96, 96),
+        image_size=96,
         gray_scale=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -446,19 +450,24 @@ def get_priorzero_vl_config(
             ),
         ),
         model=dict(
-            observation_shape=(3, 64, 64),
+            # observation_shape=(3, 64, 64),
+            observation_shape=(3, 96, 96),
+
             action_space_size=action_space_size,
             # ====== [FIX] support range must cover LunarLander reward/value range (-200 ~ +300) ======
             reward_support_range=(-300., 301., 1.),
             value_support_range=(-300., 301., 1.),
-            norm_type="LN",
+            norm_type="BN",
             num_res_blocks=1,
             num_channels=64,
             world_model_cfg=dict(
-                norm_type="LN",
-                final_norm_option_in_obs_head='LayerNorm',
-                final_norm_option_in_encoder='LayerNorm',
-                predict_latent_loss_type='mse',
+                norm_type="BN",
+                # final_norm_option_in_obs_head='LayerNorm',
+                # final_norm_option_in_encoder='LayerNorm',
+                # predict_latent_loss_type='mse',
+                final_norm_option_in_encoder='SimNorm',
+                final_norm_option_in_obs_head='SimNorm',
+                predict_latent_loss_type='group_kl',
                 support_size=601,
                 policy_entropy_weight=5e-3,
                 continuous_action_space=False,
@@ -468,8 +477,10 @@ def get_priorzero_vl_config(
                 device='cuda',
                 action_space_size=action_space_size,
                 num_layers=num_layers,
-                num_heads=8,
-                embed_dim=768,
+                # num_heads=8,
+                # embed_dim=768,
+                num_heads=4,
+                embed_dim=256,
                 obs_type='image',  # KEY: Image input with VL prior
                 env_num=max(collector_env_num, evaluator_env_num),
                 num_simulations=num_simulations,
@@ -553,7 +564,8 @@ def get_priorzero_vl_config(
         priority_prob_alpha=1,
         priority_prob_beta=1,
         # ====== [FIX] Label smoothing ======
-        policy_ls_eps_start=0.05,
+        # policy_ls_eps_start=0.05,
+        policy_ls_eps_start=0.0,
         policy_ls_eps_end=0.01,
         policy_ls_eps_decay_steps=50000,
         label_smoothing_eps=0.1,

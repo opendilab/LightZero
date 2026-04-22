@@ -178,10 +178,12 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         B, T = len(raw_obs_list), len(raw_obs_list[0])
         # Only run dict-based consistency checks for LLM text path.
         # In VL (image) mode, llm_prior_per_tok entries are numpy arrays (or None), not dicts.
+        # Additional 'prefix_cot' key check prevents false positives if VL path ever returns dicts.
         _is_llm_text_mode = (
             B > 0 and T > 1
             and llm_prior_per_tok_list[0][1] is not None
             and isinstance(llm_prior_per_tok_list[0][1], dict)
+            and 'prefix_cot' in llm_prior_per_tok_list[0][1]
         )
         if _is_llm_text_mode:
             for b in range(B):
