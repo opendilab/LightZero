@@ -1833,30 +1833,34 @@ class WorldModel(nn.Module):
             # 2. Clipped fraction (监控裁剪有效性) - use mask for accurate metrics
             clipfrac = (((ratio < 1.0 - clip_ratio) | (ratio > 1.0 + clip_ratio)).float() * mask_padding).sum() / (mask_padding.sum() + 1e-8)
         
-        # ========== 4. PPO Value Loss (与 UniZero compute_loss_unizero 对齐：交叉熵 + 按步 discount) ==========
-        returns_categorical = batch['returns_categorical']  # [B, T, support_size] - 已经是分类分布
-        
-        # 逐元素交叉熵（与 compute_loss 一致）
-        loss_value_elem = self.compute_cross_entropy_loss(outputs, returns_categorical, batch, element='value')
-        # 与 UniZero 一致：按 timestep 做 gamma^t 折扣再求平均
-        timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
-        discounts = self.gamma ** timesteps
-        discounted_loss_value = (loss_value_elem.view(-1, batch['actions'].shape[1]) * discounts).sum() / (batch['mask_padding'].sum() + 1e-8)
+        # ========== 4. PPO Value Loss (cross-entropy on returns_categorical, no gamma^t discount) ==========
+        returns_categorical = batch['returns_categorical']  # [B, T, support_size]
+
+        # Cross-entropy loss per element (same as reward loss computation)
+        logits_value = outputs.logits_value  # [B, T, support_size]
+        logits_value_flat = rearrange(logits_value, 'b t e -> (b t) e')
+        returns_cat_flat = returns_categorical.reshape(-1, returns_categorical.shape[-1])
+        loss_value_elem = -(torch.log_softmax(logits_value_flat, dim=1) * returns_cat_flat).sum(1)
+        # Apply mask (no gamma^t discount for PPO value loss)
+        mask_value_flat = rearrange(mask_padding[:, :logits_value.shape[1]], 'b t -> (b t)')
+        loss_value = (loss_value_elem * mask_value_flat).sum() / (mask_value_flat.sum() + 1e-8)
         
         # ========== 5. Entropy Loss ==========
         entropy_loss = -policy_entropy  # Negative entropy to encourage exploration
         
         # ========== 6. Total Loss ==========
-        # Discount coefficients (reuse for obs/rewards)
+        # Discount coefficients for obs/rewards (world model losses keep gamma^t weighting)
+        timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
+        discounts = self.gamma ** timesteps
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum() / (batch['mask_padding'][:, 1:].sum() + 1e-8)
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum() / (batch['mask_padding'].sum() + 1e-8)
-        
-        # Total loss（value 使用与 UniZero 一致的 discounted_loss_value）
+
+        # Total loss (value uses plain MSE, no gamma^t discount)
         loss_total = (
             discounted_loss_obs * self.latent_recon_loss_weight +
             discounted_loss_rewards +
             policy_loss +
-            value_coef * discounted_loss_value +
+            value_coef * loss_value +
             entropy_coef * entropy_loss
         )
         
@@ -1867,7 +1871,7 @@ class WorldModel(nn.Module):
             continuous_action_space=self.continuous_action_space,
             loss_obs=discounted_loss_obs,
             loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
+            loss_value=loss_value,
             loss_policy=policy_loss,
             latent_recon_loss=discounted_loss_obs,  # Using obs loss as latent recon loss
             perceptual_loss=perceptual_loss,
