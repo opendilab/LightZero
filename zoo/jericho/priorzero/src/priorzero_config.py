@@ -29,7 +29,7 @@ MODEL_CONFIGS = {
     },
     "qwen2.5-7b": {
         "model_name_or_path": "/mnt/shared-storage-user/puyuan/model/Qwen2.5-7B-Instruct",
-        "vllm_tensor_parallel_size": 2,
+        "vllm_tensor_parallel_size": 1,
         "gpu_memory_utilization": 0.35,
         "description": "Qwen2.5-7B-Instruct (high quality, needs 2+ GPUs)",
     },
