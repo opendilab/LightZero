@@ -314,12 +314,11 @@ class BabyAIEnv(BaseEnv):
 
         obs_text = resp.get('observation', '')
         reward_from_server = float(resp.get('reward', 0.0))
-        score_from_server = float(resp.get('score', reward_from_server))
         done = bool(resp.get('done', False))
 
         step_reward = reward_from_server - self._last_reward
         self._last_reward = reward_from_server
-        self.episode_return = score_from_server
+        self.episode_return = reward_from_server
 
         self._timestep += 1
         self._action_list = _parse_available_actions(obs_text)

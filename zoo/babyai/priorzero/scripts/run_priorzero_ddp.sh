@@ -22,7 +22,7 @@ USE_HIGH_LEVEL=true          # true = server high-level actions, false = 7 atomi
 
 # 3. Model parameters
 LLM_MODEL="qwen2.5-3b"      # "qwen2.5-0.5b" "qwen2.5-1.5b" "qwen2.5-3b" "qwen2.5-7b"
-USE_COT=false
+USE_COT=true
 LOG_DIR="./data_priorzero/babyai/run_logs"
 mkdir -p "${LOG_DIR}"
 
