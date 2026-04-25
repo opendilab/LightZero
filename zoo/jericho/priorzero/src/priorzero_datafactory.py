@@ -635,12 +635,11 @@ class DataProcessor:
             llm_prior_per_seq.append(seq_dict)
             llm_prior_per_tok.append(tok_dict)  
 
-        if self.use_cot:
-            self.episode_output.append({
-                "Instruction": prompt_list[0],
-                "Response": full_output[0],
-                "llm_prior_per_seq": llm_prior_per_seq[0]
-            })
+        self.episode_output.append({
+            "Instruction": prompt_list[0],
+            "Response": full_output[0] if full_output else "(no CoT)",
+            "llm_prior_per_seq": llm_prior_per_seq[0]
+        })
         # CoT reuse optimization: return CoT prefixes if requested
         if return_cot:
             return llm_prior_per_seq, llm_prior_per_tok, prefix_cots
