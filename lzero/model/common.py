@@ -529,6 +529,9 @@ class HFLanguageRepresentationNetwork(nn.Module):
         Returns:
             - (:obj:`torch.Tensor`): The final language embedding of shape (B, embedding_size).
         """
+        # Ensure the input has a batch dimension for BERT.
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
         # Ensure the input tensor is of type long.
         x = x.long()
         

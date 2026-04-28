@@ -183,14 +183,18 @@ def get_priorzero_config(
     wm_encoder_option = 'legacy'
     wm_model_name = '/mnt/shared-storage-user/puyuan/xiongjyu/models/bge-base-en-v1.5'
 
-    # aligned with ScalingInter-RL babyai_train.sh: multi-task on all 40 BabyAI levels
-    train_data_idx_list = list(range(40))  # data_idx 0-39 → levels 1-40, seed=0
-    eval_data_idx_list = list(range(40))   # aligned with ScalingInter-RL AgentEval/babyai
+    # Aligned with ScalingInter-RL (HF: AgentGym/AgentGym-RL-Data-ID, train/babyai_train.json).
+    # ScalingInter-RL trains on 18 out of 40 BabyAI levels (810 items, 45 seeds per level).
+    # BabyAI level mapping: level_id = data_idx % 40 + 1, seed = data_idx // 40.
+    # Using seed=0 (data_idx = level_id - 1) for PriorZero since it re-samples each episode.
+    _SCALING_INTER_RL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 19, 20, 21, 30, 31, 33, 36]
+    train_data_idx_list = [lvl - 1 for lvl in _SCALING_INTER_RL_LEVELS]  # 18 levels, seed=0
+    eval_data_idx_list = [lvl - 1 for lvl in _SCALING_INTER_RL_LEVELS]   # same 18 levels for eval
 
     collector_env_num = 1
-    evaluator_env_num = 2
+    evaluator_env_num = 8
     n_episode = collector_env_num
-    n_evaluator_episode = len(eval_data_idx_list)  # 40 episodes to cover all eval tasks
+    n_evaluator_episode = len(eval_data_idx_list)  # 18 episodes to cover all eval levels
 
     num_unroll_steps = 10
     infer_context_length = 4
@@ -316,16 +320,16 @@ def get_priorzero_config(
     llm_config.gpu_memory_utilization = model_config["gpu_memory_utilization"]
 
     if exp_name is None:
-        # aligned with ScalingInter-RL: multi-task across all 40 levels
+        # aligned with ScalingInter-RL: multi-task across 18 levels
         if llm_config.enable_rft:
             exp_name = (
-                f"data_priorzero/babyai/llm_rft/priorzero_multitask_40levels_{model_key}_train_{llm_config.train_mode_dict.mode}/"
+                f"data_priorzero/babyai/llm_rft/priorzero_multitask_18levels_{model_key}_train_{llm_config.train_mode_dict.mode}/"
                 f"useCot_{llm_config.use_cot}_alternate_{llm_config.train_schedule.alternate}/"
                 f"mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_tbs_{llm_config.train_batch_size}_use_mispo_{llm_config.use_mispo}"
             )
         else:
             exp_name = (
-                f"data_priorzero/babyai/llm_frozen/priorzero_multitask_40levels_{model_key}_"
+                f"data_priorzero/babyai/llm_frozen/priorzero_multitask_18levels_{model_key}_"
                 f"train_{llm_config.train_mode_dict.mode}"
                 f"useCot_{llm_config.use_cot}_seed{seed}"
             )
@@ -362,12 +366,15 @@ def get_priorzero_config(
     main_config = EasyDict(priorzero_config)
     create_config = EasyDict(create_config)
 
-    print(f"[Config] BabyAI configuration applied:")
+    train_level_ids = [idx % 40 + 1 for idx in train_data_idx_list]
+    eval_level_ids = [idx % 40 + 1 for idx in eval_data_idx_list]
+    print(f"[Config] BabyAI configuration applied (aligned with ScalingInter-RL):")
     print(f"  - Model: {model_key}")
     print(f"  - Path: {llm_config.model_name_or_path}")
     print(f"  - Server: {env_addr}")
-    print(f"  - Train tasks: {len(train_data_idx_list)} levels (data_idx {train_data_idx_list[0]}-{train_data_idx_list[-1]})")
-    print(f"  - Eval tasks: {len(eval_data_idx_list)} levels")
+    print(f"  - Train: {len(train_data_idx_list)} levels → {train_level_ids}")
+    print(f"  - Eval:  {len(eval_data_idx_list)} levels → {eval_level_ids}")
+    print(f"  - NOTE: 18/40 BabyAI levels (from HF AgentGym/AgentGym-RL-Data-ID)")
     print(f"  - use_high_level_actions: {use_high_level_actions}")
 
     return main_config, create_config, llm_config

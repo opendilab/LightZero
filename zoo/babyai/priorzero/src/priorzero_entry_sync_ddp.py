@@ -319,7 +319,7 @@ def main():
     print(f"PriorZero BabyAI Training Configuration")
     print(f"{'='*80}")
     print(f"Server: {args.env_addr}")
-    print(f"Multi-task: 40 BabyAI levels (aligned with ScalingInter-RL)")
+    print(f"Multi-task: 18 BabyAI levels (aligned with ScalingInter-RL, HF: AgentGym/AgentGym-RL-Data-ID)")
     print(f"High-level actions: {use_high_level}")
     print(f"Model: {model_key}")
     print(f"Seed: {args.seed}")

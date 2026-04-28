@@ -144,6 +144,8 @@ class Tokenizer(nn.Module):
         elif len(original_shape) == 3:  # Batch of sequences of vectors: (B, T, E)
             # Flatten the batch and time dimensions to create a batch of vectors.
             x = x.contiguous().view(-1, original_shape[-1])  # Shape: (B*T, E)
+        elif len(original_shape) == 1:  # Single observation without batch dim: (E,)
+            x = x.unsqueeze(0)  # Shape: (1, E)
         # Note: 2D (B, E) and 4D (B, C, H, W) inputs are processed directly without reshaping.
 
         # [DEBUG] Log shape before encoder
