@@ -29,6 +29,8 @@ MODEL_CONFIGS = {
     "qwen2.5-7b": {
         "model_name_or_path": "/mnt/shared-storage-user/puyuan/xiongjyu/models/Qwen2.5-7B-Instruct",
         "vllm_tensor_parallel_size": 2,
+        # "vllm_tensor_parallel_size": 1,
+
         "gpu_memory_utilization": 0.35,
         "description": "Qwen2.5-7B-Instruct (high quality, needs 2+ GPUs)",
     },
@@ -103,7 +105,9 @@ class PriorZeroLLMConfig:
         "observation_with_valid_actions": True,
     }))
 
-    prompt_max_len: int = 512  # aligned with ScalingInter-RL babyai_train.sh (max_prompt_length=512)
+    # Total context budget consumed by line 662 of priorzero_datafactory.py as
+    # `max_length = prompt_max_len - generate_max_len - 20`; BabyAI obs typically ≤ 512 tokens.
+    prompt_max_len: int = 4096
     generate_max_len: int = 512
     bf16: bool = True
 
@@ -192,9 +196,19 @@ def get_priorzero_config(
     eval_data_idx_list = [lvl - 1 for lvl in _SCALING_INTER_RL_LEVELS]   # same 18 levels for eval
 
     collector_env_num = 1
-    evaluator_env_num = 8
+    # Set evaluator_env_num == n_evaluator_episode so each env runs exactly one episode
+    # (covers every eval level once and avoids the buggy `n_episode > env_num` refill path).
+    evaluator_env_num = len(eval_data_idx_list)
+    evaluator_env_num = 4
+
+
     n_episode = collector_env_num
     n_evaluator_episode = len(eval_data_idx_list)  # 18 episodes to cover all eval levels
+
+
+    # only for debug
+    # evaluator_env_num = 2
+    # n_evaluator_episode = 2
 
     num_unroll_steps = 10
     infer_context_length = 4
@@ -205,6 +219,11 @@ def get_priorzero_config(
     batch_size = 64
     collect_num_simulations = 50
     eval_num_simulations = 50
+
+    # only for debug
+    # collect_num_simulations = 2
+    # eval_num_simulations = 2
+
     replay_buffer_size = int(3e5)
 
     env_config = dict(
@@ -368,14 +387,10 @@ def get_priorzero_config(
 
     train_level_ids = [idx % 40 + 1 for idx in train_data_idx_list]
     eval_level_ids = [idx % 40 + 1 for idx in eval_data_idx_list]
-    print(f"[Config] BabyAI configuration applied (aligned with ScalingInter-RL):")
-    print(f"  - Model: {model_key}")
-    print(f"  - Path: {llm_config.model_name_or_path}")
-    print(f"  - Server: {env_addr}")
-    print(f"  - Train: {len(train_data_idx_list)} levels → {train_level_ids}")
-    print(f"  - Eval:  {len(eval_data_idx_list)} levels → {eval_level_ids}")
-    print(f"  - NOTE: 18/40 BabyAI levels (from HF AgentGym/AgentGym-RL-Data-ID)")
-    print(f"  - use_high_level_actions: {use_high_level_actions}")
+    import logging
+    logging.getLogger("priorzero.main").info(
+        f"[Config] model={model_key} | {len(train_data_idx_list)} train levels | {len(eval_data_idx_list)} eval levels | high_level={use_high_level_actions}"
+    )
 
     return main_config, create_config, llm_config
 

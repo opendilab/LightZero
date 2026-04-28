@@ -3,6 +3,7 @@ import hashlib
 import os
 import copy
 import json
+import logging
 
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -146,12 +147,10 @@ class PriorZeroLLMTrainer:
             tmp_dict.update(batch_input_stats)
         
         if self._tb_logger is not None and self.strategy.is_rank_0():
-            print(
-                f"[Rank {self.rank}] | [LLM Batch Stats] "
-                f"global_samples={int(batch_input_stats['input_ids_global_sample_count'])}, "
-                f"global_unique_samples={int(batch_input_stats['input_ids_global_unique_count'])}, "
-                f"global_duplicate_samples={int(batch_input_stats['input_ids_global_duplicate_count'])}, "
-                f"unique_ratio={float(batch_input_stats['input_ids_global_unique_ratio']):.4f}"
+            logging.getLogger("priorzero.train").info(
+                f"[LLM] samples={int(batch_input_stats['input_ids_global_sample_count'])} "
+                f"unique={int(batch_input_stats['input_ids_global_unique_count'])} "
+                f"ratio={float(batch_input_stats['input_ids_global_unique_ratio']):.4f}"
             )
             for tmp_dict in status:
                 for k, v in tmp_dict.items():
@@ -213,9 +212,9 @@ class PriorZeroLLMTrainer:
         if self.strategy.args.vllm_enable_sleep:
             self.vllm_engine.wake_up()
         
-        print(f"[Rank {self.rank}]: vllm starting update weights....")
+        logging.getLogger("priorzero.train").info("[LLM] vLLM weight sync start")
         self.policy_model.broadcast_to_vllm()
-        print(f"[Rank {self.rank}]: vllm has updating done.")
+        logging.getLogger("priorzero.train").info("[LLM] vLLM weight sync done")
 
         if self.strategy.args.vllm_enable_sleep:
             self.vllm_engine.sleep()

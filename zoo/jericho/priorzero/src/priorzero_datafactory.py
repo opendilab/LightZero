@@ -10,6 +10,9 @@ from ding.utils import build_logger
 import random
 import numpy as np
 import math
+import logging
+
+_log_train = logging.getLogger("priorzero.train")
 
 _FMT_RE = re.compile(
     r'^\s*Reasoning:\s*(?P<reason>[\s\S]*?)\nAction:\s*(?P<action>[^\n\r]+)\s*$',
@@ -325,18 +328,16 @@ class DataProcessor:
             selected_global_samples = _select_samples_with_unique_priority(global_samples, global_max_samples)
 
             if selected_global_samples is None:
-                print(
-                    f"[Rank {self.rank}] insufficient global samples after all_gather: "
-                    f"total_global={len(global_samples)} < required={global_max_samples}"
+                _log_train.warning(
+                    f"Insufficient global samples: total={len(global_samples)} < required={global_max_samples}"
                 )
                 return False, [global_samples]
 
             start = self.rank * max_samples
             end = (self.rank + 1) * max_samples
             real_samples = selected_global_samples[start:end]
-            print(
-                f"[Rank {self.rank}] local={len(samples)}, gathered_total={len(global_samples)}, "
-                f"selected_global={len(selected_global_samples)}, take={start}:{end}"
+            _log_train.debug(
+                f"[Rank {self.rank}] local={len(samples)}, global={len(selected_global_samples)}, slice={start}:{end}"
             )
         else:
             selected_samples = _select_samples_with_unique_priority(samples, max_samples)
@@ -346,7 +347,7 @@ class DataProcessor:
             per_rank = len(selected_samples) // self.world_size
             start = self.rank * per_rank
             end = (self.rank + 1) * per_rank if self.rank != self.world_size - 1 else len(selected_samples)
-            print(f"[Rank {self.rank}] process {start}: {end} samples. Total {len(selected_samples)} samples collected by Rank 0.")
+            _log_train.debug(f"[Rank {self.rank}] samples slice={start}:{end}, total={len(selected_samples)}")
             real_samples = selected_samples[start:end]
         
         if self.use_cot:
@@ -430,15 +431,10 @@ class DataProcessor:
                 norm_std = advantage.std().item()
                 
                 if self.rank == 0 and self.value_normalizer.update_count % 10 == 0:
-                    print(
+                    _log_train.debug(
                         f"[Value Norm] step={self.value_normalizer.update_count} | "
-                        f"batch_size={batch_size} | "
                         f"running: mean={norm_stats['running_mean']:.3f}, std={norm_stats['running_std']:.3f} | "
-                        f"batch: mean={norm_stats['batch_mean']:.3f}, std={norm_stats['batch_std']:.3f} | "
-                        f"raw: min={raw_min:.3f}, max={raw_max:.3f} | "
-                        f"norm: min={norm_min:.3f}, max={norm_max:.3f} | "
-                        f"clipped={norm_stats['clipped_count']}/{norm_stats['total_count']} | "
-                        f"momentum={norm_stats['momentum']:.3f}"
+                        f"norm: min={norm_min:.3f}, max={norm_max:.3f}"
                     )
             else:
                 batch_mean = advantage.mean().item()
@@ -469,12 +465,9 @@ class DataProcessor:
                 norm_std = advantage.std().item()
 
                 if self.rank == 0 and self.value_count % 10 == 0:
-                    print(
-                        f"[Advantage Running Norm] step={self.value_count} | "
-                        f"batch_size={batch_size} | "
+                    _log_train.debug(
+                        f"[Adv Norm] step={self.value_count} | "
                         f"running: mean={self.value_running_mean:.3f}, std={self.value_running_std:.3f} | "
-                        f"batch: mean={batch_mean:.3f}, std={batch_std:.3f} | "
-                        f"raw: min={batch_min:.3f}, max={batch_max:.3f} | "
                         f"norm: min={norm_min:.3f}, max={norm_max:.3f}"
                     )
                     
@@ -505,6 +498,95 @@ class DataProcessor:
         
         return True, (inputs.input_ids, inputs.attention_mask, action_mask, advantage, rollout_logprob, log_status)
         
+    def _ensure_tp_pg(self) -> None:
+        """Lazy-init the vLLM TP subgroup PG (size = vllm_tensor_parallel_size).
+
+        With `distributed_executor_backend='external_launcher'` and TP>1, vLLM partitions the
+        torch.dist world into TP subgroups. Each rank participates in exactly one subgroup of
+        consecutive ranks `[g_start, g_start + tp_size)`. We need that subgroup as a PG to
+        all_gather prompts so each TP partner submits the same input to `llm.generate()`.
+
+        Note: `dist.new_group` is collective — every rank must call it for every group.
+        """
+        if getattr(self, '_tp_pg', None) is not None:
+            return
+        tp_size = int(getattr(self.args, 'vllm_tensor_parallel_size', 1))
+        rank = dist.get_rank()
+        for g_start in range(0, self.world_size, tp_size):
+            ranks = list(range(g_start, g_start + tp_size))
+            pg = dist.new_group(ranks=ranks)
+            if rank in ranks:
+                self._tp_pg = pg
+                self._tp_group_start = g_start
+
+    def _sync_prompts_for_tp(self, token_ids_list: List[List[int]]) -> Tuple[List[List[int]], slice]:
+        """Within a vLLM TP group (size > 1), all_gather the local prompt list and return
+        `(union, my_slice)`. Every rank in the TP group must submit the same `union` to
+        `vllm.generate` (so the V1 schedulers stay in lock-step on every rank), then slice
+        `outs[my_slice]` to recover its own outputs.
+
+        For TP=1 / single-process / no DDP: returns `(list(token_ids_list), slice(0, n_real))`.
+
+        Why count-only padding is insufficient: vLLM V1 runs an independent scheduler on each TP
+        rank from the same logical inputs, and any per-prompt length difference produces a
+        different chunked-prefill batch shape, which then hits a mismatch in the TP all_gather
+        of logits. Content must match, not just count.
+        """
+        n_real = len(token_ids_list)
+        tp_size = int(getattr(self.args, 'vllm_tensor_parallel_size', 1))
+        if not (dist.is_initialized() and self.world_size > 1 and tp_size > 1):
+            return list(token_ids_list), slice(0, n_real)
+        self._ensure_tp_pg()
+        rank = dist.get_rank()
+        local_idx = rank - self._tp_group_start
+        gathered: List[Optional[List[List[int]]]] = [None] * tp_size
+        dist.all_gather_object(gathered, list(token_ids_list), group=self._tp_pg)
+        offsets = [0]
+        for sub in gathered:
+            offsets.append(offsets[-1] + len(sub))
+        union: List[List[int]] = []
+        for sub in gathered:
+            union.extend(sub)
+        return union, slice(offsets[local_idx], offsets[local_idx + 1])
+
+    @torch.no_grad()
+    def drain_vllm_iter(self) -> None:
+        """Match the two `vllm.generate` calls that `get_llm_prior` would make in one outer eval
+        iter, but submit only the partners' prompts (via `_sync_prompts_for_tp([])`). Used by
+        the evaluator in DDP drain mode so TP partners can finish their real calls. No-op for
+        TP=1 / single-process.
+        """
+        tp_size = int(getattr(self.args, 'vllm_tensor_parallel_size', 1))
+        if not (dist.is_initialized() and self.world_size > 1 and tp_size > 1):
+            return
+
+        cot_sampling_params = SamplingParams(
+            temperature=1.0,
+            top_p=1.0,
+            max_tokens=self.generate_max_len,
+            stop=["\n\n"],
+            include_stop_str_in_output=True,
+            logprobs=None,
+            prompt_logprobs=None,
+        )
+        union, _ = self._sync_prompts_for_tp([])
+        if union:
+            self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=union)
+            self.vllm_engine.get_responses()
+
+        score_sampling_params = SamplingParams(
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=1,
+            include_stop_str_in_output=True,
+            logprobs=None,
+            prompt_logprobs=1,
+        )
+        union, _ = self._sync_prompts_for_tp([])
+        if union:
+            self.vllm_engine.add_requests(sampling_params=score_sampling_params, prompt_token_ids=union)
+            self.vllm_engine.get_responses()
+
     @torch.no_grad()
     def _build_cot_prefix_texts(self, all_user_prompts: List[str]) -> List[str]:
         """
@@ -533,8 +615,11 @@ class DataProcessor:
             truncation=True,
         )["input_ids"]
 
-        self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=context_token_ids)
+        context_token_ids_union, my_slice_cot = self._sync_prompts_for_tp(context_token_ids)
+
+        self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=context_token_ids_union)
         cot_outputs = self.vllm_engine.get_responses()
+        cot_outputs = cot_outputs[my_slice_cot]
 
         prefix_cot_list, full_output = [], []
         reasoning_pattern = re.compile(r"Reasoning\s*:", re.IGNORECASE)
@@ -633,13 +718,16 @@ class DataProcessor:
             
         if len(seq_dict) > 0:
             llm_prior_per_seq.append(seq_dict)
-            llm_prior_per_tok.append(tok_dict)  
+            llm_prior_per_tok.append(tok_dict)
 
-        self.episode_output.append({
-            "Instruction": prompt_list[0],
-            "Response": full_output[0] if full_output else "(no CoT)",
-            "llm_prior_per_seq": llm_prior_per_seq[0]
-        })
+        # Drain mode (empty inputs from caller): prompt_list / llm_prior_per_seq are empty,
+        # so skip the per-call episode log to avoid IndexError on prompt_list[0].
+        if len(prompt_list) > 0 and len(llm_prior_per_seq) > 0:
+            self.episode_output.append({
+                "Instruction": prompt_list[0],
+                "Response": full_output[0] if full_output else "(no CoT)",
+                "llm_prior_per_seq": llm_prior_per_seq[0]
+            })
         # CoT reuse optimization: return CoT prefixes if requested
         if return_cot:
             return llm_prior_per_seq, llm_prior_per_tok, prefix_cots
@@ -681,8 +769,11 @@ class DataProcessor:
         l_lens = [len(x) for x in label_ids]
         l_no_cots_lens = [len(x) for x in label_ids_no_cots]
 
-        self.vllm_engine.add_requests(sampling_params=sampling_params, prompt_token_ids=full_ids)
+        full_ids_union, my_slice_score = self._sync_prompts_for_tp(full_ids)
+
+        self.vllm_engine.add_requests(sampling_params=sampling_params, prompt_token_ids=full_ids_union)
         outs = self.vllm_engine.get_responses()
+        outs = outs[my_slice_score]
 
         scores = []
         rollout_action_logprob = []

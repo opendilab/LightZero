@@ -1,11 +1,14 @@
 import copy
+import json
+import os
 import time
 from collections import namedtuple
-from typing import Optional, Callable, Tuple, Dict, Any
+from typing import Optional, Callable, Tuple, Dict, Any, List
 
 from collections import deque, defaultdict
 import numpy as np
 import torch
+import torch.distributed as dist
 import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray, to_item, to_tensor
@@ -80,6 +83,75 @@ class PriorZeroEvaluator(OriginalEvaluator):
         else:
             raise ValueError("")
     
+    def _should_continue_eval(self, local_done: bool) -> bool:
+        """DDP-aware loop termination: continue while ANY rank still needs to work.
+
+        With vLLM TP > 1 spanning DDP ranks, an early-exiting rank would leave its TP partner
+        deadlocked at a vllm collective. We all_reduce(MAX) a 0/1 flag so all ranks break together.
+        For TP=1 / single-process, falls back to local `not local_done`.
+        """
+        tp_size = getattr(self.llm_cfg, 'vllm_tensor_parallel_size', 1)
+        if dist.is_initialized() and dist.get_world_size() > 1 and tp_size > 1:
+            flag = torch.tensor([0 if local_done else 1], dtype=torch.long,
+                                device=torch.cuda.current_device())
+            dist.all_reduce(flag, op=dist.ReduceOp.MAX)
+            return flag.item() > 0
+        return not local_done
+
+    def _save_eval_trajectories(self, completed_episodes: List[tuple], global_step: int, tag: str = "WM_LLMPrior") -> None:
+        """Save per-episode trajectory JSONs for post-hoc qualitative analysis.
+
+        Each entry in completed_episodes is (level_id, total_reward, steps_list).
+        steps_list items: {obs, action, reward, mcts_info, info}.
+        Only called on rank 0.
+        """
+        base_dir = os.path.join(f'./{self._exp_name}', 'eval_trajectories', f'step_{global_step}_{tag}')
+        level_counts: Dict[int, int] = {}
+        level_rewards: Dict[int, List[float]] = defaultdict(list)
+
+        for level_id, total_reward, steps in completed_episodes:
+            lid = int(level_id) if level_id is not None else -1
+            idx = level_counts.get(lid, 0)
+            level_counts[lid] = idx + 1
+            level_rewards[lid].append(total_reward)
+
+            level_dir = os.path.join(base_dir, f'level_{lid}')
+            os.makedirs(level_dir, exist_ok=True)
+
+            traj = {
+                'level_id': lid,
+                'total_reward': total_reward,
+                'episode_length': len(steps),
+                'steps': [],
+            }
+            for s in steps:
+                step_record = {
+                    'obs': str(s.get('obs', ''))[:2000],
+                    'action': str(s.get('action', '')),
+                    'reward': float(s.get('reward', 0)),
+                }
+                info = s.get('info', {})
+                if isinstance(info, dict):
+                    step_record['data_idx'] = info.get('data_idx')
+                    step_record['level_id'] = info.get('level_id')
+                traj['steps'].append(step_record)
+
+            with open(os.path.join(level_dir, f'traj_{idx}.json'), 'w') as f:
+                json.dump(traj, f, indent=2, ensure_ascii=False, default=str)
+
+        index = {
+            'global_step': global_step,
+            'tag': tag,
+            'n_episodes': len(completed_episodes),
+            'levels': {
+                str(lid): {'n_traj': level_counts[lid], 'mean_reward': float(np.mean(level_rewards[lid]))}
+                for lid in sorted(level_rewards)
+            },
+        }
+        with open(os.path.join(base_dir, 'index.json'), 'w') as f:
+            json.dump(index, f, indent=2, ensure_ascii=False)
+        self._logger.info(f"[EVALUATOR] Saved {len(completed_episodes)} trajectories to {base_dir}")
+
     def _log_per_level_tb(self, per_level_results: dict, tag_prefix: str, global_step: int) -> None:
         """Log per-level rewards and summary to TensorBoard."""
         if not per_level_results or self._tb_logger is None:
@@ -90,6 +162,11 @@ class PriorZeroEvaluator(OriginalEvaluator):
             self._tb_logger.add_scalar(f'{tag_prefix}/level_{level_id}_reward', mean_r, global_step)
         all_means = {f'level_{lid}': np.mean(rs) for lid, rs in sorted(per_level_results.items())}
         self._tb_logger.add_scalars(f'{tag_prefix}/level_summary', all_means, global_step)
+        all_level_means = list(all_means.values())
+        self._tb_logger.add_scalar(f'{tag_prefix}/level_mean', np.mean(all_level_means), global_step)
+        self._tb_logger.add_scalar(f'{tag_prefix}/level_std', np.std(all_level_means), global_step)
+        self._tb_logger.add_scalar(f'{tag_prefix}/level_min', np.min(all_level_means), global_step)
+        self._tb_logger.add_scalar(f'{tag_prefix}/level_max', np.max(all_level_means), global_step)
 
     def eval(self, wm_train_iter: int = -1, llm_train_iter: int = -1, phase: str = "wm") -> Tuple[bool, Dict[str, Any]]:
         modes = []
@@ -99,8 +176,16 @@ class PriorZeroEvaluator(OriginalEvaluator):
         if self.eval_mode.world_model and (phase=='wm' or phase is None):
             world_model_info = super().eval()
             modes.append(("WM", world_model_info))
+            # Sync all ranks before entering vLLM-using eval. With vLLM TP > 1 spanning DDP ranks,
+            # if a fast rank reaches eval_with_llm_prior while a slow rank is still in super().eval(),
+            # the fast rank's vllm.generate would deadlock on TP collective. The barrier guarantees
+            # everyone has finished WM eval first. No-op when DDP/TP not in use.
+            tp_size = getattr(self.llm_cfg, 'vllm_tensor_parallel_size', 1)
+            if dist.is_initialized() and dist.get_world_size() > 1 and tp_size > 1:
+                dist.barrier()
+        wm_llm_completed_episodes = []
         if self.eval_mode.world_model_llm_prior:
-            world_model_llm_prior_info, wm_llm_eval_episode_info, wm_llm_per_level = self.eval_with_llm_prior()
+            world_model_llm_prior_info, wm_llm_eval_episode_info, wm_llm_per_level, wm_llm_completed_episodes = self.eval_with_llm_prior()
             modes.append(("WM_LLMPrior", world_model_llm_prior_info))
 
         if self.eval_mode.llm_prior and phase == 'llm':
@@ -109,6 +194,11 @@ class PriorZeroEvaluator(OriginalEvaluator):
 
         if self._rank != 0:
             return
+
+        # --- Save evaluation trajectories for post-hoc analysis ---
+        step_val = wm_train_iter if (phase == 'wm' or phase is None) else llm_train_iter
+        if wm_llm_completed_episodes:
+            self._save_eval_trajectories(wm_llm_completed_episodes, step_val, tag="WM_LLMPrior")
 
         # --- Episode-level text logging (keep first episode detail as before) ---
         if self.eval_mode.world_model_llm_prior and wm_llm_eval_episode_info and len(wm_llm_eval_episode_info[0]) > 0:
@@ -168,10 +258,14 @@ class PriorZeroEvaluator(OriginalEvaluator):
             self._log_per_level_tb(llm_per_level, 'eval_per_level_LLMPrior', llm_train_iter)
 
         
-    def eval_with_llm_prior(self) -> Dict[str, Any]:
+    def eval_with_llm_prior(self) -> Tuple[Dict[str, Any], list, dict, list]:
         n_episode = self._default_n_episode
         assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
         envstep_count = 0
+        completed_episodes: List[tuple] = []
+        # Hard counter independent of VectorEvalMonitor's per-env deque-fullness check; guards
+        # against eval hanging when episodes are unevenly distributed across envs.
+        total_finishes = 0
         eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
         env_nums = self._env.env_num
 
@@ -197,7 +291,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
         timestep_dict = {}
         for i in range(env_nums):
             if 'timestep' not in init_obs[i]:
-                print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                self._logger.debug(f"'timestep' missing in init_obs[{i}], using -1")
             timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
 
         dones = np.array([False for _ in range(env_nums)])
@@ -219,7 +313,15 @@ class PriorZeroEvaluator(OriginalEvaluator):
         remain_episode = n_episode
         eps_steps_lst = np.zeros(env_nums)
         with self._timer:
-            while not eval_monitor.is_finished():
+            while True:
+                local_done = (total_finishes >= n_episode) or eval_monitor.is_finished()
+                if not self._should_continue_eval(local_done):
+                    break
+                if local_done:
+                    # Drain mode: this rank already collected n_episode results, but must keep
+                    # issuing matched vllm.generate calls so its TP partners can finish theirs.
+                    self.data_processor.drain_vllm_iter()
+                    continue
                 # Check if a timeout has occurred.
                 if self.stop_event.is_set():
                     self._logger.info("[RANK {self._rank}] [EVALUATOR]: Evaluation aborted due to timeout.")
@@ -231,6 +333,9 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
+                if not ready_env_id:
+                    continue
+
                 # Prepare stacked observations and other inputs for the policy.
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -241,7 +346,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
                 stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
-                
+
                 # ============================================
                 # 添加 LLM_PRIOR
                 raw_obs_list = []
@@ -359,13 +464,23 @@ class PriorZeroEvaluator(OriginalEvaluator):
                         saved_info = {'eval_episode_return': episode_timestep.info['score']}
                         if 'episode_info' in episode_timestep.info:
                             saved_info.update(episode_timestep.info['episode_info'])
-                        eval_monitor.update_info(env_id, saved_info)
-                        eval_monitor.update_reward(env_id, reward)
+                        # Only count up to n_episode; drain-mode iters never reach here (body skipped).
+                        if total_finishes < n_episode:
+                            eval_monitor.update_info(env_id, saved_info)
+                            eval_monitor.update_reward(env_id, reward)
+                            total_finishes += 1
 
-                        # aligned with ScalingInter-RL: record per-level result
-                        level_id = episode_timestep.info.get('level_id', None)
-                        if level_id is not None:
-                            per_level_results[int(level_id)].append(float(reward))
+                            # aligned with ScalingInter-RL: record per-level result
+                            level_id = episode_timestep.info.get('level_id', None)
+                            if level_id is not None:
+                                per_level_results[int(level_id)].append(float(reward))
+
+                            completed_episodes.append((level_id, float(reward), list(eval_episode_info[env_id])))
+                            eval_episode_info[env_id] = []
+
+                        # Remove BEFORE the inner refill: only then does
+                        # `init_obs.keys() - ready_env_id` actually include this env_id.
+                        ready_env_id.remove(env_id)
 
                         # If there are more episodes to run than available environments, reset and reuse this one.
                         if n_episode > self._env_num:
@@ -398,7 +513,6 @@ class PriorZeroEvaluator(OriginalEvaluator):
                         eps_steps_lst[env_id] = 0
                         # NOTE: Reset the policy state for this env_id. `reset_init_data` defaults to True.
                         self._policy.reset([env_id])
-                        ready_env_id.remove(env_id)
 
                     envstep_count += 1
 
@@ -411,12 +525,13 @@ class PriorZeroEvaluator(OriginalEvaluator):
             'reward_max': np.max(episode_return),
             'reward_min': np.min(episode_return),
         }
-        return info, eval_episode_info, dict(per_level_results)
+        return info, eval_episode_info, dict(per_level_results), completed_episodes
 
     def eval_only_llm_prior(self) -> Dict[str, Any]:
         n_episode = self._default_n_episode
         assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
         envstep_count = 0
+        total_finishes = 0
         env_nums = self._env.env_num
 
         eval_episode_info = [[] for _ in range(env_nums)]
@@ -430,8 +545,13 @@ class PriorZeroEvaluator(OriginalEvaluator):
         ready_env_id = [i for i in range(env_nums)]
         episode_return = []
         while True:
-            if all(dones):
+            local_done = (total_finishes >= n_episode) or all(dones) or len(ready_env_id) == 0
+            if not self._should_continue_eval(local_done):
                 break
+            if local_done:
+                # Drain mode: keep TP partners alive while other ranks finish.
+                self.data_processor.drain_vllm_iter()
+                continue
 
             obs = self._env.ready_obs
             # ============================================
@@ -510,12 +630,14 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 dones[env_id] = done
                 if episode_timestep.done:
                     ready_env_id.remove(env_id)
-                    episode_return.append(info['score'])
+                    if total_finishes < n_episode:
+                        episode_return.append(info['score'])
+                        total_finishes += 1
 
-                    # aligned with ScalingInter-RL: record per-level result
-                    level_id = info.get('level_id', None)
-                    if level_id is not None:
-                        per_level_results[int(level_id)].append(float(info['score']))
+                        # aligned with ScalingInter-RL: record per-level result
+                        level_id = info.get('level_id', None)
+                        if level_id is not None:
+                            per_level_results[int(level_id)].append(float(info['score']))
 
                 envstep_count += 1
         info = {

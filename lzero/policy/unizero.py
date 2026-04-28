@@ -1143,6 +1143,8 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if active_eval_env_num == 0 or data.numel() == 0:
+            return {}
         if ready_env_id is None:
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}

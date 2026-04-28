@@ -534,6 +534,17 @@ class HFLanguageRepresentationNetwork(nn.Module):
             x = x.unsqueeze(0)
         # Ensure the input tensor is of type long.
         x = x.long()
+
+        # Guard: BERT requires seq_len > 0.  Return a zero embedding when the
+        # input is degenerate (empty batch or zero-length sequence).
+        if x.numel() == 0 or (x.dim() >= 2 and x.shape[1] == 0):
+            import logging
+            logging.getLogger(__name__).warning(
+                f"[HFLanguageRepresentationNetwork] Empty input detected: x.shape={x.shape}. "
+                "Returning zero embeddings."
+            )
+            batch = x.shape[0] if x.dim() >= 2 else 1
+            return torch.zeros(batch, self.embed_proj_head.out_features, device=x.device)
         
         # Construct the attention mask to exclude padding tokens.
         attention_mask = (x != self.tokenizer.pad_token_id).long()

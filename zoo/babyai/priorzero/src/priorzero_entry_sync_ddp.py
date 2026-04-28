@@ -24,8 +24,6 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 from ding.worker import create_buffer, BaseLearner
 from tensorboardX import SummaryWriter
-from loguru import logger
-import deepspeed
 
 from priorzero_config import (
     get_priorzero_config,
@@ -36,9 +34,13 @@ from priorzero_collector import PriorZeroCollector
 from priorzero_evaluator import PriorZeroEvaluator
 from priorzero_policy import *
 from lzero.mcts.buffer.game_buffer_priorzero import PriorZeroGameBufferOptimized
-from utils import dump_dataclass_cfg_py
+from utils import dump_dataclass_cfg_py, setup_priorzero_logging
 
 from lzero.entry.utils import calculate_update_per_collect
+
+_log_main = logging.getLogger("priorzero.main")
+_log_train = logging.getLogger("priorzero.train")
+_log_eval = logging.getLogger("priorzero.eval")
 
 def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
     cfg = compile_config(cfg, seed=seed, auto=True, create_cfg=create_cfg)
@@ -51,13 +53,11 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
 
     policy = create_policy(cfg.policy, enable_field=['learn', 'collect', 'eval'], exp_name=cfg.exp_name, llm_cfg=llm_cfg)
     if cfg.policy.model_path is not None:
-        logging.info(f"[Rank {rank}] Loading pretrained model from {cfg.policy.model_path}...")
+        _log_main.info(f"Loading pretrained model from {cfg.policy.model_path}")
         policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location=cfg.policy.device))
-    logger.info(f"[Rank {rank}]  Policy created")
 
     os.makedirs(f'./{cfg.exp_name}/log/', exist_ok=True)
     tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
-    logger.info(f"[Rank {rank}] TensorBoard logger: ./{cfg.exp_name}/log/")
 
     learner = BaseLearner(
         cfg.policy.learn.learner,
@@ -65,10 +65,8 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
         tb_logger,
         exp_name=cfg.exp_name
     )
-    logger.info(f"[Rank {rank}] BaseLearner created")
 
     replay_buffer = PriorZeroGameBufferOptimized(cfg.policy)
-    logger.info(f"[Rank {rank}] PriorZero replay buffer created")
 
     collector = PriorZeroCollector(
         env=collector_env,
@@ -78,7 +76,6 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
         exp_name=cfg.exp_name,
         policy_config=cfg.policy,
     )
-    logger.info(f"[Rank {rank}] Collector created")
 
     evaluator = PriorZeroEvaluator(
         n_evaluator_episode=cfg.env.n_evaluator_episode,
@@ -90,8 +87,8 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
         policy_config=cfg.policy,
         llm_config=llm_cfg,
     )
-    logger.info(f"[Rank {rank}] Evaluator created")
     learner.call_hook('before_run')
+    _log_main.info("Policy, Learner, Collector, Evaluator created")
 
     return cfg, replay_buffer, tb_logger, policy, collector, evaluator, learner
 
@@ -112,12 +109,8 @@ def train_priorzero(
     enable_profile: bool = False
 ):
     rank = int(os.environ.get("RANK", "0"))
-    print(f"DEBUG: Is dist initialized at start? {dist.is_initialized()}")
-    if dist.is_initialized():
-        print(f"DEBUG: Backend is {dist.get_backend()}")
     from strategy.deepspeed import get_strategy, torch_dist_barrier_and_cuda_sync
     strategy = get_strategy(llm_cfg)
-    strategy.print(llm_cfg)
 
     strategy.setup_distributed()
     world_size = getattr(strategy, "world_size", 1)
@@ -126,15 +119,24 @@ def train_priorzero(
         rank=rank, cfg=cfg, create_cfg=create_cfg, llm_cfg=llm_cfg, seed=seed
     )
     batch_size = cfg.policy.batch_size
-    logger.info(f"[Rank {rank}] World Model components initialized")
+
+    # Initialize structured logging after exp_name is known
+    setup_priorzero_logging(cfg.exp_name, rank)
+    _log_main.info(f"=== PriorZero Training Start | rank={rank}/{world_size} | exp={cfg.exp_name} ===")
+
     if rank == 0:
         dump_dataclass_cfg_py(llm_cfg, path=f"{cfg.exp_name}/llm_cfg.py")
+        # Save config snapshot
+        import yaml
+        config_path = os.path.join(cfg.exp_name, "run_logs", "config.yaml")
+        with open(config_path, "w") as f:
+            yaml.dump({"llm_cfg": str(llm_cfg), "policy_cfg": str(cfg.policy)}, f, default_flow_style=False)
         llm_cfg.save_path = f'./{cfg.exp_name}/llm_ckpt/'
 
     from utils import Profiler
     prof = Profiler(log_interval=10, stats_file=f'./{cfg.exp_name}/log/profiler.txt', enable_profile=enable_profile)
 
-    logger.info(f"[Rank {rank}] Initializing LLM Actor...")
+    _log_main.info("Initializing LLM Actor...")
     set_pkg_seed(seed + rank, use_cuda=True)
 
     from models.actor import PolicyModel, ReferenceModel
@@ -152,7 +154,7 @@ def train_priorzero(
         gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
         vllm_enable_sleep=llm_cfg.vllm_enable_sleep,
     )
-    print(f'[Rank {rank}] Vllm engine successfully created!')
+    _log_main.info("vLLM engine created")
 
     from priorzero_datafactory import DataProcessor
     data_processor = DataProcessor(
@@ -187,8 +189,7 @@ def train_priorzero(
         last_wm_train_iter = 0
         last_llm_train_iter = 0
 
-    # aligned with ScalingInter-RL: evaluate once before training starts
-    logger.info(f"[Evaluator][Rank {rank}] Running initial evaluation before training...")
+    _log_eval.info("=== Initial Evaluation ===")
     if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
         vllm_engine.wake_up()
     evaluator.eval(wm_train_iter=0, llm_train_iter=0, phase=current_phase)
@@ -196,12 +197,13 @@ def train_priorzero(
         vllm_engine.sleep()
     torch_dist_barrier_and_cuda_sync()
 
+    _log_main.info(f"=== Training Loop Start | phase={current_phase} ===")
     while True:
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 
         if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase):
-            logger.info(f"[Evaluator][Rank {rank}: Iter {learner.train_iter}] Evaluating...")
+            _log_eval.info(f"=== Eval | wm_iter={learner.train_iter} llm_iter={policy_model.train_iter} phase={current_phase} ===")
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.wake_up()
             evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase)
@@ -225,7 +227,7 @@ def train_priorzero(
 
         if llm_cfg.enable_world_model and (not train_alternate or (train_alternate and current_phase == "wm")):
             if not (num_of_transitions > batch_size):
-                logger.warning(f'[WM Training] Data insufficient: batch_size={batch_size}, buffer={replay_buffer}. Continue collecting...')
+                _log_train.warning(f"[WM] Data insufficient: buffer={num_of_transitions} < batch={batch_size}")
                 cmd = 0
             else:
                 cmd = 1
@@ -233,7 +235,7 @@ def train_priorzero(
                 continue
 
             update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
-            logger.info(f"[WM Training] Rank {rank} | Iter {learner.train_iter} | Updates: {update_per_collect}")
+            _log_train.info(f"[WM] Iter {learner.train_iter} | updates={update_per_collect} | buffer={num_of_transitions}")
 
             for i in range(update_per_collect):
                 with prof.block("train_world_model", rank=rank):
@@ -247,12 +249,12 @@ def train_priorzero(
                 current_phase = "llm"
                 last_wm_train_iter = learner.train_iter
                 replay_buffer.mark_latest_transitions_consumed()
-                print(f"[WM Training][Rank {rank}] Switching to LLM phase at wm iter: {learner.train_iter}")
+                _log_main.info(f"=== Phase Switch: WM -> LLM | wm_iter={learner.train_iter} ===")
                 continue
 
         if llm_cfg.enable_rft and (not train_alternate or (train_alternate and current_phase == "llm")):
             new_num_of_transitions = replay_buffer.get_num_of_transitions() - replay_buffer.last_pos_in_transition
-            logger.info(f"[LLM Training] Rank {rank} | Total: {num_of_transitions} | New: {new_num_of_transitions}")
+            _log_train.info(f"[LLM] Total={num_of_transitions} | New={new_num_of_transitions}")
 
             with prof.block("fetch_latest_batch", rank=rank):
                 priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=-1, policy=policy)
@@ -269,7 +271,7 @@ def train_priorzero(
                 gathered_llm_ready = all_gather_cmd(world_size=world_size, obj=local_llm_ready)
 
                 if min(gathered_llm_ready) == 0:
-                    logger.info(f"[Rank {rank}] Skip LLM training: not all ranks ready. flags={gathered_llm_ready}")
+                    _log_train.debug(f"Skip LLM training: not all ranks ready. flags={gathered_llm_ready}")
                     continue
 
                 trainer.train_batch(train_samples, collect_env_steps=collector.envstep)
@@ -280,7 +282,7 @@ def train_priorzero(
                     current_phase = "wm"
                     last_llm_train_iter = trainer.global_step
                     data_processor.clear_statis()
-                    print(f"[Rank {rank}] Switching to WM phase at llm iter: {trainer.global_step}")
+                    _log_main.info(f"=== Phase Switch: LLM -> WM | llm_iter={trainer.global_step} ===")
 
 def main():
     import argparse
@@ -300,35 +302,21 @@ def main():
     args = parser.parse_args()
 
     use_high_level = not args.use_low_level_actions
-
-    # Health check: verify BabyAI server is reachable
+    model_key = args.model
     rank = int(os.environ.get("RANK", "0"))
+
     if rank == 0:
         try:
             r = req.get(f"{args.env_addr}/", timeout=5)
             assert r.status_code == 200, f"Server returned status {r.status_code}"
-            print(f"[HealthCheck] BabyAI server at {args.env_addr} is ready.")
         except Exception as e:
             raise RuntimeError(
                 f"BabyAI server not reachable at {args.env_addr}: {e}\n"
                 f"Start it first: cd <AgentGym-RL>/AgentGym/agentenv-babyai && python -m agentenv_babyai.launch --port 8000"
             )
-
-    model_key = args.model
-    print(f"\n{'='*80}")
-    print(f"PriorZero BabyAI Training Configuration")
-    print(f"{'='*80}")
-    print(f"Server: {args.env_addr}")
-    print(f"Multi-task: 18 BabyAI levels (aligned with ScalingInter-RL, HF: AgentGym/AgentGym-RL-Data-ID)")
-    print(f"High-level actions: {use_high_level}")
-    print(f"Model: {model_key}")
-    print(f"Seed: {args.seed}")
-    print(f"Quick Test: {args.quick_test}")
-    print(f"CoT: {args.use_cot}")
-    print(f"{'='*80}\n")
+        print(f"[PriorZero] model={model_key} | server={args.env_addr} | 18 levels | seed={args.seed} | cot={args.use_cot}")
 
     if args.quick_test:
-        logger.info("Using debug configuration")
         main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
             args.env_id, args.seed, use_cot=args.use_cot,
             exp_name='data_priorzero/babyai/priorzero_debug_multitask',
