@@ -187,6 +187,15 @@ def train_priorzero(
         last_wm_train_iter = 0
         last_llm_train_iter = 0
 
+    # aligned with ScalingInter-RL: evaluate once before training starts
+    logger.info(f"[Evaluator][Rank {rank}] Running initial evaluation before training...")
+    if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
+        vllm_engine.wake_up()
+    evaluator.eval(wm_train_iter=0, llm_train_iter=0, phase=current_phase)
+    if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
+        vllm_engine.sleep()
+    torch_dist_barrier_and_cuda_sync()
+
     while True:
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
@@ -280,7 +289,6 @@ def main():
     parser = argparse.ArgumentParser(description='PriorZero BabyAI Training')
     parser.add_argument('--env_id', type=str, default='babyai', help='Environment ID')
     parser.add_argument('--env_addr', type=str, default='http://127.0.0.1:8000', help='BabyAI server address')
-    parser.add_argument('--data_idx', type=int, default=0, help='Task index (level = idx %% 40 + 1, seed = idx // 40)')
     parser.add_argument('--use_high_level_actions', action='store_true', default=True, help='Use server high-level actions')
     parser.add_argument('--use_low_level_actions', action='store_true', default=False, help='Use 7 atomic actions')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
@@ -311,7 +319,7 @@ def main():
     print(f"PriorZero BabyAI Training Configuration")
     print(f"{'='*80}")
     print(f"Server: {args.env_addr}")
-    print(f"data_idx: {args.data_idx} (level={args.data_idx % 40 + 1}, seed={args.data_idx // 40})")
+    print(f"Multi-task: 40 BabyAI levels (aligned with ScalingInter-RL)")
     print(f"High-level actions: {use_high_level}")
     print(f"Model: {model_key}")
     print(f"Seed: {args.seed}")
@@ -323,15 +331,15 @@ def main():
         logger.info("Using debug configuration")
         main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
             args.env_id, args.seed, use_cot=args.use_cot,
-            exp_name=f'data_priorzero/babyai/priorzero_debug_level{args.data_idx % 40 + 1}',
+            exp_name='data_priorzero/babyai/priorzero_debug_multitask',
             model_key=model_key, env_addr=args.env_addr,
-            data_idx=args.data_idx, use_high_level_actions=use_high_level,
+            use_high_level_actions=use_high_level,
         )
     else:
         main_cfg, create_cfg, llm_cfg = get_priorzero_config(
             args.env_id, args.seed, use_cot=args.use_cot,
             model_key=model_key, multi_gpu=True,
-            env_addr=args.env_addr, data_idx=args.data_idx,
+            env_addr=args.env_addr,
             use_high_level_actions=use_high_level,
         )
 

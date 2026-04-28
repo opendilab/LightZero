@@ -27,7 +27,7 @@ MODEL_CONFIGS = {
         "description": "Qwen2.5-3B-Instruct (better quality)",
     },
     "qwen2.5-7b": {
-        "model_name_or_path": "/mnt/shared-storage-user/puyuan/model/Qwen2.5-7B-Instruct",
+        "model_name_or_path": "/mnt/shared-storage-user/puyuan/xiongjyu/models/Qwen2.5-7B-Instruct",
         "vllm_tensor_parallel_size": 2,
         "gpu_memory_utilization": 0.35,
         "description": "Qwen2.5-7B-Instruct (high quality, needs 2+ GPUs)",
@@ -89,8 +89,8 @@ class PriorZeroLLMConfig:
         "world_model": True,
         "world_model_llm_prior": True,
         "llm_prior": True,
-        "wm_eval_freq": 500,
-        "llm_eval_freq": 50,
+        "wm_eval_freq": 2000,   # aligned with ScalingInter-RL: larger eval interval for 40-level multi-task
+        "llm_eval_freq": 200,   # aligned with ScalingInter-RL: larger eval interval for 40-level multi-task
     }))
 
     attn_implementation: str = "flash_attention_2"
@@ -103,7 +103,7 @@ class PriorZeroLLMConfig:
         "observation_with_valid_actions": True,
     }))
 
-    prompt_max_len: int = 4096  # BabyAI obs shorter than Jericho
+    prompt_max_len: int = 512  # aligned with ScalingInter-RL babyai_train.sh (max_prompt_length=512)
     generate_max_len: int = 512
     bf16: bool = True
 
@@ -175,18 +175,22 @@ def get_priorzero_config(
     model_key: Optional[str] = "qwen2.5-3b",
     multi_gpu: bool = False,
     env_addr: str = 'http://127.0.0.1:8000',
-    data_idx: int = 0,
     use_high_level_actions: bool = True,
 ) -> Tuple[EasyDict, EasyDict]:
 
     action_space_size = 20  # upper bound for dynamic action space
-    max_steps = 50
+    max_steps = 20  # aligned with ScalingInter-RL babyai_train.sh (max_rounds=20)
     wm_encoder_option = 'legacy'
     wm_model_name = '/mnt/shared-storage-user/puyuan/xiongjyu/models/bge-base-en-v1.5'
+
+    # aligned with ScalingInter-RL babyai_train.sh: multi-task on all 40 BabyAI levels
+    train_data_idx_list = list(range(40))  # data_idx 0-39 → levels 1-40, seed=0
+    eval_data_idx_list = list(range(40))   # aligned with ScalingInter-RL AgentEval/babyai
 
     collector_env_num = 1
     evaluator_env_num = 2
     n_episode = collector_env_num
+    n_evaluator_episode = len(eval_data_idx_list)  # 40 episodes to cover all eval tasks
 
     num_unroll_steps = 10
     infer_context_length = 4
@@ -205,7 +209,8 @@ def get_priorzero_config(
         observation_shape=512,
         env_id=env_id,
         env_addr=env_addr,
-        data_idx=data_idx,
+        train_data_idx_list=train_data_idx_list,   # aligned with ScalingInter-RL
+        eval_data_idx_list=eval_data_idx_list,      # aligned with ScalingInter-RL
         use_high_level_actions=use_high_level_actions,
         for_unizero=True,
         tokenizer_path=wm_model_name,
@@ -213,7 +218,7 @@ def get_priorzero_config(
         max_seq_len=512,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        n_evaluator_episode=evaluator_env_num,
+        n_evaluator_episode=n_evaluator_episode,    # aligned with ScalingInter-RL: cover all eval tasks
         manager=dict(shared_memory=False),
     )
     policy_config = dict(
@@ -311,16 +316,16 @@ def get_priorzero_config(
     llm_config.gpu_memory_utilization = model_config["gpu_memory_utilization"]
 
     if exp_name is None:
-        level_id = data_idx % 40 + 1
+        # aligned with ScalingInter-RL: multi-task across all 40 levels
         if llm_config.enable_rft:
             exp_name = (
-                f"data_priorzero/babyai/llm_rft/priorzero_level{level_id}_{model_key}_train_{llm_config.train_mode_dict.mode}/"
+                f"data_priorzero/babyai/llm_rft/priorzero_multitask_40levels_{model_key}_train_{llm_config.train_mode_dict.mode}/"
                 f"useCot_{llm_config.use_cot}_alternate_{llm_config.train_schedule.alternate}/"
                 f"mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_tbs_{llm_config.train_batch_size}_use_mispo_{llm_config.use_mispo}"
             )
         else:
             exp_name = (
-                f"data_priorzero/babyai/llm_frozen/priorzero_level{level_id}_{model_key}_"
+                f"data_priorzero/babyai/llm_frozen/priorzero_multitask_40levels_{model_key}_"
                 f"train_{llm_config.train_mode_dict.mode}"
                 f"useCot_{llm_config.use_cot}_seed{seed}"
             )
@@ -361,7 +366,8 @@ def get_priorzero_config(
     print(f"  - Model: {model_key}")
     print(f"  - Path: {llm_config.model_name_or_path}")
     print(f"  - Server: {env_addr}")
-    print(f"  - data_idx: {data_idx} (level={data_idx % 40 + 1}, seed={data_idx // 40})")
+    print(f"  - Train tasks: {len(train_data_idx_list)} levels (data_idx {train_data_idx_list[0]}-{train_data_idx_list[-1]})")
+    print(f"  - Eval tasks: {len(eval_data_idx_list)} levels")
     print(f"  - use_high_level_actions: {use_high_level_actions}")
 
     return main_config, create_config, llm_config
@@ -374,13 +380,12 @@ def get_priorzero_debug_config(
     use_cot: bool = True,
     model_key: Optional[str] = "qwen2.5-3b",
     env_addr: str = 'http://127.0.0.1:8000',
-    data_idx: int = 0,
     use_high_level_actions: bool = True,
 ) -> EasyDict:
 
     main_config, create_config, llm_config = get_priorzero_config(
         env_id=env_id, seed=seed, exp_name=exp_name, use_cot=use_cot,
-        model_key=model_key, env_addr=env_addr, data_idx=data_idx,
+        model_key=model_key, env_addr=env_addr,
         use_high_level_actions=use_high_level_actions,
     )
     max_steps = 20

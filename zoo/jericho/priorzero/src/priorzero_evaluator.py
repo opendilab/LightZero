@@ -80,42 +80,58 @@ class PriorZeroEvaluator(OriginalEvaluator):
         else:
             raise ValueError("")
     
+    def _log_per_level_tb(self, per_level_results: dict, tag_prefix: str, global_step: int) -> None:
+        """Log per-level rewards and summary to TensorBoard."""
+        if not per_level_results or self._tb_logger is None:
+            return
+        for level_id in sorted(per_level_results.keys()):
+            rewards = per_level_results[level_id]
+            mean_r = np.mean(rewards)
+            self._tb_logger.add_scalar(f'{tag_prefix}/level_{level_id}_reward', mean_r, global_step)
+        all_means = {f'level_{lid}': np.mean(rs) for lid, rs in sorted(per_level_results.items())}
+        self._tb_logger.add_scalars(f'{tag_prefix}/level_summary', all_means, global_step)
+
     def eval(self, wm_train_iter: int = -1, llm_train_iter: int = -1, phase: str = "wm") -> Tuple[bool, Dict[str, Any]]:
         modes = []
+        wm_llm_per_level = {}
+        llm_per_level = {}
+
         if self.eval_mode.world_model and (phase=='wm' or phase is None):
             world_model_info = super().eval()
             modes.append(("WM", world_model_info))
         if self.eval_mode.world_model_llm_prior:
-            world_model_llm_prior_info, wm_llm_eval_episode_info = self.eval_with_llm_prior()
-            modes.append(("WM_LLMPrior", world_model_llm_prior_info)) 
-            
+            world_model_llm_prior_info, wm_llm_eval_episode_info, wm_llm_per_level = self.eval_with_llm_prior()
+            modes.append(("WM_LLMPrior", world_model_llm_prior_info))
+
         if self.eval_mode.llm_prior and phase == 'llm':
-            llm_prior_info, llm_eval_episode_info = self.eval_only_llm_prior()
+            llm_prior_info, llm_eval_episode_info, llm_per_level = self.eval_only_llm_prior()
             modes.append(("LLMPrior", llm_prior_info))
-        
+
         if self._rank != 0:
             return
-        
-        self._logger_eval_episode.info("="*100)
-        self._logger_eval_episode.info("="*10 + f"[WM_LLM] | episode_avg_steps={len(wm_llm_eval_episode_info[0])} | episode_return={wm_llm_eval_episode_info[0][-1]['info']['score'].item()} " + "="*10)
-        for step, info in enumerate(wm_llm_eval_episode_info[0]):
-            obs, action, reward, mcts_info = info['obs'].replace("\n",""), info['action'], info['reward'], info['mcts_info']
-            self._logger_eval_episode.info(f"[Step {step:03d}] obs: {obs}")
-            self._logger_eval_episode.info(f'action="{action}" | reward={reward}')
-            self._logger_eval_episode.info("MCTS:")
-            for key, value in mcts_info.items():
-                items = list(value.items())
-                action_str = " | ".join(
-                    f"{a}({v:.3f})" if isinstance(v, float) else f"{a}({v})"
-                    for a, v in items
-                )
-                self._logger_eval_episode.info(f"  {key}:")
-                self._logger_eval_episode.info(f"    {action_str}")
-            self._logger_eval_episode.info("-" * 100)
-        self._logger_eval_episode.info("="*100)
-        
-        self._logger_eval_episode.info("="*100)
-        if phase == 'llm':
+
+        # --- Episode-level text logging (keep first episode detail as before) ---
+        if self.eval_mode.world_model_llm_prior and wm_llm_eval_episode_info and len(wm_llm_eval_episode_info[0]) > 0:
+            self._logger_eval_episode.info("="*100)
+            self._logger_eval_episode.info("="*10 + f"[WM_LLM] | episode_avg_steps={len(wm_llm_eval_episode_info[0])} | episode_return={wm_llm_eval_episode_info[0][-1]['info']['score'].item()} " + "="*10)
+            for step, info in enumerate(wm_llm_eval_episode_info[0]):
+                obs, action, reward, mcts_info = info['obs'].replace("\n",""), info['action'], info['reward'], info['mcts_info']
+                self._logger_eval_episode.info(f"[Step {step:03d}] obs: {obs}")
+                self._logger_eval_episode.info(f'action="{action}" | reward={reward}')
+                self._logger_eval_episode.info("MCTS:")
+                for key, value in mcts_info.items():
+                    items = list(value.items())
+                    action_str = " | ".join(
+                        f"{a}({v:.3f})" if isinstance(v, float) else f"{a}({v})"
+                        for a, v in items
+                    )
+                    self._logger_eval_episode.info(f"  {key}:")
+                    self._logger_eval_episode.info(f"    {action_str}")
+                self._logger_eval_episode.info("-" * 100)
+            self._logger_eval_episode.info("="*100)
+
+        if phase == 'llm' and self.eval_mode.llm_prior and llm_eval_episode_info and len(llm_eval_episode_info[0]) > 0:
+            self._logger_eval_episode.info("="*100)
             self._logger_eval_episode.info("="*10 + f"[LLM] | episode_avg_steps={len(llm_eval_episode_info[0])} | episode_return={llm_eval_episode_info[0][-1]['info']['score'].item()} " + "="*10)
             for step, info in enumerate(llm_eval_episode_info[0]):
                 obs, action, reward, llm_policy = info['obs'].replace("\n",""), info['action'], info['reward'], info['llm_policy']
@@ -130,8 +146,8 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 self._logger_eval_episode.info(f"    {action_str}")
                 self._logger_eval_episode.info("-" * 100)
             self._logger_eval_episode.info("="*100)
-        
-        
+
+        # --- TensorBoard: aggregated metrics (original) ---
         keys = ['avg_envstep_per_episode', 'reward_mean', 'reward_std', 'reward_max', 'reward_min']
         for k in keys:
             if self.eval_mode.world_model and (phase=='wm' or phase is None):
@@ -142,7 +158,14 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 elif phase == 'llm':
                     self._tb_logger.add_scalar(f'{self._instance_name}_llm_iter/{k}_WM_LLMPrior', world_model_llm_prior_info[k], llm_train_iter)
             if self.eval_mode.llm_prior and phase == 'llm':
-                self._tb_logger.add_scalar(f'{self._instance_name}_llm_iter/{k}_LLMPrior', llm_prior_info[k], llm_train_iter)    
+                self._tb_logger.add_scalar(f'{self._instance_name}_llm_iter/{k}_LLMPrior', llm_prior_info[k], llm_train_iter)
+
+        # --- TensorBoard: per-level metrics (aligned with ScalingInter-RL) ---
+        if self.eval_mode.world_model_llm_prior and wm_llm_per_level:
+            step_val = wm_train_iter if (phase == 'wm' or phase is None) else llm_train_iter
+            self._log_per_level_tb(wm_llm_per_level, 'eval_per_level_WM_LLMPrior', step_val)
+        if self.eval_mode.llm_prior and phase == 'llm' and llm_per_level:
+            self._log_per_level_tb(llm_per_level, 'eval_per_level_LLMPrior', llm_train_iter)
 
         
     def eval_with_llm_prior(self) -> Dict[str, Any]:
@@ -151,8 +174,10 @@ class PriorZeroEvaluator(OriginalEvaluator):
         envstep_count = 0
         eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
         env_nums = self._env.env_num
-        
+
         eval_episode_info = [[] for _ in range(env_nums)]
+        # aligned with ScalingInter-RL: track per-level results for TensorBoard
+        per_level_results = defaultdict(list)
         
         self._env.reset()
         self.history_buffers.clear()
@@ -337,6 +362,11 @@ class PriorZeroEvaluator(OriginalEvaluator):
                         eval_monitor.update_info(env_id, saved_info)
                         eval_monitor.update_reward(env_id, reward)
 
+                        # aligned with ScalingInter-RL: record per-level result
+                        level_id = episode_timestep.info.get('level_id', None)
+                        if level_id is not None:
+                            per_level_results[int(level_id)].append(float(reward))
+
                         # If there are more episodes to run than available environments, reset and reuse this one.
                         if n_episode > self._env_num:
                             init_obs = self._env.ready_obs
@@ -381,15 +411,17 @@ class PriorZeroEvaluator(OriginalEvaluator):
             'reward_max': np.max(episode_return),
             'reward_min': np.min(episode_return),
         }
-        return info, eval_episode_info
-    
+        return info, eval_episode_info, dict(per_level_results)
+
     def eval_only_llm_prior(self) -> Dict[str, Any]:
         n_episode = self._default_n_episode
         assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
         envstep_count = 0
         env_nums = self._env.env_num
-        
+
         eval_episode_info = [[] for _ in range(env_nums)]
+        # aligned with ScalingInter-RL: track per-level results for TensorBoard
+        per_level_results = defaultdict(list)
 
         self._env.reset()
         self.history_buffers.clear()
@@ -480,6 +512,11 @@ class PriorZeroEvaluator(OriginalEvaluator):
                     ready_env_id.remove(env_id)
                     episode_return.append(info['score'])
 
+                    # aligned with ScalingInter-RL: record per-level result
+                    level_id = info.get('level_id', None)
+                    if level_id is not None:
+                        per_level_results[int(level_id)].append(float(info['score']))
+
                 envstep_count += 1
         info = {
             'avg_envstep_per_episode': envstep_count / n_episode if n_episode > 0 else 0,
@@ -488,7 +525,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
             'reward_max': np.max(episode_return),
             'reward_min': np.min(episode_return),
         }
-        return info, eval_episode_info
+        return info, eval_episode_info, dict(per_level_results)
     
     def apply_temperature_scaling(self, logprobs_dict: dict, return_logprobs: bool = True) -> dict:
         """

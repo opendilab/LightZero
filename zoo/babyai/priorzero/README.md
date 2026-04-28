@@ -9,7 +9,7 @@ Start the AgentGym BabyAI server before training:
 ```bash
 cd /path/to/AgentGym-RL/AgentGym/agentenv-babyai
 pip install -e .
-python -m agentenv_babyai.launch --port 8000
+python3 -m uvicorn agentenv_babyai:app --host 0.0.0.0 --port 8000    
 ```
 
 Verify: `curl http://127.0.0.1:8000/` should return 200.

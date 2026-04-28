@@ -1,7 +1,9 @@
 import copy
 import json
 import logging
+import random as _random
 import re
+import threading
 import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Union
@@ -140,9 +142,16 @@ class BabyAIEnv(BaseEnv):
     """
     tokenizer: Optional[AutoTokenizer] = None
 
+    # aligned with ScalingInter-RL: class-level counter for evaluator task cycling
+    _eval_cycle_counter = 0
+    _eval_cycle_lock = threading.Lock()
+
     DEFAULT_CONFIG: Dict[str, Any] = {
         'env_addr': 'http://127.0.0.1:8000',
         'data_idx': 0,
+        'data_idx_list': None,
+        'train_data_idx_list': None,
+        'eval_data_idx_list': None,
         'max_steps': 64,
         'max_action_num': 20,
         'tokenizer_path': 'BAAI/bge-base-en-v1.5',
@@ -150,6 +159,7 @@ class BabyAIEnv(BaseEnv):
         'for_unizero': True,
         'save_replay': False,
         'use_high_level_actions': True,
+        'is_collect': True,
         'collector_env_num': 1,
         'evaluator_env_num': 1,
     }
@@ -160,7 +170,9 @@ class BabyAIEnv(BaseEnv):
         self.cfg = merged_cfg
 
         self.env_addr: str = self.cfg['env_addr']
-        self.data_idx: int = self.cfg['data_idx']
+        self.data_idx: int = self.cfg.get('data_idx', 0)
+        self.data_idx_list: Optional[List[int]] = self.cfg.get('data_idx_list', None)
+        self._is_collect: bool = self.cfg.get('is_collect', True)
         self.max_steps: int = self.cfg['max_steps']
         self.max_action_num: int = self.cfg['max_action_num']
         self.max_seq_len: int = self.cfg['max_seq_len']
@@ -246,6 +258,17 @@ class BabyAIEnv(BaseEnv):
             return result
 
     def reset(self, return_str: bool = False) -> Dict[str, Any]:
+        # aligned with ScalingInter-RL: multi-task cycling
+        if self.data_idx_list is not None:
+            if self._is_collect:
+                self.data_idx = _random.choice(self.data_idx_list)
+            else:
+                with BabyAIEnv._eval_cycle_lock:
+                    self.data_idx = self.data_idx_list[
+                        BabyAIEnv._eval_cycle_counter % len(self.data_idx_list)
+                    ]
+                    BabyAIEnv._eval_cycle_counter += 1
+
         if self._server_halted:
             try:
                 self._env_id = self._client.create()
@@ -330,7 +353,13 @@ class BabyAIEnv(BaseEnv):
             done = True
 
         processed_obs = self.prepare_obs(raw_obs, return_str)
-        info = {'action_str': action_str, 'score': self.episode_return}
+        # aligned with ScalingInter-RL: include task identity for per-level eval logging
+        info = {
+            'action_str': action_str,
+            'score': self.episode_return,
+            'data_idx': self.data_idx,
+            'level_id': self.data_idx % 40 + 1,
+        }
 
         if done:
             self.finished = True
@@ -354,6 +383,9 @@ class BabyAIEnv(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg['is_collect'] = True
+        # aligned with ScalingInter-RL: use train task list for collector
+        if 'train_data_idx_list' in cfg and cfg['train_data_idx_list'] is not None:
+            cfg['data_idx_list'] = cfg['train_data_idx_list']
         return [cfg for _ in range(collector_env_num)]
 
     @staticmethod
@@ -361,4 +393,7 @@ class BabyAIEnv(BaseEnv):
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
         cfg['is_collect'] = False
+        # aligned with ScalingInter-RL: use eval task list for evaluator
+        if 'eval_data_idx_list' in cfg and cfg['eval_data_idx_list'] is not None:
+            cfg['data_idx_list'] = cfg['eval_data_idx_list']
         return [cfg for _ in range(evaluator_env_num)]

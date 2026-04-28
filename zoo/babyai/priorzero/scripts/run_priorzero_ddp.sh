@@ -17,18 +17,16 @@ MASTER_PORT=24554
 
 # 2. BabyAI-specific parameters
 AGENTGYM_SERVER_ADDR="http://127.0.0.1:8000"
-DATA_IDX=0                   # level = data_idx % 40 + 1, seed = data_idx // 40
 USE_HIGH_LEVEL=true          # true = server high-level actions, false = 7 atomic actions
 
-# 3. Model parameters
-LLM_MODEL="qwen2.5-3b"      # "qwen2.5-0.5b" "qwen2.5-1.5b" "qwen2.5-3b" "qwen2.5-7b"
+# 3. Model parameters (aligned with ScalingInter-RL: Qwen2.5-7B, multi-task on 40 levels)
+LLM_MODEL="qwen2.5-7b"      # "qwen2.5-0.5b" "qwen2.5-1.5b" "qwen2.5-3b" "qwen2.5-7b"
 USE_COT=true
 LOG_DIR="./data_priorzero/babyai/run_logs"
 mkdir -p "${LOG_DIR}"
 
 CURRENT_TIME=$(date +"%Y%m%d_%H%M%S")
-LEVEL_ID=$(( DATA_IDX % 40 + 1 ))
-LOG_FILE="${LOG_DIR}/log_level${LEVEL_ID}_${LLM_MODEL}_${CURRENT_TIME}.txt"
+LOG_FILE="${LOG_DIR}/log_multitask_${LLM_MODEL}_${CURRENT_TIME}.txt"
 
 # 4. Environment variables
 export CUDA_VISIBLE_DEVICES="${CUDA_DEVICES}"
@@ -37,7 +35,7 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export NCCL_DEBUG=INFO
 
 # 5. Build command
-CMD_ARGS="--env_id babyai --env_addr ${AGENTGYM_SERVER_ADDR} --data_idx ${DATA_IDX} --model ${LLM_MODEL}"
+CMD_ARGS="--env_id babyai --env_addr ${AGENTGYM_SERVER_ADDR} --model ${LLM_MODEL}"
 
 if [ "${USE_COT}" = true ]; then
     CMD_ARGS="${CMD_ARGS} --use_cot"
