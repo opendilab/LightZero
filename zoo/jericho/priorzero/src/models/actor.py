@@ -131,10 +131,11 @@ class Actor(nn.Module):
         position_ids.masked_fill_(attention_mask == 0, 1)
 
         output = self.model(sequences, attention_mask=foward_attention_mask, position_ids=position_ids)
-        output["logits"] = output["logits"].to(torch.float32)
 
         if return_entropy:
+            # Training path (micro-batch size 4): cast to fp32 for entropy + flash cross-entropy
             assert return_output
+            output["logits"] = output["logits"].to(torch.float32)
             entropy = compute_entropy(output["logits"])
             setattr(output, "entropy", entropy[:, :-1])
 
@@ -184,11 +185,8 @@ class ReferenceModel:
         device = torch.cuda.current_device()
         B = sequences.size(0)
         outs = []
-        chunk_size = max(self.micro_train_batch_size, 32)
-        
-        sequences = sequences.to(device)
-        attention_mask = attention_mask.to(device)
-        action_mask = action_mask.to(device) 
+        chunk_size = self.micro_train_batch_size
+
         for i in range(0, B, chunk_size):
             s = sequences[i : i + chunk_size].to(device)
             am = action_mask[i : i + chunk_size].to(device)
@@ -198,7 +196,7 @@ class ReferenceModel:
                 s,
                 action_mask=am,
                 attention_mask=attn,
-            )  
+            )
             outs.append(out)
         return torch.cat(outs, dim=0)
 
@@ -589,10 +587,7 @@ class PolicyModel:
         B = sequences.size(0)
 
         outs = []
-        chunk_size = max(self.micro_train_batch_size, 32)
-        sequences = sequences.to(device)
-        attention_mask = attention_mask.to(device)
-        action_mask = action_mask.to(device) 
+        chunk_size = self.micro_train_batch_size
 
         for i in range(0, B, chunk_size):
             s = sequences[i : i + chunk_size].to(device)
@@ -602,7 +597,7 @@ class PolicyModel:
                 s,
                 action_mask=am,
                 attention_mask=attn,
-            )  
+            )
             outs.append(out)
         return torch.cat(outs, dim=0)
 

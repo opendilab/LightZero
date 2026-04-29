@@ -137,7 +137,7 @@ class PriorZeroLLMConfig:
     ds_tensor_parallel_size: int = 1
 
     train_batch_size: int = 128
-    micro_train_batch_size: int = 4
+    micro_train_batch_size: int = 2
     max_rollout_staleness: int = 1
 
     learning_rate: float = 1e-6
