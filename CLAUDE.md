@@ -75,7 +75,10 @@ Replace MCTS planning with PPO policy gradient training while keeping UniZero's 
 
 **Policy:**
 - `lzero/policy/unizero.py` - `_forward_learn` unpacks PPO data (advantage, old_log_prob, return); `_forward_collect` supports pure policy mode (skips MCTS)
-- `lzero/policy/utils.py` - Added `ppo_error`, `ppo_policy_error`, `ppo_value_error`
+- `lzero/policy/utils.py` - Added `ppo_error`, `ppo_policy_error`, `ppo_value_error` (lines 716-865):
+  - `ppo_policy_error`: Clipped surrogate loss with optional dual_clip, entropy bonus, KL/clipfrac monitoring
+  - `ppo_value_error`: MSE loss with optional value clipping
+  - `ppo_error`: Combined policy + value + entropy loss computation
 
 **World Model:**
 - `lzero/model/unizero_world_models/world_model.py` - New `compute_loss_ppo()` method:
@@ -129,13 +132,21 @@ WorldModel.compute_loss_ppo()
 ### Important Notes
 
 - **old_log_prob storage:** Collector stores raw logits, not log probabilities
-- **GAE computation:** Happens in collector after episode completion via `_batch_compute_gae_for_pool()`
+- **GAE computation:** Happens in collector after episode completion via `_batch_compute_gae_for_pool()` using DI-engine's GAE implementation
+- **Return computation order:** Returns are computed BEFORE advantage normalization (fixed in commit b744cdac)
 - **Value normalization:** Supported in collector for stable training
 - **Batch structure:** current_batch has 11 elements (last 3 are advantage, old_log_prob, return for PPO)
+- **PPO loss components:** Policy (clipped surrogate) + Value (MSE with optional clipping) + Entropy bonus
 
 ## Known Issues
 
-**Current debugging:** LunarLander PPO not converging on `lunarlander_disc_unizero_ppo_online_config`. Need to investigate PPO-related bugs.
+**Recent fixes (commits 2ce95971, b744cdac, d1415022):**
+- Fixed PPO value loss computation in world model
+- Fixed return computation order (must compute returns BEFORE advantage normalization)
+- Integrated DI-engine GAE functions in muzero_collector
+- Enhanced buffer/collector/world model for proper PPO data flow
+
+**Current status:** LunarLander PPO implementation complete with proper GAE/PPO loss computation.
 
 **Backup:** `/mnt/shared-storage-user/tangjia/unizero_ppo/LightZero-bak/`
 

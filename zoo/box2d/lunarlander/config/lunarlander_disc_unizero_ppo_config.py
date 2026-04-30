@@ -8,9 +8,9 @@ evaluator_env_num = 3
 num_simulations = 50
 reanalyze_ratio = 0.
 update_per_collect = None
-replay_ratio = 0.25
+replay_ratio = 0.0            # 改为 0：split training 不需要额外 replay
 max_env_step = int(5e5)
-batch_size = 256
+batch_size = 512              # WM 的 batch size
 num_unroll_steps = 10
 infer_context_length = 4
 norm_type = 'BN'
@@ -62,16 +62,16 @@ lunarlander_unizero_ppo_config = dict(
         model_path=None,
         num_unroll_steps=num_unroll_steps,
         cuda=True,
-        game_segment_length=200,
+        game_segment_length=100,        # 改为 100：PPO 标准值（on-policy）
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        optim_type='Adam',
         piecewise_decay_lr_scheduler=False,
-        learning_rate=0.0001,
+        learning_rate=0.0005,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        replay_buffer_size=int(1e6),
+        replay_buffer_size=int(1e5),    # 改为 1e5：split training 需要适中的 buffer
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         # Whether to use pure policy (without MCTS) for data collection
@@ -80,13 +80,13 @@ lunarlander_unizero_ppo_config = dict(
         # If not set, will use collect_with_pure_policy value
         eval_with_pure_policy=True,
         # Whether to use online learning (clear replay_buffer after each training iteration)
-        online_learning=True,
+        online_learning=False,          # 改为 False：split training 需要保留旧数据给 WM
         # Value normalization for stable training
         value_norm=True,
         # Gradient clipping for training stability (based on ppo_bak.py defaults)
-        grad_clip_value=0.5,             # PPO 标准值（防止梯度爆炸）
+        grad_clip_value=20,             # PPO 标准值（防止梯度爆炸）
         # Weight decay (L2 regularization) for training stability
-        weight_decay=0.0,                # PPO 标准（禁用 L2 正则化）
+        # weight_decay=0.0,                # PPO 标准（禁用 L2 正则化）
         # PPO configuration for GAE computation
         ppo=dict(
             gamma=0.99,           # Discount factor
@@ -95,6 +95,12 @@ lunarlander_unizero_ppo_config = dict(
             value_coef=0.5,       # Value loss coefficient
             entropy_coef=0.01,   # Entropy loss coefficient
         ),
+        # Split training configuration (PriorZero-style)
+        # When enabled, trains World Model and PPO separately with different data
+        split_ppo_wm_training=True,  # Set to True to enable split training
+        wm_update_per_collect=10,    # World Model updates per collect (uses all data)
+        ppo_update_per_collect=5,    # PPO updates per collect (uses only new data)
+        ppo_batch_size=64,           # Batch size for PPO training (PPO 标准值)
     ),
 )
 lunarlander_unizero_ppo_config = EasyDict(lunarlander_unizero_ppo_config)

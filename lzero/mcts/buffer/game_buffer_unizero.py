@@ -94,6 +94,194 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         train_data = [current_batch, target_batch]
         return train_data
 
+    def mark_latest_transitions_consumed(self) -> None:
+        """
+        Mark current buffer position as consumed (PriorZero-style).
+        Used for split training: track which data has been used for PPO.
+        """
+        self.last_pos_in_transition = self.get_num_of_transitions()
+
+    def fetch_latest_batch(self, batch_size: int, policy):
+        """
+        Fetch only the latest (new) data for PPO training (PriorZero-style).
+
+        Args:
+            batch_size: Number of transitions to sample. If -1, use all new data.
+            policy: Policy for target computation.
+
+        Returns:
+            [current_batch, target_batch] or None if no new data available
+        """
+        import logging
+
+        num_of_transitions = self.get_num_of_transitions()
+        num_new = num_of_transitions - self.last_pos_in_transition
+
+        # Boundary check
+        if num_new == 0:
+            logging.warning("No new data available for fetch_latest_batch")
+            return None
+
+        if batch_size == -1:
+            batch_size = num_new
+        elif batch_size > num_new:
+            logging.warning(f"Requested batch_size {batch_size} > new data {num_new}, using {num_new}")
+            batch_size = num_new
+
+        # Sample new data
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
+
+        # Call _make_batch_latest
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = \
+            self._make_batch_latest(batch_size, self._cfg.reanalyze_ratio)
+
+        if not current_batch or not current_batch[0]:
+            logging.warning("_make_batch_latest returned empty batch")
+            return None
+
+        # Compute target (same as _sample_original)
+        timestep_list = current_batch[7]
+
+        batch_rewards, batch_target_values = self._compute_target_reward_value(
+            reward_value_context, policy._target_model, current_batch[2], timestep_list
+        )
+
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(
+            policy_re_context, policy._target_model, current_batch[1], timestep_list
+        )
+        batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
+            policy_non_re_context, self._cfg.model.action_space_size
+        )
+
+        if 0 < self._cfg.reanalyze_ratio < 1:
+            batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+        elif self._cfg.reanalyze_ratio == 1:
+            batch_target_policies = batch_target_policies_re
+        elif self._cfg.reanalyze_ratio == 0:
+            batch_target_policies = batch_target_policies_non_re
+
+        target_batch = [batch_rewards, batch_target_values, batch_target_policies]
+
+        return [current_batch, target_batch]
+
+    def _make_batch_latest(self, batch_size: int, reanalyze_ratio: float):
+        """
+        Make batch from latest (new) data only.
+        Similar to _make_batch but samples from new data range.
+        """
+        # Sample from new data
+        orig_data = self._fetch_latest_orig_data(batch_size)
+
+        # Check if we have data
+        game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
+        if not pos_in_game_segment_list:
+            return (None, None, None, None)
+
+        # Rest same as _make_batch
+        batch_size = len(pos_in_game_segment_list)
+        reanalyze_size = int(batch_size * reanalyze_ratio)
+
+        # Prepare contexts (same as _make_batch)
+        reward_value_context = self._prepare_reward_value_context(
+            batch_index_list, game_segment_list, pos_in_game_segment_list, batch_size
+        )
+
+        if 0 < reanalyze_ratio <= 1:
+            # Have reanalyzed policy
+            policy_re_context = self._prepare_policy_reanalyzed_context(
+                batch_index_list[:reanalyze_size],
+                game_segment_list[:reanalyze_size],
+                pos_in_game_segment_list[:reanalyze_size]
+            )
+            policy_non_re_context = self._prepare_policy_non_reanalyzed_context(
+                batch_index_list[reanalyze_size:],
+                game_segment_list[reanalyze_size:],
+                pos_in_game_segment_list[reanalyze_size:]
+            )
+        elif reanalyze_ratio == 0:
+            # No reanalyzed policy
+            policy_re_context = None
+            policy_non_re_context = self._prepare_policy_non_reanalyzed_context(
+                batch_index_list, game_segment_list, pos_in_game_segment_list
+            )
+        else:
+            raise ValueError(f"reanalyze_ratio should be in [0,1], got {reanalyze_ratio}")
+
+        # Prepare current_batch (same as _make_batch)
+        current_batch = self._prepare_current_batch(
+            batch_index_list, game_segment_list, pos_in_game_segment_list,
+            weights_list, make_time_list
+        )
+
+        return reward_value_context, policy_re_context, policy_non_re_context, current_batch
+
+    def _fetch_latest_orig_data(self, batch_size: int):
+        """
+        Fetch latest transitions (from last_pos_in_transition to current).
+
+        Returns:
+            (game_segment_list, pos_in_game_segment_list, batch_index_list,
+             weights_list, make_time_list)
+        """
+        import logging
+        import random
+
+        num_of_transitions = self.get_num_of_transitions()
+
+        # Get indices of new transitions
+        latest_new_indices = list(range(self.last_pos_in_transition, num_of_transitions))
+
+        if not latest_new_indices:
+            return ([], [], [], [], [])
+
+        # Sample
+        if batch_size == -1 or batch_size >= len(latest_new_indices):
+            candidate_indices = latest_new_indices
+        else:
+            candidate_indices = random.sample(latest_new_indices, batch_size)
+
+        # Convert indices to game_segment positions
+        game_segment_list = []
+        pos_in_game_segment_list = []
+        batch_index_list = []
+        weights_list = []
+        make_time_list = []
+
+        for idx in candidate_indices:
+            # Boundary check
+            if idx >= len(self.game_segment_game_pos_look_up):
+                logging.warning(f"Index {idx} out of range for game_segment_game_pos_look_up (len={len(self.game_segment_game_pos_look_up)})")
+                continue
+
+            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+            game_segment_idx -= self.base_idx
+
+            # Validate index
+            if game_segment_idx < 0 or game_segment_idx >= len(self.game_segment_buffer):
+                logging.warning(f"Invalid game_segment_idx {game_segment_idx} (base_idx={self.base_idx}, buffer_len={len(self.game_segment_buffer)})")
+                continue
+
+            game_segment = self.game_segment_buffer[game_segment_idx]
+
+            # Validate position (same as _sample_orig_data)
+            segment_len = len(game_segment.action_segment)
+            within_obs_window = pos_in_game_segment + self._cfg.num_unroll_steps + self._cfg.model.frame_stack_num <= len(game_segment.obs_segment)
+            within_segment_window = pos_in_game_segment < self._cfg.game_segment_length
+            valid_next_action = pos_in_game_segment < segment_len - 1
+
+            if not (within_obs_window and within_segment_window and valid_next_action):
+                continue
+
+            game_segment_list.append(game_segment)
+            pos_in_game_segment_list.append(pos_in_game_segment)
+            batch_index_list.append(idx)
+            weights_list.append(1.0)  # Equal weights for new data
+            make_time_list.append(game_segment.make_time)
+
+        return (game_segment_list, pos_in_game_segment_list, batch_index_list,
+                weights_list, make_time_list)
+
     def _sample_from_segment_range(self, batch_size: int, policy, start_idx: int, end_idx: int) -> List[Any]:
         """
         Overview:
@@ -161,7 +349,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             
         #     return (train_data_new, train_data_old)
         # else:
-        print("没有足够数据进行新旧数据分离")
         # Fallback: 没有足够的新旧数据区分，使用原始方法
         train_data = self._sample_original(batch_size, policy)
         return (train_data, None)

@@ -198,7 +198,7 @@ def train_unizero(
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
-            
+
             if not data_sufficient:
                 logging.warning(
                     f'Rank {rank}: The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -206,48 +206,96 @@ def train_unizero(
                 )
                 continue
 
-            # Execute multiple training rounds
-            for i in range(update_per_collect):
-                # ✅ 处理混合采样返回的元组 (train_data_new, train_data_old)
-                sample_result = replay_buffer.sample(batch_size, policy)
-                
-                if isinstance(sample_result, tuple):
-                    train_data_new, train_data_old = sample_result
-                    # 如果有新旧数据分离，先训练新数据
-                    if train_data_old is not None:
-                        # 训练新数据
-                        train_data_new.append(learner.train_iter)
-                        train_data_new.append(True) # is_old_data = False
-                        log_vars_new = learner.train(train_data_new, collector.envstep)
-                        
-                        # 训练老数据
-                        train_data_old.append(learner.train_iter)
-                        train_data_old.append(False) # is_old_data = True
-                        log_vars_old = learner.train(train_data_old, collector.envstep)
-                        
-                        # 更新优先级（如果使用）
-                        if cfg.policy.use_priority:
-                            replay_buffer.update_priority(train_data_new, log_vars_new[0]['value_priority_orig'])
-                            replay_buffer.update_priority(train_data_old, log_vars_old[0]['value_priority_orig'])
-                    else:
-                        # Fallback: 只有新数据
-                        train_data_new.append(learner.train_iter)
-                        log_vars = learner.train(train_data_new, collector.envstep)
-                        if cfg.policy.use_priority:
-                            replay_buffer.update_priority(train_data_new, log_vars[0]['value_priority_orig'])
-                else:
-                    # 向后兼容：如果返回的不是元组，使用原始逻辑
-                    train_data = sample_result
+            # ========== Split Training Mode (PriorZero-style) ==========
+            if cfg.policy.get('split_ppo_wm_training', False):
+                # Phase 1: World Model Training (use all data)
+                wm_update_per_collect = cfg.policy.get('wm_update_per_collect', update_per_collect)
+                logging.info(f"[Rank {rank}] [WM Training] Updates: {wm_update_per_collect}")
+
+                for i in range(wm_update_per_collect):
+                    train_data = replay_buffer.sample(batch_size, policy)
+                    if isinstance(train_data, tuple):
+                        train_data = train_data[0]  # Use first element if tuple
                     train_data.append(learner.train_iter)
-                    log_vars = learner.train(train_data, collector.envstep)
+                    train_data.append('world_model_only')  # ✅ loss_type
+
+                    log_vars_wm = learner.train(train_data, collector.envstep)
+
                     if cfg.policy.use_priority:
-                        replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-                
-                if replay_buffer._cfg.reanalyze_ratio > 0 and i % 20 == 0:
-                    policy.recompute_pos_emb_diff_and_clear_cache()
-                
-                if cfg.policy.use_wandb:
-                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+                        replay_buffer.update_priority(train_data, log_vars_wm[0]['value_priority_orig'])
+
+                # Mark position after WM training
+                replay_buffer.mark_latest_transitions_consumed()
+                logging.info(f"[Rank {rank}] [WM Training] Completed. Marked position: {replay_buffer.last_pos_in_transition}")
+
+                # Phase 2: PPO Training (use only new data)
+                ppo_batch_size = cfg.policy.get('ppo_batch_size', batch_size)
+                ppo_train_data = replay_buffer.fetch_latest_batch(ppo_batch_size, policy)
+
+                if ppo_train_data is not None:
+                    ppo_update_per_collect = cfg.policy.get('ppo_update_per_collect', update_per_collect)
+                    logging.info(f"[Rank {rank}] [PPO Training] Updates: {ppo_update_per_collect}")
+
+                    for i in range(ppo_update_per_collect):
+                        ppo_train_data_copy = [ppo_train_data[0], ppo_train_data[1]]  # Copy to avoid modifying original
+                        ppo_train_data_copy.append(learner.train_iter)
+                        ppo_train_data_copy.append('all')  # ✅ loss_type: train both PPO and world model on new data
+
+                        log_vars_ppo = learner.train(ppo_train_data_copy, collector.envstep)
+
+                    # Mark position after PPO training
+                    replay_buffer.mark_latest_transitions_consumed()
+                    logging.info(f"[Rank {rank}] [PPO Training] Completed. Marked position: {replay_buffer.last_pos_in_transition}")
+
+                    log_vars = {**log_vars_wm, **log_vars_ppo}
+                else:
+                    logging.warning(f"[Rank {rank}] [PPO Training] No new data, skipping PPO update")
+                    log_vars = log_vars_wm
+
+            # ========== Original Training Mode ==========
+            else:
+                # Execute multiple training rounds
+                for i in range(update_per_collect):
+                    # ✅ 处理混合采样返回的元组 (train_data_new, train_data_old)
+                    sample_result = replay_buffer.sample(batch_size, policy)
+
+                    if isinstance(sample_result, tuple):
+                        train_data_new, train_data_old = sample_result
+                        # 如果有新旧数据分离，先训练新数据
+                        if train_data_old is not None:
+                            # 训练新数据
+                            train_data_new.append(learner.train_iter)
+                            train_data_new.append(True) # is_old_data = False
+                            log_vars_new = learner.train(train_data_new, collector.envstep)
+
+                            # 训练老数据
+                            train_data_old.append(learner.train_iter)
+                            train_data_old.append(False) # is_old_data = True
+                            log_vars_old = learner.train(train_data_old, collector.envstep)
+
+                            # 更新优先级（如果使用）
+                            if cfg.policy.use_priority:
+                                replay_buffer.update_priority(train_data_new, log_vars_new[0]['value_priority_orig'])
+                                replay_buffer.update_priority(train_data_old, log_vars_old[0]['value_priority_orig'])
+                        else:
+                            # Fallback: 只有新数据
+                            train_data_new.append(learner.train_iter)
+                            log_vars = learner.train(train_data_new, collector.envstep)
+                            if cfg.policy.use_priority:
+                                replay_buffer.update_priority(train_data_new, log_vars[0]['value_priority_orig'])
+                    else:
+                        # 向后兼容：如果返回的不是元组，使用原始逻辑
+                        train_data = sample_result
+                        train_data.append(learner.train_iter)
+                        log_vars = learner.train(train_data, collector.envstep)
+                        if cfg.policy.use_priority:
+                            replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+
+                    if replay_buffer._cfg.reanalyze_ratio > 0 and i % 20 == 0:
+                        policy.recompute_pos_emb_diff_and_clear_cache()
+
+                    if cfg.policy.use_wandb:
+                        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
         # Clear replay buffer after training for online learning
         # if cfg.policy.get('online_learning', False):

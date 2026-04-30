@@ -388,13 +388,20 @@ class UniZeroPolicy(MuZeroPolicy):
         Arguments:
             - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
                 The first tensor is the current_batch, the second tensor is the target_batch.
+                Optionally includes loss_type as 4th element: [current_batch, target_batch, train_iter, loss_type]
         Returns:
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
                 current learning loss and learning statistics.
         """
         self._learn_model.train()
         self._target_model.train()
-        current_batch, target_batch, train_iter = data
+
+        # ✅ 解包 loss_type（如果有的话）
+        if len(data) == 4:
+            current_batch, target_batch, train_iter, loss_type = data
+        else:
+            current_batch, target_batch, train_iter = data
+            loss_type = 'all'  # default
         # PPO: current_batch now contains 11 elements: obs, action, bootstrap_action, mask, indices, weights, make_time, timestep, advantage, old_log_prob, return
         obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch, advantage_batch, old_log_prob_batch, return_batch = current_batch
         target_reward, target_value, target_policy = target_batch
@@ -492,6 +499,7 @@ class UniZeroPolicy(MuZeroPolicy):
             clip_ratio=self.ppo_clip_ratio,
             value_coef=self.ppo_value_coef,
             entropy_coef=self.ppo_entropy_coef,
+            loss_type=loss_type,  # ✅ 传递 loss_type
         )
 
         weighted_total_loss = losses.loss_total

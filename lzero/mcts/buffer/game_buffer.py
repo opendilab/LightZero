@@ -70,10 +70,13 @@ class GameBuffer(ABC, object):
         self.num_of_collected_episodes = 0
         self.base_idx = 0
         self.clear_time = 0
-        
+
         # ✅ 记录最新 push 的 segment 数量
         self.latest_push_count = 0
         self.new_data_ratio = self._cfg.get('new_data_ratio', 0.5)  # 默认 50% 新数据
+
+        # ✅ PriorZero-style: 跟踪已消费的 transition 位置
+        self.last_pos_in_transition = 0
 
     @abstractmethod
     def sample(

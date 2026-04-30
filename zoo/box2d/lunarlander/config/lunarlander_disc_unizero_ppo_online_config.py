@@ -95,6 +95,12 @@ lunarlander_unizero_ppo_online_config = dict(
             value_coef=0.5,       # 根据 ppo_bak: value_weight=0.5
             entropy_coef=0.01,     # 根据 ppo_bak: entropy_weight=0.0
         ),
+        # Split training configuration (PriorZero-style)
+        # When enabled, trains World Model and PPO separately with different data
+        split_ppo_wm_training=False,  # Set to True to enable split training
+        wm_update_per_collect=None,   # World Model updates per collect (uses all data)
+        ppo_update_per_collect=None,  # PPO updates per collect (uses only new data)
+        ppo_batch_size=None,          # Batch size for PPO training (defaults to batch_size)
     ),
 )
 lunarlander_unizero_ppo_online_config = EasyDict(lunarlander_unizero_ppo_online_config)

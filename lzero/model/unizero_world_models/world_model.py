@@ -1666,6 +1666,7 @@ class WorldModel(nn.Module):
         clip_ratio: float = 0.2,
         value_coef: float = 0.5,
         entropy_coef: float = 0.01,
+        loss_type: str = 'all',  # ✅ 新增: 'all', 'ppo_only', 'world_model_only'
         **kwargs: Any
     ) -> LossWithIntermediateLosses:
         """
@@ -1855,15 +1856,32 @@ class WorldModel(nn.Module):
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum() / (batch['mask_padding'][:, 1:].sum() + 1e-8)
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum() / (batch['mask_padding'].sum() + 1e-8)
 
-        # Total loss (value uses plain MSE, no gamma^t discount)
-        loss_total = (
-            discounted_loss_obs * self.latent_recon_loss_weight +
-            discounted_loss_rewards +
-            policy_loss +
-            value_coef * loss_value +
-            entropy_coef * entropy_loss
-        )
-        
+        # ========== 6. Total Loss (根据 loss_type 组合) ==========
+        if loss_type == 'all':
+            # 全部 loss：world model + PPO
+            loss_total = (
+                discounted_loss_obs * self.latent_recon_loss_weight +
+                discounted_loss_rewards +
+                policy_loss +
+                value_coef * loss_value +
+                entropy_coef * entropy_loss
+            )
+        elif loss_type == 'ppo_only':
+            # 只有 PPO loss
+            loss_total = (
+                policy_loss +
+                value_coef * loss_value +
+                entropy_coef * entropy_loss
+            )
+        elif loss_type == 'world_model_only':
+            # 只有 world model loss
+            loss_total = (
+                discounted_loss_obs * self.latent_recon_loss_weight +
+                discounted_loss_rewards
+            )
+        else:
+            raise ValueError(f"Unknown loss_type: {loss_type}. Must be 'all', 'ppo_only', or 'world_model_only'")
+
         # ========== 7. Return LossWithIntermediateLosses ==========
         return LossWithIntermediateLosses(
             latent_recon_loss_weight=self.latent_recon_loss_weight,
