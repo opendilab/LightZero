@@ -535,30 +535,35 @@ class PriorZeroEvaluator(OriginalEvaluator):
         env_nums = self._env.env_num
 
         eval_episode_info = [[] for _ in range(env_nums)]
-        # aligned with ScalingInter-RL: track per-level results for TensorBoard
         per_level_results = defaultdict(list)
 
         self._env.reset()
         self.history_buffers.clear()
 
         dones = np.array([False for _ in range(env_nums)])
-        ready_env_id = [i for i in range(env_nums)]
+        ready_env_id = set(range(env_nums))
+        remain_episode = n_episode
         episode_return = []
+
+        retry_waiting_time = 0.001
+
+        init_obs = self._env.ready_obs
+        while len(init_obs.keys()) != self._env_num:
+            time.sleep(retry_waiting_time)
+            init_obs = self._env.ready_obs
+
         while True:
-            local_done = (total_finishes >= n_episode) or all(dones) or len(ready_env_id) == 0
+            local_done = (total_finishes >= n_episode)
             if not self._should_continue_eval(local_done):
                 break
             if local_done:
-                # Drain mode: keep TP partners alive while other ranks finish.
                 self.data_processor.drain_vllm_iter()
                 continue
 
             obs = self._env.ready_obs
-            # ============================================
-            # 添加 LLM_PRIOR
             raw_obs_list = []
             histories_list = []
-            valid_actions_list = [] 
+            valid_actions_list = []
             for env_id in sorted(list(ready_env_id)):
                 raw_obs_text = obs[env_id]['raw_obs_text']
                 raw_obs_list.append(raw_obs_text)
@@ -571,15 +576,15 @@ class PriorZeroEvaluator(OriginalEvaluator):
 
             llm_prior_per_seq, _, _ = self.data_processor.get_llm_prior(
                 states=raw_obs_list,
-                valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
+                valid_actions_list=valid_actions_list,
                 histories=histories_list,
-                return_cot=True  # Request CoT prefixes for reuse in training
+                return_cot=True
             )
             actions = {env_id: None for env_id in sorted(list(ready_env_id))}
             llm_policy = {env_id: {} for env_id in sorted(list(ready_env_id))}
-            
+
             for env_id, llm_prior, valid_actions in zip(sorted(list(ready_env_id)), llm_prior_per_seq, valid_actions_list):
-                if len(llm_prior) == 1:   # 只有go,即valid_action_len=0
+                if len(llm_prior) == 1:
                     assert len(valid_actions) == 0
                     actions[env_id] = 0
                     continue
@@ -594,16 +599,15 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 all_values = [v for _, v in llm_policy[env_id].items()]
                 for k, _ in llm_policy[env_id].items():
                     llm_policy[env_id][k] /= sum(all_values)
-                
+
                 actions[env_id] = valid_actions.index(action_str_select)
-            
-            # ============================================
+
             try:
                 timesteps = self._env.step(actions)
                 timed_out = False
             except RuntimeError as e:
                 timed_out = True
-                    
+
             if timed_out:
                 self._logger.error(
                     f"[RANK {self._rank}] step TIMEOUT → break evaluate loop"
@@ -612,7 +616,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 self.history_buffers.clear()
                 episode_return.append(0.0)
                 break
-            
+
             timesteps = to_tensor(timesteps, dtype=torch.float32)
             for env_id, episode_timestep in timesteps.items():
                 obs_new, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
@@ -629,15 +633,28 @@ class PriorZeroEvaluator(OriginalEvaluator):
 
                 dones[env_id] = done
                 if episode_timestep.done:
-                    ready_env_id.remove(env_id)
+                    ready_env_id.discard(env_id)
                     if total_finishes < n_episode:
                         episode_return.append(info['score'])
                         total_finishes += 1
 
-                        # aligned with ScalingInter-RL: record per-level result
                         level_id = info.get('level_id', None)
                         if level_id is not None:
                             per_level_results[int(level_id)].append(float(info['score']))
+
+                    if n_episode > self._env_num and total_finishes < n_episode:
+                        init_obs = self._env.ready_obs
+                        while len(init_obs.keys()) != self._env_num:
+                            time.sleep(retry_waiting_time)
+                            init_obs = self._env.ready_obs
+
+                        new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
+                        ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                        remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                    self.history_buffers[env_id].clear()
+                    dones[env_id] = False
+                    eval_episode_info[env_id] = []
 
                 envstep_count += 1
         info = {

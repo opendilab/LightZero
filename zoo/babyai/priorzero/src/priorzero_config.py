@@ -149,12 +149,12 @@ class PriorZeroLLMConfig:
     policy_loss_type: str = "ppo"
     reward_func: Optional[EasyDict] = field(default_factory=lambda: EasyDict({
         "format_reward": True,
-        "format_param": EasyDict({"format_weight": 0.5}),
+        "format_param": EasyDict({"format_weight": 0.1}),
     }))
     advantage_type: str = "advantage_global_batch_norm"
     eps_clip_low_high: Tuple[float, float] = (0.2, 0.2)
-    rft_kl_coef: float = 0.001
-    entropy_loss_coef: float = 0.0
+    rft_kl_coef: float = 0.01
+    entropy_loss_coef: float = 0.01
     kl_estimator: str = "k3"
 
     llm_save_freq: int = 1000
