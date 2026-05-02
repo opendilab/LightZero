@@ -362,7 +362,30 @@ class DataProcessor:
 
         full_ids_list = [s['full_ids'] for s in real_samples]
         tgt_ids_list = [s['label_ids'] for s in real_samples]
-        assert self.tokenizer.batch_decode(tgt_ids_list) == targets_only, "Decoded label ids do not match targets_only. Please check the tokenizer and data processing logic."
+        # Consistency check: decoded label_ids should match the expected target text.
+        # Convert hard assert to warning + filter to avoid crashing on tokenizer round-trip edge cases.
+        decoded_labels = self.tokenizer.batch_decode(tgt_ids_list)
+        if decoded_labels != targets_only:
+            mismatch_indices = [
+                i for i, (d, t) in enumerate(zip(decoded_labels, targets_only)) if d != t
+            ]
+            _log_train.warning(
+                f"[make_llm_train_samples] label_ids decode mismatch for {len(mismatch_indices)}/{len(targets_only)} samples. "
+                f"First mismatch idx={mismatch_indices[0] if mismatch_indices else '?'}: "
+                f"decoded={decoded_labels[mismatch_indices[0]]!r:.120} vs expected={targets_only[mismatch_indices[0]]!r:.120}"
+                if mismatch_indices else ""
+            )
+            # Filter out mismatched samples to avoid training on corrupted data
+            keep_mask = [i for i in range(len(targets_only)) if i not in set(mismatch_indices)]
+            if len(keep_mask) == 0:
+                _log_train.warning("[make_llm_train_samples] All samples mismatched, skipping batch")
+                return False, [real_samples]
+            real_samples = [real_samples[i] for i in keep_mask]
+            targets_only = [targets_only[i] for i in keep_mask]
+            full_ids_list = [full_ids_list[i] for i in keep_mask]
+            tgt_ids_list = [tgt_ids_list[i] for i in keep_mask]
+            if fmt_rewards is not None:
+                fmt_rewards = fmt_rewards[keep_mask]
         inputs = self.tokenizer.pad({"input_ids": full_ids_list}, padding=True, return_tensors="pt")
         labels = torch.full_like(inputs.input_ids, -100)
         for i, tgt_ids in enumerate(tgt_ids_list):

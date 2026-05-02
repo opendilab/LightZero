@@ -240,7 +240,7 @@ class BatchPPOTrainer:
         for k, v in batch_data.items():
             if torch.is_tensor(v):
                 batch_data[k] = v.to(device)
-        
+
         all_samples_size = batch_data["input_ids"].size(0)
         status_list = []
         pbar = tqdm(
@@ -248,8 +248,10 @@ class BatchPPOTrainer:
             desc=f"PPO batch step={step_idx}",
             disable=not self.strategy.is_rank_0(),
         )
-        acc_grad_steps = self.strategy.accumulated_gradient 
+        acc_grad_steps = self.strategy.accumulated_gradient
         metrics_buffer = defaultdict(list) # 用于累积 micro_step 指标的缓冲区
+        kl_early_stop_threshold = getattr(self.args, 'kl_early_stop_threshold', None)
+        kl_early_stopped = False
         for micro_step, start_idx in enumerate(pbar):
             end_idx = min(start_idx + self.micro_train_batch_size, all_samples_size)
             micro_batch = {
@@ -287,7 +289,45 @@ class BatchPPOTrainer:
                 kl_loss = masked_mean(kl, micro_batch["action_mask"])
             else:
                 kl_loss = torch.tensor(0.0, device=device)
-            
+
+            # KL early stopping: skip remaining micro-batches if ref_kl exceeds threshold
+            kl_loss_item_for_check = kl_loss.detach().float().item()
+            if kl_early_stop_threshold is not None and kl_early_stop_threshold > 0:
+                if kl_loss_item_for_check > kl_early_stop_threshold:
+                    if self.strategy.is_rank_0() and not kl_early_stopped:
+                        import logging
+                        logging.getLogger("priorzero.train").warning(
+                            f"[KL Early Stop] ref_kl={kl_loss_item_for_check:.4f} > threshold={kl_early_stop_threshold}, "
+                            f"skipping gradient updates for remaining micro-batches at micro_step={micro_step}"
+                        )
+                    kl_early_stopped = True
+                    # Skip backward pass but still collect metrics for logging
+                    entropy_loss = masked_mean(output.entropy[:, -micro_batch["action_mask"].shape[1] :], micro_batch["action_mask"])
+                    policy_loss_item = actor_loss.detach().float().item()
+                    clipfrac_item = clipfrac.detach().float().item()
+                    clip_ratio_item = clip_ratio.detach().float().item()
+                    approx_kl_item = approx_kl.detach().float().item()
+                    kl_loss_item = kl_loss_item_for_check
+                    entropy_loss_item = entropy_loss.detach().float().item()
+                    input_response_length_item = micro_batch["attention_mask"].sum().detach().float().item() / micro_batch["attention_mask"].shape[0]
+                    response_length_item = micro_batch["action_mask"].sum().detach().float().item() / micro_batch["action_mask"].shape[0]
+                    input_length_item = input_response_length_item - response_length_item
+                    metrics_buffer["policy_loss"].append(policy_loss_item)
+                    metrics_buffer["clipfrac"].append(clipfrac_item)
+                    metrics_buffer["clip_ratio"].append(clip_ratio_item)
+                    metrics_buffer["approx_kl"].append(approx_kl_item)
+                    metrics_buffer["ref_kl"].append(kl_loss_item)
+                    metrics_buffer["input_length"].append(input_length_item)
+                    metrics_buffer["response_length"].append(response_length_item)
+                    metrics_buffer['entropy'].append(entropy_loss_item)
+                    log_status = micro_batch["log_status"]
+                    other_status = {k: [item[k] for item in log_status] for k in log_status[0].keys()}
+                    for k, v in other_status.items():
+                        metrics_buffer[k] = v
+                    if ((micro_step + 1) % acc_grad_steps == 0) or ((micro_step + 1) == pbar.total):
+                        self.train_iter += 1
+                    continue
+
             loss = actor_loss + kl_loss * float(kl_ctl.value)
             
             entropy_loss = masked_mean(output.entropy[:, -micro_batch["action_mask"].shape[1] :], micro_batch["action_mask"])
@@ -374,6 +414,8 @@ class BatchPPOTrainer:
                     status["mispo_token_ratio"] = np.mean(metrics_buffer['mispo_token_ratio'])
                 if "mispo_traj_ratio" in metrics_buffer:
                     status["mispo_traj_ratio"] = np.mean(metrics_buffer['mispo_traj_ratio'])
+                if kl_early_stopped:
+                    status["kl_early_stopped"] = 1.0
                 metrics_buffer.clear()
 
                 status = self.strategy.all_reduce(status)

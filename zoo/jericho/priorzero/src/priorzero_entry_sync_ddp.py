@@ -207,11 +207,11 @@ def train_priorzero(
             break
         
         # 1.评估阶段
-        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase):
+        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase, env_step=collector.envstep):
             logger.info(f"[Evaluator][Rank {rank}: Iter {learner.train_iter}] Evaluating...")
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.wake_up()
-            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase)
+            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase, env_step=collector.envstep)
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.sleep()
         

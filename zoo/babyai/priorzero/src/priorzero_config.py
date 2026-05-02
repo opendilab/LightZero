@@ -91,8 +91,11 @@ class PriorZeroLLMConfig:
         "world_model": True,
         "world_model_llm_prior": True,
         "llm_prior": True,
-        "wm_eval_freq": 2000,   # aligned with ScalingInter-RL: larger eval interval for 40-level multi-task
-        "llm_eval_freq": 200,   # aligned with ScalingInter-RL: larger eval interval for 40-level multi-task
+        "wm_eval_freq": 500,
+        "llm_eval_freq": 50,
+        # env-step-based eval frequency (preferred over iter-based when > 0)
+        "wm_eval_freq_envsteps": 0,   # 0 = disabled, falls back to wm_eval_freq
+        "llm_eval_freq_envsteps": 0,   # 0 = disabled, falls back to llm_eval_freq
     }))
 
     attn_implementation: str = "flash_attention_2"
@@ -127,6 +130,7 @@ class PriorZeroLLMConfig:
     temperature: float = 1.0
     top_p: float = 0.95
     seed: int = 0
+    
     reduction: str = "mean"
 
     deepspeed_enable_sleep: bool = True
@@ -149,13 +153,17 @@ class PriorZeroLLMConfig:
     policy_loss_type: str = "ppo"
     reward_func: Optional[EasyDict] = field(default_factory=lambda: EasyDict({
         "format_reward": True,
-        "format_param": EasyDict({"format_weight": 0.1}),
+        "format_param": EasyDict({"format_weight": 0.3}),
     }))
     advantage_type: str = "advantage_global_batch_norm"
     eps_clip_low_high: Tuple[float, float] = (0.2, 0.2)
-    rft_kl_coef: float = 0.01
-    entropy_loss_coef: float = 0.01
+    rft_kl_coef: float = 0.1
+    entropy_loss_coef: float = 0.001
     kl_estimator: str = "k3"
+    # KL early stopping: skip remaining micro-batches when ref_kl exceeds this threshold
+    # kl_early_stop_threshold: float = 0.1
+    kl_early_stop_threshold: float = 0.0
+
 
     llm_save_freq: int = 1000
     save_path: str = ""
@@ -217,14 +225,17 @@ def get_priorzero_config(
     embed_dim = 768
     replay_ratio = 0.1
     batch_size = 64
-    collect_num_simulations = 50
+    # collect_num_simulations = 50
+    collect_num_simulations = 25
     eval_num_simulations = 50
 
     # only for debug
     # collect_num_simulations = 2
     # eval_num_simulations = 2
 
-    replay_buffer_size = int(3e5)
+    # replay_buffer_size = int(3e5)
+    replay_buffer_size = int(5e5)
+
 
     env_config = dict(
         stop_value=int(1e6),
@@ -302,7 +313,8 @@ def get_priorzero_config(
         n_episode=n_episode,
         train_start_after_envsteps=0,
         replay_buffer_size=replay_buffer_size,
-        eval_freq=int(3e4),
+        # eval_freq=int(3e4),
+        eval_freq=int(2e4),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         buffer_reanalyze_freq=1 / 1000000,
@@ -344,7 +356,7 @@ def get_priorzero_config(
             exp_name = (
                 f"data_priorzero/babyai/llm_rft/priorzero_multitask_18levels_{model_key}_train_{llm_config.train_mode_dict.mode}/"
                 f"useCot_{llm_config.use_cot}_alternate_{llm_config.train_schedule.alternate}/"
-                f"mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_tbs_{llm_config.train_batch_size}_use_mispo_{llm_config.use_mispo}"
+                f"mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_tbs_{llm_config.train_batch_size}_use-mispo-{llm_config.use_mispo}_seed{seed}"
             )
         else:
             exp_name = (
@@ -397,7 +409,8 @@ def get_priorzero_config(
 
 def get_priorzero_debug_config(
     env_id: str = 'babyai',
-    seed: int = 0,
+    # seed: int = 0,
+    seed: int = 1,
     exp_name: str = None,
     use_cot: bool = True,
     model_key: Optional[str] = "qwen2.5-3b",

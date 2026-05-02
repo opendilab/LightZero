@@ -13,6 +13,14 @@ export PYTHONPATH=/mnt/shared-storage-user/puyuan/code/LightZero:$PYTHONPATH
 # 1. Training environment parameters
 CUDA_DEVICES="0,1,2,3"
 NPROC_PER_NODE=4
+
+CUDA_DEVICES="1,2,3"
+NPROC_PER_NODE=3
+
+
+CUDA_DEVICES="2,3"
+NPROC_PER_NODE=2
+
 MASTER_PORT=24554
 
 # 2. BabyAI-specific parameters
@@ -31,8 +39,8 @@ LOG_FILE="${LOG_DIR}/log_multitask_${LLM_MODEL}_${CURRENT_TIME}.txt"
 # 4. Environment variables
 export CUDA_VISIBLE_DEVICES="${CUDA_DEVICES}"
 export PYTHONFAULTHANDLER=1
-export TORCH_DISTRIBUTED_DEBUG=DETAIL
-export NCCL_DEBUG=INFO
+export TORCH_DISTRIBUTED_DEBUG=OFF
+export NCCL_DEBUG=WARN
 
 # 5. Build command
 CMD_ARGS="--env_id babyai --env_addr ${AGENTGYM_SERVER_ADDR} --model ${LLM_MODEL}"

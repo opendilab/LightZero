@@ -56,8 +56,14 @@ def main(
     embed_dim = 768
     replay_ratio = 0.1
     batch_size = 64
+    # collect_num_simulations = 50
+    collect_num_simulations = 25
+    eval_num_simulations = 50
+
     num_simulations = 50
-    replay_buffer_size = int(3e5)
+    # replay_buffer_size = int(3e5)
+    replay_buffer_size = int(5e5)
+
 
     # ------------------------------------------------------------------
     babyai_unizero_config = dict(
@@ -106,6 +112,8 @@ def main(
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
                     device="cuda",
+                    collect_num_simulations=collect_num_simulations,
+                    eval_num_simulations=eval_num_simulations,
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=24,
@@ -136,7 +144,9 @@ def main(
             n_episode=n_episode,
             train_start_after_envsteps=0,
             replay_buffer_size=replay_buffer_size,
-            eval_freq=int(5e3),
+            eval_freq=int(500),
+            eval_per_level=True,
+            # eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=1 / 1000000,

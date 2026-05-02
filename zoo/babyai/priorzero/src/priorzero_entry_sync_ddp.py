@@ -192,7 +192,7 @@ def train_priorzero(
     _log_eval.info("=== Initial Evaluation ===")
     if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
         vllm_engine.wake_up()
-    evaluator.eval(wm_train_iter=0, llm_train_iter=0, phase=current_phase)
+    evaluator.eval(wm_train_iter=0, llm_train_iter=0, phase=current_phase, env_step=collector.envstep)
     if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
         vllm_engine.sleep()
     torch_dist_barrier_and_cuda_sync()
@@ -202,11 +202,11 @@ def train_priorzero(
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 
-        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase):
-            _log_eval.info(f"=== Eval | wm_iter={learner.train_iter} llm_iter={policy_model.train_iter} phase={current_phase} ===")
+        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase, env_step=collector.envstep):
+            _log_eval.info(f"=== Eval | wm_iter={learner.train_iter} llm_iter={policy_model.train_iter} phase={current_phase} envstep={collector.envstep} ===")
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.wake_up()
-            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase)
+            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase, env_step=collector.envstep)
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.sleep()
 
@@ -303,6 +303,10 @@ def main():
 
     use_high_level = not args.use_low_level_actions
     model_key = args.model
+
+    args.seed = 1
+
+
     rank = int(os.environ.get("RANK", "0"))
 
     if rank == 0:

@@ -52,19 +52,34 @@ class PriorZeroEvaluator(OriginalEvaluator):
         )
         self._last_wm_eval_iter = 0
         self._last_llm_eval_iter = 0
+        self._last_eval_envstep = 0
         
         self._logger.info(f"[RANK {self._rank}] ✓ PriorZeroEvaluator initialized with vLLM engine")
         self._logger.info(f"[RANK {self._rank}]  - History length: {self.llm_cfg.history_length}")
     
-    def should_eval(self, wm_train_iter: int, llm_train_iter, phase='wm') -> bool:
+    def should_eval(self, wm_train_iter: int, llm_train_iter, phase='wm', env_step: int = -1) -> bool:
         """
-        Overview:
-            Determine whether it's time to run an evaluation based on the training iteration.
-        Arguments:
-            - train_iter (:obj:`int`): The current training iteration.
-        Returns:
-            - (:obj:`bool`): True if evaluation should be run, otherwise False.
+        Determine whether it's time to run an evaluation.
+
+        When ``env_step >= 0`` the decision is based on env-step frequency
+        (``wm_eval_freq_envsteps`` / ``llm_eval_freq_envsteps`` in eval_dict).
+        Otherwise falls back to the legacy iter-based logic for backward
+        compatibility.
         """
+        # --- New env-step-based trigger (preferred) ---
+        if env_step >= 0:
+            wm_freq_es = getattr(self.eval_mode, 'wm_eval_freq_envsteps', 0)
+            llm_freq_es = getattr(self.eval_mode, 'llm_eval_freq_envsteps', 0)
+            freq = wm_freq_es if (phase is None or phase == 'wm') else llm_freq_es
+            if freq > 0:
+                if env_step == self._last_eval_envstep:
+                    return False
+                if (env_step - self._last_eval_envstep) < freq and env_step != 0:
+                    return False
+                self._last_eval_envstep = env_step
+                return True
+
+        # --- Legacy iter-based trigger (fallback) ---
         if phase is None or phase == 'wm':
             if wm_train_iter == self._last_wm_eval_iter:
                 return False
@@ -79,7 +94,6 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 return False
             self._last_llm_eval_iter = llm_train_iter
             return True
-            
         else:
             raise ValueError("")
     
@@ -156,30 +170,35 @@ class PriorZeroEvaluator(OriginalEvaluator):
         """Log per-level rewards and summary to TensorBoard."""
         if not per_level_results or self._tb_logger is None:
             return
+        all_level_means = []
         for level_id in sorted(per_level_results.keys()):
             rewards = per_level_results[level_id]
             mean_r = np.mean(rewards)
             self._tb_logger.add_scalar(f'{tag_prefix}/level_{level_id}_reward', mean_r, global_step)
-        all_means = {f'level_{lid}': np.mean(rs) for lid, rs in sorted(per_level_results.items())}
-        self._tb_logger.add_scalars(f'{tag_prefix}/level_summary', all_means, global_step)
-        all_level_means = list(all_means.values())
+            all_level_means.append(mean_r)
         self._tb_logger.add_scalar(f'{tag_prefix}/level_mean', np.mean(all_level_means), global_step)
         self._tb_logger.add_scalar(f'{tag_prefix}/level_std', np.std(all_level_means), global_step)
         self._tb_logger.add_scalar(f'{tag_prefix}/level_min', np.min(all_level_means), global_step)
         self._tb_logger.add_scalar(f'{tag_prefix}/level_max', np.max(all_level_means), global_step)
 
-    def eval(self, wm_train_iter: int = -1, llm_train_iter: int = -1, phase: str = "wm") -> Tuple[bool, Dict[str, Any]]:
+    def _log_agg_tb(self, info: dict, tag_prefix: str, global_step: int) -> None:
+        """Log aggregated eval metrics to TensorBoard."""
+        if self._tb_logger is None:
+            return
+        for k in ['avg_envstep_per_episode', 'reward_mean', 'reward_std', 'reward_max', 'reward_min']:
+            if k in info:
+                self._tb_logger.add_scalar(f'{tag_prefix}/{k}', info[k], global_step)
+
+    def eval(self, wm_train_iter: int = -1, llm_train_iter: int = -1, phase: str = "wm", env_step: int = -1) -> Tuple[bool, Dict[str, Any]]:
         modes = []
+        wm_per_level = {}
         wm_llm_per_level = {}
         llm_per_level = {}
 
-        if self.eval_mode.world_model and (phase=='wm' or phase is None):
-            world_model_info = super().eval()
+        # Mode 1: Pure WM+MCTS — now runs in ALL phases (no phase guard)
+        if self.eval_mode.world_model:
+            world_model_info, wm_per_level = self.eval_wm_only()
             modes.append(("WM", world_model_info))
-            # Sync all ranks before entering vLLM-using eval. With vLLM TP > 1 spanning DDP ranks,
-            # if a fast rank reaches eval_with_llm_prior while a slow rank is still in super().eval(),
-            # the fast rank's vllm.generate would deadlock on TP collective. The barrier guarantees
-            # everyone has finished WM eval first. No-op when DDP/TP not in use.
             tp_size = getattr(self.llm_cfg, 'vllm_tensor_parallel_size', 1)
             if dist.is_initialized() and dist.get_world_size() > 1 and tp_size > 1:
                 dist.barrier()
@@ -188,7 +207,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
             world_model_llm_prior_info, wm_llm_eval_episode_info, wm_llm_per_level, wm_llm_completed_episodes = self.eval_with_llm_prior()
             modes.append(("WM_LLMPrior", world_model_llm_prior_info))
 
-        if self.eval_mode.llm_prior and phase == 'llm':
+        if self.eval_mode.llm_prior:
             llm_prior_info, llm_eval_episode_info, llm_per_level = self.eval_only_llm_prior()
             modes.append(("LLMPrior", llm_prior_info))
 
@@ -200,7 +219,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
         if wm_llm_completed_episodes:
             self._save_eval_trajectories(wm_llm_completed_episodes, step_val, tag="WM_LLMPrior")
 
-        # --- Episode-level text logging (keep first episode detail as before) ---
+        # --- Episode-level text logging ---
         if self.eval_mode.world_model_llm_prior and wm_llm_eval_episode_info and len(wm_llm_eval_episode_info[0]) > 0:
             self._logger_eval_episode.info("="*100)
             self._logger_eval_episode.info("="*10 + f"[WM_LLM] | episode_avg_steps={len(wm_llm_eval_episode_info[0])} | episode_return={wm_llm_eval_episode_info[0][-1]['info']['score'].item()} " + "="*10)
@@ -220,7 +239,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 self._logger_eval_episode.info("-" * 100)
             self._logger_eval_episode.info("="*100)
 
-        if phase == 'llm' and self.eval_mode.llm_prior and llm_eval_episode_info and len(llm_eval_episode_info[0]) > 0:
+        if self.eval_mode.llm_prior and llm_eval_episode_info and len(llm_eval_episode_info[0]) > 0:
             self._logger_eval_episode.info("="*100)
             self._logger_eval_episode.info("="*10 + f"[LLM] | episode_avg_steps={len(llm_eval_episode_info[0])} | episode_return={llm_eval_episode_info[0][-1]['info']['score'].item()} " + "="*10)
             for step, info in enumerate(llm_eval_episode_info[0]):
@@ -237,27 +256,219 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 self._logger_eval_episode.info("-" * 100)
             self._logger_eval_episode.info("="*100)
 
-        # --- TensorBoard: aggregated metrics (original) ---
-        keys = ['avg_envstep_per_episode', 'reward_mean', 'reward_std', 'reward_max', 'reward_min']
-        for k in keys:
-            if self.eval_mode.world_model and (phase=='wm' or phase is None):
-                self._tb_logger.add_scalar(f'{self._instance_name}_wm_iter/{k}_WM', world_model_info[k], wm_train_iter)
-            if self.eval_mode.world_model_llm_prior:
-                if phase == 'wm' or phase is None:
-                    self._tb_logger.add_scalar(f'{self._instance_name}_wm_iter/{k}_WM_LLMPrior', world_model_llm_prior_info[k], wm_train_iter)
-                elif phase == 'llm':
-                    self._tb_logger.add_scalar(f'{self._instance_name}_llm_iter/{k}_WM_LLMPrior', world_model_llm_prior_info[k], llm_train_iter)
-            if self.eval_mode.llm_prior and phase == 'llm':
-                self._tb_logger.add_scalar(f'{self._instance_name}_llm_iter/{k}_LLMPrior', llm_prior_info[k], llm_train_iter)
+        # ==================================================================
+        # TensorBoard logging
+        # ==================================================================
+        # New unified tags: eval/{mode}/agg/{metric}  with x-axis = env_step
+        # Deprecated tags: eval/{mode}/agg_{wm|llm}_iter/{metric}  (kept for transition)
+        # ==================================================================
+        agg_keys = ['avg_envstep_per_episode', 'reward_mean', 'reward_std', 'reward_max', 'reward_min']
+        global_step = env_step  # unified x-axis
 
-        # --- TensorBoard: per-level metrics (aligned with ScalingInter-RL) ---
-        if self.eval_mode.world_model_llm_prior and wm_llm_per_level:
-            step_val = wm_train_iter if (phase == 'wm' or phase is None) else llm_train_iter
-            self._log_per_level_tb(wm_llm_per_level, 'eval_per_level_WM_LLMPrior', step_val)
-        if self.eval_mode.llm_prior and phase == 'llm' and llm_per_level:
-            self._log_per_level_tb(llm_per_level, 'eval_per_level_LLMPrior', llm_train_iter)
+        # Meta information — allows recovering phase / iter from env_step
+        if global_step >= 0:
+            self._tb_logger.add_scalar('eval/meta/phase', 0 if (phase == 'wm' or phase is None) else 1, global_step)
+            self._tb_logger.add_scalar('eval/meta/wm_train_iter', wm_train_iter, global_step)
+            self._tb_logger.add_scalar('eval/meta/llm_train_iter', llm_train_iter, global_step)
+
+        # --- Mode 1: wm_only ---
+        if self.eval_mode.world_model:
+            if global_step >= 0:
+                self._log_agg_tb(world_model_info, 'eval/wm_only/agg', global_step)
+                self._log_per_level_tb(wm_per_level, 'eval/wm_only/per_level', global_step)
+            # Deprecated tags (transition period)
+            if phase == 'wm' or phase is None:
+                for k in agg_keys:
+                    self._tb_logger.add_scalar(f'deprecated/eval/wm_mcts/agg_wm_iter/{k}', world_model_info[k], wm_train_iter)
+                self._log_per_level_tb(wm_per_level, 'deprecated/eval/wm_mcts/per_level_wm_iter', wm_train_iter)
+
+        # --- Mode 2: wm_llm ---
+        if self.eval_mode.world_model_llm_prior:
+            if global_step >= 0:
+                self._log_agg_tb(world_model_llm_prior_info, 'eval/wm_llm/agg', global_step)
+                self._log_per_level_tb(wm_llm_per_level, 'eval/wm_llm/per_level', global_step)
+            # Deprecated tags (transition period)
+            if phase == 'wm' or phase is None:
+                for k in agg_keys:
+                    self._tb_logger.add_scalar(f'deprecated/eval/wm_llm_mcts/agg_wm_iter/{k}', world_model_llm_prior_info[k], wm_train_iter)
+                self._log_per_level_tb(wm_llm_per_level, 'deprecated/eval/wm_llm_mcts/per_level_wm_iter', wm_train_iter)
+            elif phase == 'llm':
+                for k in agg_keys:
+                    self._tb_logger.add_scalar(f'deprecated/eval/wm_llm_mcts/agg_llm_iter/{k}', world_model_llm_prior_info[k], llm_train_iter)
+                self._log_per_level_tb(wm_llm_per_level, 'deprecated/eval/wm_llm_mcts/per_level_llm_iter', llm_train_iter)
+
+        # --- Mode 3: llm_only ---
+        if self.eval_mode.llm_prior:
+            if global_step >= 0:
+                self._log_agg_tb(llm_prior_info, 'eval/llm_only/agg', global_step)
+                self._log_per_level_tb(llm_per_level, 'eval/llm_only/per_level', global_step)
+            # Deprecated tags (transition period)
+            step_axis = 'wm_iter' if (phase == 'wm' or phase is None) else 'llm_iter'
+            step_val_llm = wm_train_iter if (phase == 'wm' or phase is None) else llm_train_iter
+            for k in agg_keys:
+                self._tb_logger.add_scalar(f'deprecated/eval/llm_only/agg_{step_axis}/{k}', llm_prior_info[k], step_val_llm)
+            self._log_per_level_tb(llm_per_level, f'deprecated/eval/llm_only/per_level_{step_axis}', step_val_llm)
 
         
+    def eval_wm_only(self) -> Tuple[Dict[str, Any], dict]:
+        """Pure WM MCTS eval with per-level tracking. Replaces super().eval()."""
+        n_episode = self._default_n_episode
+        assert n_episode is not None
+        envstep_count = 0
+        total_finishes = 0
+        eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
+        env_nums = self._env.env_num
+        per_level_results = defaultdict(list)
+
+        self._env.reset()
+        self._policy.reset(task_id=self.task_id)
+
+        init_obs = self._env.ready_obs
+        retry_waiting_time = 0.001
+        while len(init_obs.keys()) != self._env_num:
+            time.sleep(retry_waiting_time)
+            init_obs = self._env.ready_obs
+
+        action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
+        to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        timestep_dict = {i: to_ndarray(init_obs[i].get('timestep', -1)) for i in range(env_nums)}
+
+        dones = np.array([False for _ in range(env_nums)])
+        game_segments = [
+            GameSegment(
+                self._env.action_space,
+                game_segment_length=self.policy_config.game_segment_length,
+                config=self.policy_config,
+                task_id=self.task_id,
+            ) for _ in range(env_nums)
+        ]
+        for i in range(env_nums):
+            game_segments[i].reset(
+                [to_ndarray(init_obs[i]['observation']) for _ in range(self.policy_config.model.frame_stack_num)]
+            )
+
+        ready_env_id = set()
+        remain_episode = n_episode
+        eps_steps_lst = np.zeros(env_nums)
+
+        with self._timer:
+            while not eval_monitor.is_finished() and total_finishes < n_episode:
+                if self.stop_event.is_set():
+                    break
+
+                obs = self._env.ready_obs
+                new_available_env_id = set(obs.keys()).difference(ready_env_id)
+                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                if not ready_env_id:
+                    continue
+
+                stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                stack_obs = list(stack_obs.values())
+                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
+                to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+
+                stack_obs = to_ndarray(stack_obs)
+                stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+
+                if self.task_id is None:
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
+                else:
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep, task_id=self.task_id)
+
+                actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
+                distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
+                value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                visit_entropy_dict_with_env_id = {k: v['visit_count_distribution_entropy'] for k, v in policy_output.items()}
+
+                actions, distributions_dict, value_dict, pred_value_dict, visit_entropy_dict = {}, {}, {}, {}, {}
+                for env_id in ready_env_id:
+                    actions[env_id] = actions_with_env_id.pop(env_id)
+                    distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
+                    value_dict[env_id] = value_dict_with_env_id.pop(env_id)
+                    pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+                    visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
+
+                timesteps = self._env.step(actions)
+                timesteps = to_tensor(timesteps, dtype=torch.float32)
+                for env_id, episode_timestep in timesteps.items():
+                    obs_t, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
+
+                    eps_steps_lst[env_id] += 1
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero', 'priorzero']:
+                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False, task_id=self.task_id)
+
+                    game_segments[env_id].append(
+                        actions[env_id], to_ndarray(obs_t['observation']), reward,
+                        action_mask_dict[env_id], to_play_dict[env_id], timestep_dict[env_id],
+                    )
+
+                    action_mask_dict[env_id] = to_ndarray(obs_t['action_mask'])
+                    to_play_dict[env_id] = to_ndarray(obs_t['to_play'])
+                    timestep_dict[env_id] = to_ndarray(obs_t.get('timestep', -1))
+
+                    dones[env_id] = done
+                    if episode_timestep.done:
+                        self._policy.reset([env_id])
+                        reward = episode_timestep.info['score']
+                        saved_info = {'eval_episode_return': episode_timestep.info['score']}
+                        if 'episode_info' in episode_timestep.info:
+                            saved_info.update(episode_timestep.info['episode_info'])
+                        eval_monitor.update_info(env_id, saved_info)
+                        eval_monitor.update_reward(env_id, reward)
+                        total_finishes += 1
+
+                        level_id = episode_timestep.info.get('level_id', None)
+                        if level_id is not None:
+                            per_level_results[int(level_id)].append(float(reward))
+
+                        if n_episode > self._env_num:
+                            init_obs = self._env.ready_obs
+                            while len(init_obs.keys()) != self._env_num:
+                                time.sleep(retry_waiting_time)
+                                init_obs = self._env.ready_obs
+
+                            new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
+                            ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                            remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                            action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
+                            to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                            timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
+
+                            game_segments[env_id] = GameSegment(
+                                self._env.action_space,
+                                game_segment_length=self.policy_config.game_segment_length,
+                                config=self.policy_config,
+                                task_id=self.task_id,
+                            )
+                            game_segments[env_id].reset(
+                                [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)]
+                            )
+
+                        eps_steps_lst[env_id] = 0
+                        self._policy.reset([env_id])
+                        ready_env_id.remove(env_id)
+
+                    envstep_count += 1
+
+        episode_return = eval_monitor.get_episode_return()
+        mean_episode_return = np.mean(episode_return)
+        if mean_episode_return >= self._max_episode_return:
+            self._max_episode_return = mean_episode_return
+        info = {
+            'avg_envstep_per_episode': envstep_count / n_episode if n_episode > 0 else 0,
+            'reward_mean': np.mean(episode_return),
+            'reward_std': np.std(episode_return),
+            'reward_max': np.max(episode_return),
+            'reward_min': np.min(episode_return),
+        }
+        return info, dict(per_level_results)
+
     def eval_with_llm_prior(self) -> Tuple[Dict[str, Any], list, dict, list]:
         n_episode = self._default_n_episode
         assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
