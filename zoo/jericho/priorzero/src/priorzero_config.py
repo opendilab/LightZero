@@ -117,6 +117,8 @@ class PriorZeroLLMConfig:
         # env-step-based eval frequency (preferred over iter-based when > 0)
         "wm_eval_freq_envsteps": 0,   # 0 = disabled, falls back to wm_eval_freq
         "llm_eval_freq_envsteps": 0,   # 0 = disabled, falls back to llm_eval_freq
+        # Whether to save CoT/prompt/LLM-prior details in trajectory JSON files
+        "save_llm_cot": True,
     }))
     
     attn_implementation: str = "flash_attention_2" 

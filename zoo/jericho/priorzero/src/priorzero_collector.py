@@ -366,7 +366,7 @@ class PriorZeroCollector(OriginalCollector):
                     valid_actions_list.append(valid_actions)
                 with self.prof.block("collect_step_get_llm_prior", rank=self._rank):
                     # CoT reuse optimization: request CoT prefixes to store in game segments
-                    llm_prior_per_seq, llm_prior_per_tok, cot_prefixes = self.data_processor.get_llm_prior(
+                    llm_prior_per_seq, llm_prior_per_tok, cot_prefixes, _ = self.data_processor.get_llm_prior(
                         states=raw_obs_list,
                         valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
                         histories=histories_list,

@@ -148,6 +148,46 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 if isinstance(info, dict):
                     step_record['data_idx'] = info.get('data_idx')
                     step_record['level_id'] = info.get('level_id')
+
+                # --- Enriched fields: CoT, LLM prior, MCTS info ---
+                save_cot = getattr(self.eval_mode, 'save_llm_cot', True)
+                if save_cot:
+                    # LLM CoT raw output
+                    if s.get('llm_cot_raw') is not None:
+                        step_record['llm_cot_raw'] = str(s['llm_cot_raw'])[:5000]
+                    # LLM prompt
+                    if s.get('llm_prompt') is not None:
+                        step_record['llm_prompt'] = str(s['llm_prompt'])[:5000]
+                    # LLM action probability distribution (normalized)
+                    llm_probs = s.get('llm_action_probs')
+                    if llm_probs:
+                        step_record['llm_action_probs'] = {
+                            str(a): float(p) for a, p in llm_probs.items()
+                        }
+                    # LLM policy (from eval_only_llm_prior path)
+                    llm_policy = s.get('llm_policy')
+                    if llm_policy:
+                        step_record['llm_policy'] = {
+                            str(a): float(p) for a, p in llm_policy.items()
+                        }
+                    # Valid actions list
+                    va = s.get('valid_actions')
+                    if va:
+                        step_record['valid_actions'] = [str(a) for a in va]
+                    # MCTS info (visit counts, prior distributions, etc.)
+                    mcts = s.get('mcts_info')
+                    if mcts and isinstance(mcts, dict):
+                        mcts_serialized = {}
+                        for key, value in mcts.items():
+                            if isinstance(value, dict):
+                                mcts_serialized[str(key)] = {
+                                    str(a): float(v) if isinstance(v, (int, float)) else str(v)
+                                    for a, v in value.items()
+                                }
+                            else:
+                                mcts_serialized[str(key)] = str(value)
+                        step_record['mcts_info'] = mcts_serialized
+
                 traj['steps'].append(step_record)
 
             with open(os.path.join(level_dir, f'traj_{idx}.json'), 'w') as f:
@@ -573,12 +613,31 @@ class PriorZeroEvaluator(OriginalEvaluator):
                     valid_actions = obs[env_id].get('valid_actions', [])
                     valid_actions_list.append(valid_actions)
 
-                llm_prior_per_seq, _, _ = self.data_processor.get_llm_prior(
+                llm_prior_per_seq, llm_prior_per_tok, prefix_cots, full_cot_outputs = self.data_processor.get_llm_prior(
                     states=raw_obs_list,
                     valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
                     histories=histories_list,
                     return_cot=True  # Request CoT prefixes for reuse in training
                 )
+
+                # Build per-env lookup for CoT/prompt data (aligned with sorted ready_env_id)
+                sorted_ready = sorted(list(ready_env_id))
+                _llm_cot_by_env = {}
+                _llm_prompt_by_env = {}
+                _llm_prior_raw_by_env = {}  # unscaled log-probs
+                _valid_actions_by_env = {}
+                for idx, env_id in enumerate(sorted_ready):
+                    _valid_actions_by_env[env_id] = valid_actions_list[idx]
+                    _llm_prior_raw_by_env[env_id] = dict(llm_prior_per_seq[idx])  # copy before scaling
+                    if full_cot_outputs and idx < len(full_cot_outputs):
+                        _llm_cot_by_env[env_id] = full_cot_outputs[idx]
+                    else:
+                        _llm_cot_by_env[env_id] = None
+                    if llm_prior_per_tok and idx < len(llm_prior_per_tok):
+                        _llm_prompt_by_env[env_id] = llm_prior_per_tok[idx].get('prompt', None)
+                    else:
+                        _llm_prompt_by_env[env_id] = None
+
                 for env_id, llm_prior in enumerate(llm_prior_per_seq):
                     scaled_llm_prior = self.apply_temperature_scaling(llm_prior, return_logprobs=True)
                     llm_prior_per_seq[env_id] = scaled_llm_prior
@@ -649,7 +708,12 @@ class PriorZeroEvaluator(OriginalEvaluator):
                         "action": action,
                         "reward": float(reward),
                         "mcts_info": mcts_info[env_id],
-                        "info": info
+                        "info": info,
+                        # --- enriched fields for trajectory analysis ---
+                        "llm_cot_raw": _llm_cot_by_env.get(env_id),
+                        "llm_prompt": _llm_prompt_by_env.get(env_id),
+                        "llm_action_probs": _llm_prior_raw_by_env.get(env_id, {}),
+                        "valid_actions": _valid_actions_by_env.get(env_id, []),
                     })
                     self.history_buffers[env_id].append((obs[env_id]['raw_obs_text'], action, float(reward)))
                     
@@ -785,12 +849,26 @@ class PriorZeroEvaluator(OriginalEvaluator):
                 valid_actions = obs[env_id].get('valid_actions', [])
                 valid_actions_list.append(valid_actions)
 
-            llm_prior_per_seq, _, _ = self.data_processor.get_llm_prior(
+            llm_prior_per_seq, llm_prior_per_tok, prefix_cots, full_cot_outputs = self.data_processor.get_llm_prior(
                 states=raw_obs_list,
                 valid_actions_list=valid_actions_list,
                 histories=histories_list,
                 return_cot=True
             )
+            # Build per-env lookup for CoT/prompt data
+            sorted_ready_llm = sorted(list(ready_env_id))
+            llm_cot_by_env = {}
+            llm_prompt_by_env = {}
+            for idx, env_id in enumerate(sorted_ready_llm):
+                if full_cot_outputs is not None and idx < len(full_cot_outputs):
+                    llm_cot_by_env[env_id] = full_cot_outputs[idx]
+                else:
+                    llm_cot_by_env[env_id] = None
+                if llm_prior_per_tok is not None and idx < len(llm_prior_per_tok):
+                    llm_prompt_by_env[env_id] = llm_prior_per_tok[idx].get('prompt', None)
+                else:
+                    llm_prompt_by_env[env_id] = None
+
             actions = {env_id: None for env_id in sorted(list(ready_env_id))}
             llm_policy = {env_id: {} for env_id in sorted(list(ready_env_id))}
 
@@ -839,6 +917,10 @@ class PriorZeroEvaluator(OriginalEvaluator):
                         "reward": float(reward),
                         "llm_policy": llm_policy[env_id],
                         "info": info,
+                        # --- CoT / LLM prior enrichment ---
+                        "llm_cot_raw": llm_cot_by_env.get(env_id),
+                        "llm_prompt": llm_prompt_by_env.get(env_id),
+                        "valid_actions": valid_actions_list[sorted_ready_llm.index(env_id)] if env_id in sorted_ready_llm else [],
                     })
                 self.history_buffers[env_id].append((obs[env_id]['raw_obs_text'], action, float(reward)))
 

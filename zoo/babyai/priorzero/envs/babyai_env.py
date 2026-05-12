@@ -309,7 +309,7 @@ class BabyAIEnv(BaseEnv):
     def step(self, action: Union[int, np.ndarray, str], return_str: bool = False) -> BaseEnvTimestep:
         if self._server_halted:
             dummy_obs = self.prepare_obs("[Server halted]", return_str)
-            info = {'action_str': 'noop', 'abnormal': True, 'eval_episode_return': self.episode_return}
+            info = {'action_str': 'noop', 'abnormal': True, 'eval_episode_return': self.episode_return, 'score': self.episode_return}
             return BaseEnvTimestep(dummy_obs, 0.0, True, info)
 
         if isinstance(action, str):

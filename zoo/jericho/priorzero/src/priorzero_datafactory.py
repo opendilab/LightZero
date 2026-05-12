@@ -686,7 +686,7 @@ class DataProcessor:
 
         Returns:
             If return_cot=False: (llm_prior_per_seq, llm_prior_per_tok)
-            If return_cot=True: (llm_prior_per_seq, llm_prior_per_tok, prefix_cots)
+            If return_cot=True: (llm_prior_per_seq, llm_prior_per_tok, prefix_cots, full_cot_outputs)
         """
         prompt_list = []
         assert len(states) == len(histories) == len(valid_actions_list)
@@ -753,7 +753,7 @@ class DataProcessor:
             })
         # CoT reuse optimization: return CoT prefixes if requested
         if return_cot:
-            return llm_prior_per_seq, llm_prior_per_tok, prefix_cots
+            return llm_prior_per_seq, llm_prior_per_tok, prefix_cots, full_output
         else:
             return llm_prior_per_seq, llm_prior_per_tok
 

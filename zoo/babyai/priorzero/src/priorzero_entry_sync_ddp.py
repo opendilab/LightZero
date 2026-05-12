@@ -304,7 +304,9 @@ def main():
     use_high_level = not args.use_low_level_actions
     model_key = args.model
 
-    args.seed = 1
+    # args.seed = 2
+    # args.seed = 3
+
 
 
     rank = int(os.environ.get("RANK", "0"))
