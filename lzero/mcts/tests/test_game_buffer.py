@@ -4,6 +4,9 @@ from easydict import EasyDict
 
 from ding.torch_utils import to_list
 from lzero.mcts.buffer.game_buffer_efficientzero import EfficientZeroGameBuffer
+from lzero.mcts.buffer.game_buffer_muzero import MuZeroGameBuffer
+from lzero.mcts.buffer.game_buffer_sampled_efficientzero import SampledEfficientZeroGameBuffer
+from lzero.mcts.buffer.game_buffer_sampled_muzero import SampledMuZeroGameBuffer
 
 config = EasyDict(
     dict(
@@ -23,6 +26,41 @@ config = EasyDict(
         ),
     )
 )
+
+
+def _make_varied_action_config(action_space_size=100, num_of_sampled_actions=3):
+    return EasyDict(
+        dict(
+            batch_size=2,
+            priority_prob_alpha=0.6,
+            priority_prob_beta=0.4,
+            replay_buffer_size=100,
+            env_type='board_games',
+            use_priority=False,
+            action_type='varied_action_space',
+            game_segment_length=10,
+            num_unroll_steps=0,
+            model=dict(
+                action_space_size=action_space_size,
+                continuous_action_space=False,
+                num_of_sampled_actions=num_of_sampled_actions,
+                value_support_range=(-10, 10, 1),
+                reward_support_range=(-10, 10, 1),
+            ),
+        )
+    )
+
+
+def _make_sparse_policy_context(action_space_size=100):
+    action_mask = np.zeros(action_space_size, dtype=np.int8)
+    action_mask[[7, 42, 99]] = 1
+    return [
+        [0],
+        [[[0.2, 0.3, 0.5]]],
+        [1],
+        [[action_mask]],
+        [[-1]],
+    ]
 
 
 @pytest.mark.unittest
@@ -93,3 +131,29 @@ def test_sample_orig_data():
     context = buffer._sample_orig_data(batch_size=2)
     # context = (game_lst, game_pos_lst, indices_lst, weights, make_time)
     print(context)
+
+
+@pytest.mark.unittest
+def test_non_sampled_varied_action_policy_maps_to_action_ids():
+    buffer = MuZeroGameBuffer(_make_varied_action_config())
+
+    target_policies = buffer._compute_target_policy_non_reanalyzed(
+        _make_sparse_policy_context(), policy_shape=100
+    )
+
+    assert target_policies.shape == (1, 1, 100)
+    np.testing.assert_allclose(target_policies[0, 0, [7, 42, 99]], [0.2, 0.3, 0.5])
+    assert target_policies[0, 0].sum() == pytest.approx(1.0)
+
+
+@pytest.mark.unittest
+@pytest.mark.parametrize('buffer_cls', [SampledMuZeroGameBuffer, SampledEfficientZeroGameBuffer])
+def test_sampled_varied_action_policy_uses_sampled_action_indices(buffer_cls):
+    buffer = buffer_cls(_make_varied_action_config())
+
+    target_policies = buffer._compute_target_policy_non_reanalyzed(
+        _make_sparse_policy_context(), policy_shape=3
+    )
+
+    assert target_policies.shape == (1, 1, 3)
+    np.testing.assert_allclose(target_policies[0, 0], [0.2, 0.3, 0.5])
