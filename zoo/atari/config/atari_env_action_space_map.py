@@ -32,3 +32,8 @@ atari_env_action_space_map = EasyDict({
     'ALE/BeamRider-v5': 9,
     'ALE/Gravitar-v5': 18,
 })
+
+for _env_id, _action_space_size in list(atari_env_action_space_map.items()):
+    if _env_id.startswith('ALE/') and _env_id.endswith('-v5'):
+        _legacy_env_id = _env_id[len('ALE/'):-len('-v5')] + 'NoFrameskip-v4'
+        atari_env_action_space_map[_legacy_env_id] = _action_space_size

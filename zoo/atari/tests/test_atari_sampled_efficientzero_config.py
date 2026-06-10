@@ -1,6 +1,3 @@
-import ast
-from pathlib import Path
-
 from easydict import EasyDict
 
 env_id = 'BreakoutNoFrameskip-v4'
@@ -106,48 +103,19 @@ def _assert_sampled_efficientzero_atari_obs_shape(cfg):
     assert cfg.policy.model.image_channel == 1
 
 
-def _dict_call_keywords(node):
-    assert isinstance(node, ast.Call)
-    assert isinstance(node.func, ast.Name)
-    assert node.func.id == 'dict'
-    return {keyword.arg: keyword.value for keyword in node.keywords}
+def test_legacy_atari_env_ids_are_supported():
+    from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-
-def _tuple_value(node):
-    assert isinstance(node, ast.Tuple)
-    return tuple(element.value for element in node.elts)
-
-
-def _bool_value(node):
-    assert isinstance(node, ast.Constant)
-    return node.value
-
-
-def _find_repo_config_dict():
-    config_path = Path(__file__).parents[1] / 'config' / 'atari_sampled_efficientzero_config.py'
-    tree = ast.parse(config_path.read_text())
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == 'atari_sampled_efficientzero_config':
-                return _dict_call_keywords(node.value)
-    raise AssertionError('atari_sampled_efficientzero_config assignment not found')
+    assert atari_env_action_space_map['PongNoFrameskip-v4'] == atari_env_action_space_map['ALE/Pong-v5'] == 6
+    assert atari_env_action_space_map['BreakoutNoFrameskip-v4'] == atari_env_action_space_map['ALE/Breakout-v5'] == 4
+    assert atari_env_action_space_map['MsPacmanNoFrameskip-v4'] == atari_env_action_space_map['ALE/MsPacman-v5'] == 9
 
 
 def test_repo_sampled_efficientzero_atari_config_uses_env_observation_shape():
-    config = _find_repo_config_dict()
-    env_config = _dict_call_keywords(config['env'])
-    policy_config = _dict_call_keywords(config['policy'])
-    model_config = _dict_call_keywords(policy_config['model'])
+    from zoo.atari.config.atari_sampled_efficientzero_config import main_config as repo_config
 
-    assert 'obs_shape' not in env_config
-    assert _tuple_value(env_config['observation_shape']) == (4, 64, 64)
-    assert _tuple_value(model_config['observation_shape']) == (4, 64, 64)
-    assert env_config['frame_stack_num'].value == model_config['frame_stack_num'].value == 4
-    assert _bool_value(env_config['gray_scale']) is True
-    assert _bool_value(model_config['gray_scale']) is True
-    assert model_config['image_channel'].value == 1
+    assert repo_config.policy.model.action_space_size == 6
+    _assert_sampled_efficientzero_atari_obs_shape(repo_config)
 
 
 def test_sampled_efficientzero_test_config_uses_env_observation_shape():
