@@ -1,13 +1,16 @@
 import sys
 import os
+import logging
 from pathlib import Path
 
+_jericho_src = str(Path(__file__).resolve().parent.parent.parent.parent / "jericho" / "priorzero" / "src")
+_local_src = str(Path(__file__).resolve().parent)
+sys.path.insert(0, _jericho_src)
+sys.path.insert(0, _local_src)
+
 import asyncio
-import os
-import sys
 from functools import partial
-from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import torch
 import torch.distributed as dist
@@ -43,8 +46,8 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
 
     collector_env.seed(seed)
     evaluator_env.seed(seed, dynamic_seed=False)
-    
-    policy = create_policy( cfg.policy, enable_field=['learn', 'collect', 'eval'], exp_name=cfg.exp_name, llm_cfg=llm_cfg)
+
+    policy = create_policy(cfg.policy, enable_field=['learn', 'collect', 'eval'], exp_name=cfg.exp_name, llm_cfg=llm_cfg)
     if cfg.policy.model_path is not None:
         logging.info(f"[Rank {rank}] Loading pretrained model from {cfg.policy.model_path}...")
         policy.learn_mode.load_state_dict(torch.load(cfg.policy.model_path, map_location=cfg.policy.device))
@@ -53,7 +56,7 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
     os.makedirs(f'./{cfg.exp_name}/log/', exist_ok=True)
     tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
     logger.info(f"[Rank {rank}] TensorBoard logger: ./{cfg.exp_name}/log/")
-    
+
     learner = BaseLearner(
         cfg.policy.learn.learner,
         policy.learn_mode,
@@ -62,11 +65,9 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
     )
     logger.info(f"[Rank {rank}] BaseLearner created")
 
-    
     replay_buffer = PriorZeroGameBufferOptimized(cfg.policy)
-    logger.info(f"[Rank {rank}] PriorZero replay buffer created (with game_segments support)")
+    logger.info(f"[Rank {rank}] PriorZero replay buffer created")
 
-    # Create collector
     collector = PriorZeroCollector(
         env=collector_env,
         policy=policy.collect_mode,
@@ -77,7 +78,6 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
     )
     logger.info(f"[Rank {rank}] Collector created")
 
-    # Create evaluator
     evaluator = PriorZeroEvaluator(
         n_evaluator_episode=cfg.env.n_evaluator_episode,
         stop_value=cfg.env.stop_value,
@@ -116,17 +116,13 @@ def train_priorzero(
     from strategy.deepspeed import get_strategy, torch_dist_barrier_and_cuda_sync
     strategy = get_strategy(llm_cfg)
     strategy.print(llm_cfg)
-    
-    strategy.setup_distributed()   # torchrun 下：绑定 local_rank + init_distributed
+
+    strategy.setup_distributed()
     world_size = getattr(strategy, "world_size", 1)
-    
-    
-    cfg, replay_buffer, tb_logger, policy, collector, evaluator, learner = prepare_unizero( 
-                                                                        rank=rank,
-                                                                        cfg=cfg,
-                                                                        create_cfg=create_cfg, 
-                                                                        llm_cfg=llm_cfg, 
-                                                                        seed=seed)
+
+    cfg, replay_buffer, tb_logger, policy, collector, evaluator, learner = prepare_unizero(
+        rank=rank, cfg=cfg, create_cfg=create_cfg, llm_cfg=llm_cfg, seed=seed
+    )
     batch_size = cfg.policy.batch_size
     logger.info(f"[Rank {rank}] World Model components initialized")
     if rank == 0:
@@ -136,19 +132,15 @@ def train_priorzero(
     from utils import Profiler
     prof = Profiler(log_interval=10, stats_file=f'./{cfg.exp_name}/log/profiler.txt', enable_profile=enable_profile)
 
-    
     logger.info(f"[Rank {rank}] Initializing LLM Actor...")
     set_pkg_seed(seed + rank, use_cuda=True)
-    
+
     from models.actor import PolicyModel, ReferenceModel
     if llm_cfg.rft_kl_coef > 0:
-        ref_model = ReferenceModel(
-            strategy=strategy,
-            pretrain=llm_cfg.model_name_or_path
-        )
+        ref_model = ReferenceModel(strategy=strategy, pretrain=llm_cfg.model_name_or_path)
     else:
         ref_model = None
-    
+
     from vllm_utils.vllm_engine import create_vllm_engine
     vllm_engine = create_vllm_engine(
         tensor_parallel_size=llm_cfg.vllm_tensor_parallel_size,
@@ -158,100 +150,84 @@ def train_priorzero(
         gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
         vllm_enable_sleep=llm_cfg.vllm_enable_sleep,
     )
-
     print(f'[Rank {rank}] Vllm engine successfully created!')
-    
+
     from priorzero_datafactory import DataProcessor
-    data_processor = DataProcessor(rank=rank, 
-                                   world_size=world_size,
-                                   vllm_engine=vllm_engine, 
-                                   strategy=strategy, 
-                                   model_path=llm_cfg.model_name_or_path,
-                                   exp_name=cfg.exp_name if rank == 0 else None,
-                                )
-    # 在collector中初始化data_processor 和prof对象
+    data_processor = DataProcessor(
+        rank=rank, world_size=world_size, vllm_engine=vllm_engine,
+        strategy=strategy, model_path=llm_cfg.model_name_or_path,
+        exp_name=cfg.exp_name if rank == 0 else None,
+    )
     collector.data_processor = data_processor
     collector.prof = prof
     evaluator.data_processor = data_processor
-    
+
     policy_model = PolicyModel(
-        strategy=strategy,
-        pretrain=llm_cfg.model_name_or_path,
-        vllm_engine=vllm_engine,
-        max_steps=llm_cfg.max_steps
+        strategy=strategy, pretrain=llm_cfg.model_name_or_path,
+        vllm_engine=vllm_engine, max_steps=llm_cfg.max_steps
     )
     from priorzero_trainer import PriorZeroLLMTrainer
     trainer = PriorZeroLLMTrainer(
-        cfg=llm_cfg,
-        pretrain=llm_cfg.model_name_or_path,
-        strategy= strategy,
-        vllm_engine = vllm_engine,
-        policy_model=policy_model,
-        reference_model=ref_model,
+        cfg=llm_cfg, pretrain=llm_cfg.model_name_or_path,
+        strategy=strategy, vllm_engine=vllm_engine,
+        policy_model=policy_model, reference_model=ref_model,
         exp_name=cfg.exp_name if rank == 0 else None,
         tb_logger=tb_logger if rank == 0 else None,
         llm_save_freq=llm_cfg.llm_save_freq
     )
-        
+
     torch_dist_barrier_and_cuda_sync()
     train_schedule = llm_cfg.train_schedule
     train_alternate = train_schedule["alternate"]
     current_phase = None
-    llm_collect_mode = None
     if train_alternate:
         current_phase = train_schedule["start_phase"]
         last_wm_train_iter = 0
         last_llm_train_iter = 0
-        llm_collect_mode = train_schedule["llm_collect_mode"]
 
     while True:
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
-        
-        # 1.评估阶段
-        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase, env_step=collector.envstep):
+
+        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase):
             logger.info(f"[Evaluator][Rank {rank}: Iter {learner.train_iter}] Evaluating...")
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.wake_up()
-            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase, env_step=collector.envstep)
+            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase)
             if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
                 vllm_engine.sleep()
-        
-        # 2.数据收集阶段         
-        if not train_alternate or (train_alternate and current_phase == "wm") or (train_alternate and current_phase == "llm" and llm_collect_mode != "no_collect"):
-            if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                vllm_engine.wake_up()      
-            
-            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs={'temperature': 0.25, 'epsilon': 0.0}, phase=current_phase)
-            data_processor.get_llm_output_log(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter)
-            
-            if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                vllm_engine.sleep()
-            
-            replay_buffer.push_game_segments(new_data)
-            replay_buffer.remove_oldest_data_to_fit()
-            
-        num_of_transitions = replay_buffer.get_num_of_transitions() 
-        torch_dist_barrier_and_cuda_sync()   
-              
-        # 3.world model训练阶段
+
+        if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
+            vllm_engine.wake_up()
+
+        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs={'temperature': 0.25, 'epsilon': 0.0}, phase=current_phase)
+        data_processor.get_llm_output_log(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter)
+
+        if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
+            vllm_engine.sleep()
+
+        replay_buffer.push_game_segments(new_data)
+        replay_buffer.remove_oldest_data_to_fit()
+        num_of_transitions = replay_buffer.get_num_of_transitions()
+
+        torch_dist_barrier_and_cuda_sync()
+
         if llm_cfg.enable_world_model and (not train_alternate or (train_alternate and current_phase == "wm")):
             if not (num_of_transitions > batch_size):
-                logger.warning(f'[WM Training] Data in replay_buffer is not sufficient: batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect...')
+                logger.warning(f'[WM Training] Data insufficient: batch_size={batch_size}, buffer={replay_buffer}. Continue collecting...')
                 cmd = 0
             else:
                 cmd = 1
             if min(all_gather_cmd(world_size=world_size, obj=cmd)) == 0:
                 continue
-            
+
             update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=world_size)
             logger.info(f"[WM Training] Rank {rank} | Iter {learner.train_iter} | Updates: {update_per_collect}")
-            
+
             for i in range(update_per_collect):
                 with prof.block("train_world_model", rank=rank):
                     train_data = replay_buffer.sample(batch_size, policy)
                     train_data.append(learner.train_iter)
-
                     log_vars = learner.train(train_data, collector.envstep)
                     if cfg.policy.use_priority:
                         replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
@@ -259,118 +235,101 @@ def train_priorzero(
             if llm_cfg.enable_rft and train_alternate and learner.train_iter - last_wm_train_iter >= train_schedule["wm_update_iters"]:
                 current_phase = "llm"
                 last_wm_train_iter = learner.train_iter
-                if llm_collect_mode != "no_collect":
-                    replay_buffer.mark_latest_transitions_consumed()
-                print(f"[WM Training][Rank {rank}] Switching to LLM training phase at wm iter: {learner.train_iter}")
+                replay_buffer.mark_latest_transitions_consumed()
+                print(f"[WM Training][Rank {rank}] Switching to LLM phase at wm iter: {learner.train_iter}")
                 continue
-        
-        # 4. llm 训练阶段
+
         if llm_cfg.enable_rft and (not train_alternate or (train_alternate and current_phase == "llm")):
             new_num_of_transitions = replay_buffer.get_num_of_transitions() - replay_buffer.last_pos_in_transition
-            logger.info(f"[LLM Training] Rank {rank} | Total transitions: {num_of_transitions} | New transitions: {new_num_of_transitions}")
-            
-            if llm_collect_mode != "no_collect":
-                priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=-1, policy=policy, select_last=True)
-            else:
-                priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=256, policy=policy, select_last=False)
-            # 清理 policy的cahce，防止OOM
-            torch.cuda.empty_cache()
+            logger.info(f"[LLM Training] Rank {rank} | Total: {num_of_transitions} | New: {new_num_of_transitions}")
+
+            with prof.block("fetch_latest_batch", rank=rank):
+                priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=-1, policy=policy)
+                torch.cuda.empty_cache()
+
             with prof.block("train_llm", rank=rank):
                 llm_need_sample_cnt = llm_cfg.train_batch_size * llm_cfg.max_rollout_staleness // world_size
                 flag, train_samples = data_processor.make_llm_train_samples(priorzero_batch, ddp=True, max_samples=llm_need_sample_cnt)
-                
+
                 if not flag:
                     local_llm_ready = 0
                 else:
                     local_llm_ready = 1
                 gathered_llm_ready = all_gather_cmd(world_size=world_size, obj=local_llm_ready)
-                
+
                 if min(gathered_llm_ready) == 0:
-                    logger.info(
-                        f"[Rank {rank}] Skip LLM training because not all ranks have enough samples. "
-                        f"ready_flags={gathered_llm_ready}, local_ready={local_llm_ready}, required_samples_per_rank={llm_need_sample_cnt}, train_samples={len(train_samples[0])}"
-                    )
+                    logger.info(f"[Rank {rank}] Skip LLM training: not all ranks ready. flags={gathered_llm_ready}")
                     continue
-                
+
                 trainer.train_batch(train_samples, collect_env_steps=collector.envstep)
-                if llm_collect_mode != "no_collect":
-                    replay_buffer.mark_latest_transitions_consumed()
-                
+                replay_buffer.mark_latest_transitions_consumed()
+
                 torch_dist_barrier_and_cuda_sync()
                 if llm_cfg.enable_world_model and train_alternate and trainer.global_step - last_llm_train_iter >= train_schedule["llm_update_iters"]:
                     current_phase = "wm"
                     last_llm_train_iter = trainer.global_step
                     data_processor.clear_statis()
-                    print(f"[Rank {rank}] Switching to World Model training phase at llm iter: {trainer.global_step}")
-                    
+                    print(f"[Rank {rank}] Switching to WM phase at llm iter: {trainer.global_step}")
+
 def main():
-    """
-    Main entry point with argument parsing.
-    """
     import argparse
+    import requests as req
 
-    parser = argparse.ArgumentParser(
-        description='PriorZero Training with Auto Model Configuration',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Use default model (qwen2.5-1.5b)
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py
-
-  # Use specific model
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py --model qwen2.5-0.5b
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py --model qwen2.5-7b
-
-  # List all available models
-  python priorzero_entry_sync.py --list-models
-
-  # Different environment
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py --env_id zork1.z5 --model qwen2.5-1.5b
-        """
-    )
-    parser.add_argument('--env_id', type=str, default='detective.z5', help='Jericho game ID')
+    parser = argparse.ArgumentParser(description='PriorZero TextCraft Training')
+    parser.add_argument('--env_id', type=str, default='textcraft', help='Environment ID')
+    parser.add_argument('--env_addr', type=str, default='http://127.0.0.1:36005', help='TextCraft server address')
+    parser.add_argument('--data_idx', type=int, default=0, help='Task index (selects goal item from crafting tree)')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--max_iter', type=int, default=int(1e6), help='Max training iterations')
-    parser.add_argument('--quick_test', action='store_true', default=False, help='Use quick test config')
-    # Model selection
+    parser.add_argument('--quick_test', action='store_true', default=False, help='Use debug config')
     parser.add_argument('--model', type=str, default="qwen2.5-3b", choices=get_available_models())
     parser.add_argument('--enable_profile', action='store_true', default=False)
     parser.add_argument('--use_cot', action='store_true', default=False)
     args = parser.parse_args()
 
-    model_key = args.model if args.model else "qwen2.5-1.5b"
+    rank = int(os.environ.get("RANK", "0"))
+    if rank == 0:
+        try:
+            r = req.get(f"{args.env_addr}/", timeout=5)
+            assert r.status_code == 200, f"Server returned status {r.status_code}"
+            print(f"[HealthCheck] TextCraft server at {args.env_addr} is ready.")
+        except Exception as e:
+            raise RuntimeError(
+                f"TextCraft server not reachable at {args.env_addr}: {e}\n"
+                f"Start it first: cd <AgentGym-RL>/AgentGym/agentenv-textcraft && python -m agentenv_textcraft.launch --port 36005"
+            )
+
+    model_key = args.model
     print(f"\n{'='*80}")
-    print(f"PriorZero Training Configuration")
+    print(f"PriorZero TextCraft Training Configuration")
     print(f"{'='*80}")
-    print(f"Environment: {args.env_id}")
+    print(f"Server: {args.env_addr}")
+    print(f"data_idx: {args.data_idx} (selects goal item from crafting tree)")
     print(f"Model: {model_key}")
     print(f"Seed: {args.seed}")
     print(f"Quick Test: {args.quick_test}")
-    print(f"use cot: {args.use_cot}")
-    print(f"enable_profile: {args.enable_profile}")
+    print(f"CoT: {args.use_cot}")
     print(f"{'='*80}\n")
 
     if args.quick_test:
-        logger.info("Using quick test configuration")
+        logger.info("Using debug configuration")
         main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
             args.env_id, args.seed, use_cot=args.use_cot,
-            exp_name=f'data_priorzero/priorzero_debug_{args.env_id}',
-            model_key=model_key,
+            exp_name=f'data_priorzero/textcraft/priorzero_debug_dataidx{args.data_idx}',
+            model_key=model_key, env_addr=args.env_addr,
+            data_idx=args.data_idx,
         )
     else:
         main_cfg, create_cfg, llm_cfg = get_priorzero_config(
             args.env_id, args.seed, use_cot=args.use_cot,
-            model_key=model_key,
-            multi_gpu=True
+            model_key=model_key, multi_gpu=True,
+            env_addr=args.env_addr, data_idx=args.data_idx,
         )
 
     train_priorzero(
-        main_cfg,
-        create_cfg,
-        llm_cfg,
-        seed=args.seed,
-        max_train_iter=args.max_iter,
-        enable_profile=args.enable_profile,    # 是否要对各个耗时部分进行 profile
+        main_cfg, create_cfg, llm_cfg,
+        seed=args.seed, max_train_iter=args.max_iter,
+        enable_profile=args.enable_profile,
     )
 
 

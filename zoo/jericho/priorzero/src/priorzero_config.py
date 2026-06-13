@@ -111,8 +111,13 @@ class PriorZeroLLMConfig:
         "world_model": True,              # 评估模式1：完全与 unizero 的 eval 一致；mcts 的根节点仅使用 WM 的logits
         "world_model_llm_prior": True,    # 评估模式2：基于 unizero 的 eval 过程, 但是 mcts 的根节点需要利用 llm 的先验；具体怎么利用取决于mcts_root_logits_dict.mode 参数
         "llm_prior": True,                # 评估模式3：仅使用 llm prior 进行 eval, 不需要 wm 进行评估
-        "wm_eval_freq": 499,
-        "llm_eval_freq": 49,
+        "wm_eval_freq": 500,
+        "llm_eval_freq": 50,
+        # env-step-based eval frequency (preferred over iter-based when > 0)
+        "wm_eval_freq_envsteps": 0,   # 0 = disabled, falls back to wm_eval_freq
+        "llm_eval_freq_envsteps": 0,   # 0 = disabled, falls back to llm_eval_freq
+        # Whether to save CoT/prompt/LLM-prior details in trajectory JSON files
+        "save_llm_cot": True,
     }))
     
     attn_implementation: str = "flash_attention_2" 
@@ -184,7 +189,8 @@ class PriorZeroLLMConfig:
     rft_kl_coef: float = 0.01
     entropy_loss_coef: float = 0.0
     kl_estimator: str = "k3"
-    
+    kl_early_stop_threshold: float = 0.0  # 0 means disabled; when ref_kl exceeds this, skip remaining gradient updates in the epoch
+
     llm_save_freq: int = 1000  # 每多少步保存一次 llm 模型,一步代表一次参数更新而不是梯度累积
     save_path: str = "" # 该参数将被 exp_name 目录覆盖
     

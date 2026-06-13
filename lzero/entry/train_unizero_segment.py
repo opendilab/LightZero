@@ -20,6 +20,7 @@ from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
+from lzero.worker import MuZeroPerLevelEvaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
 from .utils import random_collect, calculate_update_per_collect
 
@@ -97,7 +98,8 @@ def train_unizero_segment(
     replay_buffer = GameBuffer(policy_config)
     collector = Collector(env=collector_env, policy=policy.collect_mode, tb_logger=tb_logger, exp_name=cfg.exp_name,
                           policy_config=policy_config)
-    evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
+    EvaluatorCls = MuZeroPerLevelEvaluator if cfg.policy.get('eval_per_level', False) else Evaluator
+    evaluator = EvaluatorCls(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
                           tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)
 
@@ -115,6 +117,7 @@ def train_unizero_segment(
 
     # TODO: for visualize
     # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
     
     buffer_reanalyze_count = 0
     train_epoch = 0
@@ -157,9 +160,7 @@ def train_unizero_segment(
         # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
         if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
         
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            if stop:
-                break
+            evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)

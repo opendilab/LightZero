@@ -16,7 +16,6 @@ from transformers import AutoTokenizer
 
 from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 from ding.envs import BaseEnv, BaseEnvTimestep
-from jericho import FrotzEnv
 
 
 def _valid_actions_worker_loop(conn, game_path, seed):
@@ -246,9 +245,14 @@ class JerichoEnv(BaseEnv):
             if self.rank != 0:
                 JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(self.cfg['tokenizer_path'])
 
-        # Initialize FrotzEnv with the given game.
-        self._env: FrotzEnv = FrotzEnv(self.game_path, 0)
+        # Subprocess timeout for Frotz operations (seconds).
+        # Jericho's C code can hang indefinitely; this is the kill threshold.
+        self._frotz_timeout: float = float(self.cfg.get('frotz_timeout', 30.0))
+
+        # Initialize FrotzEnv inside a subprocess for hang protection.
+        self._env = FrotzWorker(self.game_path, timeout=self._frotz_timeout)
         self._action_list: Optional[List[str]] = None
+        self._frotz_halted: bool = False  # Set True when Frotz subprocess was killed
         self.finished: bool = False
         self._init_flag: bool = False
         self.episode_return: float = 0.0
@@ -432,6 +436,7 @@ class JerichoEnv(BaseEnv):
         self.finished = False
         self._init_flag = True
         self._action_list = None
+        self._frotz_halted = False  # Clear halted flag on successful reset
         self.episode_return = info['score'] if 'score' in info else 0.0
         self._timestep = 0
         self.episode_history = []
@@ -478,6 +483,8 @@ class JerichoEnv(BaseEnv):
             Close the environment and release any resources.
         """
         self._init_flag = False
+        if hasattr(self, '_env') and self._env is not None:
+            self._env.close()
 
     def __repr__(self) -> str:
         """
@@ -503,6 +510,17 @@ class JerichoEnv(BaseEnv):
         """
         # Clear previously blocked actions.
         self.blocked_actions = set()
+
+        # If Frotz was previously killed (halted), force done immediately.
+        if self._frotz_halted:
+            dummy_obs = self.prepare_obs("[Frotz emulator halted]", return_str)
+            info = {
+                'action_str': 'noop',
+                'abnormal': True,
+                'frotz_timeout': True,
+                'eval_episode_return': self.episode_return,
+            }
+            return BaseEnvTimestep(dummy_obs, 0.0, True, info)
 
         # Convert numerical action to string if necessary.
         if isinstance(action, str):
@@ -530,7 +548,22 @@ class JerichoEnv(BaseEnv):
 
         previous_obs: Optional[str] = self.last_observation if (self.remove_stuck_actions and self.last_observation is not None) else None
 
-        observation, reward, done, info = self._env.step(action_str)
+        try:
+            observation, reward, done, info = self._env.step(action_str)
+        except RuntimeError as e:
+            # FrotzWorker timeout: the Frotz process was killed and respawned.
+            # Return an abnormal timestep so the caller (BaseEnvManager / Collector) can reset.
+            logging.warning(f"[JerichoEnv] step() timed out on action '{action_str}': {e}")
+            self._frotz_halted = True
+            dummy_obs = self.prepare_obs("[Frotz emulator halted]", return_str)
+            info = {
+                'action_str': action_str,
+                'abnormal': True,
+                'frotz_timeout': True,
+                'eval_episode_return': self.episode_return,
+            }
+            return BaseEnvTimestep(dummy_obs, 0.0, True, info)
+
         info['action_str'] = action_str
 
         self._timestep += 1
@@ -557,6 +590,13 @@ class JerichoEnv(BaseEnv):
                 f'[TIMEOUT] rank {self.rank} get_valid_actions() timed out during step {self._timestep}. '
                 f'Ending episode. episode_return: {self.episode_return}'
             )
+
+        # If prepare_obs triggered a timeout (e.g. get_valid_actions hung), force done.
+        if self._frotz_halted:
+            info['abnormal'] = True
+            info['frotz_timeout'] = True
+            info['eval_episode_return'] = self.episode_return
+            return BaseEnvTimestep(processed_obs, reward, True, info)
 
         if self._timestep >= self.max_steps:
             done = True

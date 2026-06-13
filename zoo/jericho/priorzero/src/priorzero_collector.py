@@ -9,6 +9,7 @@ from typing import Optional, Any, List, Dict, Tuple
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, allreduce_data
@@ -112,6 +113,20 @@ class PriorZeroCollector(OriginalCollector):
         self._logger.info(f"[RANK {self._rank}] ✓ PriorZeroCollector initialized with vLLM engine")
         self._logger.info(f"[RANK {self._rank}]   - History length: {self.llm_cfg.history_length}")
         self._logger.info(f"[RANK {self._rank}]   - Generate max length: {self.llm_cfg.generate_max_len}")
+
+    def _should_continue_collect(self, local_done: bool) -> bool:
+        # Mirror of PriorZeroEvaluator._should_continue_eval. With vLLM TP > 1
+        # spanning DDP ranks, exiting collect() while a TP partner is still
+        # inside vllm.generate causes the partner to deadlock at the next
+        # _sync_prompts_for_tp. all_reduce(MAX) a 0/1 flag and continue while
+        # ANY rank still needs work. No-op for TP=1 / single-process.
+        tp_size = getattr(self.llm_cfg, 'vllm_tensor_parallel_size', 1)
+        if dist.is_initialized() and dist.get_world_size() > 1 and tp_size > 1:
+            flag = torch.tensor([0 if local_done else 1], dtype=torch.long,
+                                device=torch.cuda.current_device())
+            dist.all_reduce(flag, op=dist.ReduceOp.MAX)
+            return flag.item() > 0
+        return not local_done
 
     def pad_and_save_last_trajectory(
             self, i: int, last_game_segments: List[GameSegment], last_game_priorities: List[np.ndarray],
@@ -273,7 +288,40 @@ class PriorZeroCollector(OriginalCollector):
         if collect_with_pure_policy:
             temp_visit_list = [0.0 for _ in range(self._env.action_space.n)]
 
+        return_data = None
         while True:
+            local_done = len(self.game_segment_pool) >= self._default_num_segments
+
+            if local_done and return_data is None:
+                # First moment this rank reaches its target: log, snapshot
+                # return_data, clear pool. Do not break yet — TP partners on
+                # other DDP ranks may still be inside vllm.generate.
+                self._logger.info(
+                    f'[RANK {self._rank}] ✓ Collected {len(self.game_segment_pool)} segments '
+                    f'(target: {self._default_num_segments})'
+                )
+                return_data = [
+                    [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))],
+                    [
+                        {
+                            'priorities': self.game_segment_pool[i][1],
+                            'done': self.game_segment_pool[i][2],
+                            'unroll_plus_td_steps': self.unroll_plus_td_steps
+                        }
+                        for i in range(len(self.game_segment_pool))
+                    ]
+                ]
+                self.game_segment_pool.clear()
+
+            if not self._should_continue_collect(local_done):
+                break
+
+            if local_done:
+                # Drain mode: issue matched empty vllm iterations so TP partners
+                # don't deadlock at the next _sync_prompts_for_tp.
+                self.data_processor.drain_vllm_iter()
+                continue
+
             with self._timer:
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
@@ -318,7 +366,7 @@ class PriorZeroCollector(OriginalCollector):
                     valid_actions_list.append(valid_actions)
                 with self.prof.block("collect_step_get_llm_prior", rank=self._rank):
                     # CoT reuse optimization: request CoT prefixes to store in game segments
-                    llm_prior_per_seq, llm_prior_per_tok, cot_prefixes = self.data_processor.get_llm_prior(
+                    llm_prior_per_seq, llm_prior_per_tok, cot_prefixes, _ = self.data_processor.get_llm_prior(
                         states=raw_obs_list,
                         valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
                         histories=histories_list,
@@ -550,30 +598,6 @@ class PriorZeroCollector(OriginalCollector):
                     game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]))
                     last_game_segments[env_id] = None
                     last_game_priorities[env_id] = None
-
-            # ==================================================================
-            # Check if Enough Segments Collected
-            # ==================================================================
-            if len(self.game_segment_pool) >= self._default_num_segments:
-                self._logger.info(
-                    f'[RANK {self._rank}] ✓ Collected {len(self.game_segment_pool)} segments '
-                    f'(target: {self._default_num_segments})'
-                )
-
-                # Format return data
-                return_data = [
-                    [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))],
-                    [
-                        {
-                            'priorities': self.game_segment_pool[i][1],
-                            'done': self.game_segment_pool[i][2],
-                            'unroll_plus_td_steps': self.unroll_plus_td_steps
-                        }
-                        for i in range(len(self.game_segment_pool))
-                    ]
-                ]
-                self.game_segment_pool.clear()
-                break
 
         # ==================================================================
         # Final Logging
