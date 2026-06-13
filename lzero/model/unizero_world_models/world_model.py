@@ -15,6 +15,7 @@ from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
+from .hf_transformer import HuggingfaceQwenTransformer
 from collections import OrderedDict 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -59,7 +60,13 @@ class WorldModel(nn.Module):
         self.config = config
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
 
-        self.transformer = Transformer(self.config)
+        if getattr(self.config, 'use_qwen_backbone', False):
+            self.transformer = HuggingfaceQwenTransformer.from_pretrained(
+                self.config,
+                self.config.pretrained_path,
+            )
+        else:
+            self.transformer = Transformer(self.config)
         self.task_num = 1
         self.env_num = self.config.env_num
         if self.config.device == 'cpu':
@@ -78,7 +85,8 @@ class WorldModel(nn.Module):
         # Initialize patterns for block masks
         self._initialize_patterns()
 
-        self.hidden_size = config.embed_dim // config.num_heads
+        self.hidden_size = getattr(config, 'hidden_size', config.embed_dim // config.num_heads)
+        config['hidden_size'] = self.hidden_size
 
         # Position embedding
         if not self.config.rotary_emb:
@@ -614,15 +622,20 @@ class WorldModel(nn.Module):
          Returns:
          - torch.Tensor: The positional embedding tensor.
          """
-        attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
-        if torch.cuda.is_available():
-            return attn_func(self.pos_emb.weight).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).to(self.device).detach()
+        if getattr(self.config, 'use_qwen_backbone', False):
+            positional_embedding = self.transformer._get_positional_embedding(layer, attn_type, self.pos_emb)
+            positional_embedding = positional_embedding.view(
+                1, self.config.max_tokens, self.num_heads, self.hidden_size
+            )
         else:
-            return attn_func(self.pos_emb.weight).view(
+            attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
+            positional_embedding = attn_func(self.pos_emb.weight).view(
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).detach()
+            )
+        if torch.cuda.is_available():
+            return positional_embedding.transpose(1, 2).to(self.device).detach()
+        else:
+            return positional_embedding.transpose(1, 2).detach()
 
     def forward(
         self,

@@ -29,7 +29,7 @@ MODEL_CONFIGS = {
     },
     "qwen2.5-7b": {
         "model_name_or_path": "/mnt/shared-storage-user/puyuan/model/Qwen2.5-7B-Instruct",
-        "vllm_tensor_parallel_size": 2,
+        "vllm_tensor_parallel_size": 1,
         "gpu_memory_utilization": 0.35,
         "description": "Qwen2.5-7B-Instruct (high quality, needs 2+ GPUs)",
     },
@@ -71,7 +71,6 @@ def print_available_models():
 @dataclass
 class PriorZeroLLMConfig:
     model_name_or_path: str = "Qwen2.5-3B-Instruct"
-    local_rank: int = -1
     enable_rft: bool = True
     enable_world_model: bool = True
     train_mode_dict: Optional[EasyDict] = field(default_factory=lambda: EasyDict({
@@ -96,7 +95,7 @@ class PriorZeroLLMConfig:
         "wm_update_iters": 2e3, # alternate=True. wm 的 train_iter 
         "llm_update_iters": 2e2, # alternate=True. llm 的 train_iter
         "start_phase": "wm",   # alternate=True. 从哪个阶段开始： "wm" 或 "llm"
-        "wm_warmup_updates": 0, # alternate=True/False， 在训练初期，先单独训练 wm 一段时间（更新次数），让 wm 学习到一些基本的环境动态
+        "llm_collect_mode": "no_collect" # wm_collect意味着llm训练过程收集数据使用 wm; wm_llm_collect意味着 llm 训练过程收集数据使用 llm 和 wm; no_collect 意味着 llm 训练过程不收集数据，直接使用 replay buffer 中的数据
     }))
 
     llm_prior_temperature: float = 2.0  # LLM prior 分布的温度参数
@@ -122,7 +121,7 @@ class PriorZeroLLMConfig:
     }))
     
     attn_implementation: str = "flash_attention_2" 
-    history_length: int = 10
+    history_length: int = 25
     use_cot: bool = False
     cot_weight: float = 0.1 # 控制 cot前缀token的权重，由于重点是action:，所以前缀的token权重调低
     
@@ -274,10 +273,10 @@ def get_priorzero_config(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(
             shared_memory=False,
-            step_timeout=30 if env_id in ['zork1.z5'] else None,  # zork1 需要更长的 step_timeout
         ),
         use_cache=True,
         cache_size=100000,
+        get_valid_actions_timeout=40
     )
     policy_config = dict(
         type='priorzero',
