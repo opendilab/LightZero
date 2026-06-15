@@ -195,10 +195,12 @@ def train_priorzero(
     train_schedule = llm_cfg.train_schedule
     train_alternate = train_schedule["alternate"]
     current_phase = None
+    llm_collect_mode = None
     if train_alternate:
         current_phase = train_schedule["start_phase"]
         last_wm_train_iter = 0
         last_llm_train_iter = 0
+        llm_collect_mode = train_schedule["llm_collect_mode"]
         
     while True:
         cmd = "noop"
@@ -213,19 +215,20 @@ def train_priorzero(
                     vllm_engine.sleep()
                     
             if cmd != "stop":
-                if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                    vllm_engine.wake_up()
-                        
-                new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs={'temperature': 0.25, 'epsilon': 0.0}, phase=current_phase)
-                data_processor.get_llm_output_log(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter)
-                
-                if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                    vllm_engine.sleep()
-                
-                update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)                
-                
-                replay_buffer.push_game_segments(new_data)
-                replay_buffer.remove_oldest_data_to_fit()
+                if not train_alternate or (train_alternate and current_phase == "wm") or (train_alternate and current_phase == "llm" and llm_collect_mode != "no_collect"):
+                    if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
+                        vllm_engine.wake_up()
+                            
+                    new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs={'temperature': 0.25, 'epsilon': 0.0}, phase=current_phase)
+                    data_processor.get_llm_output_log(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter)
+                    
+                    if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
+                        vllm_engine.sleep()
+                    
+                    update_per_collect = calculate_update_per_collect(cfg, new_data, world_size=1)                
+                    
+                    replay_buffer.push_game_segments(new_data)
+                    replay_buffer.remove_oldest_data_to_fit()
                 
                 num_of_transitions = replay_buffer.get_num_of_transitions() 
                 new_num_of_transitions = replay_buffer.get_num_of_transitions() - replay_buffer.last_pos_in_transition
@@ -254,17 +257,20 @@ def train_priorzero(
                     if llm_cfg.enable_rft and train_alternate and learner.train_iter - last_wm_train_iter >= train_schedule["wm_update_iters"]:
                         current_phase = "llm"
                         last_wm_train_iter = learner.train_iter
-                        replay_buffer.mark_latest_transitions_consumed()
+                        if llm_collect_mode != "no_collect":
+                            replay_buffer.mark_latest_transitions_consumed()
                         continue
 
                 if llm_cfg.enable_rft and (not train_alternate or (train_alternate and current_phase == "llm")):
-                    with prof.block("fetch_latest_batch", rank=0):
-                        print(f"[Rank 0] world_model: train_iter ={learner.train_iter} \t replay_buffer.fetch_latest_batch begin \t")
-                        priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=-1, policy=policy)
-                        # 清理 policy的cahce，防止OOM
-                        torch.cuda.empty_cache()
-                        print(f"[Rank 0] fetch_latest_batch returned: type={type(priorzero_batch)}, len={len(priorzero_batch)}")
-                        cmd = "llm"
+                    print(f"[Rank 0] world_model: train_iter ={learner.train_iter} \t replay_buffer.fetch_latest_batch begin \t")
+                    if llm_collect_mode != "no_collect":
+                        priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=-1, policy=policy, select_last=True)
+                    else:
+                        priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=128, policy=policy, select_last=False)
+                    # 清理 policy的cahce，防止OOM
+                    torch.cuda.empty_cache()
+                    print(f"[Rank 0] fetch_latest_batch returned: type={type(priorzero_batch)}, len={len(priorzero_batch)}")
+                    cmd = "llm"
 
                 if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
                     cmd = "stop"
@@ -285,7 +291,8 @@ def train_priorzero(
                     continue
                 
                 trainer.train_batch(train_samples, collect_env_steps=collector.envstep)
-                replay_buffer.mark_latest_transitions_consumed()
+                if llm_collect_mode != "no_collect":
+                    replay_buffer.mark_latest_transitions_consumed()
                 torch_dist_barrier_and_cuda_sync()
                 
                 if llm_cfg.enable_world_model and train_alternate and trainer.global_step - last_llm_train_iter >= train_schedule["llm_update_iters"]:

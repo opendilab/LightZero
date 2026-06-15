@@ -272,8 +272,12 @@ class MuZeroEvaluator(ISerialEvaluator):
             ready_env_id = set()
             remain_episode = n_episode
             eps_steps_lst = np.zeros(env_nums)
+            # Hard counter independent of VectorEvalMonitor's per-env deque-fullness check; guards
+            # against eval hanging when episodes are unevenly distributed across envs (the per-env
+            # deques [n//env_num, ...] may never all reach maxlen even after n_episode finishes).
+            total_finishes = 0
             with self._timer:
-                while not eval_monitor.is_finished():
+                while not eval_monitor.is_finished() and total_finishes < n_episode:
                     # Check if a timeout has occurred.
                     if self.stop_event.is_set():
                         self._logger.info("[EVALUATOR]: Evaluation aborted due to timeout.")
@@ -284,6 +288,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     new_available_env_id = set(obs.keys()).difference(ready_env_id)
                     ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                     remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                    if not ready_env_id:
+                        continue
 
                     # Prepare stacked observations and other inputs for the policy.
                     stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
@@ -363,6 +370,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 saved_info.update(episode_timestep.info['episode_info'])
                             eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
+                            total_finishes += 1
                             self._logger.info(
                                 f"[EVALUATOR] env {env_id} finished episode, final reward: {eval_monitor.get_latest_reward(env_id)}, "
                                 f"current episode count: {eval_monitor.get_current_episode()}"

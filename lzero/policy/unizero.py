@@ -935,6 +935,12 @@ class UniZeroPolicy(MuZeroPolicy):
             return_log_dict['current_encoder_clip_value'] = current_clip_value
         # ===================== END: 添加新日志项 =====================
 
+        if getattr(self._cfg.model.world_model_cfg, 'use_qwen_backbone', False):
+            for key, value in list(return_log_dict.items()):
+                if isinstance(value, torch.Tensor):
+                    value = value.detach()
+                    return_log_dict[key] = value.item() if value.numel() == 1 else value.float().mean().item()
+
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
             wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
@@ -1182,6 +1188,8 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if active_eval_env_num == 0 or data.numel() == 0:
+            return {}
         if ready_env_id is None:
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}

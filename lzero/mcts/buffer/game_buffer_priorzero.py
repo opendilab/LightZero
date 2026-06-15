@@ -15,7 +15,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
     def mark_latest_transitions_consumed(self) -> None:
         self.last_pos_in_transition = self.get_num_of_transitions()
     
-    def fetch_latest_batch(self, batch_size: int, policy) -> List[Any]:
+    def fetch_latest_batch(self, batch_size: int, policy, select_last: bool) -> List[Any]:
         """
         Fetch latest batch for LLM training.
 
@@ -28,7 +28,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         policy._target_model.eval()
 
         reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
-            batch_size, self._cfg.reanalyze_ratio, fetch_latest=True
+            batch_size, self._cfg.reanalyze_ratio, fetch_latest=True, select_last=select_last
         )
         if not current_batch:
             return [[], [], [], [], [], [], [], []]
@@ -84,7 +84,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
 
         return [current_batch, target_batch]
 
-    def _make_batch(self, batch_size: int, reanalyze_ratio: float, fetch_latest: bool = False) -> Tuple[Any]:
+    def _make_batch(self, batch_size: int, reanalyze_ratio: float, fetch_latest: bool = False, select_last: bool = False) -> Tuple[Any]:
 
         # Sample original data
         if not fetch_latest:
@@ -94,7 +94,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
                 orig_data = self._sample_orig_data_episode(batch_size)
         else:
             if self.sample_type == 'transition':
-                orig_data = self._fetch_latest_orig_data(batch_size)
+                orig_data = self._fetch_latest_orig_data(batch_size, select_last=select_last)
             elif self.sample_type == 'episode':
                 raise ValueError("fetch_latest with episode sampling not supported.")
 
@@ -173,7 +173,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
-        # 检查 vllm和policy_model的输入上下文是否一致
+        # 检查 vllm和policy_model的输入上下文是否一致 (only for non-padded positions)
         assert len(raw_obs_list) == len(history_obs_list) == len(llm_prior_per_tok_list) == len(cot_prefix_list) == len(llm_action_list)
         B, T = len(raw_obs_list), len(raw_obs_list[0])
         # Only run dict-based consistency checks for LLM text path.
@@ -188,6 +188,10 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         if _is_llm_text_mode:
             for b in range(B):
                 for t in range(T - 1):
+                    # Skip padded positions: mask[t] == 0 means the action at step t is padding,
+                    # so llm_prior_per_tok at t+1 is also padding and the alignment invariant doesn't hold.
+                    if mask_list[b][t] == 0.:
+                        continue
                     current_obs = raw_obs_list[b][t]
                     current_hist = history_obs_list[b][t]
 
@@ -245,7 +249,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         self.game_segment_game_pos_look_up = []
     
     
-    def _fetch_latest_orig_data(self, batch_size: int) -> Tuple:
+    def _fetch_latest_orig_data(self, batch_size: int, select_last: bool = False) -> Tuple:
         """
         Overview:
             Sample original data which includes:
@@ -265,12 +269,15 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         probs /= probs.sum()
 
         # 主要改动： 由sample改成了确定的取最后batch_size个样本
-        latest_new_indices = list(range(self.last_pos_in_transition, num_of_transitions))
-        if batch_size == -1:
-            candidate_batch_index_list = latest_new_indices 
+        if select_last:
+            latest_new_indices = list(range(self.last_pos_in_transition, num_of_transitions))
+            if batch_size == -1:
+                candidate_batch_index_list = latest_new_indices 
+            else:
+                candidate_batch_index_list = latest_new_indices[-batch_size:]
         else:
-            candidate_batch_index_list = latest_new_indices[-batch_size:]
-
+            latest_new_indices = list(range(num_of_transitions))
+            candidate_batch_index_list = np.random.choice(num_of_transitions, size=batch_size, replace=False, p=probs)
         game_segment_list = []
         pos_in_game_segment_list = []
         batch_index_list = []

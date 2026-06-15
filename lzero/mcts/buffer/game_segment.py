@@ -150,6 +150,7 @@ class GameSegment:
             to_play: int = -1,
             timestep: int = 0,
             chance: int = 0,
+            **kwargs,
     ) -> None:
         """
         Overview:
