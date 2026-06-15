@@ -10,6 +10,7 @@ from torch.optim import Optimizer
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+from transformers import AutoModelForCausalLM, AutoModelForVision2Seq, AutoConfig, BitsAndBytesConfig
 from peft import LoraConfig, PeftModel, TaskType, get_peft_model
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
@@ -88,13 +89,28 @@ class Actor(nn.Module):
         else:
             _ = None
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            pretrain_or_model,
-            trust_remote_code=True,
-            attn_implementation=attn_impl,
-            torch_dtype=torch.bfloat16 if bf16 else "auto",
-            device_map=device_map,
-        )
+        # Detect if model is VL (Vision-Language) or LLM (Language Model)
+        config = AutoConfig.from_pretrained(pretrain_or_model, trust_remote_code=True)
+        is_vl = hasattr(config, 'vision_config') or 'VL' in config.__class__.__name__
+
+        if is_vl:
+            # Use AutoModelForVision2Seq for VL models (e.g., Qwen2.5-VL, Qwen3-VL)
+            self.model = AutoModelForVision2Seq.from_pretrained(
+                pretrain_or_model,
+                trust_remote_code=True,
+                attn_implementation=attn_impl,
+                torch_dtype=torch.bfloat16 if bf16 else "auto",
+                device_map=device_map,
+            )
+        else:
+            # Use AutoModelForCausalLM for text-only LLM models
+            self.model = AutoModelForCausalLM.from_pretrained(
+                pretrain_or_model,
+                trust_remote_code=True,
+                attn_implementation=attn_impl,
+                torch_dtype=torch.bfloat16 if bf16 else "auto",
+                device_map=device_map,
+            )
         self.model.config.use_cache = False
 
         if self.train_mode == "lora":
@@ -346,7 +362,27 @@ class BatchPPOTrainer:
             response_length_item = micro_batch["action_mask"].sum().detach().float().item() / micro_batch["action_mask"].shape[0]
             input_length_item = input_response_length_item - response_length_item
             entropy_loss_item = entropy_loss.detach().float().item()
-            
+            total_loss_item = loss.detach().float().item()
+
+            # PPO importance sampling ratio stats
+            with torch.no_grad():
+                ratio = torch.exp(action_log_probs - micro_batch['old_action_log_probs'])
+                ratio_masked = (ratio * micro_batch['action_mask'].float())
+                mask_sum = micro_batch['action_mask'].float().sum()
+                ratio_mean_item = (ratio_masked.sum() / mask_sum).item() if mask_sum > 0 else 1.0
+                ratio_std_item = ((((ratio - ratio_mean_item) ** 2) * micro_batch['action_mask'].float()).sum() / mask_sum).sqrt().item() if mask_sum > 0 else 0.0
+
+                # Advantage stats for this micro-batch
+                adv = micro_batch['advantages']
+                adv_mean_item = adv.mean().item()
+                adv_std_item = adv.std().item() if adv.numel() > 1 else 0.0
+
+                # Log prob means
+                log_prob_new_mean_item = masked_mean(action_log_probs, micro_batch['action_mask']).item()
+                log_prob_old_mean_item = masked_mean(micro_batch['old_action_log_probs'], micro_batch['action_mask']).item()
+
+            kl_coef_item = float(kl_ctl.value)
+
             pbar.set_postfix({
                 "policy_loss": policy_loss_item,
                 "clipfrac": clipfrac_item,
@@ -362,6 +398,14 @@ class BatchPPOTrainer:
             metrics_buffer["input_length"].append(input_length_item)
             metrics_buffer["response_length"].append(response_length_item)
             metrics_buffer['entropy'].append(entropy_loss_item)
+            metrics_buffer['total_loss'].append(total_loss_item)
+            metrics_buffer['ratio_mean'].append(ratio_mean_item)
+            metrics_buffer['ratio_std'].append(ratio_std_item)
+            metrics_buffer['advantage_mean'].append(adv_mean_item)
+            metrics_buffer['advantage_std'].append(adv_std_item)
+            metrics_buffer['log_prob_new_mean'].append(log_prob_new_mean_item)
+            metrics_buffer['log_prob_old_mean'].append(log_prob_old_mean_item)
+            metrics_buffer['kl_coef'].append(kl_coef_item)
             if vllm_kl is not None:
                 metrics_buffer['vllm_kl'].append(vllm_kl.item())
             if mispo_token_mask is not None:
@@ -400,6 +444,15 @@ class BatchPPOTrainer:
                     "value_advantage_max": np.max(metrics_buffer['value_advantage']),
                     "value_advantage_mean": np.mean(metrics_buffer['value_advantage']),
                     "value_advantage_min": np.min(metrics_buffer['value_advantage']),
+
+                    "total_loss": np.mean(metrics_buffer['total_loss']),
+                    "ratio_mean": np.mean(metrics_buffer['ratio_mean']),
+                    "ratio_std": np.mean(metrics_buffer['ratio_std']),
+                    "advantage_mean": np.mean(metrics_buffer['advantage_mean']),
+                    "advantage_std": np.mean(metrics_buffer['advantage_std']),
+                    "log_prob_new_mean": np.mean(metrics_buffer['log_prob_new_mean']),
+                    "log_prob_old_mean": np.mean(metrics_buffer['log_prob_old_mean']),
+                    "kl_coef": np.mean(metrics_buffer['kl_coef']),
                 }
                 if "final_advantage" in metrics_buffer:
                     status["final_advantage_max"] = np.max(metrics_buffer['final_advantage'])

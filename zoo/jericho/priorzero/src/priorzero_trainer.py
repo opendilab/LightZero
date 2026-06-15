@@ -89,6 +89,8 @@ class PriorZeroLLMTrainer:
         self.kl_ctl = FixedKLController(self.init_kl_coef)
         self.rank = self.strategy.get_rank()
         self.world_size = self.strategy.world_size
+        self.instance_name = instance_name
+        self._tb_prefix = instance_name.replace("_ppo", "")  # e.g. "llm" or "vl"
         
         if tb_logger is not None:
             from ding.utils import build_logger
@@ -156,8 +158,8 @@ class PriorZeroLLMTrainer:
                 for k, v in tmp_dict.items():
                     if k == 'iter':
                         continue
-                    self._tb_logger.add_scalar(f"learner_llm_iter/{k}", float(v), int(tmp_dict['iter']))
-                    self._tb_logger.add_scalar(f"learner_llm_envstep/{k}", float(v), int(collect_env_steps))
+                    self._tb_logger.add_scalar(f"learner_{self._tb_prefix}_iter/{k}", float(v), int(tmp_dict['iter']))
+                    self._tb_logger.add_scalar(f"learner_{self._tb_prefix}_envstep/{k}", float(v), int(collect_env_steps))
                     self.global_step = max(self.global_step, int(tmp_dict['iter']))
         
         self._sync_global_step_from_rank0()

@@ -729,6 +729,45 @@ class UniZeroPolicy(MuZeroPolicy):
         temperature_reward=self.intermediate_losses['temperature_reward']
         temperature_policy=self.intermediate_losses['temperature_policy']
 
+        # ==================== START: 目标熵正则化更新逻辑 ====================
+        current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight  # 默认使用固定值
+        current_ratio = 0.0
+        alpha_loss = torch.tensor(0.0, device=self._cfg.device)
+        if self.use_adaptive_entropy_weight:
+            # --- 动态计算目标熵 ---
+            progress = min(1.0, train_iter / self.target_entropy_decay_steps)
+            current_ratio = self.target_entropy_start_ratio * (1 - progress) + self.target_entropy_end_ratio * progress
+            action_space_size = self._cfg.model.action_space_size
+            current_target_entropy = -np.log(1.0 / action_space_size) * current_ratio
+
+            # --- 计算 alpha_loss ---
+            alpha_loss = (self.log_alpha * (policy_entropy.detach() - current_target_entropy)).mean()
+
+            # --- 更新 log_alpha ---
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            with torch.no_grad():
+                self.log_alpha.clamp_(np.log(1e-4), np.log(10.0))
+
+            # --- 使用当前更新后的 alpha (截断梯度流) ---
+            current_alpha = self.log_alpha.exp().detach()
+
+            # 重新计算加权的策略损失和总损失
+            weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
+            self.obs_loss_weight = 10
+            self.value_loss_weight = 0.5
+            self.reward_loss_weight = 1.
+            self.policy_loss_weight = 1.
+            total_loss = (
+                self.reward_loss_weight * reward_loss +
+                self.value_loss_weight * value_loss +
+                self.policy_loss_weight * weighted_policy_loss +
+                self.obs_loss_weight * obs_loss
+            )
+            weighted_total_loss = (weights * total_loss).mean()
+        # ===================== END: 目标熵正则化更新逻辑 =====================
+
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 

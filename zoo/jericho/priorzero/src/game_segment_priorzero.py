@@ -92,10 +92,14 @@ class GameSegment(OriginalGameSegment):
 
         import copy
         if len(next_segment_history_obs) > 0:
-            assert self.raw_obs_segment[-1] == next_segment_llm_prior_per_tok[0]['current_obs']
-            assert self.history_obs_segment[-1] == next_segment_llm_prior_per_tok[0]['history']
-            assert self.history_obs_segment[-1][-1][1] == self.llm_action_segment[-1]
-            assert next_segment_history_obs[0][-1][1] == next_segment_llm_action[0]
+            # Check if llm_prior_per_tok is dict (LLM text games) or array (VL Atari)
+            if next_segment_llm_prior_per_tok and isinstance(next_segment_llm_prior_per_tok[0], dict):
+                # LLM text games: validate consistency
+                assert self.raw_obs_segment[-1] == next_segment_llm_prior_per_tok[0]['current_obs']
+                assert self.history_obs_segment[-1] == next_segment_llm_prior_per_tok[0]['history']
+                assert self.history_obs_segment[-1][-1][1] == self.llm_action_segment[-1]
+                assert next_segment_history_obs[0][-1][1] == next_segment_llm_action[0]
+            # For VL Atari: llm_prior_per_tok is numpy array, skip validation
 
         for raw_obs in next_segment_raw_obs:
             self.raw_obs_segment.append(copy.deepcopy(raw_obs))

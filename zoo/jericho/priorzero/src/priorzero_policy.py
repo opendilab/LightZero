@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from ding.utils import POLICY_REGISTRY
+from ding.utils import POLICY_REGISTRY, allreduce
 from ding.model import model_wrap
 import os
 
@@ -100,7 +100,10 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             self._cfg.grad_clip_value
         )
         if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
+            # Only sync world_model gradients (other params have None grad)
+            for p in self._learn_model.world_model.parameters():
+                if p.grad is not None:
+                    allreduce(p.grad.data)
         self._optimizer_world_model.step()
         self._target_model.update(self._learn_model.state_dict())
 
@@ -209,65 +212,55 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         
     def _monitor_vars_learn(self) -> List[str]:
         """
-        [PRIORZERO-MODIFIED]
-        Register variables to be monitored in learn mode for TensorBoard logging.
+        Register variables to be monitored in learn mode.
+        These are logged by DI-engine's BaseLearner under "learner_iter/" prefix.
 
-        This extends UniZero's monitoring with PriorZero-specific LLM metrics.
-
-        Returns:
-            List of variable names that should be logged to TensorBoard/WandB
+        Organized into groups:
+        - Core WM losses (essential for training diagnosis)
+        - WM analysis metrics (for deeper debugging)
+        - Training dynamics (LR, grad norm, entropy)
         """
-
         return [
-            # ============ Combined Metrics ============
-            'wm_total_loss',             # World model total loss
-            'wm_grad_norm',              # World model gradient norm
-            # ============ World Model Component Losses ============
-            'wm_value_loss',
-            'wm_policy_loss',
-            'wm_reward_loss',
+            # ---- Core WM Losses ----
+            'wm_total_loss',
             'wm_obs_loss',
-
-            'adaptive_alpha',
-            "adaptive_target_entropy_ratio",
-            'alpha_loss',
-
-            'Current_GPU',
-            'Max_GPU',
-            'collect_epsilon',
-            'collect_mcts_temperature',
-            'cur_lr_world_model',
-            'cur_lr_tokenizer',
-            
-            'wm_orig_policy_loss',
-            'wm_policy_entropy',
+            'wm_reward_loss',
+            'wm_policy_loss',
+            'wm_value_loss',
             'wm_latent_recon_loss',
-            'wm_target_policy_entropy',
-            'consistency_loss',
-            'value_priority',
-            'wm_target_reward',
-            'wm_target_value',
-            'total_grad_norm_before_clip_wm',
-            # tokenizer
-            'commitment_loss',
-            'reconstruction_loss',
             'wm_perceptual_loss',
 
-            "logits_value_mean",
-            "logits_value_max",
-            "logits_value_min",
-            "logits_policy_mean",
-            "logits_policy_max",
-            "logits_policy_min",
+            # ---- WM Policy Analysis ----
+            'wm_orig_policy_loss',
+            'wm_policy_entropy',
+            'wm_target_policy_entropy',
 
-            "temperature_value",
-            "temperature_reward",
-            "temperature_policy",
-            "current_policy_label_eps",
+            # ---- WM Targets ----
+            'wm_target_reward',
+            'wm_target_value',
+            'value_priority',
+
+            # ---- Adaptive Entropy ----
             'adaptive_alpha',
-            "adaptive_target_entropy_ratio",
+            'adaptive_target_entropy_ratio',
             'alpha_loss',
-            "current_encoder_clip_value",
+
+            # ---- Training Dynamics ----
+            'wm_grad_norm',
+            'cur_lr_world_model',
+
+            # ---- Logits Statistics ----
+            'logits_value_mean',
+            'logits_policy_mean',
+
+            # ---- Temperature ----
+            'temperature_value',
+            'temperature_reward',
+            'temperature_policy',
+
+            # ---- System ----
+            'Current_GPU',
+            'Max_GPU',
         ]
         # ========================================================================
     
@@ -318,18 +311,45 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         if ready_env_id is None:
             ready_env_id = np.arange(active_collect_env_num)
         output = {i: None for i in ready_env_id}
-        
+
+        # Convert LLM priors to policy priors
+        # For Atari: llm_prior_logprob is a list of dicts (action_name -> prob)
+        # For text games: llm_prior_logprob is a list of dicts (action_name -> prob)
+        # Both use semantic action names now!
         policy_priors = []
         for env_id in range(active_collect_env_num):
-            actions = valid_actions_list[env_id]
-            prior = []
-            if len(actions) == 0:
-                print("When valid actions is None, the action must be 'go'")
-                prior.append(llm_prior_logprob[env_id]['go'])
+            prior_data = llm_prior_logprob[env_id]
+
+            # Check if this is a numpy array (legacy format) or dict (new format)
+            if isinstance(prior_data, np.ndarray):
+                # Legacy: numpy array with probabilities for each action index
+                prior = prior_data
+            elif isinstance(prior_data, dict):
+                # New format: dict mapping action names to probabilities
+                # Need to convert to array aligned with action space
+                actions = valid_actions_list[env_id]
+                prior = []
+
+                if len(actions) == 0:
+                    # Fallback for edge case
+                    print("Warning: No valid actions provided")
+                    prior = np.ones(self.cfg.model.action_space_size) / self.cfg.model.action_space_size
+                else:
+                    # Extract probabilities for each action in order
+                    for action in actions:
+                        prior.append(prior_data.get(action, 0.0))
+                    prior = np.array(prior, dtype=np.float32)
+
+                    # Normalize if needed
+                    if prior.sum() > 0:
+                        prior = prior / prior.sum()
+                    else:
+                        prior = np.ones(len(actions), dtype=np.float32) / len(actions)
             else:
-                for action in actions:
-                    prior.append(llm_prior_logprob[env_id][action])
+                raise TypeError(f"Unexpected prior type: {type(prior_data)}")
+
             policy_priors.append(prior)
+
         policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
         
         with torch.no_grad():
@@ -424,7 +444,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         valid_actions_list = kwargs.get('valid_actions_list', None)
         mcts_root_logits_dict = self.llm_cfg.mcts_root_logits_dict
         
-        if llm_prior_logprob is None or not any(llm_prior_logprob) or mcts_root_logits_dict.mode == "wm_logits":
+        if llm_prior_logprob is None or all(x is None for x in llm_prior_logprob) or mcts_root_logits_dict.mode == "wm_logits":
             logging.debug("No LLM priors provided, using standard UniZero MCTS")
             return super()._forward_eval(
                 data, action_mask, to_play=to_play, ready_env_id=ready_env_id, timestep=timestep
@@ -438,14 +458,24 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         
         policy_priors = []
         for env_id in range(active_eval_env_num):
+            prior_data = llm_prior_logprob[env_id]
             actions = valid_actions_list[env_id]
-            prior = []
-            if len(actions) == 0:
-                print("When valid actions is None, the action must be 'go'")
-                prior.append(llm_prior_logprob[env_id]['go'])
+
+            if isinstance(prior_data, np.ndarray):
+                # Image mode: numpy array with log-probs for each action index
+                prior = prior_data.tolist()
+            elif isinstance(prior_data, dict):
+                # Text mode: dict mapping action names to log-probs
+                prior = []
+                if len(actions) == 0:
+                    print("When valid actions is None, the action must be 'go'")
+                    prior.append(prior_data['go'])
+                else:
+                    for action in actions:
+                        prior.append(prior_data[action])
             else:
-                for action in actions:
-                    prior.append(llm_prior_logprob[env_id][action])
+                # Fallback: uniform
+                prior = [0.0] * len(actions) if len(actions) > 0 else [0.0]
             policy_priors.append(prior)
         policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
         

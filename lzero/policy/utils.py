@@ -430,7 +430,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tup
     """
     # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
     # Also, ensure the tensor is of the correct floating-point type for the model.
-    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
 
     # Calculate the dimension size to slice based on the model configuration.
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
@@ -493,7 +493,7 @@ def prepare_obs_bkp(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Ten
                        ---, ---, ---, ---,  ---, ---, ---, ---,   ---
         """
         # obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
-        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
+        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
         # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
         # ``obs_batch_ori``. shape is (4, (4+5)*1, 96, 96) = (4, 9, 96, 96)
         obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num * cfg.model.image_channel, :, :]

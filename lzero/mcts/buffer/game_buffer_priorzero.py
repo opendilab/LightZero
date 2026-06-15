@@ -20,8 +20,9 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         Fetch latest batch for LLM training.
 
         Returns:
-            [raw_obs_list, history_obs_list, llm_prior_per_tok_list, batch_target_values, batch_pred_values, cot_prefix_list, llm_action]
-            CoT prefix list is added for CoT reuse optimization.
+            [raw_obs_list, history_obs_list, llm_prior_per_tok_list,
+             batch_target_values, batch_pred_values, cot_prefix_list, llm_action_list, action_list]
+            action_list: integer action indices for correct rollout log-prob lookup in VL training.
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
@@ -30,7 +31,7 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
             batch_size, self._cfg.reanalyze_ratio, fetch_latest=True, select_last=select_last
         )
         if not current_batch:
-            return [[], [], [], [], [], [], []]
+            return [[], [], [], [], [], [], [], []]
 
         obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list, raw_obs_list, history_obs_list, llm_prior_per_tok_list, cot_prefix_list, llm_action_list = current_batch
 
@@ -45,7 +46,8 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
 
         # CoT reuse optimization: return cot_prefix_list
         # IMPORTANT: Validate return value before returning to ensure broadcast compatibility
-        result = [raw_obs_list, history_obs_list, llm_prior_per_tok_list, batch_target_values, batch_pred_values, cot_prefix_list, llm_action_list]
+        # action_list included so VL training can index into action_logprobs by MCTS-selected action index
+        result = [raw_obs_list, history_obs_list, llm_prior_per_tok_list, batch_target_values, batch_pred_values, cot_prefix_list, llm_action_list, action_list]
 
         return result
     
@@ -174,24 +176,34 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         # 检查 vllm和policy_model的输入上下文是否一致 (only for non-padded positions)
         assert len(raw_obs_list) == len(history_obs_list) == len(llm_prior_per_tok_list) == len(cot_prefix_list) == len(llm_action_list)
         B, T = len(raw_obs_list), len(raw_obs_list[0])
-        for b in range(B):
-            for t in range(T - 1):
-                # Skip padded positions: mask[t] == 0 means the action at step t is padding,
-                # so llm_prior_per_tok at t+1 is also padding and the alignment invariant doesn't hold.
-                if mask_list[b][t] == 0.:
-                    continue
-                current_obs = raw_obs_list[b][t]
-                current_hist = history_obs_list[b][t]
+        # Only run dict-based consistency checks for LLM text path.
+        # In VL (image) mode, llm_prior_per_tok entries are numpy arrays (or None), not dicts.
+        # Additional 'prefix_cot' key check prevents false positives if VL path ever returns dicts.
+        _is_llm_text_mode = (
+            B > 0 and T > 1
+            and llm_prior_per_tok_list[0][1] is not None
+            and isinstance(llm_prior_per_tok_list[0][1], dict)
+            and 'prefix_cot' in llm_prior_per_tok_list[0][1]
+        )
+        if _is_llm_text_mode:
+            for b in range(B):
+                for t in range(T - 1):
+                    # Skip padded positions: mask[t] == 0 means the action at step t is padding,
+                    # so llm_prior_per_tok at t+1 is also padding and the alignment invariant doesn't hold.
+                    if mask_list[b][t] == 0.:
+                        continue
+                    current_obs = raw_obs_list[b][t]
+                    current_hist = history_obs_list[b][t]
 
-                old_prefix_cot = llm_prior_per_tok_list[b][t+1]['prefix_cot']
-                old_current_obs = llm_prior_per_tok_list[b][t+1]['current_obs']
-                old_history = llm_prior_per_tok_list[b][t+1]['history']
-                old_logprob = llm_prior_per_tok_list[b][t+1]['rollout_action_logprob']
-                cot_prefix = cot_prefix_list[b][t+1]
-                llm_action = llm_action_list[b][t+1]
+                    old_prefix_cot = llm_prior_per_tok_list[b][t+1]['prefix_cot']
+                    old_current_obs = llm_prior_per_tok_list[b][t+1]['current_obs']
+                    old_history = llm_prior_per_tok_list[b][t+1]['history']
+                    old_logprob = llm_prior_per_tok_list[b][t+1]['rollout_action_logprob']
+                    cot_prefix = cot_prefix_list[b][t+1]
+                    llm_action = llm_action_list[b][t+1]
 
-                assert llm_action in old_logprob
-                assert old_current_obs == current_obs and old_history == current_hist and old_prefix_cot == cot_prefix           
+                    assert llm_action in old_logprob
+                    assert old_current_obs == current_obs and old_history == current_hist and old_prefix_cot == cot_prefix
 
         current_batch.append(raw_obs_list)
         current_batch.append(history_obs_list)
@@ -422,8 +434,8 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
             network_output = []
             network_output_pred = []
             
-            batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
-            batch_obs_pred = torch.from_numpy(pred_obs_list).to(self._cfg.device)
+            batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device).float()
+            batch_obs_pred = torch.from_numpy(pred_obs_list).to(self._cfg.device).float()
 
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value

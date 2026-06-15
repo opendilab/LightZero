@@ -425,4 +425,6 @@ class MuZeroEvaluator(ISerialEvaluator):
                 'reward_max': np.max(episode_return),
                 'reward_min': np.min(episode_return),
             }
-        return info
+            if mean_episode_return >= self._stop_value:
+                stop_flag = True
+        return stop_flag, info

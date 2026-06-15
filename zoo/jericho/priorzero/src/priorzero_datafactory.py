@@ -292,7 +292,11 @@ class DataProcessor:
         Returns:
             Tuple of (input_ids, attention_mask, action_mask, advantages, rollout_logprob)
         """
-        raw_obs_list, history_obs_list, llm_prior_per_tok_list, target_value, pred_value, cot_prefix_list, llm_action_list = priorzero_batch
+        # Support both 7-element (legacy) and 8-element (with action_list) batch formats
+        if len(priorzero_batch) == 8:
+            raw_obs_list, history_obs_list, llm_prior_per_tok_list, target_value, pred_value, cot_prefix_list, llm_action_list, _action_list = priorzero_batch
+        else:
+            raw_obs_list, history_obs_list, llm_prior_per_tok_list, target_value, pred_value, cot_prefix_list, llm_action_list = priorzero_batch
 
         assert len(raw_obs_list) == len(history_obs_list) == len(llm_prior_per_tok_list) == len(target_value) == len(pred_value) == len(cot_prefix_list) == len(llm_action_list), \
             f"Batch size mismatch: raw_obs={len(raw_obs_list)}, history_obs={len(history_obs_list)}, llm_prior_per_tok={len(llm_prior_per_tok_list)}, \
