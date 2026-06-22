@@ -774,12 +774,32 @@ class WorldModel(nn.Module):
 
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
-        last_linear_layer_init_zero = True  # TODO
+        last_linear_layer_init_zero = getattr(self.config, 'last_linear_layer_init_zero', True)
         if last_linear_layer_init_zero:
+            zero_init_head_names = getattr(self.config, 'zero_init_head_names', None)
             if self.continuous_action_space:
-                module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
+                default_heads_to_initialize = ['value', 'reward', 'observation']
             else:
-                module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
+                default_heads_to_initialize = ['policy', 'value', 'reward', 'observation']
+            if zero_init_head_names is None:
+                zero_init_head_names = default_heads_to_initialize
+            elif isinstance(zero_init_head_names, str):
+                zero_init_head_names = [zero_init_head_names]
+
+            head_map = {
+                'policy': self.head_policy,
+                'value': self.head_value,
+                'reward': self.head_rewards,
+                'rewards': self.head_rewards,
+                'observation': self.head_observations,
+                'observations': self.head_observations,
+            }
+            module_to_initialize = []
+            for head_name in zero_init_head_names:
+                if head_name not in head_map:
+                    raise ValueError(f"Unknown zero-init head name: {head_name}")
+                module_to_initialize.append(head_map[head_name])
+
             for head in module_to_initialize:
                 for layer in reversed(head.head_module):
                     if isinstance(layer, nn.Linear):
@@ -1968,13 +1988,20 @@ class WorldModel(nn.Module):
             value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
-            if self.config.latent_recon_loss_weight > 0:
+            if self.config.latent_recon_loss_weight > 0 or self.config.perceptual_loss_weight > 0:
                 # Reconstruct observations from latent state representations
                 reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
                 # Calculate reconstruction loss and perceptual loss
-                latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images)  # NOTE: for stack=1
-                perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images)  # NOTE: for stack=1
+                target_images = batch['observations'].reshape(-1, 3, 64, 64)  # NOTE: for stack=1
+                if self.config.latent_recon_loss_weight > 0:
+                    latent_recon_loss = self.tokenizer.reconstruction_loss(target_images, reconstructed_images)
+                else:
+                    latent_recon_loss = self.latent_recon_loss
+                if self.config.perceptual_loss_weight > 0:
+                    perceptual_loss = self.tokenizer.perceptual_loss(target_images, reconstructed_images)
+                else:
+                    perceptual_loss = self.perceptual_loss
             else:
                 # TODO:
                 latent_recon_loss = self.latent_recon_loss
@@ -2118,6 +2145,16 @@ class WorldModel(nn.Module):
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
+        full_mask_count = batch['mask_padding'].sum()
+        if full_mask_count == 0:
+            raise ValueError("mask_padding is all zeros; cannot compute UniZero loss")
+        obs_mask_count = batch['mask_padding'][:, 1:].sum().clamp_min(1)
+
+        def _safe_masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+            selected_values = values[mask]
+            if selected_values.numel() == 0:
+                return values.new_tensor(0.)
+            return selected_values.mean()
 
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
@@ -2132,7 +2169,7 @@ class WorldModel(nn.Module):
             if loss_name == 'loss_obs':
                 seq_len = batch['actions'].shape[1] - 1
                 # Get the corresponding mask_padding
-                mask_padding = batch['mask_padding'][:, 1:seq_len]
+                mask_padding = batch['mask_padding'][:, 1:]
             else:
                 seq_len = batch['actions'].shape[1]
                 # Get the corresponding mask_padding
@@ -2143,27 +2180,27 @@ class WorldModel(nn.Module):
 
             # First step loss
             first_step_mask = mask_padding[:, 0]
-            first_step_losses[loss_name] = loss_tmp[:, 0][first_step_mask].mean()
+            first_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, 0], first_step_mask)
 
             # Middle step loss
             middle_timestep = seq_len // 2
             middle_step_mask = mask_padding[:, middle_timestep]
-            middle_step_losses[loss_name] = loss_tmp[:, middle_timestep][middle_step_mask].mean()
+            middle_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, middle_timestep], middle_step_mask)
 
             # Last step loss
             last_step_mask = mask_padding[:, -1]
-            last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
+            last_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, -1], last_step_mask)
 
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
         # Calculate overall discounted loss
-        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ batch['mask_padding'][:,1:].sum()
-        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
+        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ obs_mask_count
+        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
 
         # Add encoder output to return dictionary for external training loop access
         # Using .detach() because this tensor is only used for subsequent clip operations and should not affect gradient computation

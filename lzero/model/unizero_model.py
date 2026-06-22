@@ -176,8 +176,14 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
             
-            if world_model_cfg.latent_recon_loss_weight == 0:
-                self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
+            use_image_decoder = (
+                world_model_cfg.latent_recon_loss_weight > 0 or
+                world_model_cfg.perceptual_loss_weight > 0
+            )
+            if not use_image_decoder:
+                self.tokenizer = Tokenizer(
+                    encoder=self.representation_network, decoder=None, with_lpips=False, obs_type=world_model_cfg.obs_type
+                )
             else:
                 # TODO: customize LatentDecoder
                 self.decoder_network = LatentDecoder(
@@ -186,7 +192,12 @@ class UniZeroModel(nn.Module):
                     num_channels = 64,
                     activation=self.activation,
                 )
-                self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, with_lpips=True, obs_type=world_model_cfg.obs_type)
+                self.tokenizer = Tokenizer(
+                    encoder=self.representation_network,
+                    decoder=self.decoder_network,
+                    with_lpips=world_model_cfg.perceptual_loss_weight > 0,
+                    obs_type=world_model_cfg.obs_type
+                )
 
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')

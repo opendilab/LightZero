@@ -236,6 +236,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 use_softmoe_head=False,
                 # (bool) Whether to use Mixture-of-Experts (MoE) head.
                 use_moe_head=False,
+                # (bool) Whether to initialize selected output heads' last linear layer to zero.
+                last_linear_layer_init_zero=True,
+                # (list/None) Output heads to zero-init. None preserves the legacy behavior of zero-initializing all heads.
+                zero_init_head_names=None,
                 # (int) Number of experts in the MoE head.
                 num_experts_in_moe_head=4,
                 # (bool) Whether to use MoE in the transformer layers.
@@ -254,6 +258,10 @@ class UniZeroPolicy(MuZeroPolicy):
             ),
         ),
         # ****** common ******
+        # (bool) Whether to use torch.compile for UniZero models.
+        # It can be faster for static graphs, but UniZero training uses dynamic dictionaries and cache state,
+        # so leaving it off avoids expensive compile/recompile overhead in online RL runs.
+        torch_compile=False,
         # (bool) Whether to enable adaptive policy entropy weight (alpha)
         use_adaptive_entropy_weight=True,
         # (float) Learning rate for adaptive alpha optimizer
@@ -364,6 +372,8 @@ class UniZeroPolicy(MuZeroPolicy):
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
+        # (bool) Whether to call torch.cuda.empty_cache() when resetting inference caches after each train epoch.
+        empty_cuda_cache_on_cache_reset=True,
         # (int) The transition number of one ``GameSegment``.
         game_segment_length=400,
         # (bool) Whether to analyze simulation normalization.
@@ -648,10 +658,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
-        # Ensure that the installed torch version is greater than or equal to 2.0
-        assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
-        self._model = torch.compile(self._model)
-        self._target_model = torch.compile(self._target_model)
+        if self._cfg.torch_compile:
+            # Ensure that the installed torch version is greater than or equal to 2.0
+            assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
+            self._model = torch.compile(self._model)
+            self._target_model = torch.compile(self._target_model)
         # NOTE: soft target
         self._target_model = model_wrap(
             self._target_model,
@@ -886,8 +897,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean()
+        if valid_target_policy.numel() == 0:
+            average_target_policy_entropy = batch_for_gpt['target_policy'].new_tensor(0.)
+        else:
+            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+            average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -1076,24 +1090,14 @@ class UniZeroPolicy(MuZeroPolicy):
             self.latent_recon_loss_weight = self._cfg.model.world_model_cfg.latent_recon_loss_weight
             self.perceptual_loss_weight = self._cfg.model.world_model_cfg.perceptual_loss_weight
 
-            if self.latent_recon_loss_weight>0:
-                total_loss = (
-                    self.reward_loss_weight * reward_loss +
-                    self.value_loss_weight * value_loss +
-                    self.policy_loss_weight * weighted_policy_loss +
-                    self.obs_loss_weight  * obs_loss +
-                    self.latent_recon_loss_weight * latent_recon_loss+
-                    self.perceptual_loss_weight*perceptual_loss
-                )
-            else:
-
-                total_loss = (
-                    self.reward_loss_weight * reward_loss +
-                    self.value_loss_weight * value_loss +
-                    self.policy_loss_weight * weighted_policy_loss +
-                    self.obs_loss_weight  * obs_loss
-
-                )
+            total_loss = (
+                self.reward_loss_weight * reward_loss +
+                self.value_loss_weight * value_loss +
+                self.policy_loss_weight * weighted_policy_loss +
+                self.obs_loss_weight * obs_loss +
+                self.latent_recon_loss_weight * latent_recon_loss +
+                self.perceptual_loss_weight * perceptual_loss
+            )
             weighted_total_loss = (weights * total_loss).mean()
         # ===================== END: Target Entropy Regularization Update Logic =====================
 
@@ -1253,6 +1257,30 @@ class UniZeroPolicy(MuZeroPolicy):
 
             "current_policy_label_eps":current_policy_label_eps,
         }
+        return_log_dict.update({
+            'loss/weighted_total': weighted_total_loss.item(),
+            'loss/obs': obs_loss.item(),
+            'loss/reward': reward_loss.item(),
+            'loss/value': value_loss.item(),
+            'loss/policy': policy_loss.item(),
+            'loss/policy_orig': orig_policy_loss.item(),
+            'loss/policy_entropy': policy_entropy.item(),
+            'loss/latent_recon': latent_recon_loss.item(),
+            'loss/perceptual': perceptual_loss.item(),
+            'target/reward': target_reward.mean().item(),
+            'target/value': target_value.mean().item(),
+            'target/policy_entropy': average_target_policy_entropy.item(),
+            'target/transformed_reward': transformed_target_reward.mean().item(),
+            'target/transformed_value': transformed_target_value.mean().item(),
+            'priority/value': value_priority_np.mean().item(),
+            'lr/world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'grad/world_model_total_norm': total_grad_norm_before_clip_wm.item(),
+            'memory/current_gpu_gb': current_memory_allocated_gb,
+            'memory/max_gpu_gb': max_memory_allocated_gb,
+            'collect/epsilon': self._collect_epsilon,
+            'collect/mcts_temperature': self._collect_mcts_temperature,
+            'schedule/policy_label_eps': current_policy_label_eps,
+        })
 
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
@@ -1281,22 +1309,32 @@ class UniZeroPolicy(MuZeroPolicy):
 
                 # Monitor target_policy entropy statistics (minimum entropy indicates extreme distributions)
                 valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-                target_policy_entropies = -torch.sum(
-                    valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
-                )
-                return_log_dict['target_policy_entropy/mean'] = target_policy_entropies.mean().item()
-                return_log_dict['target_policy_entropy/min'] = target_policy_entropies.min().item()
-                return_log_dict['target_policy_entropy/max'] = target_policy_entropies.max().item()
-                return_log_dict['target_policy_entropy/std'] = target_policy_entropies.std().item()
+                if valid_target_policy.numel() == 0:
+                    return_log_dict['target_policy_entropy/mean'] = 0.0
+                    return_log_dict['target_policy_entropy/min'] = 0.0
+                    return_log_dict['target_policy_entropy/max'] = 0.0
+                    return_log_dict['target_policy_entropy/std'] = 0.0
+                else:
+                    target_policy_entropies = -torch.sum(
+                        valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
+                    )
+                    return_log_dict['target_policy_entropy/mean'] = target_policy_entropies.mean().item()
+                    return_log_dict['target_policy_entropy/min'] = target_policy_entropies.min().item()
+                    return_log_dict['target_policy_entropy/max'] = target_policy_entropies.max().item()
+                    return_log_dict['target_policy_entropy/std'] = target_policy_entropies.std(unbiased=False).item()
         # ================================================================================
 
         if self.use_adaptive_entropy_weight:
             return_log_dict['adaptive_alpha'] = current_alpha.item()
             return_log_dict['adaptive_target_entropy_ratio'] = current_ratio
             return_log_dict['alpha_loss'] = alpha_loss.item()
+            return_log_dict['entropy/adaptive_alpha'] = current_alpha.item()
+            return_log_dict['entropy/target_ratio'] = current_ratio
+            return_log_dict['entropy/alpha_loss'] = alpha_loss.item()
 
         if self.use_encoder_clip_annealing:
             return_log_dict['current_encoder_clip_value'] = current_clip_value
+            return_log_dict['stability/current_encoder_clip_value'] = current_clip_value
 
         if self.use_head_clip and self.head_clip_manager is not None:
             # Add head clip results to log (if any)
@@ -1964,4 +2002,5 @@ class UniZeroPolicy(MuZeroPolicy):
                 # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
                 model.world_model.precompute_pos_emb_diff_kv()
             model.world_model.clear_caches()
-        torch.cuda.empty_cache()
+        if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
+            torch.cuda.empty_cache()
