@@ -152,7 +152,8 @@ def train_unizero_segment(
 
         # Evaluate policy performance
         if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            save_ckpt_fn = learner.save_checkpoint if getattr(cfg.policy, 'save_ckpt_in_eval', True) else None
+            stop, reward = evaluator.eval(save_ckpt_fn, learner.train_iter, collector.envstep)
             if stop:
                 break
 

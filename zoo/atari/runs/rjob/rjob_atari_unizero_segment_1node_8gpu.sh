@@ -22,13 +22,17 @@ EXP_ROOT="${EXP_ROOT:-data_unizero/rjob}"
 RJOB_LOG_ROOT="${RJOB_LOG_ROOT:-${LIGHTZERO_HOME}/rjob_logs/atari_unizero_segment}"
 MAX_ENV_STEP="${MAX_ENV_STEP:-}"
 MAX_PARALLEL="${MAX_PARALLEL:-8}"
+TOKENIZER_PRETRAINED_VGG="${TOKENIZER_PRETRAINED_VGG:-${LIGHTZERO_HOME}/tokenizer_pretrained_vgg}"
+TORCH_HOME="${TORCH_HOME:-${TOKENIZER_PRETRAINED_VGG}}"
+USE_NEW_CACHE_MANAGER="${USE_NEW_CACHE_MANAGER:-1}"
+SAVE_CKPT="${SAVE_CKPT:-0}"
 
 RJOB_NAME="${RJOB_NAME:-uz-atari-unizero-segment-1n8g}"
 RJOB_MEMORY="${RJOB_MEMORY:-1500000}"
 RJOB_CPU="${RJOB_CPU:-150}"
 RJOB_GPU="${RJOB_GPU:-8}"
-RJOB_CHARGED_GROUP="${RJOB_CHARGED_GROUP:-rlinfra_gpu}"
-RJOB_PRIVATE_MACHINE="${RJOB_PRIVATE_MACHINE:-yes}"
+RJOB_CHARGED_GROUP="${RJOB_CHARGED_GROUP:-narmodel_gpu}"
+RJOB_PRIVATE_MACHINE="${RJOB_PRIVATE_MACHINE:-group}"
 RJOB_IMAGE="${RJOB_IMAGE:-registry.h.pjlab.org.cn/ailab-rlinfra-rlinfra_gpu/rft:20260408}"
 RJOB_REPLICA="${RJOB_REPLICA:-1}"
 RJOB_CUSTOM_RESOURCES="${RJOB_CUSTOM_RESOURCES:-brainpp.cn/fuse=1}"
@@ -42,6 +46,22 @@ if [[ ! -f "${RUN_SCRIPT}" ]]; then
     exit 1
 fi
 
+case "${RJOB_PRIVATE_MACHINE,,}" in
+    yes|true|1)
+        RJOB_PRIVATE_MACHINE="group"
+        ;;
+    false|0)
+        RJOB_PRIVATE_MACHINE="no"
+        ;;
+    group|no|project|tenant)
+        RJOB_PRIVATE_MACHINE="${RJOB_PRIVATE_MACHINE,,}"
+        ;;
+    *)
+        echo "Invalid RJOB_PRIVATE_MACHINE=${RJOB_PRIVATE_MACHINE}; expected group, no, project, tenant, or legacy yes/true/1/false/0." >&2
+        exit 1
+        ;;
+esac
+
 submit_cmd=(
     rjob submit
     --name="${RJOB_NAME}"
@@ -54,7 +74,6 @@ submit_cmd=(
     --image="${RJOB_IMAGE}"
     --mount=gpfs://gpfs1/puyuan:/mnt/shared-storage-user/puyuan
     --mount=gpfs://gpfs1/luyudong:/mnt/shared-storage-user/luyudong
-    --mount=gpfs://gpfs1/luyudong:/mnt/shared-storage-user/tangjia
     --mount=gpfs://gpfs2/gpfs2-shared-public:/mnt/shared-storage-gpfs2/gpfs2-shared-public
     --mount=gpfs://gpfs2/narmodel:/mnt/shared-storage-user/narmodel
     -e INSIDE_RJOB=1
@@ -69,6 +88,10 @@ submit_cmd=(
     -e RJOB_LOG_ROOT="${RJOB_LOG_ROOT}"
     -e MAX_ENV_STEP="${MAX_ENV_STEP}"
     -e MAX_PARALLEL="${MAX_PARALLEL}"
+    -e TOKENIZER_PRETRAINED_VGG="${TOKENIZER_PRETRAINED_VGG}"
+    -e TORCH_HOME="${TORCH_HOME}"
+    -e USE_NEW_CACHE_MANAGER="${USE_NEW_CACHE_MANAGER}"
+    -e SAVE_CKPT="${SAVE_CKPT}"
     -e RJOB_MEMORY="${RJOB_MEMORY}"
     -e RJOB_CPU="${RJOB_CPU}"
     -e RJOB_GPU="${RJOB_GPU}"
@@ -93,6 +116,9 @@ echo "  seeds:      ${SEEDS}"
 echo "  variants:   ${BASELINE_VARIANTS}"
 echo "  logs:       ${RJOB_LOG_ROOT}/${RUN_TAG}"
 echo "  tensorboard:${LIGHTZERO_HOME}/${EXP_ROOT}/${RUN_TAG}"
+echo "  torch_home: ${TORCH_HOME}"
+echo "  new_cache:  ${USE_NEW_CACHE_MANAGER}"
+echo "  save_ckpt:  ${SAVE_CKPT}"
 
 if [[ "${RJOB_DRY_RUN:-0}" == "1" ]]; then
     printf 'Dry-run command:'

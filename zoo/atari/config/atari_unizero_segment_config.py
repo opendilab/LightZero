@@ -44,6 +44,8 @@ def main(
         torch_compile_override=None,
         empty_cuda_cache_on_cache_reset_override=None,
         zero_init_head_names_override=None,
+        use_new_cache_manager_override=None,
+        save_ckpt_override=None,
 ):
     if env_id not in atari_env_action_space_map:
         supported_envs = ', '.join(sorted(atari_env_action_space_map.keys()))
@@ -74,6 +76,8 @@ def main(
     torch_compile = False
     empty_cuda_cache_on_cache_reset = False
     zero_init_head_names = ['value', 'reward']
+    use_new_cache_manager = True
+    save_ckpt = True
 
     if latent_recon_loss_weight_override is not None:
         latent_recon_loss_weight = float(latent_recon_loss_weight_override)
@@ -85,6 +89,10 @@ def main(
         empty_cuda_cache_on_cache_reset = bool(empty_cuda_cache_on_cache_reset_override)
     if zero_init_head_names_override is not None:
         zero_init_head_names = _parse_zero_init_head_names(zero_init_head_names_override)
+    if use_new_cache_manager_override is not None:
+        use_new_cache_manager = bool(use_new_cache_manager_override)
+    if save_ckpt_override is not None:
+        save_ckpt = bool(save_ckpt_override)
 
     if env_id == 'ALE/Pong-v5':
         max_env_step = int(5e5)
@@ -139,8 +147,17 @@ def main(
                     game_segment_length=game_segment_length,
                     device='cuda',
                     use_priority=True,
+                    use_new_cache_manager=use_new_cache_manager,
                     last_linear_layer_init_zero=True,
                     zero_init_head_names=zero_init_head_names,
+                ),
+            ),
+            save_ckpt_in_eval=save_ckpt,
+            learn=dict(
+                learner=dict(
+                    hook=dict(
+                        save_ckpt_after_iter=int(1e4) if save_ckpt else int(1e12),
+                    ),
                 ),
             ),
             # Learning settings
@@ -235,6 +252,8 @@ if __name__ == "__main__":
         help='Comma separated heads to zero-init, or all/legacy/none',
         default=None
     )
+    parser.add_argument('--use-new-cache-manager', type=_str2bool, nargs='?', const=True, help='Enable the structured KV cache manager', default=None)
+    parser.add_argument('--save-ckpt', type=_str2bool, nargs='?', const=True, help='Save evaluator/best checkpoints', default=None)
     args = parser.parse_args()
 
     main(
@@ -249,4 +268,6 @@ if __name__ == "__main__":
         torch_compile_override=args.torch_compile,
         empty_cuda_cache_on_cache_reset_override=args.empty_cuda_cache_on_cache_reset,
         zero_init_head_names_override=args.zero_init_head_names,
+        use_new_cache_manager_override=args.use_new_cache_manager,
+        save_ckpt_override=args.save_ckpt,
     )

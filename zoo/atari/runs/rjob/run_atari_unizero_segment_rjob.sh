@@ -43,12 +43,15 @@ EXP_ROOT="${EXP_ROOT:-data_unizero/rjob}"
 RJOB_LOG_ROOT="${RJOB_LOG_ROOT:-${LIGHTZERO_HOME}/rjob_logs/atari_unizero_segment}"
 MAX_ENV_STEP="${MAX_ENV_STEP:-}"
 DRY_RUN="${DRY_RUN:-0}"
+TOKENIZER_PRETRAINED_VGG="${TOKENIZER_PRETRAINED_VGG:-${LIGHTZERO_HOME}/tokenizer_pretrained_vgg}"
+USE_NEW_CACHE_MANAGER="${USE_NEW_CACHE_MANAGER:-1}"
+SAVE_CKPT="${SAVE_CKPT:-0}"
 
 RJOB_MEMORY="${RJOB_MEMORY:-1500000}"
 RJOB_CPU="${RJOB_CPU:-150}"
 RJOB_GPU="${RJOB_GPU:-8}"
-RJOB_CHARGED_GROUP="${RJOB_CHARGED_GROUP:-rlinfra_gpu}"
-RJOB_PRIVATE_MACHINE="${RJOB_PRIVATE_MACHINE:-yes}"
+RJOB_CHARGED_GROUP="${RJOB_CHARGED_GROUP:-narmodel_gpu}"
+RJOB_PRIVATE_MACHINE="${RJOB_PRIVATE_MACHINE:-group}"
 RJOB_CUSTOM_RESOURCES="${RJOB_CUSTOM_RESOURCES:-brainpp.cn/fuse=1}"
 RJOB_IMAGE="${RJOB_IMAGE:-registry.h.pjlab.org.cn/ailab-rlinfra-rlinfra_gpu/rft:20260408}"
 RLAUNCH_BIN="${RLAUNCH_BIN:-rlaunch}"
@@ -56,6 +59,22 @@ RLAUNCH_BIN="${RLAUNCH_BIN:-rlaunch}"
 CONDA_ENV_PATH="${CONDA_ENV_PATH:-/mnt/shared-storage-user/puyuan/conda_envs/lz}"
 PYTHON_BIN="${PYTHON_BIN:-${CONDA_ENV_PATH}/bin/python}"
 CONFIG_SCRIPT="${CONFIG_SCRIPT:-${LIGHTZERO_HOME}/zoo/atari/config/atari_unizero_segment_config.py}"
+
+case "${RJOB_PRIVATE_MACHINE,,}" in
+    yes|true|1)
+        RJOB_PRIVATE_MACHINE="group"
+        ;;
+    false|0)
+        RJOB_PRIVATE_MACHINE="no"
+        ;;
+    group|no|project|tenant)
+        RJOB_PRIVATE_MACHINE="${RJOB_PRIVATE_MACHINE,,}"
+        ;;
+    *)
+        echo "Invalid RJOB_PRIVATE_MACHINE=${RJOB_PRIVATE_MACHINE}; expected group, no, project, tenant, or legacy yes/true/1/false/0." >&2
+        exit 1
+        ;;
+esac
 
 if [[ "${INSIDE_RJOB:-0}" != "1" && "${SUBMIT_RJOB:-1}" == "1" ]]; then
     if ! command -v "${RLAUNCH_BIN}" >/dev/null 2>&1; then
@@ -74,7 +93,6 @@ if [[ "${INSIDE_RJOB:-0}" != "1" && "${SUBMIT_RJOB:-1}" == "1" ]]; then
         --image="${RJOB_IMAGE}" \
         --mount=gpfs://gpfs1/puyuan:/mnt/shared-storage-user/puyuan \
         --mount=gpfs://gpfs1/luyudong:/mnt/shared-storage-user/luyudong \
-        --mount=gpfs://gpfs1/luyudong:/mnt/shared-storage-user/tangjia \
         --mount=gpfs://gpfs2/gpfs2-shared-public:/mnt/shared-storage-gpfs2/gpfs2-shared-public \
         --mount=gpfs://gpfs2/narmodel:/mnt/shared-storage-user/narmodel \
         -- env \
@@ -90,6 +108,10 @@ if [[ "${INSIDE_RJOB:-0}" != "1" && "${SUBMIT_RJOB:-1}" == "1" ]]; then
             RJOB_LOG_ROOT="${RJOB_LOG_ROOT}" \
             MAX_ENV_STEP="${MAX_ENV_STEP}" \
             DRY_RUN="${DRY_RUN}" \
+            TOKENIZER_PRETRAINED_VGG="${TOKENIZER_PRETRAINED_VGG}" \
+            TORCH_HOME="${TORCH_HOME:-${TOKENIZER_PRETRAINED_VGG}}" \
+            USE_NEW_CACHE_MANAGER="${USE_NEW_CACHE_MANAGER}" \
+            SAVE_CKPT="${SAVE_CKPT}" \
             RJOB_MEMORY="${RJOB_MEMORY}" \
             RJOB_CPU="${RJOB_CPU}" \
             RJOB_GPU="${RJOB_GPU}" \
@@ -156,11 +178,11 @@ export LD_LIBRARY_PATH="${CONDA_ENV_PATH}/lib:${LD_LIBRARY_PATH:-}"
 export PYTHONPATH="${LIGHTZERO_HOME}:${PYTHONPATH:-}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/matplotlib}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${RUN_DIR}/cache}"
-export TORCH_HOME="${TORCH_HOME:-${RUN_DIR}/cache/torch}"
+export TORCH_HOME="${TORCH_HOME:-${TOKENIZER_PRETRAINED_VGG}}"
 export WANDB_MODE="${WANDB_MODE:-offline}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
-export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-garbage_collection_threshold:0.7,max_split_size_mb:256}"
-mkdir -p "${MPLCONFIGDIR}" "${XDG_CACHE_HOME}" "${TORCH_HOME}"
+export PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-garbage_collection_threshold:0.7,max_split_size_mb:256}"
+mkdir -p "${MPLCONFIGDIR}" "${XDG_CACHE_HOME}"
 
 normalize_list() {
     echo "$1" | tr ',' ' '
@@ -229,9 +251,34 @@ baseline_args_for_variant() {
     esac
 }
 
+variant_requires_lpips() {
+    local variant="$1"
+    case "${variant}" in
+        recon_lpips|legacy_aux|aux|legacy_full)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 read -r -a ENV_LIST <<< "$(normalize_list "${ATARI_ENVS}")"
 read -r -a SEED_LIST <<< "$(normalize_list "${SEEDS}")"
 read -r -a VARIANT_LIST <<< "$(normalize_list "${BASELINE_VARIANTS}")"
+
+for variant in "${VARIANT_LIST[@]}"; do
+    if variant_requires_lpips "${variant}"; then
+        if [[ ! -f "${TORCH_HOME}/vgg.pth" ]]; then
+            log_err "LPIPS variant '${variant}' requires ${TORCH_HOME}/vgg.pth."
+            exit 1
+        fi
+        if [[ ! -f "${TORCH_HOME}/hub/checkpoints/vgg16-397923af.pth" ]]; then
+            log_err "LPIPS variant '${variant}' requires ${TORCH_HOME}/hub/checkpoints/vgg16-397923af.pth."
+            exit 1
+        fi
+    fi
+done
 
 if [[ "${MODE}" != "single" && "${MODE}" != "multitask" ]]; then
     log_err "Unsupported MODE=${MODE}. Expected single or multitask."
@@ -278,6 +325,10 @@ LIGHTZERO_HOME=${LIGHTZERO_HOME}
 CONFIG_SCRIPT=${CONFIG_SCRIPT}
 CONDA_ENV_PATH=${CONDA_ENV_PATH}
 PYTHON_BIN=${PYTHON_BIN}
+TOKENIZER_PRETRAINED_VGG=${TOKENIZER_PRETRAINED_VGG}
+TORCH_HOME=${TORCH_HOME}
+USE_NEW_CACHE_MANAGER=${USE_NEW_CACHE_MANAGER}
+SAVE_CKPT=${SAVE_CKPT}
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
 GPU_LIST=${GPU_LIST[*]}
 MAX_PARALLEL=${MAX_PARALLEL}
@@ -307,6 +358,9 @@ log "PYTHON_BIN:    ${PYTHON_BIN}"
 log "RUN_DIR:       ${RUN_DIR}"
 log "EXP_ROOT:      ${EXP_ROOT}"
 log "TB_ROOT:       ${TB_ROOT}"
+log "TORCH_HOME:    ${TORCH_HOME}"
+log "NEW_CACHE:     ${USE_NEW_CACHE_MANAGER}"
+log "SAVE_CKPT:     ${SAVE_CKPT}"
 log "DRY_RUN:       ${DRY_RUN}"
 
 if [[ "${DRY_RUN}" == "1" ]]; then
@@ -385,6 +439,8 @@ launch_task() {
             --seed "${seed}"
             --exp-root "${EXP_ROOT}"
             --run-tag "${RUN_TAG}"
+            --use-new-cache-manager "${USE_NEW_CACHE_MANAGER}"
+            --save-ckpt "${SAVE_CKPT}"
             "${variant_args[@]}"
         )
         if [[ -n "${MAX_ENV_STEP}" ]]; then
@@ -394,11 +450,53 @@ launch_task() {
         echo "Command: ${cmd[*]}"
         "${cmd[@]}"
     ) > >(awk -v task="${task_name}" '{ print strftime("[%Y-%m-%d %H:%M:%S]"), "[" task "]", $0; fflush() }' | tee -a "${task_log}") 2>&1 &
+    task_pid="$!"
+    TASK_PIDS+=("${task_pid}")
+    TASK_NAMES+=("${task_name}")
+    TASK_LOGS+=("${task_log}")
 }
 
 task_index=0
 running=0
 failed=0
+TASK_PIDS=()
+TASK_NAMES=()
+TASK_LOGS=()
+
+record_finished_task() {
+    local pid="$1"
+    local status="$2"
+    local idx
+    for idx in "${!TASK_PIDS[@]}"; do
+        if [[ "${TASK_PIDS[$idx]}" == "${pid}" ]]; then
+            log "Task finished: ${TASK_NAMES[$idx]} pid=${pid} exit_code=${status} log=${TASK_LOGS[$idx]}"
+            unset "TASK_PIDS[$idx]"
+            unset "TASK_NAMES[$idx]"
+            unset "TASK_LOGS[$idx]"
+            break
+        fi
+    done
+    if [[ "${status}" -ne 0 ]]; then
+        failed=1
+    fi
+}
+
+wait_for_one_task() {
+    local finished_pid
+    local status
+    set +e
+    wait -n -p finished_pid "${TASK_PIDS[@]}"
+    status="$?"
+    set -e
+    if [[ -n "${finished_pid:-}" ]]; then
+        record_finished_task "${finished_pid}" "${status}"
+    else
+        log_err "wait -n returned status=${status} without a finished pid."
+        if [[ "${status}" -ne 0 ]]; then
+            failed=1
+        fi
+    fi
+}
 
 for env_id in "${ENV_LIST[@]}"; do
     for seed in "${SEED_LIST[@]}"; do
@@ -409,9 +507,7 @@ for env_id in "${ENV_LIST[@]}"; do
             running=$((running + 1))
 
             if [[ "${running}" -ge "${MAX_PARALLEL}" ]]; then
-                if ! wait -n; then
-                    failed=1
-                fi
+                wait_for_one_task
                 running=$((running - 1))
             fi
         done
@@ -419,9 +515,7 @@ for env_id in "${ENV_LIST[@]}"; do
 done
 
 while [[ "${running}" -gt 0 ]]; do
-    if ! wait -n; then
-        failed=1
-    fi
+    wait_for_one_task
     running=$((running - 1))
 done
 

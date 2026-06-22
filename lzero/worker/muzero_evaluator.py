@@ -292,13 +292,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                     new_available_env_id = set(obs.keys()).difference(ready_env_id)
                     ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                     remain_episode -= min(len(new_available_env_id), remain_episode)
+                    ready_env_id_list = sorted(ready_env_id)
 
                     # Prepare stacked observations and other inputs for the policy.
-                    stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
-                    stack_obs = list(stack_obs.values())
-                    action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
-                    to_play = [to_play_dict[env_id] for env_id in ready_env_id]
-                    timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+                    stack_obs = [game_segments[env_id].get_obs() for env_id in ready_env_id_list]
+                    action_mask = [action_mask_dict[env_id] for env_id in ready_env_id_list]
+                    to_play = [to_play_dict[env_id] for env_id in ready_env_id_list]
+                    timestep = [timestep_dict[env_id] for env_id in ready_env_id_list]
 
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
@@ -309,10 +309,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     if self.task_id is None:
                         # Single-task setting
-                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
+                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id_list, timestep=timestep)
                     else:
                         # Multi-task setting
-                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep, task_id=self.task_id)
+                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id_list, timestep=timestep, task_id=self.task_id)
 
                     # Unpack policy outputs.
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -329,7 +329,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     if self.policy_config.sampled_algo:
                         root_sampled_actions_dict = {}
 
-                    for index, env_id in enumerate(ready_env_id):
+                    for index, env_id in enumerate(ready_env_id_list):
                         actions[env_id] = actions_with_env_id.pop(env_id)
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
                         if self.policy_config.sampled_algo:

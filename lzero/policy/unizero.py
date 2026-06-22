@@ -180,6 +180,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 support_size=101,
                 # (int) The maximum size of the cache.
                 max_cache_size=5000,
+                # (bool) Whether to use the structured KVCacheManager instead of legacy dict pools.
+                use_new_cache_manager=False,
                 # (int) The number of environments.
                 env_num=8,
                 # (float) The weight of the latent reconstruction loss.
@@ -1385,6 +1387,49 @@ class UniZeroPolicy(MuZeroPolicy):
             ).to(self._cfg.device)
             self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
 
+    @staticmethod
+    def _normalize_ready_env_id(ready_env_id, active_env_num: int) -> List[int]:
+        if ready_env_id is None:
+            return list(range(active_env_num))
+        if isinstance(ready_env_id, set):
+            return sorted(int(env_id) for env_id in ready_env_id)
+        return [int(env_id) for env_id in list(ready_env_id)]
+
+    def _select_last_infer_inputs(self, last_obs: torch.Tensor, last_actions: List, ready_env_id: List[int],
+                                  total_env_num: int) -> Tuple[torch.Tensor, List]:
+        """Select previous observations/actions by true env id for root KV-cache lookup."""
+        if last_obs.shape[0] == total_env_num:
+            last_obs_batch = last_obs[ready_env_id]
+        else:
+            last_obs_batch = last_obs
+
+        if len(last_actions) == total_env_num:
+            last_action_batch = [last_actions[env_id] for env_id in ready_env_id]
+        else:
+            last_action_batch = list(last_actions)
+        return last_obs_batch, last_action_batch
+
+    def _update_last_infer_inputs(self, obs_attr: str, action_attr: str, data: torch.Tensor,
+                                  batch_action: List, ready_env_id: List[int], total_env_num: int) -> None:
+        """Write current observations/actions back to per-env slots without shrinking the buffers."""
+        last_obs = getattr(self, obs_attr)
+        last_actions = getattr(self, action_attr)
+        if last_obs.shape[0] != total_env_num or len(last_actions) != total_env_num:
+            last_obs = initialize_pad_batch(
+                self._cfg.model.observation_shape,
+                total_env_num,
+                self._cfg.device,
+                pad_token_id=self.pad_token_id
+            )
+            last_actions = [-1 for _ in range(total_env_num)]
+
+        for batch_idx, env_id in enumerate(ready_env_id):
+            last_obs[env_id].copy_(data[batch_idx])
+            last_actions[env_id] = batch_action[batch_idx]
+
+        setattr(self, obs_attr, last_obs)
+        setattr(self, action_attr, last_actions)
+
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -1427,12 +1472,16 @@ class UniZeroPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = temperature
         self._collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
-        if ready_env_id is None:
-            ready_env_id = np.arange(active_collect_env_num)
+        ready_env_id = self._normalize_ready_env_id(ready_env_id, active_collect_env_num)
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs_collect, self.last_batch_action_collect, data, timestep)
+            last_obs_batch, last_action_batch = self._select_last_infer_inputs(
+                self.last_batch_obs_collect, self.last_batch_action_collect, ready_env_id, self.collector_env_num
+            )
+            network_output = self._collect_model.initial_inference(
+                last_obs_batch, last_action_batch, data, timestep, ready_env_id=ready_env_id
+            )
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -1503,23 +1552,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs_collect = data
-            self.last_batch_action_collect = batch_action
+            self._update_last_infer_inputs(
+                'last_batch_obs_collect', 'last_batch_action_collect',
+                data, batch_action, ready_env_id, self.collector_env_num
+            )
 
             # This logic is a temporary workaround specific to the muzero_segment_collector.
             if active_collect_env_num < self.collector_env_num:
-                # When an environment finishes an episode ('done'), the length of `self.last_batch_obs_collect` passed back
-                # becomes smaller than the total number of collector environments.
-                # Handling this dynamic batch size is complex, as the transformer's KV cache retrieval
-                # requires a stable environment ID for correct indexing. A mismatch would cause retrieval errors.
-                #
-                # Therefore, as a simpler solution, we reset the collection state for ALL environments.
-                # By resetting `self.last_batch_action_collect` to -1 for all `self.collector_env_num` environments,
-                # we force the transformer to start its context from scratch, avoiding incorrect cache lookups.
-                logging.info('========== collect_forward ============')
-                logging.info(f'An environment has finished. Active envs: {active_collect_env_num} < Total envs: {self.collector_env_num}. Resetting all.')
-
-                self._reset_collect(reset_init_data=True)
+                logging.info(
+                    f'Partial collect batch: active envs {active_collect_env_num} < total envs '
+                    f'{self.collector_env_num}; preserving per-env KV cache slots.'
+                )
 
                 # If the sampling type is 'episode', it's unexpected for the number of active environments to drop,
                 # as this suggests an inconsistent state or a potential issue in the collection logic.
@@ -1584,11 +1627,15 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
-        if ready_env_id is None:
-            ready_env_id = np.arange(active_eval_env_num)
+        ready_env_id = self._normalize_ready_env_id(ready_env_id, active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action_eval, data, timestep)
+            last_obs_batch, last_action_batch = self._select_last_infer_inputs(
+                self.last_batch_obs_eval, self.last_batch_action_eval, ready_env_id, self.evaluator_env_num
+            )
+            network_output = self._eval_model.initial_inference(
+                last_obs_batch, last_action_batch, data, timestep, ready_env_id=ready_env_id
+            )
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward
@@ -1647,8 +1694,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs_eval = data
-            self.last_batch_action_eval = batch_action
+            self._update_last_infer_inputs(
+                'last_batch_obs_eval', 'last_batch_action_eval',
+                data, batch_action, ready_env_id, self.evaluator_env_num
+            )
 
         return output
 
@@ -1664,24 +1713,38 @@ class UniZeroPolicy(MuZeroPolicy):
               whether to clear caches.
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
-        if reset_init_data:
-            self.last_batch_obs_collect = initialize_pad_batch(
-                self._cfg.model.observation_shape,
-                self._cfg.collector_env_num,
-                self._cfg.device,
-                pad_token_id=self.pad_token_id
-            )
-            self.last_batch_action_collect = [-1 for _ in range(self._cfg.collector_env_num)]
-
-
         # We must handle both single int and list of ints for env_id.
         if env_id is not None:
             if isinstance(env_id, int):
                 env_ids_to_reset = [env_id]
             else: # Assumes it's a list
-                env_ids_to_reset = env_id
+                env_ids_to_reset = [int(eid) for eid in env_id]
+        else:
+            env_ids_to_reset = None
+
+        if reset_init_data:
+            if env_ids_to_reset is None:
+                self.last_batch_obs_collect = initialize_pad_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.collector_env_num,
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
+                )
+                self.last_batch_action_collect = [-1 for _ in range(self._cfg.collector_env_num)]
+            else:
+                reset_obs = initialize_pad_batch(
+                    self._cfg.model.observation_shape,
+                    len(env_ids_to_reset),
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
+                )
+                for idx, eid in enumerate(env_ids_to_reset):
+                    if 0 <= eid < self._cfg.collector_env_num:
+                        self.last_batch_obs_collect[eid].copy_(reset_obs[idx])
+                        self.last_batch_action_collect[eid] = -1
 
             # The key condition: `current_steps` is None only on the end-of-episode reset call from the collector.
+        if env_ids_to_reset is not None:
             if current_steps is None:
                 world_model = self._collect_model.world_model
                 for eid in env_ids_to_reset:
@@ -1730,35 +1793,44 @@ class UniZeroPolicy(MuZeroPolicy):
               whether to clear caches.
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
-        if reset_init_data:
-            if task_id is not None:
-                self.last_batch_obs_eval = initialize_pad_batch(
-                    self._cfg.model.observation_shape_list[task_id],
-                    self._cfg.evaluator_env_num,
-                    self._cfg.device,
-                    pad_token_id=self.pad_token_id
-                )
-                logging.info(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:{self.last_batch_obs_eval.shape}')
-
-            else:
-                self.last_batch_obs_eval = initialize_pad_batch(
-                    self._cfg.model.observation_shape,
-                    self._cfg.evaluator_env_num,
-                    self._cfg.device,
-                    pad_token_id=self.pad_token_id
-                )
-                logging.info(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:{self.last_batch_obs_eval.shape}')
-
-            self.last_batch_action_eval = [-1 for _ in range(self._cfg.evaluator_env_num)]
-
-        # This logic handles the crucial end-of-episode cache clearing for evaluation.
-        # The evaluator calls `_policy.reset([env_id])` when an episode is done.
         if env_id is not None:
             if isinstance(env_id, int):
                 env_ids_to_reset = [env_id]
             else: # Assumes it's a list
-                env_ids_to_reset = env_id
+                env_ids_to_reset = [int(eid) for eid in env_id]
+        else:
+            env_ids_to_reset = None
 
+        if reset_init_data:
+            if task_id is not None:
+                reset_obs = initialize_pad_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.evaluator_env_num if env_ids_to_reset is None else len(env_ids_to_reset),
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
+                )
+
+            else:
+                reset_obs = initialize_pad_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num if env_ids_to_reset is None else len(env_ids_to_reset),
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
+                )
+
+            if env_ids_to_reset is None:
+                self.last_batch_obs_eval = reset_obs
+                self.last_batch_action_eval = [-1 for _ in range(self._cfg.evaluator_env_num)]
+            else:
+                for idx, eid in enumerate(env_ids_to_reset):
+                    if 0 <= eid < self._cfg.evaluator_env_num:
+                        self.last_batch_obs_eval[eid].copy_(reset_obs[idx])
+                        self.last_batch_action_eval[eid] = -1
+            logging.info(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:{self.last_batch_obs_eval.shape}')
+
+        # This logic handles the crucial end-of-episode cache clearing for evaluation.
+        # The evaluator calls `_policy.reset([env_id])` when an episode is done.
+        if env_ids_to_reset is not None:
             # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
             if current_steps is None:
                 world_model = self._eval_model.world_model

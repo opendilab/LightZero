@@ -393,8 +393,9 @@ class UniZeroModel(nn.Module):
         logging.info(f'{"TOTAL":<30} {total_params:>15,} {total_trainable:>15,} {"100.0%":>15}')
         logging.info(f'{"=" * 80}\n')
         
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
-                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None,
+                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0,
+                          ready_env_id: Optional[list] = None) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of the UniZero model, which is the first step of the UniZero model.
@@ -422,7 +423,8 @@ class UniZeroModel(nn.Module):
         obs_act_dict = {
             'obs': obs_batch,
             'action': action_batch,
-            'current_obs': current_obs_batch
+            'current_obs': current_obs_batch,
+            'ready_env_id': ready_env_id,
         }
         
         # Perform initial inference using the world model
