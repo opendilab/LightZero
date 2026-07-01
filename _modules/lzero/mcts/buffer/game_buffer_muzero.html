@@ -168,6 +168,18 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">value_support</span> <span class="o">=</span> <span class="n">DiscreteSupport</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">value_support_range</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">reward_support</span> <span class="o">=</span> <span class="n">DiscreteSupport</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">reward_support_range</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="MuZeroGameBuffer._assign_target_policy_for_legal_actions"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._assign_target_policy_for_legal_actions">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_assign_target_policy_for_legal_actions</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">policy_tmp</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">policy</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Assign visit-count policy values into the target policy vector.</span>
+
+<span class="sd">        Non-sampled algorithms use a full action-space policy vector, so each legal action is the destination index.</span>
+<span class="sd">        Sampled algorithms override this method because their target policy vector is indexed by sampled-action slot.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">legal_action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">):</span>
+            <span class="n">policy_tmp</span><span class="p">[</span><span class="n">legal_action</span><span class="p">]</span> <span class="o">=</span> <span class="n">policy</span><span class="p">[</span><span class="n">index</span><span class="p">]</span></div>
+
 <div class="viewcode-block" id="MuZeroGameBuffer.reset_runtime_metrics"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reset_runtime_metrics">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset_runtime_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
@@ -797,8 +809,9 @@
                                 <span class="c1"># to make sure target_policies have the same dimension</span>
                                 <span class="n">sum_visits</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
                                 <span class="n">policy</span> <span class="o">=</span> <span class="p">[</span><span class="n">visit_count</span> <span class="o">/</span> <span class="n">sum_visits</span> <span class="k">for</span> <span class="n">visit_count</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">]</span>
-                                <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">legal_action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">roots_legal_actions_list</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]):</span>
-                                    <span class="n">policy_tmp</span><span class="p">[</span><span class="n">legal_action</span><span class="p">]</span> <span class="o">=</span> <span class="n">policy</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">_assign_target_policy_for_legal_actions</span><span class="p">(</span>
+                                    <span class="n">policy_tmp</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">roots_legal_actions_list</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]</span>
+                                <span class="p">)</span>
                                 <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy_tmp</span><span class="p">)</span>
 
                     <span class="n">policy_index</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -870,9 +883,10 @@
                         <span class="k">else</span><span class="p">:</span>
                             <span class="c1"># for board games that have two players or envs that have varied action space.</span>
                             <span class="n">policy_tmp</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">policy_shape</span><span class="p">)]</span>
-                            <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">legal_action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]):</span>
-                                <span class="c1"># only the action in ``legal_action`` the policy logits is nonzero</span>
-                                <span class="n">policy_tmp</span><span class="p">[</span><span class="n">legal_action</span><span class="p">]</span> <span class="o">=</span> <span class="n">distributions</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                            <span class="c1"># only the action in ``legal_action`` the policy logits is nonzero</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_assign_target_policy_for_legal_actions</span><span class="p">(</span>
+                                <span class="n">policy_tmp</span><span class="p">,</span> <span class="n">distributions</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]</span>
+                            <span class="p">)</span>
                             <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy_tmp</span><span class="p">)</span>
                     <span class="k">else</span><span class="p">:</span>
                         <span class="c1"># NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0</span>
