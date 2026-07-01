@@ -48,6 +48,15 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
+    def _assign_target_policy_for_legal_actions(
+            self, policy_tmp: List[float], policy: List[float], legal_actions: List[int]
+    ) -> None:
+        """
+        Sampled policies are stored in sampled-action order, not in the full environment action-space index.
+        """
+        for index, policy_value in enumerate(policy):
+            policy_tmp[index] = policy_value
+
     def sample(self, batch_size: int, policy: Any) -> List[Any]:
         """
         Overview:
@@ -555,8 +564,9 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                                 # to make sure target_policies have the same dimension
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
-                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                    policy_tmp[legal_action] = policy[index]
+                                self._assign_target_policy_for_legal_actions(
+                                    policy_tmp, policy, roots_legal_actions_list[policy_index]
+                                )
                                 target_policies.append(policy_tmp)
 
                     policy_index += 1

@@ -75,6 +75,18 @@ class MuZeroGameBuffer(GameBuffer):
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
+    def _assign_target_policy_for_legal_actions(
+            self, policy_tmp: List[float], policy: List[float], legal_actions: List[int]
+    ) -> None:
+        """
+        Assign visit-count policy values into the target policy vector.
+
+        Non-sampled algorithms use a full action-space policy vector, so each legal action is the destination index.
+        Sampled algorithms override this method because their target policy vector is indexed by sampled-action slot.
+        """
+        for index, legal_action in enumerate(legal_actions):
+            policy_tmp[legal_action] = policy[index]
+
     def reset_runtime_metrics(self):
         """
         Overview:
@@ -704,8 +716,9 @@ class MuZeroGameBuffer(GameBuffer):
                                 # to make sure target_policies have the same dimension
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
-                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                    policy_tmp[legal_action] = policy[index]
+                                self._assign_target_policy_for_legal_actions(
+                                    policy_tmp, policy, roots_legal_actions_list[policy_index]
+                                )
                                 target_policies.append(policy_tmp)
 
                     policy_index += 1
@@ -777,9 +790,10 @@ class MuZeroGameBuffer(GameBuffer):
                         else:
                             # for board games that have two players or envs that have varied action space.
                             policy_tmp = [0 for _ in range(policy_shape)]
-                            for index, legal_action in enumerate(legal_actions[policy_index]):
-                                # only the action in ``legal_action`` the policy logits is nonzero
-                                policy_tmp[legal_action] = distributions[index]
+                            # only the action in ``legal_action`` the policy logits is nonzero
+                            self._assign_target_policy_for_legal_actions(
+                                policy_tmp, distributions, legal_actions[policy_index]
+                            )
                             target_policies.append(policy_tmp)
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
