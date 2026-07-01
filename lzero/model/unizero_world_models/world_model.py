@@ -2646,7 +2646,7 @@ class WorldModel(nn.Module):
         if self.use_new_cache_manager:
             # Use new KV cache manager's clear method
             self.kv_cache_manager.clear_all()
-            print(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
+            logging.debug(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
 
             # Optionally print stats before clearing
             if hasattr(self.kv_cache_manager, 'get_stats_summary'):
@@ -2659,7 +2659,7 @@ class WorldModel(nn.Module):
                 kv_cache_dict_env.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
-            print(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
+            logging.debug(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

@@ -268,6 +268,10 @@ class UniZeroPolicy(MuZeroPolicy):
         use_adaptive_entropy_weight=True,
         # (float) Learning rate for adaptive alpha optimizer
         adaptive_entropy_alpha_lr=1e-3,
+        # (float) Lower/upper bounds for adaptive entropy alpha. The lower bound must stay well below
+        # typical Atari entropy weights so alpha can keep decaying when the target entropy anneals.
+        adaptive_entropy_alpha_min=1e-4,
+        adaptive_entropy_alpha_max=10.0,
         # (float) Target entropy ratio at the start of training (higher = more exploration)
         target_entropy_start_ratio=0.98,
         # (float) Target entropy ratio at the end of training (lower = more exploitation)
@@ -720,6 +724,12 @@ class UniZeroPolicy(MuZeroPolicy):
         self.target_entropy_start_ratio = self._cfg.target_entropy_start_ratio
         self.target_entropy_end_ratio = self._cfg.target_entropy_end_ratio
         self.target_entropy_decay_steps = self._cfg.target_entropy_decay_steps  # e.g., complete annealing within 200k steps (2M envsteps)
+        self.adaptive_entropy_alpha_min = float(getattr(self._cfg, 'adaptive_entropy_alpha_min', 1e-4))
+        self.adaptive_entropy_alpha_max = float(getattr(self._cfg, 'adaptive_entropy_alpha_max', 10.0))
+        if self.adaptive_entropy_alpha_min <= 0 or self.adaptive_entropy_alpha_max <= 0:
+            raise ValueError("adaptive entropy alpha bounds must be positive")
+        if self.adaptive_entropy_alpha_min > self.adaptive_entropy_alpha_max:
+            raise ValueError("adaptive_entropy_alpha_min must be <= adaptive_entropy_alpha_max")
 
         if self.use_adaptive_entropy_weight:
             # 1. Set target entropy. For discrete action spaces, a common heuristic is the negative logarithm
@@ -741,6 +751,10 @@ class UniZeroPolicy(MuZeroPolicy):
             logging.info(">>> Target Entropy Regularization (Adaptive Alpha) Enabled <<<")
             logging.info(f"    Target Entropy: {self.target_entropy:.4f}")
             logging.info(f"    Alpha Optimizer Learning Rate: {alpha_lr:.2e}")
+            logging.info(
+                f"    Alpha Bounds: [{self.adaptive_entropy_alpha_min:.2e}, "
+                f"{self.adaptive_entropy_alpha_max:.2e}]"
+            )
             logging.info("="*20)
         # ===================== END: Target Entropy Regularization Initialization =====================
 
@@ -1070,10 +1084,12 @@ class UniZeroPolicy(MuZeroPolicy):
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
-            # [Optimization suggestion] Add log_alpha clipping as a safety measure
+            # Keep alpha numerically bounded without preventing late-stage entropy annealing.
             with torch.no_grad():
-                # Limit alpha to a range, e.g., [1e-4, 10.0]
-                self.log_alpha.clamp_(np.log(5e-2), np.log(10.0))
+                self.log_alpha.clamp_(
+                    np.log(self.adaptive_entropy_alpha_min),
+                    np.log(self.adaptive_entropy_alpha_max)
+                )
 
             # Use current updated alpha (with gradient flow truncated)
             current_alpha = self.log_alpha.exp().detach()
@@ -1081,24 +1097,14 @@ class UniZeroPolicy(MuZeroPolicy):
             # Recalculate weighted policy loss and total loss
             # Note: policy_entropy here is already an average value of a batch
             weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
-            # Rebuild total loss (not using losses.loss_total)
-            # Ensure the weights here are consistent with the calculation in LossWithIntermediateLosses class
-            self.obs_loss_weight = 2
-            self.value_loss_weight = 0.5
-            self.reward_loss_weight = 1.
-            self.policy_loss_weight = 1.
-            self.ends_loss_weight = 0.
-
-            self.latent_recon_loss_weight = self._cfg.model.world_model_cfg.latent_recon_loss_weight
-            self.perceptual_loss_weight = self._cfg.model.world_model_cfg.perceptual_loss_weight
-
+            # Rebuild total loss with the same weights used by LossWithIntermediateLosses.
             total_loss = (
-                self.reward_loss_weight * reward_loss +
-                self.value_loss_weight * value_loss +
-                self.policy_loss_weight * weighted_policy_loss +
-                self.obs_loss_weight * obs_loss +
-                self.latent_recon_loss_weight * latent_recon_loss +
-                self.perceptual_loss_weight * perceptual_loss
+                losses.reward_loss_weight * reward_loss +
+                losses.value_loss_weight * value_loss +
+                losses.policy_loss_weight * weighted_policy_loss +
+                losses.obs_loss_weight * obs_loss +
+                losses.latent_recon_loss_weight * latent_recon_loss +
+                losses.perceptual_loss_weight * perceptual_loss
             )
             weighted_total_loss = (weights * total_loss).mean()
         # ===================== END: Target Entropy Regularization Update Logic =====================
@@ -1767,7 +1773,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
-            logging.info(f'clear_interval: {clear_interval}')
+            logging.debug(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
@@ -1776,10 +1782,10 @@ class UniZeroPolicy(MuZeroPolicy):
             world_model.clear_caches()
             # ======================================================================================
 
-            # Free up GPU memory
-            torch.cuda.empty_cache()
+            if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
-            logging.info(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
+            logging.debug(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
@@ -1856,14 +1862,15 @@ class UniZeroPolicy(MuZeroPolicy):
                 # ======================================================================================
 
                 world_model.keys_values_wm_list.clear()
-                torch.cuda.empty_cache()
+                if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 return
 
         # Determine the clear interval based on the environment's sample type
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps is not None and current_steps % clear_interval == 0:
-            logging.info(f'clear_interval: {clear_interval}')
+            logging.debug(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
@@ -1872,11 +1879,11 @@ class UniZeroPolicy(MuZeroPolicy):
             world_model.clear_caches()
             # ======================================================================================
 
-            # Free up GPU memory
-            torch.cuda.empty_cache()
+            if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
-            logging.info('evaluator: eval_model clear()')
-            logging.info(f'eps_steps_lst[{env_id}]: {current_steps}')
+            logging.debug('evaluator: eval_model clear()')
+            logging.debug(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """
