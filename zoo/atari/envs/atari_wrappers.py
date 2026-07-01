@@ -15,6 +15,16 @@ from easydict import EasyDict
 from gymnasium.wrappers import RecordVideo
 
 
+def _strip_gymnasium_reset_info(observation):
+    while isinstance(observation, tuple) and len(observation) == 2:
+        first, second = observation
+        if isinstance(second, dict) or hasattr(first, 'shape'):
+            observation = first
+        else:
+            break
+    return observation
+
+
 # only for reference now
 # Note: If these functions are to be used with new environments, they also need similar gym/gymnasium compatibility modifications.
 def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):
@@ -203,10 +213,14 @@ class WarpFrame(gym.ObservationWrapper):
         assert original_space.dtype == np.uint8 and len(original_space.shape) == 3
 
     def observation(self, obs):
+        obs = _strip_gymnasium_reset_info(obs)
         if self._key is None:
             frame = obs
         else:
             frame = obs[self._key]
+        frame = _strip_gymnasium_reset_info(frame)
+        if not isinstance(frame, np.ndarray):
+            frame = np.asarray(frame)
 
         if self._grayscale:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
@@ -246,7 +260,7 @@ class JpegWrapper(gym.Wrapper):
         return observation, reward, done, info
 
     def reset(self, **kwargs):
-        observation = self.env.reset(**kwargs)
+        observation = _strip_gymnasium_reset_info(self.env.reset(**kwargs))
 
         if self.transform2string:
             observation = jpeg_data_compressor(observation)
