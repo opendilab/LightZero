@@ -67,3 +67,31 @@ def test_ctree_sampled_efficientzero_discrete_sampling_respects_legal_actions():
     assert len(sampled_actions[1]) == 4
     assert len(distributions[1]) == 4
     assert [int(action[0]) for action in sampled_actions[1]] == [2, 2, 2, 2]
+
+
+@pytest.mark.unittest
+def test_ctree_sampled_muzero_discrete_sampling_respects_legal_actions():
+    smz_tree = pytest.importorskip("lzero.mcts.ctree.ctree_sampled_muzero.smz_tree")
+
+    roots = smz_tree.Roots(2, [[1, 4], [2]], 5, 4, False)
+    roots.prepare(
+        0.25,
+        [[0.25, 0.25, 0.25, 0.25], [0.25, 0.25, 0.25, 0.25]],
+        [0.0, 0.0],
+        [
+            [100.0, -10.0, 90.0, 80.0, 10.0],
+            [0.0, 1.0, 2.0, 3.0, 4.0],
+        ],
+        [-1, -1],
+    )
+
+    sampled_actions = roots.get_sampled_actions()
+    distributions = roots.get_distributions()
+
+    assert len(sampled_actions[0]) == 2
+    assert len(distributions[0]) == 2
+    assert set(int(action[0]) for action in sampled_actions[0]) == {1, 4}
+
+    assert len(sampled_actions[1]) == 1
+    assert len(distributions[1]) == 1
+    assert [int(action[0]) for action in sampled_actions[1]] == [2]
