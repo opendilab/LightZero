@@ -212,6 +212,13 @@ cd LightZero
 python3 -u zoo/atari/config/atari_muzero_segment_config.py
 ```
 
+使用如下代码在 [Pong](https://gymnasium.farama.org/environments/atari/pong/) 环境上训练实验性的 Ray 异步 MuZero 智能体：
+
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_muzero_segment_async_config.py
+```
+
 使用如下代码在 [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe) 环境上快速训练一个 MuZero 智能体：
 
 ```bash
@@ -225,6 +232,10 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 cd LightZero
 python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
+
+### 实验性 MuZero 异步训练
+
+Atari MuZero segment 的异步 pipeline 目前基于 Ray 调度实现：collector actor 和 evaluator actor 异步运行，learner 与 replay buffer 仍保留在 driver 进程中，因此 MuZero 更新逻辑保持不变。以 Pong 上 500k 同步 MuZero 设置作为初步对比，baseline 达到 491k envsteps，速度为 22.1 envsteps/s，eval reward 为 -15.7；同一实验设置下 async 达到 939k envsteps，速度为 39.9 envsteps/s，eval reward 为 -14.3。该实验中端到端吞吐约提升 1.8x，replay ratio 基本可比；结果仍属于初步观察，并依赖具体硬件环境。
 
 ## 📚 文档
 

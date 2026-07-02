@@ -232,6 +232,13 @@ cd LightZero
 python3 -u zoo/atari/config/atari_muzero_segment_config.py
 ```
 
+Train an experimental Ray async MuZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
+
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_muzero_segment_async_config.py
+```
+
 Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
 
 ```bash
@@ -245,6 +252,10 @@ Train a UniZero agent to play [Pong](https://gymnasium.farama.org/environments/a
 cd LightZero
 python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
+
+### Experimental Async MuZero Training
+
+The async Atari MuZero segment pipeline is currently implemented as a Ray-based scheduler: collector actors and the evaluator actor run asynchronously, while the learner and replay buffer remain in the driver process so the MuZero update logic is unchanged. In a preliminary Pong comparison with the 500k synchronous MuZero setup, the baseline reached 491k envsteps at 22.1 envsteps/s with eval reward -15.7; the async run reached 939k envsteps at 39.9 envsteps/s with eval reward -14.3 in the same experiment family. This indicates about 1.8x end-to-end throughput in that run with comparable replay ratios; results are preliminary and hardware-dependent.
 
 ## 📚 Documentation
 
