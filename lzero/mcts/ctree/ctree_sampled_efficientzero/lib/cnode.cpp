@@ -285,52 +285,52 @@ namespace tree
         else
         {
             // discrete action space for sampled algo..
-
-            //========================================================
-            // python code
-            //========================================================
-            // if self.legal_actions is not None:
-            //     # fisrt use the self.legal_actions to exclude the illegal actions
-            //     policy_tmp = [0. for _ in range(self.action_space_size)]
-            //     for index, legal_action in enumerate(self.legal_actions):
-            //         policy_tmp[legal_action] = policy_logits[index]
-            //     policy_logits = policy_tmp
-            // # then empty the self.legal_actions
-            // self.legal_actions = []
-            // then empty the self.legal_actions
-            //            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
-            //            sampled_actions = torch.multinomial(prob, self.num_of_sampled_actions, replacement=False)
-
-            //========================================================
-            // TODO(pu): legal actions
-            //========================================================
-            // std::vector<float> policy_tmp;
-            // for (int i = 0; i < this->action_space_size; ++i)
-            // {
-            //     policy_tmp.push_back(0.);
-            // }
-            // for (int i = 0; i < this->legal_actions.size(); ++i)
-            // {
-            //     policy_tmp[this->legal_actions[i].value] = policy_logits[i];
-            // }
-            // for (int i = 0; i < this->action_space_size; ++i)
-            // {
-            //     policy_logits[i] = policy_tmp[i];
-            // }
-            // std::cout << "position 3" << std::endl;
-
-            // python code: legal_actions = []
-            std::vector<CAction> legal_actions;
-
-            // python code: probs = softmax(policy_logits)
-            float logits_exp_sum = 0;
-            for (int i = 0; i < policy_logits.size(); ++i)
+            std::vector<int> candidate_actions;
+            if (this->legal_actions.empty())
             {
-                logits_exp_sum += exp(policy_logits[i]);
+                for (int i = 0; i < this->action_space_size; ++i)
+                {
+                    candidate_actions.push_back(i);
+                }
             }
-            for (int i = 0; i < policy_logits.size(); ++i)
+            else
             {
-                probs.push_back(exp(policy_logits[i]) / (logits_exp_sum + 1e-6));
+                for (int i = 0; i < this->legal_actions.size(); ++i)
+                {
+                    candidate_actions.push_back(int(this->legal_actions[i].value[0]));
+                }
+            }
+
+            assert(candidate_actions.size() > 0);
+            assert(policy_logits.size() == this->action_space_size || policy_logits.size() == candidate_actions.size());
+
+            std::vector<float> candidate_logits;
+            for (int i = 0; i < candidate_actions.size(); ++i)
+            {
+                int action = candidate_actions[i];
+                if (policy_logits.size() == this->action_space_size)
+                {
+                    candidate_logits.push_back(policy_logits[action]);
+                }
+                else
+                {
+                    candidate_logits.push_back(policy_logits[i]);
+                }
+            }
+
+            float logits_exp_sum = 0;
+            float max_logit = candidate_logits[0];
+            for (int i = 1; i < candidate_logits.size(); ++i)
+            {
+                max_logit = std::max(max_logit, candidate_logits[i]);
+            }
+            for (int i = 0; i < candidate_logits.size(); ++i)
+            {
+                logits_exp_sum += exp(candidate_logits[i] - max_logit);
+            }
+            for (int i = 0; i < candidate_logits.size(); ++i)
+            {
+                probs.push_back(exp(candidate_logits[i] - max_logit) / (logits_exp_sum + 1e-6));
             }
 
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -392,10 +392,10 @@ namespace tree
 
             std::sort(disc_action_with_probs.begin(), disc_action_with_probs.end(), cmp);
 
-            // take the fist ``num_of_sampled_actions`` actions
-            for (int k = 0; k < num_of_sampled_actions; ++k)
+            int num_sampled = std::min(this->num_of_sampled_actions, int(candidate_actions.size()));
+            for (int k = 0; k < num_sampled; ++k)
             {
-                sampled_actions.push_back(disc_action_with_probs[k].first);
+                sampled_actions.push_back(candidate_actions[disc_action_with_probs[k].first]);
                 // disc_action_with_probs[k].second is disturbed_probs
                 // sampled_actions_probs.push_back(disc_action_with_probs[k].second);
                 sampled_actions_probs.push_back(probs[disc_action_with_probs[k].first]);
@@ -419,18 +419,23 @@ namespace tree
             disc_action_with_probs.clear(); // Empty the collection to prepare for the next sampling.
         }
 
-        float prior;
-        for (int i = 0; i < this->num_of_sampled_actions; ++i)
-        {
+        this->legal_actions.clear();
+        this->sampled_actions.clear();
 
-            if (this->continuous_action_space == true)
+        if (this->continuous_action_space == true)
+        {
+            for (int i = 0; i < this->num_of_sampled_actions; ++i)
             {
                 CAction action = CAction(sampled_actions_after_tanh[i], 0);
                 std::vector<CAction> legal_actions;
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_log_probs_after_tanh[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
+                this->sampled_actions.push_back(action);
             }
-            else
+        }
+        else
+        {
+            for (int i = 0; i < sampled_actions.size(); ++i)
             {
                 std::vector<float> sampled_action_tmp;
                 for (size_t iter = 0; iter < 1; iter++)
@@ -441,6 +446,11 @@ namespace tree
                 std::vector<CAction> legal_actions;
                 this->children[action.get_combined_hash()] = CNode(sampled_actions_probs[i], legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space); // only for muzero/efficient zero, not support alphazero
                 this->legal_actions.push_back(action);
+                this->sampled_actions.push_back(action);
+            }
+            while (!this->sampled_actions.empty() && this->sampled_actions.size() < this->num_of_sampled_actions)
+            {
+                this->sampled_actions.push_back(this->sampled_actions.back());
             }
         }
         
@@ -461,7 +471,8 @@ namespace tree
             - noises: the vector of noises added to each child node.
         */
         float noise, prior;
-        for (int i = 0; i < this->num_of_sampled_actions; ++i)
+        int noise_num = std::min(int(this->legal_actions.size()), int(noises.size()));
+        for (int i = 0; i < noise_num; ++i)
         {
 
             noise = noises[i];
@@ -596,6 +607,10 @@ namespace tree
                 CNode *child = this->get_child(a);
                 distribution.push_back(child->visit_count);
             }
+            while (distribution.size() < this->sampled_actions.size())
+            {
+                distribution.push_back(0);
+            }
         }
         return distribution;
     }
@@ -644,13 +659,13 @@ namespace tree
 
         for (int i = 0; i < this->root_num; ++i)
         {
-            if (this->continuous_action_space == true and this->legal_actions_list[0][0] == -1)
+            if (this->continuous_action_space == true)
             {
                 // continous action space
                 std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
             }
-            else if (this->continuous_action_space == false or this->legal_actions_list[0][0] == -1)
+            else if (this->legal_actions_list.size() <= i || this->legal_actions_list[i].empty() || this->legal_actions_list[i][0] == -1)
             {
                 // sampled
                 // discrete action space without action mask
@@ -662,9 +677,11 @@ namespace tree
             {
                 // TODO(pu): discrete action space
                 std::vector<CAction> c_legal_actions;
-                for (int i = 0; i < this->legal_actions_list.size(); ++i)
+                for (int j = 0; j < this->legal_actions_list[i].size(); ++j)
                 {
-                    CAction c_legal_action = CAction(legal_actions_list[i], 0);
+                    std::vector<float> legal_action;
+                    legal_action.push_back(this->legal_actions_list[i][j]);
+                    CAction c_legal_action = CAction(legal_action, 0);
                     c_legal_actions.push_back(c_legal_action);
                 }
                 this->roots.push_back(CNode(0, c_legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
@@ -773,10 +790,10 @@ namespace tree
         for (int i = 0; i < this->root_num; ++i)
         {
             std::vector<CAction> sampled_action;
-            sampled_action = this->roots[i].legal_actions;
+            sampled_action = this->roots[i].sampled_actions;
             std::vector<std::vector<float> > python_sampled_action;
 
-            for (int j = 0; j < this->roots[i].legal_actions.size(); ++j)
+            for (int j = 0; j < sampled_action.size(); ++j)
             {
                 python_sampled_action.push_back(sampled_action[j].value);
             }
