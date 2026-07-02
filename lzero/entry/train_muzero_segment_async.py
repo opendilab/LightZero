@@ -2,6 +2,7 @@ import asyncio
 import copy
 import logging
 import os
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Deque, Dict, Optional, Tuple
@@ -61,12 +62,72 @@ def _select_game_buffer(policy_type: str):
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
     elif policy_type == 'stochastic_muzero':
         from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
+    elif policy_type == 'unizero':
+        from lzero.mcts import UniZeroGameBuffer as GameBuffer
+    elif policy_type == 'sampled_unizero':
+        from lzero.mcts import SampledUniZeroGameBuffer as GameBuffer
     else:
         raise AssertionError(
-            "train_muzero_segment_async only supports muzero-family segment policies, "
+            "train_muzero_segment_async only supports MuZero/UniZero segment policies, "
             f"got {policy_type!r}"
         )
     return GameBuffer
+
+
+def _is_unizero_policy(policy_type: str) -> bool:
+    return policy_type in ['unizero', 'sampled_unizero']
+
+
+def _configure_policy_device(cfg: EasyDict, policy_type: str) -> None:
+    import torch
+
+    use_cuda = bool(_cfg_get(cfg.policy, 'cuda', True)) and torch.cuda.is_available()
+    device = 'cuda' if use_cuda else 'cpu'
+    cfg.policy.device = device
+    cfg.policy.cuda = use_cuda
+    if _is_unizero_policy(policy_type):
+        world_model_cfg = getattr(getattr(cfg.policy, 'model', None), 'world_model_cfg', None)
+        if world_model_cfg is not None:
+            world_model_cfg.device = device
+
+
+def _has_enough_replay_data(cfg: EasyDict, replay_buffer: Any, batch_size: int) -> bool:
+    if _cfg_get(cfg.policy, 'sample_type', 'transition') == 'episode':
+        return replay_buffer.get_num_of_game_segments() > batch_size
+    return replay_buffer.get_num_of_transitions() > batch_size
+
+
+def _can_start_training(cfg: EasyDict, collector_envstep: int, replay_buffer: Any) -> bool:
+    train_start_after_envsteps = int(_cfg_get(cfg.policy, 'train_start_after_envsteps', 0))
+    return (
+        collector_envstep > train_start_after_envsteps and
+        _has_enough_replay_data(cfg, replay_buffer, int(cfg.policy.batch_size))
+    )
+
+
+def _reanalyze_interval(update_per_collect: int, buffer_reanalyze_freq: float) -> Optional[int]:
+    if buffer_reanalyze_freq <= 0:
+        return None
+    if buffer_reanalyze_freq >= 1:
+        return max(1, int(update_per_collect // buffer_reanalyze_freq))
+    return None
+
+
+def _reanalyze_period(buffer_reanalyze_freq: float) -> Optional[int]:
+    if buffer_reanalyze_freq <= 0 or buffer_reanalyze_freq >= 1:
+        return None
+    return max(1, int(1 // buffer_reanalyze_freq))
+
+
+def _prepare_train_data_for_policy(train_data: Any, policy_type: str, train_iter: int) -> Any:
+    if _is_unizero_policy(policy_type):
+        train_data.append(train_iter)
+    return train_data
+
+
+def _after_train_epoch(policy: Any, policy_type: str) -> None:
+    if _is_unizero_policy(policy_type) and hasattr(policy, 'recompute_pos_emb_diff_and_clear_cache'):
+        policy.recompute_pos_emb_diff_and_clear_cache()
 
 
 def _to_cpu_tree(obj: Any) -> Any:
@@ -124,6 +185,30 @@ def _should_eval(train_iter: int, last_eval_iter: int, eval_freq: int) -> bool:
     return True
 
 
+def _should_publish_model_state(
+        current_version: int,
+        last_published_version: int,
+        has_published_state: bool,
+        weight_sync_interval: int,
+        max_policy_lag: Optional[int],
+        force: bool = False,
+) -> bool:
+    if force or not has_published_state:
+        return True
+
+    weight_sync_interval = max(int(weight_sync_interval), 1)
+    if (current_version - last_published_version) >= weight_sync_interval:
+        return True
+
+    if max_policy_lag is None:
+        return False
+    max_policy_lag = int(max_policy_lag)
+    if max_policy_lag < 0:
+        return False
+
+    return (current_version - last_published_version) > max_policy_lag
+
+
 def _save_checkpoint_snapshot(
         exp_name: str,
         state_dict: Dict[str, Any],
@@ -162,6 +247,7 @@ def _get_async_cfg(cfg: EasyDict) -> EasyDict:
     set_default('max_train_chunk_steps', 4)
     set_default('weight_sync_interval', 1)
     set_default('max_policy_lag', 0)
+    set_default('eval_at_start', False)
     set_default('collector_num_cpus', 1)
     set_default('evaluator_num_cpus', 1)
     set_default('collector_num_gpus', 0)
@@ -190,6 +276,7 @@ async def _run_async_driver(
     from lzero.entry.async_muzero.actors import MuZeroSegmentCollectorActor, MuZeroSegmentEvaluatorActor
 
     async_cfg = _get_async_cfg(cfg)
+    policy_type = create_cfg.policy.type
     collector_cls = MuZeroSegmentCollectorActor.options(
         num_cpus=async_cfg.collector_num_cpus,
         num_gpus=async_cfg.collector_num_gpus,
@@ -209,32 +296,39 @@ async def _run_async_driver(
     pending_eval: Dict[asyncio.Task, Dict[str, Any]] = {}
     train_budgets: Deque[_TrainEpochBudget] = deque()
 
+    driver_start_time = time.time()
     collector_envstep = 0
     train_epoch = 0
     buffer_reanalyze_count = 0
-    last_eval_iter = 0
+    last_eval_iter = -int(cfg.policy.eval_freq) if async_cfg.eval_at_start else 0
+    next_evaluator_actor = 0
     best_reward = float('-inf')
     stop_requested = False
     last_published_version = -1
     last_published_model_state: Optional[Dict[str, Any]] = None
+    last_published_model_ref: Optional[Any] = None
     last_buffer_stats_iter: Optional[int] = None
     buffer_stats_warning_keys: set = set()
 
-    def get_published_model_state(force: bool = False) -> Tuple[int, Dict[str, Any]]:
-        nonlocal last_published_version, last_published_model_state
+    def get_published_model_state(force: bool = False) -> Tuple[int, Any]:
+        nonlocal last_published_version, last_published_model_state, last_published_model_ref
         current_version = learner.train_iter
-        should_publish = (
-            force or last_published_model_state is None or
-            (current_version - last_published_version) >= async_cfg.weight_sync_interval
+        should_publish = _should_publish_model_state(
+            current_version=current_version,
+            last_published_version=last_published_version,
+            has_published_state=last_published_model_state is not None,
+            weight_sync_interval=async_cfg.weight_sync_interval,
+            max_policy_lag=async_cfg.max_policy_lag,
+            force=force,
         )
         if should_publish:
             last_published_model_state = _model_state_for_remote(policy)
+            last_published_model_ref = ray_module.put(last_published_model_state)
             last_published_version = current_version
-        return last_published_version, last_published_model_state
+        return last_published_version, last_published_model_ref
 
     def launch_collect(actor: Any, actor_id: int) -> None:
-        version, model_state = get_published_model_state()
-        model_state_ref = ray_module.put(model_state)
+        version, model_state_ref = get_published_model_state()
         kwargs = _collect_kwargs(cfg.policy, learner.train_iter, collector_envstep)
         ref = actor.collect.remote(
             model_state_ref,
@@ -267,7 +361,10 @@ async def _run_async_driver(
     def maybe_launch_collects() -> None:
         if stop_requested or collector_envstep >= max_env_step:
             return
-        if len(train_budgets) >= async_cfg.max_train_budget_queue_size:
+        if (
+                len(train_budgets) >= async_cfg.max_train_budget_queue_size and
+                _can_start_training(cfg, collector_envstep, replay_buffer)
+        ):
             return
         max_inflight = min(async_cfg.max_collect_inflight, len(collector_actors))
         busy_actor_ids = {meta['actor_id'] for meta in pending_collect.values()}
@@ -279,13 +376,15 @@ async def _run_async_driver(
             launch_collect(actor, actor_id)
 
     def maybe_launch_eval() -> None:
+        nonlocal next_evaluator_actor
         if stop_requested or not evaluator_actors:
             return
         if len(pending_eval) >= async_cfg.max_eval_inflight:
             return
         if not _should_eval(learner.train_iter, last_eval_iter, cfg.policy.eval_freq):
             return
-        actor_id = len(pending_eval) % len(evaluator_actors)
+        actor_id = next_evaluator_actor % len(evaluator_actors)
+        next_evaluator_actor += 1
         launch_eval(evaluator_actors[actor_id], actor_id)
 
     def process_collect_result(result: Dict[str, Any]) -> None:
@@ -297,16 +396,17 @@ async def _run_async_driver(
         replay_buffer.remove_oldest_data_to_fit()
 
         reanalyze_batch_size = cfg.policy.reanalyze_batch_size
-        if cfg.policy.buffer_reanalyze_freq >= 1:
-            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+        buffer_reanalyze_freq = float(cfg.policy.buffer_reanalyze_freq)
+        if buffer_reanalyze_freq >= 1:
+            reanalyze_interval = _reanalyze_interval(update_per_collect, buffer_reanalyze_freq)
         else:
             reanalyze_interval = None
-            reanalyze_period = int(1 // cfg.policy.buffer_reanalyze_freq)
+            reanalyze_period = _reanalyze_period(buffer_reanalyze_freq)
             enough_for_reanalyze = (
                 replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps >
                 int(reanalyze_batch_size / cfg.policy.reanalyze_partition)
             )
-            if train_epoch % reanalyze_period == 0 and enough_for_reanalyze:
+            if reanalyze_period is not None and train_epoch % reanalyze_period == 0 and enough_for_reanalyze:
                 replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                 buffer_reanalyze_count += 1
                 logging.info(f'[AsyncMuZero] Buffer reanalyze count: {buffer_reanalyze_count}')
@@ -314,15 +414,19 @@ async def _run_async_driver(
         train_budgets.append(
             _TrainEpochBudget(update_per_collect=update_per_collect, reanalyze_interval=reanalyze_interval)
         )
+        elapsed = max(time.time() - driver_start_time, 1e-6)
+        policy_lag = learner.train_iter - int(result['policy_version'])
         logging.info(
             '[AsyncMuZero] collect done actor=%s version=%s envstep_delta=%s global_envstep=%s '
-            'update_budget=%s duration=%.3fs',
+            'update_budget=%s duration=%.3fs driver_envstep_per_sec=%.2f policy_lag=%s',
             result['actor_id'],
             result['policy_version'],
             result['envstep_delta'],
             collector_envstep,
             update_per_collect,
             result['duration'],
+            collector_envstep / elapsed,
+            policy_lag,
         )
 
     def train_one_step() -> bool:
@@ -331,22 +435,28 @@ async def _run_async_driver(
             return False
         if learner.train_iter >= max_train_iter:
             return False
-        if replay_buffer.get_num_of_transitions() <= cfg.policy.batch_size:
+        if not _can_start_training(cfg, collector_envstep, replay_buffer):
             return False
 
         budget = train_budgets[0]
         reanalyze_batch_size = cfg.policy.reanalyze_batch_size
-        if cfg.policy.buffer_reanalyze_freq >= 1:
+        buffer_reanalyze_freq = float(cfg.policy.buffer_reanalyze_freq)
+        if buffer_reanalyze_freq >= 1:
             enough_for_reanalyze = (
                 replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps >
                 int(reanalyze_batch_size / cfg.policy.reanalyze_partition)
             )
-            if budget.reanalyze_interval is not None and budget.progress % budget.reanalyze_interval == 0 and enough_for_reanalyze:
+            if (
+                    budget.reanalyze_interval is not None and
+                    budget.progress % budget.reanalyze_interval == 0 and
+                    enough_for_reanalyze
+            ):
                 replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                 buffer_reanalyze_count += 1
                 logging.info(f'[AsyncMuZero] Buffer reanalyze count: {buffer_reanalyze_count}')
 
         train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
+        train_data = _prepare_train_data_for_policy(train_data, policy_type, learner.train_iter)
         log_vars = learner.train(train_data, collector_envstep)
         if cfg.policy.use_priority:
             replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
@@ -355,6 +465,7 @@ async def _run_async_driver(
         if budget.done:
             train_budgets.popleft()
             train_epoch += 1
+            _after_train_epoch(policy, policy_type)
         return True
 
     async def process_completed(timeout: float = 0.0) -> int:
@@ -376,7 +487,7 @@ async def _run_async_driver(
                 reward_mean = result.get('reward_mean')
                 if reward_mean is not None:
                     reward_mean = float(reward_mean)
-                    if reward_mean > best_reward:
+                    if reward_mean > best_reward and _cfg_get(cfg.policy, 'save_ckpt_in_eval', True):
                         best_reward = reward_mean
                         _save_checkpoint_snapshot(
                             cfg.exp_name,
@@ -432,14 +543,27 @@ async def _run_async_driver(
 
             if learner.train_iter >= max_train_iter or stop_requested:
                 break
-            if collector_envstep >= max_env_step and not pending_collect and not train_budgets:
-                break
+            if collector_envstep >= max_env_step and not pending_collect:
+                if not train_budgets:
+                    break
+                if not _has_enough_replay_data(cfg, replay_buffer, int(cfg.policy.batch_size)):
+                    logging.warning(
+                        '[AsyncMuZero] stopping with %s queued train budgets because replay buffer is insufficient '
+                        'for batch_size=%s after reaching max_env_step=%s: %s',
+                        len(train_budgets),
+                        cfg.policy.batch_size,
+                        max_env_step,
+                        replay_buffer,
+                    )
+                    break
 
             if trained_steps == 0:
                 await process_completed(timeout=async_cfg.poll_interval_s)
 
+        elapsed = max(time.time() - driver_start_time, 1e-6)
         logging.info(
-            '[AsyncMuZero] stopping: envstep=%s/%s train_iter=%s/%s stop_requested=%s pending_collect=%s pending_eval=%s',
+            '[AsyncMuZero] stopping: envstep=%s/%s train_iter=%s/%s stop_requested=%s pending_collect=%s '
+            'pending_eval=%s elapsed=%.3fs driver_envstep_per_sec=%.2f',
             collector_envstep,
             max_env_step,
             learner.train_iter,
@@ -447,6 +571,8 @@ async def _run_async_driver(
             stop_requested,
             len(pending_collect),
             len(pending_eval),
+            elapsed,
+            collector_envstep / elapsed,
         )
     finally:
         close_refs = []
@@ -486,10 +612,11 @@ def train_muzero_segment_async(
     cfg, create_cfg = input_cfg
     assert create_cfg.policy.type in [
         'efficientzero', 'muzero', 'muzero_context', 'muzero_rnn_full_obs', 'sampled_efficientzero',
-        'sampled_muzero', 'gumbel_muzero', 'stochastic_muzero'
+        'sampled_muzero', 'gumbel_muzero', 'stochastic_muzero', 'unizero', 'sampled_unizero'
     ], (
-        "train_muzero_segment_async only supports: 'efficientzero', 'muzero', "
-        "'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
+        "train_muzero_segment_async only supports MuZero/UniZero segment policies: "
+        "'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', "
+        "'stochastic_muzero', 'unizero', 'sampled_unizero'"
     )
 
     if cfg.policy.get('eval_offline', False) or cfg.policy.get('random_collect_episode_num', 0) > 0:
@@ -515,11 +642,7 @@ def train_muzero_segment_async(
     from tensorboardX import SummaryWriter
     import torch
 
-    if cfg.policy.cuda and torch.cuda.is_available():
-        cfg.policy.device = 'cuda'
-    else:
-        cfg.policy.device = 'cpu'
-        cfg.policy.cuda = False
+    _configure_policy_device(cfg, create_cfg.policy.type)
 
     GameBuffer = _select_game_buffer(create_cfg.policy.type)
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)

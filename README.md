@@ -253,9 +253,9 @@ cd LightZero
 python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
 
-### Experimental Async MuZero Training
+### Experimental Async Segment Training
 
-The async Atari MuZero segment pipeline is currently implemented as a Ray-based scheduler: collector actors and the evaluator actor run asynchronously, while the learner and replay buffer remain in the driver process so the MuZero update logic is unchanged. In a preliminary Pong comparison with the 500k synchronous MuZero setup, the baseline reached 491k envsteps at 22.1 envsteps/s with eval reward -15.7; the async run reached 939k envsteps at 39.9 envsteps/s with eval reward -14.3 in the same experiment family. This indicates about 1.8x end-to-end throughput in that run with comparable replay ratios; results are preliminary and hardware-dependent.
+The Atari segment async pipeline uses Ray collector/evaluator actors while keeping the learner and replay buffer in the driver process. It supports MuZero-family segment policies and UniZero segment policies through the explicit `--async-pipeline` config flag. In the latest Pong MuZero rjob comparison, async reached about 37.0 envsteps/s wall-clock versus about 23.2 envsteps/s for the synchronous baseline in the same time window. For design details, UniZero differences, and narmodel_gpu rjob usage, see [Async Pipeline Review](docs/async_pipeline_muzero_unizero.md) and [中文说明](docs/async_pipeline_muzero_unizero_zh.md).
 
 ## 📚 Documentation
 
@@ -268,6 +268,7 @@ For those interested in customizing environments and algorithms, we provide rele
 - [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/config/config.md)
 - [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/logs/logs.md)
 - [Loss Landscape Visualization](https://github.com/opendilab/LightZero/blob/main/lzero/loss_landscape/README.md)
+- [MuZero / UniZero Async Segment Pipeline](docs/async_pipeline_muzero_unizero.md)
 
 Should you have any questions, feel free to contact us for support.
 

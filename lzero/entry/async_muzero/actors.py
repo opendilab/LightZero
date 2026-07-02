@@ -49,7 +49,35 @@ def _prepare_actor_cfg(cfg: Any, seed_offset: int) -> Any:
     else:
         cfg.policy.device = 'cpu'
         cfg.policy.cuda = False
+    world_model_cfg = getattr(getattr(cfg.policy, 'model', None), 'world_model_cfg', None)
+    if world_model_cfg is not None:
+        world_model_cfg.device = cfg.policy.device
     return cfg
+
+
+def _clear_policy_runtime_caches(policy: Any) -> None:
+    """
+    Clear UniZero world-model caches after a remote actor loads new weights.
+
+    MuZero models do not expose ``world_model`` and therefore pass through this
+    helper unchanged.
+    """
+    world_models = []
+    for attr in ('_collect_model', '_eval_model', '_target_model'):
+        model = getattr(policy, attr, None)
+        world_model = getattr(model, 'world_model', None)
+        if world_model is not None and world_model not in world_models:
+            world_models.append(world_model)
+
+    for world_model in world_models:
+        config = getattr(world_model, 'config', None)
+        if config is not None and not getattr(config, 'rotary_emb', False):
+            precompute = getattr(world_model, 'precompute_pos_emb_diff_kv', None)
+            if precompute is not None:
+                precompute()
+        clear = getattr(world_model, 'clear_caches', None)
+        if clear is not None:
+            clear()
 
 
 @ray.remote
@@ -98,6 +126,7 @@ class MuZeroSegmentCollectorActor:
     ) -> Dict[str, Any]:
         if self._latest_policy_version != policy_version:
             self._policy.collect_mode.load_state_dict({'model': model_state})
+            _clear_policy_runtime_caches(self._policy)
             self._latest_policy_version = policy_version
 
         start_envstep = self._collector.envstep
@@ -168,6 +197,7 @@ class MuZeroSegmentEvaluatorActor:
     ) -> Dict[str, Any]:
         if self._latest_policy_version != policy_version:
             self._policy.eval_mode.load_state_dict({'model': model_state})
+            _clear_policy_runtime_caches(self._policy)
             self._latest_policy_version = policy_version
 
         start_time = time.time()

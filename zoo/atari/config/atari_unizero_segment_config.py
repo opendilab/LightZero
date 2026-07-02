@@ -46,6 +46,14 @@ def main(
         zero_init_head_names_override=None,
         use_new_cache_manager_override=None,
         save_ckpt_override=None,
+        async_pipeline=False,
+        num_collector_actors=1,
+        max_policy_lag=0,
+        max_train_chunk_steps=4,
+        weight_sync_interval=1,
+        collector_num_gpus=0,
+        evaluator_num_gpus=0,
+        smoke_test=False,
 ):
     if env_id not in atari_env_action_space_map:
         supported_envs = ', '.join(sorted(atari_env_action_space_map.keys()))
@@ -79,6 +87,18 @@ def main(
     use_new_cache_manager = True
     save_ckpt = True
 
+    if smoke_test:
+        collector_env_num = 1
+        num_segments = 1
+        evaluator_env_num = 1
+        game_segment_length = 16
+        num_unroll_steps = 2
+        infer_context_length = 1
+        num_simulations = 2
+        batch_size = 2
+        replay_ratio = 1.0
+        save_ckpt = False
+
     if latent_recon_loss_weight_override is not None:
         latent_recon_loss_weight = float(latent_recon_loss_weight_override)
     if perceptual_loss_weight_override is not None:
@@ -100,6 +120,8 @@ def main(
         max_env_step = int(10e6)
     if max_env_step_override is not None:
         max_env_step = int(max_env_step_override)
+    if smoke_test:
+        max_env_step = min(max_env_step, 40)
 
     # Reanalyze settings
     buffer_reanalyze_freq = 1/5000000000
@@ -187,8 +209,31 @@ def main(
             evaluator_env_num=evaluator_env_num,
             eval_freq=int(1e4),
             replay_buffer_size=int(5e5),
+            async_pipeline=dict(
+                enabled=async_pipeline,
+                num_collector_actors=num_collector_actors,
+                num_evaluator_actors=1,
+                max_collect_inflight=num_collector_actors,
+                max_eval_inflight=1,
+                max_train_chunk_steps=max_train_chunk_steps,
+                weight_sync_interval=weight_sync_interval,
+                max_policy_lag=max_policy_lag,
+                eval_at_start=True,
+                collector_num_cpus=1,
+                evaluator_num_cpus=1,
+                collector_num_gpus=collector_num_gpus,
+                evaluator_num_gpus=evaluator_num_gpus,
+                buffer_stats_interval=100,
+                poll_interval_s=0.1,
+                shutdown_timeout_s=30,
+            ),
         ),
     )
+    if smoke_test:
+        atari_unizero_config['env'].update(
+            collect_max_episode_steps=int(30),
+            eval_max_episode_steps=int(30),
+        )
     atari_unizero_config = EasyDict(atari_unizero_config)
     main_config = atari_unizero_config
 
@@ -207,7 +252,10 @@ def main(
     create_config = atari_unizero_create_config
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
-    from lzero.entry import train_unizero_segment
+    if async_pipeline:
+        from lzero.entry.train_unizero_segment_async import train_unizero_segment_async as train_entry
+    else:
+        from lzero.entry import train_unizero_segment as train_entry
     exp_root = exp_root.rstrip('/')
     exp_parts = [exp_root]
     if run_tag:
@@ -221,9 +269,13 @@ def main(
     exp_parts.append(
         f'{game_name}_uz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     )
+    if async_pipeline:
+        exp_parts[-1] += f'_async-c{num_collector_actors}-chunk{max_train_chunk_steps}-lag{max_policy_lag}'
+    if smoke_test:
+        exp_parts[-1] += '_smoke'
     main_config.exp_name = '/'.join(exp_parts)
 
-    train_unizero_segment([main_config, create_config], seed=seed, model_path=None, max_env_step=max_env_step)
+    train_entry([main_config, create_config], seed=seed, model_path=None, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":
@@ -254,6 +306,14 @@ if __name__ == "__main__":
     )
     parser.add_argument('--use-new-cache-manager', type=_str2bool, nargs='?', const=True, help='Enable the structured KV cache manager', default=None)
     parser.add_argument('--save-ckpt', type=_str2bool, nargs='?', const=True, help='Save evaluator/best checkpoints', default=None)
+    parser.add_argument('--async-pipeline', action='store_true', help='Enable Ray async collector/evaluator pipeline')
+    parser.add_argument('--num-collector-actors', type=int, default=1, help='Number of Ray collector actors')
+    parser.add_argument('--max-policy-lag', type=int, default=0, help='Allowed collector policy version lag')
+    parser.add_argument('--max-train-chunk-steps', type=int, default=4, help='Max learner updates before yielding to async tasks')
+    parser.add_argument('--weight-sync-interval', type=int, default=1, help='Learner steps between collect/eval weight publishes')
+    parser.add_argument('--collector-num-gpus', type=float, default=0, help='Ray GPU resource per collector actor')
+    parser.add_argument('--evaluator-num-gpus', type=float, default=0, help='Ray GPU resource per evaluator actor')
+    parser.add_argument('--smoke-test', action='store_true', help='Use a tiny config for startup/rjob smoke validation')
     args = parser.parse_args()
 
     main(
@@ -270,4 +330,12 @@ if __name__ == "__main__":
         zero_init_head_names_override=args.zero_init_head_names,
         use_new_cache_manager_override=args.use_new_cache_manager,
         save_ckpt_override=args.save_ckpt,
+        async_pipeline=args.async_pipeline,
+        num_collector_actors=args.num_collector_actors,
+        max_policy_lag=args.max_policy_lag,
+        max_train_chunk_steps=args.max_train_chunk_steps,
+        weight_sync_interval=args.weight_sync_interval,
+        collector_num_gpus=args.collector_num_gpus,
+        evaluator_num_gpus=args.evaluator_num_gpus,
+        smoke_test=args.smoke_test,
     )
