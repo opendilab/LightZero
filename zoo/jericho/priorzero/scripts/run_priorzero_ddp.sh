@@ -4,7 +4,7 @@ set -x
 
 # 1. 训练环境参数
 CUDA_DEVICES="0,1,2,3"      
-NPROC_PER_NODE=4           
+NPROC_PER_NODE=4          
 MASTER_PORT=24554          
 
 # 2. 程序相关参数
@@ -13,6 +13,7 @@ LOG_DIR="./data_priorzero/run_logs"
 LLM_MODEL="qwen2.5-3b"  # "qwen2.5-3b" "qwen2.5-7b"
 USE_COT=false                # true / false
 mkdir -p "${LOG_DIR}"       
+SEED=0
 
 CURRENT_TIME=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="${LOG_DIR}/log_${ENV_ID}_${LLM_MODEL}_${CURRENT_TIME}.txt"
@@ -31,6 +32,7 @@ if [ "${USE_COT}" = true ]; then
         --use_cot \
         --env_id "${ENV_ID}" \
         --model "${LLM_MODEL}" \
+        --seed "${SEED}" \
         2>&1 | tee "${LOG_FILE}"
 else
     torchrun \
@@ -39,5 +41,6 @@ else
         ./src/priorzero_entry_sync_ddp.py \
         --env_id "${ENV_ID}" \
         --model "${LLM_MODEL}" \
+        --seed "${SEED}" \
         2>&1 | tee "${LOG_FILE}"
 fi

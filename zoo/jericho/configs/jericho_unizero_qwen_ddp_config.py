@@ -20,11 +20,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # Keep the observation encoder from the current DDP config. Qwen is used as
     # the world-model backbone, not as the text observation encoder.
     encoder_option = 'legacy'
-    model_name: str = '/mnt/afs/niuyazhe/workspace/xiongjyu/models/bge-base-en-v1.5'
+    model_name: str = '/mnt/shared-storage-user/puyuan/xiongjyu/models/bge-base-en-v1.5'
     batch_size = int(os.environ.get("BATCH_SIZE", str(64 * gpu_num)))
     accumulation_steps = 1
 
-    qwen_backbone_path: str = '/mnt/afs/niuyazhe/workspace/xiongjyu/models/Qwen2.5-0.5B'
+    qwen_backbone_path: str = '/mnt/shared-storage-user/puyuan/xiongjyu/models/Qwen2.5-0.5B-Instruct'
 
     env_configurations = {
         'detective.z5': (12, 100),
@@ -35,7 +35,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     action_space_size, max_steps = env_configurations.get(env_id, (10, 50))
     max_steps = int(os.environ.get("MAX_STEPS", max_steps))
 
-    evaluator_env_num: int = int(os.environ.get("EVALUATOR_ENV_NUM", "3"))
+    evaluator_env_num: int = int(os.environ.get("EVALUATOR_ENV_NUM", "1"))
     num_simulations: int = int(os.environ.get("NUM_SIMULATIONS", "50"))
     num_unroll_steps: int = 10
     infer_context_length: int = 4

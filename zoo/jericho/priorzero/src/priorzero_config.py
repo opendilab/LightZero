@@ -28,7 +28,7 @@ MODEL_CONFIGS = {
         "description": "Qwen2.5-3B-Instruct (better quality)",
     },
     "qwen2.5-7b": {
-        "model_name_or_path": "/mnt/shared-storage-user/puyuan/model/Qwen2.5-7B-Instruct",
+        "model_name_or_path": "/mnt/shared-storage-user/puyuan/xiongjyu/models/Qwen2.5-7B-Instruct",
         "vllm_tensor_parallel_size": 1,
         "gpu_memory_utilization": 0.35,
         "description": "Qwen2.5-7B-Instruct (high quality, needs 2+ GPUs)",
@@ -98,7 +98,7 @@ class PriorZeroLLMConfig:
         "llm_collect_mode": "no_collect" # wm_collect意味着llm训练过程收集数据使用 wm; wm_llm_collect意味着 llm 训练过程收集数据使用 llm 和 wm; no_collect 意味着 llm 训练过程不收集数据，直接使用 replay buffer 中的数据
     }))
 
-    llm_prior_temperature: float = 2.0  # LLM prior 分布的温度参数
+    llm_prior_temperature: float = 1.0  # LLM prior 分布的温度参数
     mcts_root_logits_dict: Optional[EasyDict] = field(default_factory=lambda: EasyDict({
         "mode": "llm_plus_wm_logits",        # collect/eval阶段保持一致。"llm_logits"是仅用llm prior的logits; "wm_logits"是仅用 world_model 的policy给出的logits; "llm_plus_wm_logits"是两者的加权求和。
         "plus_method": "fixed",        # 当 plus_method = "fixed" 时，使用固定权重；否则使用自适应权重"adaptive"
@@ -122,7 +122,7 @@ class PriorZeroLLMConfig:
     
     user_prompt_dict: Optional[EasyDict] = field(default_factory=lambda: EasyDict({
         "history_with_reward": True,   # 是否在 prompt 中加入历史交互的 reward 信息
-        "observation_with_valid_actions": False,  # 是否在 prompt 中加入当前 observation 中可执行的 action 信息  
+        "observation_with_valid_actions": True,  # 是否在 prompt 中加入当前 observation 中可执行的 action 信息  
     }))
     
     prompt_max_len: int = 8192
@@ -153,14 +153,14 @@ class PriorZeroLLMConfig:
     deepspeed_enable_sleep: bool = True
     
     zero_stage: int = 2
-    gradient_checkpointing: bool = False
+    gradient_checkpointing: bool = True
     gradient_checkpointing_use_reentrant: bool = False
     max_norm: float = 1.0     # Gradient clipping
     ds_tensor_parallel_size: int = 1
     
     # 需要注意的是，buffer中取一条经验是 10个样本，因为包含10次交互； num_unroll_steps = 10
     train_batch_size: int = 128 # 总的train_size, 结果= micro_batch_size *  GPUS * gradient_accumulation_steps
-    micro_train_batch_size: int = 4 # 一次micro_train_batch_size 用来计算梯度；只有一次 train_batch_size 才会更新参数
+    micro_train_batch_size: int = 1 # 一次micro_train_batch_size 用来计算梯度；只有一次 train_batch_size 才会更新参数
     max_rollout_staleness: int = 1 # off 次数，用来训练的数据和当前策略之间允许的最大差距
 
     learning_rate: float = 1e-6
@@ -377,13 +377,13 @@ def get_priorzero_config(
         env_name = env_id.replace(".z5", "")
         if llm_config.enable_rft:
             exp_name = (
-                f"data_priorzero/llm_rft/priorzero_{env_name}_{model_key}_train_{llm_config.train_mode_dict.mode}/"
+                f"data_priorzero_latest/llm_rft/priorzero_{env_name}_{model_key}_train_{llm_config.train_mode_dict.mode}/"
                 f"useCot_{llm_config.use_cot}_alternate_{llm_config.train_schedule.alternate}/"
                 f"mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_tbs_{llm_config.train_batch_size}_use_mispo_{llm_config.use_mispo}"
             )
         else:
             exp_name = (
-                f"data_priorzero/llm_frozen/priorzero_{env_name}_{model_key}_"
+                f"data_priorzero_latest/llm_frozen/priorzero_{env_name}_{model_key}_"
                 f"train_{llm_config.train_mode_dict.mode}"
                 f"useCot_{llm_config.use_cot}_seed{seed}"
             )
