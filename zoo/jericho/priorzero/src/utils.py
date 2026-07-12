@@ -4,8 +4,60 @@ from typing import List, Dict, Any, Tuple, Union, Optional
 from transformers import AutoTokenizer
 from dataclasses import is_dataclass
 import os
+import logging
 import inspect
 import textwrap
+
+
+# ============================================================================
+# Structured Logging Setup
+# ============================================================================
+
+def setup_priorzero_logging(exp_name: str, rank: int = 0) -> Dict[str, logging.Logger]:
+    """
+    Create structured loggers for PriorZero training.
+    Only rank 0 gets console output and file handlers.
+    Other ranks get NullHandler (silent).
+
+    Returns dict with keys: 'main', 'train', 'eval'
+    """
+    log_dir = os.path.join(exp_name, "run_logs")
+    os.makedirs(log_dir, exist_ok=True)
+
+    file_fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    console_fmt = logging.Formatter("[%(levelname).1s] %(message)s")
+
+    loggers = {}
+    for name, filename in [("main", "main.log"), ("train", "train.log"), ("eval", "eval.log")]:
+        lg = logging.getLogger(f"priorzero.{name}")
+        lg.setLevel(logging.DEBUG)
+        lg.handlers.clear()
+        lg.propagate = False
+
+        if rank == 0:
+            fh = logging.FileHandler(os.path.join(log_dir, filename), mode="a")
+            fh.setLevel(logging.DEBUG)
+            fh.setFormatter(file_fmt)
+            lg.addHandler(fh)
+
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            ch.setFormatter(console_fmt)
+            lg.addHandler(ch)
+        else:
+            lg.addHandler(logging.NullHandler())
+
+        loggers[name] = lg
+
+    # Error log: captures WARNING+ from all priorzero loggers
+    if rank == 0:
+        err_handler = logging.FileHandler(os.path.join(log_dir, "error.log"), mode="a")
+        err_handler.setLevel(logging.WARNING)
+        err_handler.setFormatter(file_fmt)
+        for lg in loggers.values():
+            lg.addHandler(err_handler)
+
+    return loggers
 
 def dump_dataclass_cfg_py(cfg, path: str) -> str:
     if not is_dataclass(cfg):

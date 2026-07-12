@@ -124,9 +124,8 @@ class GameSegment(OriginalGameSegment):
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_raw_obs)
             if pad_len > 0:
-                stacked_raw_obs = stacked_raw_obs[:-1]
-                pad_frames = [stacked_raw_obs[-1] for _ in range(pad_len + 1)]
-                stacked_raw_obs = stacked_raw_obs +  pad_frames
+                pad_frames = [stacked_raw_obs[-1] for _ in range(pad_len)]
+                stacked_raw_obs = stacked_raw_obs + pad_frames
         return stacked_raw_obs
 
     def get_unroll_histroy_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
@@ -142,9 +141,8 @@ class GameSegment(OriginalGameSegment):
         if padding:
             pad_len = self.frame_stack_num + num_unroll_steps - len(stacked_histroy_obs)
             if pad_len > 0:
-                stacked_histroy_obs = stacked_histroy_obs[:-1]
-                pad_frames = [stacked_histroy_obs[-1] for _ in range(pad_len + 1)]
-                stacked_histroy_obs = stacked_histroy_obs +  pad_frames
+                pad_frames = [stacked_histroy_obs[-1] for _ in range(pad_len)]
+                stacked_histroy_obs = stacked_histroy_obs + pad_frames
         return stacked_histroy_obs
 
     def get_unroll_llm_prior_per_tok(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
