@@ -176,10 +176,6 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         B, T = len(raw_obs_list), len(raw_obs_list[0])
         for b in range(B):
             for t in range(T - 1):
-                # Skip padded positions: mask[t] == 0 means the action at step t is padding,
-                # so llm_prior_per_tok at t+1 is also padding and the alignment invariant doesn't hold.
-                if mask_list[b][t] == 0.:
-                    continue
                 current_obs = raw_obs_list[b][t]
                 current_hist = history_obs_list[b][t]
 

@@ -362,30 +362,9 @@ class DataProcessor:
 
         full_ids_list = [s['full_ids'] for s in real_samples]
         tgt_ids_list = [s['label_ids'] for s in real_samples]
-        # Consistency check: decoded label_ids should match the expected target text.
-        # Convert hard assert to warning + filter to avoid crashing on tokenizer round-trip edge cases.
-        decoded_labels = self.tokenizer.batch_decode(tgt_ids_list)
-        if decoded_labels != targets_only:
-            mismatch_indices = [
-                i for i, (d, t) in enumerate(zip(decoded_labels, targets_only)) if d != t
-            ]
-            _log_train.warning(
-                f"[make_llm_train_samples] label_ids decode mismatch for {len(mismatch_indices)}/{len(targets_only)} samples. "
-                f"First mismatch idx={mismatch_indices[0] if mismatch_indices else '?'}: "
-                f"decoded={decoded_labels[mismatch_indices[0]]!r:.120} vs expected={targets_only[mismatch_indices[0]]!r:.120}"
-                if mismatch_indices else ""
-            )
-            # Filter out mismatched samples to avoid training on corrupted data
-            keep_mask = [i for i in range(len(targets_only)) if i not in set(mismatch_indices)]
-            if len(keep_mask) == 0:
-                _log_train.warning("[make_llm_train_samples] All samples mismatched, skipping batch")
-                return False, [real_samples]
-            real_samples = [real_samples[i] for i in keep_mask]
-            targets_only = [targets_only[i] for i in keep_mask]
-            full_ids_list = [full_ids_list[i] for i in keep_mask]
-            tgt_ids_list = [tgt_ids_list[i] for i in keep_mask]
-            if fmt_rewards is not None:
-                fmt_rewards = fmt_rewards[keep_mask]
+
+        assert self.tokenizer.batch_decode(tgt_ids_list) == targets_only, "Decoded label ids do not match targets_only. Please check the tokenizer and data processing logic."
+
         inputs = self.tokenizer.pad({"input_ids": full_ids_list}, padding=True, return_tensors="pt")
         labels = torch.full_like(inputs.input_ids, -100)
         for i, tgt_ids in enumerate(tgt_ids_list):
@@ -520,95 +499,6 @@ class DataProcessor:
             rollout_logprob[idx, -len(logprob_token_list):] = torch.tensor(logprob_token_list, dtype=torch.float32)
         
         return True, (inputs.input_ids, inputs.attention_mask, action_mask, advantage, rollout_logprob, log_status)
-        
-    def _ensure_tp_pg(self) -> None:
-        """Lazy-init the vLLM TP subgroup PG (size = vllm_tensor_parallel_size).
-
-        With `distributed_executor_backend='external_launcher'` and TP>1, vLLM partitions the
-        torch.dist world into TP subgroups. Each rank participates in exactly one subgroup of
-        consecutive ranks `[g_start, g_start + tp_size)`. We need that subgroup as a PG to
-        all_gather prompts so each TP partner submits the same input to `llm.generate()`.
-
-        Note: `dist.new_group` is collective — every rank must call it for every group.
-        """
-        if getattr(self, '_tp_pg', None) is not None:
-            return
-        tp_size = int(getattr(self.args, 'vllm_tensor_parallel_size', 1))
-        rank = dist.get_rank()
-        for g_start in range(0, self.world_size, tp_size):
-            ranks = list(range(g_start, g_start + tp_size))
-            pg = dist.new_group(ranks=ranks)
-            if rank in ranks:
-                self._tp_pg = pg
-                self._tp_group_start = g_start
-
-    def _sync_prompts_for_tp(self, token_ids_list: List[List[int]]) -> Tuple[List[List[int]], slice]:
-        """Within a vLLM TP group (size > 1), all_gather the local prompt list and return
-        `(union, my_slice)`. Every rank in the TP group must submit the same `union` to
-        `vllm.generate` (so the V1 schedulers stay in lock-step on every rank), then slice
-        `outs[my_slice]` to recover its own outputs.
-
-        For TP=1 / single-process / no DDP: returns `(list(token_ids_list), slice(0, n_real))`.
-
-        Why count-only padding is insufficient: vLLM V1 runs an independent scheduler on each TP
-        rank from the same logical inputs, and any per-prompt length difference produces a
-        different chunked-prefill batch shape, which then hits a mismatch in the TP all_gather
-        of logits. Content must match, not just count.
-        """
-        n_real = len(token_ids_list)
-        tp_size = int(getattr(self.args, 'vllm_tensor_parallel_size', 1))
-        if not (dist.is_initialized() and self.world_size > 1 and tp_size > 1):
-            return list(token_ids_list), slice(0, n_real)
-        self._ensure_tp_pg()
-        rank = dist.get_rank()
-        local_idx = rank - self._tp_group_start
-        gathered: List[Optional[List[List[int]]]] = [None] * tp_size
-        dist.all_gather_object(gathered, list(token_ids_list), group=self._tp_pg)
-        offsets = [0]
-        for sub in gathered:
-            offsets.append(offsets[-1] + len(sub))
-        union: List[List[int]] = []
-        for sub in gathered:
-            union.extend(sub)
-        return union, slice(offsets[local_idx], offsets[local_idx + 1])
-
-    @torch.no_grad()
-    def drain_vllm_iter(self) -> None:
-        """Match the two `vllm.generate` calls that `get_llm_prior` would make in one outer eval
-        iter, but submit only the partners' prompts (via `_sync_prompts_for_tp([])`). Used by
-        the evaluator in DDP drain mode so TP partners can finish their real calls. No-op for
-        TP=1 / single-process.
-        """
-        tp_size = int(getattr(self.args, 'vllm_tensor_parallel_size', 1))
-        if not (dist.is_initialized() and self.world_size > 1 and tp_size > 1):
-            return
-
-        cot_sampling_params = SamplingParams(
-            temperature=1.0,
-            top_p=1.0,
-            max_tokens=self.generate_max_len,
-            stop=["\n\n"],
-            include_stop_str_in_output=True,
-            logprobs=None,
-            prompt_logprobs=None,
-        )
-        union, _ = self._sync_prompts_for_tp([])
-        if union:
-            self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=union)
-            self.vllm_engine.get_responses()
-
-        score_sampling_params = SamplingParams(
-            temperature=self.temperature,
-            top_p=self.top_p,
-            max_tokens=1,
-            include_stop_str_in_output=True,
-            logprobs=None,
-            prompt_logprobs=1,
-        )
-        union, _ = self._sync_prompts_for_tp([])
-        if union:
-            self.vllm_engine.add_requests(sampling_params=score_sampling_params, prompt_token_ids=union)
-            self.vllm_engine.get_responses()
 
     @torch.no_grad()
     def _build_cot_prefix_texts(self, all_user_prompts: List[str]) -> List[str]:
@@ -638,11 +528,8 @@ class DataProcessor:
             truncation=True,
         )["input_ids"]
 
-        context_token_ids_union, my_slice_cot = self._sync_prompts_for_tp(context_token_ids)
-
-        self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=context_token_ids_union)
+        self.vllm_engine.add_requests(sampling_params=cot_sampling_params, prompt_token_ids=context_token_ids)
         cot_outputs = self.vllm_engine.get_responses()
-        cot_outputs = cot_outputs[my_slice_cot]
 
         prefix_cot_list, full_output = [], []
         reasoning_pattern = re.compile(r"Reasoning\s*:", re.IGNORECASE)
@@ -743,17 +630,15 @@ class DataProcessor:
             llm_prior_per_seq.append(seq_dict)
             llm_prior_per_tok.append(tok_dict)
 
-        # Drain mode (empty inputs from caller): prompt_list / llm_prior_per_seq are empty,
-        # so skip the per-call episode log to avoid IndexError on prompt_list[0].
-        if len(prompt_list) > 0 and len(llm_prior_per_seq) > 0:
+        if self.use_cot:
             self.episode_output.append({
                 "Instruction": prompt_list[0],
-                "Response": full_output[0] if full_output else "(no CoT)",
+                "Response": full_output[0],
                 "llm_prior_per_seq": llm_prior_per_seq[0]
             })
         # CoT reuse optimization: return CoT prefixes if requested
         if return_cot:
-            return llm_prior_per_seq, llm_prior_per_tok, prefix_cots, full_output
+            return llm_prior_per_seq, llm_prior_per_tok, prefix_cots
         else:
             return llm_prior_per_seq, llm_prior_per_tok
 
@@ -792,11 +677,8 @@ class DataProcessor:
         l_lens = [len(x) for x in label_ids]
         l_no_cots_lens = [len(x) for x in label_ids_no_cots]
 
-        full_ids_union, my_slice_score = self._sync_prompts_for_tp(full_ids)
-
-        self.vllm_engine.add_requests(sampling_params=sampling_params, prompt_token_ids=full_ids_union)
+        self.vllm_engine.add_requests(sampling_params=sampling_params, prompt_token_ids=full_ids)
         outs = self.vllm_engine.get_responses()
-        outs = outs[my_slice_score]
 
         scores = []
         rollout_action_logprob = []

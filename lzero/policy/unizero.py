@@ -901,12 +901,6 @@ class UniZeroPolicy(MuZeroPolicy):
                     value = value.detach()
                     return_log_dict[key] = value.item() if value.numel() == 1 else value.float().mean().item()
 
-        if getattr(self._cfg.model.world_model_cfg, 'use_qwen_backbone', False):
-            for key, value in list(return_log_dict.items()):
-                if isinstance(value, torch.Tensor):
-                    value = value.detach()
-                    return_log_dict[key] = value.item() if value.numel() == 1 else value.float().mean().item()
-
         if self._cfg.use_wandb:
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
             wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
