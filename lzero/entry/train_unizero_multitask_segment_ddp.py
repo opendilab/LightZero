@@ -26,6 +26,11 @@ from lzero.entry.utils import (
     symlog,
     inv_symlog,
 )
+from lzero.entry.utils import (
+    collect_and_log_moe_statistics,
+    TemperatureScheduler,
+    log_buffer_memory_usage
+)
 # NOTE: The following imports are for type hinting purposes.
 # The actual GameBuffer is selected dynamically based on the policy type.
 from lzero.mcts import UniZeroGameBuffer
@@ -52,7 +57,8 @@ def train_unizero_multitask_segment_ddp(
         model_path: Optional[str] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
-        benchmark_name: str = "atari"
+        benchmark_name: str = "atari",
+        cal_moe_profile: bool = True
 ) -> 'Policy':
     """
     Overview:
@@ -68,6 +74,7 @@ def train_unizero_multitask_segment_ddp(
         - max_train_iter (:obj:`Optional[int]`): The maximum number of policy update iterations during training.
         - max_env_step (:obj:`Optional[int]`): The maximum number of environment interaction steps to collect.
         - benchmark_name (:obj:`str`): The name of the benchmark, e.g., "atari" or "dmc".
+        - cal_moe_profile (:obj:`bool`, optional): Whether to enable MoE expert selection statistics and heatmap logging. Default is True.
 
     Returns:
         - policy (:obj:`Policy`): The converged policy.
@@ -201,6 +208,8 @@ def train_unizero_multitask_segment_ddp(
         # Create a TensorBoard logger.
         log_dir = os.path.join('./{}/log'.format(cfg.exp_name), f'serial_rank_{rank}')
         tb_logger = SummaryWriter(log_dir)
+        # Inject TensorBoard logger into policy for gradient conflict and MoE statistics logging
+        policy.logger = tb_logger
 
         # Create the shared learner.
         learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
@@ -498,6 +507,12 @@ def train_unizero_multitask_segment_ddp(
                     # DDP automatically synchronizes gradients and parameters during training.
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
 
+                    if cal_moe_profile and cfg.policy.model.world_model_cfg.multiplication_moe_in_transformer and cfg.policy.model.world_model_cfg.num_experts_of_moe_in_transformer:
+                        # Collect and log MoE expert selection statistics (heatmaps, distribution divergence)
+                        moe_log_interval = getattr(cfg.policy, 'moe_log_interval', 1)
+                        if learner.train_iter % moe_log_interval == 0:
+                            collect_and_log_moe_statistics(policy, tb_logger, learner.train_iter, world_size, rank)   
+            
                     # Check if task_exploitation_weight needs to be calculated.
                     if i == 0:
                         # Calculate task weights.

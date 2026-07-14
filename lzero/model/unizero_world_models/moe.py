@@ -119,13 +119,30 @@ class MoELayer(nn.Module):
             )
         else:
             self.shared_expert = None
+        self.device = next(iter(experts)).w1.weight.device if experts else torch.device('cuda')
+        
+        # Sliding window configuration
+        self.window_sizes = {
+            'immediate': 100,    # Immediate statistics (last 100 steps)
+            'short': 1000,       # Short-term statistics (last 1000 steps)
+            'medium': 10000,     # Medium-term statistics (last 10000 steps)
+            'long': 100000       # Long-term statistics (last 100000 steps)
+        }
+        
+        # GPU statistics buffer: task_id -> {window_type -> [expert selection history]}
+        self.expert_stats_gpu = {}
+        self.step_count = 0
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, task_id: int = None) -> torch.Tensor:
         """
         Overview:
             Performs the forward pass for the MoE layer.
+
         Arguments:
             - x (:obj:`torch.Tensor`): The input tensor of shape [batch_size, seq_len, dim].
+            - task_id (:obj:`int`, optional): Current task ID. When not None and in training mode,
+                expert selection statistics are collected for gradient conflict analysis.
+
         Returns:
             - torch.Tensor: The output tensor with the same shape as the input.
         """
@@ -133,31 +150,27 @@ class MoELayer(nn.Module):
         original_shape = x.size()
         x = x.view(-1, self.dim)
 
-        # Compute gate logits, shape: [num_tokens, num_experts]
-        gate_logits = self.gate(x)
-        # Select top-k experts for each token.
-        weights, indices = torch.topk(gate_logits, self.num_experts_per_tok, dim=1)
-        # Normalize the weights of selected experts using softmax.
-        weights = F.softmax(weights, dim=1).to(x.dtype)
+       
+        expert_output = x
+        if self.num_experts != 0:
+            # Gate logits: [N, num_experts], N = num tokens
+            gate_logits = self.gate(x)
+            # Top-k experts per token
+            weights, indices = torch.topk(gate_logits, self.num_experts_per_tok, dim=1)
+            weights = F.softmax(weights, dim=1).to(x.dtype)
 
-        # Initialize the output tensor for expert computations.
-        expert_output = torch.zeros_like(x)
+            if self.training and task_id is not None:
+                self._collect_expert_selection_stats(task_id, indices)
 
-        # Iterate over each expert to compute outputs for the tokens routed to it.
-        for expert_id in range(self.num_experts):
-            # Find the tokens that have this expert in their top-k list.
-            batch_idx, expert_tok_idx = torch.where(indices == expert_id)
-            if batch_idx.numel() == 0:
-                continue
-
-            # Select the subset of tokens for the current expert.
-            token_subset = x[batch_idx]  # Shape: [num_tokens_for_expert, dim]
-            # Compute the output from the current expert.
-            output_expert = self.experts[expert_id](token_subset)
-            # Get the corresponding weights for these tokens.
-            token_weights = weights[batch_idx, expert_tok_idx].unsqueeze(-1)
-            # Apply weights and accumulate the output.
-            expert_output[batch_idx] += output_expert * token_weights
+            expert_output = torch.zeros_like(x)
+            for expert_id in range(self.num_experts):
+                batch_idx, expert_tok_idx = torch.where(indices == expert_id)
+                if batch_idx.numel() == 0:
+                    continue
+                token_subset = x[batch_idx]
+                output_expert = self.experts[expert_id](token_subset)
+                token_weights = weights[batch_idx, expert_tok_idx].unsqueeze(-1)
+                expert_output[batch_idx] += output_expert * token_weights
 
         # If a shared expert exists, add its output.
         if self.shared_expert is not None:
@@ -168,8 +181,132 @@ class MoELayer(nn.Module):
 
         # Restore the original tensor shape and return.
         return output.view(original_shape)
+    
+    def _collect_expert_selection_stats(self, task_id: int, indices: torch.Tensor) -> None:
+        """
+        Overview:
+            Collect expert selection statistics in GPU memory using multi-granularity sliding windows.
+            Maintains rolling buffers for immediate/short/medium/long windows to track expert usage.
 
+        Arguments:
+            - task_id (:obj:`int`): The identifier of the current task.
+            - indices (:obj:`torch.Tensor`): Expert indices selected by the router for the current batch.
 
+        Shapes:
+            - indices: :math:`(N, k)` where N is num tokens and k is num_experts_per_tok.
+
+        Examples:
+            >>> # Collect stats for task 0 with expert indices
+            >>> indices = torch.tensor([[0, 2], [1, 3]])  # batch_size=2, k=2
+            >>> moe_layer._collect_expert_selection_stats(task_id=0, indices=indices)
+        """
+        self.step_count += 1
+        
+        if task_id not in self.expert_stats_gpu:
+            self.expert_stats_gpu[task_id] = {}
+            for window_type in self.window_sizes.keys():
+                self.expert_stats_gpu[task_id][window_type] = torch.zeros(
+                    self.window_sizes[window_type], 
+                    self.num_experts, 
+                    dtype=torch.float32, 
+                    device=self.device
+                )
+        
+        # Calculate expert selection frequency for current batch
+        indices_flat = indices.flatten()  # [N*k]
+        expert_counts = torch.zeros(self.num_experts, device=self.device, dtype=torch.float32)
+        for expert_id in range(self.num_experts):
+            expert_counts[expert_id] = (indices_flat == expert_id).sum().float()
+        
+        # Update sliding windows for all granularities
+        for window_type, window_size in self.window_sizes.items():
+            buffer = self.expert_stats_gpu[task_id][window_type]
+            # Sliding window: new data goes to the end, old data moves forward
+            buffer[:-1] = buffer[1:].clone()
+            buffer[-1] = expert_counts
+    
+    def get_expert_selection_stats(self, task_id: int = None) -> dict:
+        """
+        Overview:
+            Get multi-granularity expert selection frequency statistics.
+
+        Arguments:
+            - task_id (:obj:`int`, optional): Specific task ID. If None, returns stats for all tasks.
+
+        Returns:
+            - stats (:obj:`dict`): {task_id: {window_type: {frequencies, total_counts, total_selections, data_points}}}.
+        Examples:
+            >>> # Get stats for all tasks
+            >>> all_stats = moe_layer.get_expert_selection_stats()
+            >>> # Get stats for specific task
+            >>> task_stats = moe_layer.get_expert_selection_stats(task_id=0)
+        """
+        if task_id is None:
+            # Return statistics for all tasks
+            all_stats = {}
+            for tid in self.expert_stats_gpu.keys():
+                all_stats[tid] = self._compute_task_stats(tid)
+            return all_stats
+        else:
+            # Return statistics for specified task
+            return self._compute_task_stats(task_id)
+    
+    def _compute_task_stats(self, task_id: int) -> dict:
+        """
+        Overview:
+            Compute multi-granularity statistics for a specified task.
+
+        Arguments:
+            - task_id (:obj:`int`): The task identifier.
+
+        Returns:
+            - stats (:obj:`dict`): {window_type: {frequencies, total_counts, total_selections, data_points}}.
+
+        Shapes:
+            - frequencies: :math:`(num\_experts,)` normalized selection frequencies per expert.
+            - total_counts: :math:`(num\_experts,)` absolute selection counts per expert.
+        Examples:
+            >>> # Compute stats for task 0
+            >>> task_stats = moe_layer._compute_task_stats(task_id=0)
+            >>> immediate_freq = task_stats['immediate']['frequencies']
+        """
+        if task_id not in self.expert_stats_gpu:
+            return {}
+        
+        stats = {}
+        for window_type, buffer in self.expert_stats_gpu[task_id].items():
+            # Simplified version: directly average all existing data, ignoring whether window is full
+            # buffer shape: [window_size, num_experts]
+            total_counts = buffer.sum(dim=0)  # [num_experts]
+            total_selections = total_counts.sum()
+            
+            if total_selections > 0:
+                frequencies = total_counts / total_selections
+            else:
+                frequencies = torch.zeros(self.num_experts, device=self.device)
+            
+            stats[window_type] = {
+                'frequencies': frequencies,  # Keep tensor format
+                'total_counts': total_counts,  # Keep tensor format  
+                'total_selections': total_selections.item(),
+                'data_points': min(self.step_count, self.window_sizes[window_type])
+            }
+        
+        return stats
+    
+    def reset_expert_selection_stats(self) -> None:
+        """
+        Overview:
+            Reset expert selection statistics and clear GPU buffers.
+
+        Examples:
+            >>> # Reset all expert selection statistics
+            >>> moe_layer.reset_expert_selection_stats()
+        """
+        self.expert_stats_gpu.clear()
+        self.step_count = 0
+
+class MoELayerOptimized(nn.Module):
     """
     Overview:
         An optimized implementation of the Mixture-of-Experts (MoE) layer that maintains the same API as `MoELayer`.
