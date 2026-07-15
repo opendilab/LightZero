@@ -1,0 +1,161 @@
+{
+  "depths": [
+    4,
+    8,
+    12,
+    16
+  ],
+  "matrix_stats": {
+    "4": {
+      "4": {
+        "wins": 0,
+        "losses": 0,
+        "draws": 0
+      },
+      "8": {
+        "wins": 0,
+        "losses": 10,
+        "draws": 0
+      },
+      "12": {
+        "wins": 0,
+        "losses": 10,
+        "draws": 0
+      },
+      "16": {
+        "wins": 0,
+        "losses": 10,
+        "draws": 0
+      }
+    },
+    "8": {
+      "4": {
+        "wins": 10,
+        "losses": 0,
+        "draws": 0
+      },
+      "8": {
+        "wins": 0,
+        "losses": 0,
+        "draws": 0
+      },
+      "12": {
+        "wins": 0,
+        "losses": 10,
+        "draws": 0
+      },
+      "16": {
+        "wins": 1,
+        "losses": 8,
+        "draws": 1
+      }
+    },
+    "12": {
+      "4": {
+        "wins": 10,
+        "losses": 0,
+        "draws": 0
+      },
+      "8": {
+        "wins": 10,
+        "losses": 0,
+        "draws": 0
+      },
+      "12": {
+        "wins": 0,
+        "losses": 0,
+        "draws": 0
+      },
+      "16": {
+        "wins": 0,
+        "losses": 1,
+        "draws": 9
+      }
+    },
+    "16": {
+      "4": {
+        "wins": 10,
+        "losses": 0,
+        "draws": 0
+      },
+      "8": {
+        "wins": 9,
+        "losses": 1,
+        "draws": 0
+      },
+      "12": {
+        "wins": 10,
+        "losses": 0,
+        "draws": 0
+      },
+      "16": {
+        "wins": 0,
+        "losses": 0,
+        "draws": 0
+      }
+    }
+  },
+  "combined_stats": {
+    "d4_vs_d8": {
+      "depth1": 4,
+      "depth2": 8,
+      "d1_wins": 0,
+      "d1_losses": 20,
+      "draws": 0,
+      "total_games": 20,
+      "d1_winrate": 0.0,
+      "d2_winrate": 1.0
+    },
+    "d4_vs_d12": {
+      "depth1": 4,
+      "depth2": 12,
+      "d1_wins": 0,
+      "d1_losses": 20,
+      "draws": 0,
+      "total_games": 20,
+      "d1_winrate": 0.0,
+      "d2_winrate": 1.0
+    },
+    "d4_vs_d16": {
+      "depth1": 4,
+      "depth2": 16,
+      "d1_wins": 0,
+      "d1_losses": 20,
+      "draws": 0,
+      "total_games": 20,
+      "d1_winrate": 0.0,
+      "d2_winrate": 1.0
+    },
+    "d8_vs_d12": {
+      "depth1": 8,
+      "depth2": 12,
+      "d1_wins": 0,
+      "d1_losses": 20,
+      "draws": 0,
+      "total_games": 20,
+      "d1_winrate": 0.0,
+      "d2_winrate": 1.0
+    },
+    "d8_vs_d16": {
+      "depth1": 8,
+      "depth2": 16,
+      "d1_wins": 2,
+      "d1_losses": 17,
+      "draws": 1,
+      "total_games": 20,
+      "d1_winrate": 0.1,
+      "d2_winrate": 0.85
+    },
+    "d12_vs_d16": {
+      "depth1": 12,
+      "depth2": 16,
+      "d1_wins": 0,
+      "d1_losses": 11,
+      "draws": 9,
+      "total_games": 20,
+      "d1_winrate": 0.0,
+      "d2_winrate": 0.55
+    }
+  },
+  "timestamp": "2025-12-19T00:44:21.629766"
+}
