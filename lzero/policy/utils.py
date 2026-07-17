@@ -1,8 +1,5 @@
 import inspect
 import logging
-from typing import List, Dict, Union
-from typing import Tuple
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -10,8 +7,69 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
+from typing import List, Dict, Union, Tuple
 import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+
+def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str, pad_token_id: int = 0) -> torch.Tensor:
+    """
+    Overview:
+        Initialize a tensor filled with `pad_token_id` for batch observations. 
+        This function is designed to be flexible and can handle both textual 
+        and non-textual observations:
+        
+        - For textual observations: it initializes `input_ids` with padding tokens, 
+        ensuring consistent sequence lengths within a batch.
+        - For non-textual observations: it provides a convenient way to fill 
+        observation tensors with a default of 0, 
+        ensuring shape compatibility and preventing uninitialized values.
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
+        - batch_size (:obj:`int`): The batch size.
+        - device (:obj:`str`): The device to store the tensor.
+        - pad_token_id (:obj:`int`): The token ID (or placeholder value) used for padding.
+    Returns:
+        - padded_tensor (:obj:`torch.Tensor`): A tensor of the given shape, 
+        filled with `pad_token_id`.
+    """
+    if isinstance(observation_shape, (list, tuple)):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError(f"observation_shape must be int, list, or tuple, but got {type(observation_shape).__name__}")
+
+    return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == -1 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
+
+
+def initialize_zeros_batch(
+    observation_shape: Union[int, List[int], Tuple[int, ...]],
+    batch_size: int,
+    device: str
+) -> torch.Tensor:
+    """
+    Overview:
+        Initializes a zeros tensor for a batch of observations based on the
+        provided shape. This is commonly used to prepare initial input for models
+        like UniZero.
+
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int, ...]]`): The shape of a single observation.
+        - batch_size (:obj:`int`): The number of observations in the batch.
+        - device (:obj:`str`): The device to store the tensor on (e.g., 'cpu', 'cuda').
+
+    Returns:
+        - torch.Tensor: A zeros tensor with the shape [batch_size, *observation_shape].
+    """
+    if isinstance(observation_shape, (list, tuple)):
+        shape = (batch_size, *observation_shape)
+    elif isinstance(observation_shape, int):
+        shape = (batch_size, observation_shape)
+    else:
+        raise TypeError(
+            f"observation_shape must be an int, list, or tuple, but got {type(observation_shape).__name__}"
+        )
+    return torch.zeros(shape, device=device)
 
 def compute_bleu(reference: str, prediction: str) -> float:
     """
@@ -211,29 +269,70 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
-# modified from https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
-def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type):
-    # start with all of the candidate parameters
+# The following code is modified from the original implementation at:
+# https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
+
+def configure_optimizers_nanogpt(
+    model: nn.Module,
+    weight_decay: float,
+    learning_rate: float,
+    betas: Tuple[float, float],
+    device_type: str,
+    optim_include_no_require_grad_params: bool = False
+) -> torch.optim.AdamW:
+    """
+    Overview:
+        Configures the AdamW optimizer for the nanoGPT model. This function separates model
+        parameters into two groups: one that will be subject to weight decay and one that will not.
+        Typically, 2D and higher-dimensional tensors (e.g., weights of linear layers) are decayed,
+        while 1D tensors (e.g., biases and LayerNorm weights) are not.
+
+    Arguments:
+        - model (:obj:`nn.Module`): The model for which to configure optimizers.
+        - weight_decay (:obj:`float`): The weight decay coefficient to apply.
+        - learning_rate (:obj:`float`): The learning rate for the optimizer.
+        - betas (:obj:`Tuple[float, float]`): The beta coefficients for the AdamW optimizer (e.g., (0.9, 0.95)).
+        - device_type (:obj:`str`): The type of device being used, e.g., 'cuda' or 'cpu'.
+
+    Returns:
+        (:obj:`torch.optim.AdamW`): The configured AdamW optimizer instance.
+    """
+    # Start with all of the candidate parameters from the model.
     param_dict = {pn: p for pn, p in model.named_parameters()}
-    # filter out those that do not require grad
-    param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-    # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-    # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+
+    # TODO: When `optim_include_no_require_grad_params` is True, keep `requires_grad=False` parameters
+    # in weight decay, since some may be unfrozen later (e.g., in the ScaleZero DPS pipeline).
+    if not optim_include_no_require_grad_params:
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+
+    # Create optimizer parameter groups. Any parameter that is 2D or higher will be weight decayed,
+    # otherwise no. i.e. all weight tensors in matrix multiplications and embeddings will be decayed,
+    # while all biases and layernorm weights will not.
     decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
     nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
     optim_groups = [
         {'params': decay_params, 'weight_decay': weight_decay},
         {'params': nodecay_params, 'weight_decay': 0.0}
     ]
+
     num_decay_params = sum(p.numel() for p in decay_params)
     num_nodecay_params = sum(p.numel() for p in nodecay_params)
     print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
     print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-    # Create AdamW optimizer and use the fused version if it is available
+
+    # Create the AdamW optimizer.
+    # Check if a fused version of AdamW is available in the current PyTorch installation.
     fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+    
+    # Note: The current logic creates a standard AdamW optimizer on CUDA-enabled systems.
+    # The 'fused' version is only considered on non-CUDA systems, where it will ultimately not be used
+    # because `device_type` would not be 'cuda'.
     if torch.cuda.is_available():
+        # On a CUDA-enabled system, create a standard AdamW optimizer.
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
     else:
+        # On a non-CUDA system, check if the fused optimizer can be used.
+        # This will be False if device_type is not 'cuda'.
         use_fused = fused_available and device_type == 'cuda'
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
@@ -372,7 +471,7 @@ def prepare_obs_stack_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> T
     return obs_batch, obs_target_batch
 
 
-def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
         Prepare the observations for the model by converting the original batch of observations
@@ -382,6 +481,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     Arguments:
         - obs_batch_ori (:obj:`np.ndarray`): The original observations in a batch style.
         - cfg (:obj:`EasyDict`): The configuration dictionary containing model settings.
+        - task_id (:obj:`int`, optional): The global task ID, used in multitask settings to select the appropriate observation shape.
 
     Returns:
         - obs_batch (:obj:`torch.Tensor`): The tensor containing the observations for the initial inference.
@@ -395,9 +495,12 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     # Calculate the dimension size to slice based on the model configuration.
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
     # For multi-layer perceptron models ('mlp'), use the number of frames to stack times the size of the observation space.
-    stack_dim = cfg.model.frame_stack_num * (
+    if task_id is None:
+        stack_dim = cfg.model.frame_stack_num * (
         cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape)
-
+    else:
+        stack_dim = cfg.model.frame_stack_num * (
+            cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape_list[task_id])
     # Slice the original observation tensor to obtain the batch for the initial inference.
     obs_batch = obs_batch_ori[:, :stack_dim]
 
@@ -408,7 +511,10 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
         # Determine the starting dimension to exclude based on the model type.
         # For 'conv', exclude the first 'image_channel' dimensions.
         # For 'mlp', exclude the first 'observation_shape' dimensions.
-        exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape
+        if task_id is None:
+            exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape
+        else:
+            exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape_list[task_id]
 
         # Slice the original observation tensor to obtain the batch for consistency loss calculation.
         obs_target_batch = obs_batch_ori[:, exclude_dim:]

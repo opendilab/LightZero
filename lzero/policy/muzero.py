@@ -11,11 +11,10 @@ from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
-from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
-from lzero.model.utils import cal_dormant_ratio
+from lzero.model.utils import calculate_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
@@ -71,7 +70,7 @@ class MuZeroPolicy(Policy):
             norm_type='BN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
-            # (bool) Whether to analyze dormant ratio.
+            # (bool) Whether to analyze dormant ratio. More details can be found in https://proceedings.mlr.press/v202/sokar23a/sokar23a.pdf.
             analysis_dormant_ratio=False,
             # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
             # More details can be found in https://arxiv.org/abs/2310.00344.
@@ -113,7 +112,7 @@ class MuZeroPolicy(Policy):
         # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
         eval_offline=False,
         # (bool) Whether to calculate the dormant ratio.
-        cal_dormant_ratio=False,
+        calculate_dormant_ratio=False,
         # (bool) Whether to analyze simulation normalization.
         analysis_sim_norm=False,
         # (bool) Whether to analyze dormant ratio.
@@ -423,8 +422,8 @@ class MuZeroPolicy(Policy):
 
         # ========= logging for analysis =========
         # calculate dormant ratio of encoder
-        if self._cfg.cal_dormant_ratio:
-            self.dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
+        if self._cfg.calculate_dormant_ratio:
+            self.dormant_ratio_encoder = calculate_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
                                                            percentage=self._cfg.dormant_threshold)
         # calculate L2 norm of latent state
         latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()
@@ -470,7 +469,7 @@ class MuZeroPolicy(Policy):
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # ========= logging for analysis ===============
-            if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.cal_dormant_ratio:
+            if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.calculate_dormant_ratio:
                 # calculate dormant ratio of encoder
                 action_tmp = action_batch[:, step_k]
                 if len(action_tmp.shape) == 1:
@@ -486,7 +485,7 @@ class MuZeroPolicy(Policy):
                     latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
                 )
                 state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
-                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network,
+                self.dormant_ratio_dynamics = calculate_dormant_ratio(self._learn_model.dynamics_network,
                                                                 state_action_encoding.detach(),
                                                                 percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
@@ -743,7 +742,7 @@ class MuZeroPolicy(Policy):
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_collect_env_num)]
             if not self._cfg.collect_with_pure_policy:
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
@@ -896,7 +895,7 @@ class MuZeroPolicy(Policy):
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
@@ -941,12 +940,13 @@ class MuZeroPolicy(Policy):
 
         return output
 
-    def _reset_collect(self, data_id: Optional[List[int]] = None) -> None:
+    def _reset_collect(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
         """
         Overview:
             Reset the observation and action for the collector environment.
         Arguments:
             - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -956,12 +956,13 @@ class MuZeroPolicy(Policy):
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
 
-    def _reset_eval(self, data_id: Optional[List[int]] = None) -> None:
+    def _reset_eval(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
         """
         Overview:
             Reset the observation and action for the evaluator environment.
         Arguments:
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -970,6 +971,7 @@ class MuZeroPolicy(Policy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+    
     def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:

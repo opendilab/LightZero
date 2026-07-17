@@ -1,4 +1,3 @@
-import logging
 import os
 from functools import partial
 from typing import Optional, Tuple
@@ -8,16 +7,17 @@ from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import set_pkg_seed, get_rank
+from ding.utils import get_rank, set_pkg_seed
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
-
+from ditk import logging
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect, calculate_update_per_collect
+from tensorboardX import SummaryWriter
+
+from .utils import calculate_update_per_collect, random_collect
 
 
 def train_rezero(

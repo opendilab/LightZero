@@ -1,4 +1,5 @@
 from typing import Union
+
 import torch
 
 
@@ -10,7 +11,6 @@ class DiscreteSupport(object):
         self.size = self.arange.shape[1]
         assert self.size > 0, "DiscreteSupport size must be greater than 0"
         self.step = step
-
 
 def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.) -> torch.Tensor:
     """
@@ -107,33 +107,44 @@ def visit_count_temperature(
         return fixed_temperature_value
 
 
+
 def phi_transform(
     discrete_support: DiscreteSupport,
     x: torch.Tensor,
+    label_smoothing_eps: float = 0.0
 ) -> torch.Tensor:
     """
     Overview:
-        Map a real-valued scalar to a categorical distribution over a discrete support using linear interpolation (a.k.a. “soft” one-hot).
+        Map a real-valued scalar to a categorical distribution over a discrete support
+        using linear interpolation (a.k.a. "soft" one-hot).
 
-        For each scalar value the probability mass is split between the two
+        For each scalar value, the probability mass is split between the two
         nearest support atoms so that their weighted sum equals the original
-        value (MuZero, Appendix F).
+        value (see MuZero, Appendix F).
 
     Arguments:
         - discrete_support : DiscreteSupport
             Container with the support values (must be evenly spaced).
         - x : torch.Tensor
             Input tensor of arbitrary shape ``(...,)`` containing real numbers.
+        - label_smoothing_eps : float
+            Epsilon value for label smoothing (default: 0). When > 0, mixes the target
+            distribution with a uniform distribution to:
+            - Prevent overconfidence and overfitting to discrete support atoms
+            - Improve generalization through smoother value/reward representations
+            - Enhance numerical stability during training
+
+            Formula: smooth_target = (1 - ε) * target + ε / N, where N = support size.
 
     Returns:
         - torch.Tensor
             Tensor of shape ``(*x.shape, N)`` where ``N = discrete_support.size``.
-            The last dimension is a probability distribution (sums to 1).
+            The last dimension represents a probability distribution (sums to 1).
 
     Notes
     -----
-    • No in-place ops on the input are used, improving autograd safety.  
-    • Only one `scatter_add_` kernel is launched for efficiency.  
+    • No in-place ops on the input are used, improving autograd safety.
+    • Only one `scatter_add_` kernel is launched for efficiency.
     """
     # --- constants ----------------------------------------------------------
     min_bound = discrete_support.arange[0, 0]
@@ -141,20 +152,21 @@ def phi_transform(
     step      = discrete_support.step
     size      = discrete_support.size
 
-    # --- 1. clip to the valid range ----------------------------------------
+    # --- 1. Clip to the valid range ----------------------------------------
     x = x.clamp(min_bound, max_bound)
 
-    # --- 2. locate neighbouring indices ------------------------------------
-    pos             = (x - min_bound) / step    # continuous position
-    low_idx_float   = torch.floor(pos)          # lower index
-    low_idx_long    = low_idx_float.long()      # lower index
-    high_idx        = low_idx_long + 1          # upper index (may overflow)
+    # --- 2. Locate neighbouring indices ------------------------------------
+    pos             = (x - min_bound) / step    # Continuous position relative to support
+    low_idx_float   = torch.floor(pos)          # Lower index (float)
+    low_idx_long    = low_idx_float.long()      # Lower index (long)
+    high_idx        = low_idx_long + 1          # Upper index (may temporarily overflow)
 
-    # --- 3. linear interpolation weights -----------------------------------
-    p_high = pos - low_idx_float                # distance to lower atom
-    p_low  = 1.0 - p_high                       # complementary mass
+    # --- 3. Linear interpolation weights -----------------------------------
+    p_high = pos - low_idx_float                # Distance to the lower atom (weight for upper)
+    p_low  = 1.0 - p_high                       # Complementary mass (weight for lower)
 
-    # --- 4. stack indices / probs and scatter ------------------------------
+    # --- 4. Stack indices / probs and scatter ------------------------------
+    # Clamp high_idx to handle the edge case where x is exactly max_bound
     idx   = torch.stack([low_idx_long,
                          torch.clamp(high_idx, max=size - 1)], dim=-1)  # (*x, 2)
     prob  = torch.stack([p_low, p_high], dim=-1)                        # (*x, 2)
@@ -163,7 +175,14 @@ def phi_transform(
                          dtype=x.dtype, device=x.device)
 
     target.scatter_add_(-1, idx, prob)
-    return target
+
+    # --- 5. Apply label smoothing ------------------------------------------
+    if label_smoothing_eps > 0:
+        # Mix the original "two-hot" target with a uniform distribution
+        # smooth_target
+        return (1.0 - label_smoothing_eps) * target + (label_smoothing_eps / size)
+    else:
+        return target
 
 
 def cross_entropy_loss(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:

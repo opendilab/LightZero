@@ -850,7 +850,6 @@ namespace tree{
         srand(t1.tv_usec);
 
         int last_action = -1;
-        float parent_q = 0.0;
         results.search_lens = std::vector<int>();
 
         int players = 0;

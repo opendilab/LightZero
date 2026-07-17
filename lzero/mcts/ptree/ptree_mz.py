@@ -446,7 +446,6 @@ def batch_traverse(
         - virtual_to_play (:obj:`list`): The to_play list used in self_play collecting and trainin gin board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     """
-    parent_q = 0.0
     results.search_lens = [None for _ in range(results.num)]
     results.last_actions = [None for _ in range(results.num)]
 
@@ -460,6 +459,7 @@ def batch_traverse(
 
     results.search_paths = {i: [] for i in range(results.num)}
     for i in range(results.num):
+        parent_q = 0.0
         node = roots.roots[i]
         is_root = 1
         search_len = 0

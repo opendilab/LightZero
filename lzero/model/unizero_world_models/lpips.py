@@ -4,14 +4,14 @@ Modified from https://github.com/CompVis/taming-transformers
 
 import hashlib
 import os
-from collections import namedtuple
-from pathlib import Path
-
 import requests
 import torch
 import torch.nn as nn
 from torchvision import models
 from tqdm import tqdm
+from collections import namedtuple
+from pathlib import Path
+from ditk import logging
 
 
 class LPIPS(nn.Module):
@@ -20,21 +20,61 @@ class LPIPS(nn.Module):
         super().__init__()
         self.scaling_layer = ScalingLayer()
         self.chns = [64, 128, 256, 512, 512]  # vg16 features
+
         # Comment out the following line if you don't need perceptual loss
-        # self.net = vgg16(pretrained=True, requires_grad=False)
+        # This line will now automatically use the path specified by TORCH_HOME
+        self.net = vgg16(pretrained=True, requires_grad=False)
         self.lin0 = NetLinLayer(self.chns[0], use_dropout=use_dropout)
         self.lin1 = NetLinLayer(self.chns[1], use_dropout=use_dropout)
         self.lin2 = NetLinLayer(self.chns[2], use_dropout=use_dropout)
         self.lin3 = NetLinLayer(self.chns[3], use_dropout=use_dropout)
         self.lin4 = NetLinLayer(self.chns[4], use_dropout=use_dropout)
-        # Comment out the following line if you don't need perceptual loss
-        # self.load_from_pretrained()
-        # for param in self.parameters():
-        #     param.requires_grad = False
+        self.load_from_pretrained()
+        for param in self.parameters():
+            param.requires_grad = False
 
     def load_from_pretrained(self) -> None:
-        ckpt = get_ckpt_path(name="vgg_lpips", root=Path.home() / ".cache/iris/tokenizer_pretrained_vgg")  # Download VGG if necessary
-        self.load_state_dict(torch.load(ckpt, map_location=torch.device("cpu")), strict=False)
+        """
+        Load LPIPS linear layer weights (vgg.pth) from TORCH_HOME directory.
+
+        Raises:
+            EnvironmentError: If TORCH_HOME is not set or invalid.
+            FileNotFoundError: If checkpoint file cannot be loaded.
+            RuntimeError: If state dict loading fails.
+        """
+        # Get TORCH_HOME from environment variable
+        torch_home = os.environ.get('TORCH_HOME')
+
+        if torch_home is None:
+            error_msg = (
+                "TORCH_HOME environment variable is not set. "
+                "Please set TORCH_HOME to specify the directory for pretrained models. "
+                "Example: export TORCH_HOME=/path/to/torch/home"
+            )
+            logging.error(error_msg)
+            raise EnvironmentError(error_msg)
+
+        try:
+            logging.info(f"Loading LPIPS pretrained weights from TORCH_HOME: {torch_home}")
+            ckpt = get_ckpt_path(name="vgg_lpips", root=torch_home)
+
+            if not os.path.exists(ckpt):
+                error_msg = f"Checkpoint file not found: {ckpt}"
+                logging.error(error_msg)
+                raise FileNotFoundError(error_msg)
+
+            logging.info(f"Loading checkpoint from: {ckpt}")
+            state_dict = torch.load(ckpt, map_location=torch.device("cpu"))
+            self.load_state_dict(state_dict, strict=False)
+            logging.info(f"Successfully loaded LPIPS pretrained weights from: {ckpt}")
+
+        except FileNotFoundError as e:
+            logging.error(f"Failed to load LPIPS checkpoint: {e}")
+            raise
+        except Exception as e:
+            error_msg = f"Failed to load LPIPS pretrained weights: {e}"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg) from e
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         in0_input, in1_input = (self.scaling_layer(input), self.scaling_layer(target))
@@ -74,7 +114,10 @@ class NetLinLayer(nn.Module):
 class vgg16(torch.nn.Module):
     def __init__(self, requires_grad: bool = False, pretrained: bool = True) -> None:
         super(vgg16, self).__init__()
+        # With TORCH_HOME set, pretrained=True will search or download the model in the specified directory
+        logging.info("Loading vgg16 backbone...")
         vgg_pretrained_features = models.vgg16(pretrained=pretrained).features
+        logging.info("vgg16 backbone loaded.")
         self.slice1 = torch.nn.Sequential()
         self.slice2 = torch.nn.Sequential()
         self.slice3 = torch.nn.Sequential()
@@ -160,6 +203,7 @@ def md5_hash(path: str) -> str:
 
 def get_ckpt_path(name: str, root: str, check: bool = False) -> str:
     assert name in URL_MAP
+    # This function is used for loading vgg.pth, and the path is correct
     path = os.path.join(root, CKPT_MAP[name])
     if not os.path.exists(path) or (check and not md5_hash(path) == MD5_MAP[name]):
         print("Downloading {} model from {} to {}".format(name, URL_MAP[name], path))

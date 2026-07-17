@@ -35,7 +35,9 @@ atari_sampled_efficientzero_config = dict(
     f'data_sez/{env_id[:-14]}_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id=env_id,
-        obs_shape=(4, 96, 96),
+        observation_shape=(4, 64, 64),
+        frame_stack_num=4,
+        gray_scale=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -43,8 +45,10 @@ atari_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(4, 96, 96),
+            observation_shape=(4, 64, 64),
+            image_channel=1,
             frame_stack_num=4,
+            gray_scale=True,
             action_space_size=action_space_size,
             downsample=True,
             continuous_action_space=continuous_action_space,
@@ -87,3 +91,32 @@ atari_sampled_efficientzero_create_config = dict(
 )
 atari_sampled_efficientzero_create_config = EasyDict(atari_sampled_efficientzero_create_config)
 create_config = atari_sampled_efficientzero_create_config
+
+
+def _assert_sampled_efficientzero_atari_obs_shape(cfg):
+    assert not hasattr(cfg.env, 'obs_shape')
+    assert tuple(cfg.env.observation_shape) == (4, 64, 64)
+    assert tuple(cfg.policy.model.observation_shape) == tuple(cfg.env.observation_shape)
+    assert cfg.env.frame_stack_num == cfg.policy.model.frame_stack_num == 4
+    assert cfg.env.gray_scale is True
+    assert cfg.policy.model.gray_scale is True
+    assert cfg.policy.model.image_channel == 1
+
+
+def test_legacy_atari_env_ids_are_supported():
+    from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+
+    assert atari_env_action_space_map['PongNoFrameskip-v4'] == atari_env_action_space_map['ALE/Pong-v5'] == 6
+    assert atari_env_action_space_map['BreakoutNoFrameskip-v4'] == atari_env_action_space_map['ALE/Breakout-v5'] == 4
+    assert atari_env_action_space_map['MsPacmanNoFrameskip-v4'] == atari_env_action_space_map['ALE/MsPacman-v5'] == 9
+
+
+def test_repo_sampled_efficientzero_atari_config_uses_env_observation_shape():
+    from zoo.atari.config.atari_sampled_efficientzero_config import main_config as repo_config
+
+    assert repo_config.policy.model.action_space_size == 6
+    _assert_sampled_efficientzero_atari_obs_shape(repo_config)
+
+
+def test_sampled_efficientzero_test_config_uses_env_observation_shape():
+    _assert_sampled_efficientzero_atari_obs_shape(main_config)

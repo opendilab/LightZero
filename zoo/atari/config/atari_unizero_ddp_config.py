@@ -21,11 +21,6 @@ num_unroll_steps = 10
 infer_context_length = 4
 seed = 0
 
-# ====== only for debug =====
-# num_simulations = 2
-# max_env_step = int(2e5)
-# batch_size = 2
-# num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -55,7 +50,6 @@ atari_unizero_config = dict(
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
                 device='cuda',
-                # device='cpu',
                 action_space_size=action_space_size,
                 num_layers=2,
                 num_heads=8,

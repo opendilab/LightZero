@@ -83,11 +83,11 @@ class SampledUniZeroMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], timestep: Union[int, List[Any]]
+            List[Any]], timestep: Union[int, List[Any]], task_id=None
     ) -> None:
         """
         Overview:
-            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
+            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel.
             This method utilizes the C++ implementation of the tree search for efficiency.
 
         Arguments:
@@ -96,6 +96,7 @@ class SampledUniZeroMCTSCtree(object):
             - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
             - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
             - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
+            - task_id (:obj:`int`, optional): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()
@@ -142,6 +143,7 @@ class SampledUniZeroMCTSCtree(object):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+
                 if self._cfg.model.continuous_action_space is True:
                     # continuous action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device)
@@ -159,9 +161,16 @@ class SampledUniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
+                # search_depth is used for rope in UniZero
+                search_depth = results.get_search_len()
                 # for Sampled UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index,
-                                                           latent_state_index_in_search_path, timestep)
+                # TODO: support RoPE
+                if task_id is not None:
+                    # multi task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                else:
+                    # single task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

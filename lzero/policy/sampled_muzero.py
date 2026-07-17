@@ -1,24 +1,24 @@
 import copy
-from typing import List, Dict, Any, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import torch
-import wandb
 import torch.optim as optim
+import wandb
 from ding.model import model_wrap
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from ditk import logging
+from lzero.mcts import SampledMuZeroMCTSCtree as MCTSCtree
+from lzero.model import ImageTransforms
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          cross_entropy_loss, from, import, lzero.policy,
+                          mz_network_output_unpack, negative_cosine_similarity,
+                          phi_transform, prepare_obs, scalar_transform,
+                          select_action, to_torch_float_tensor)
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
-from lzero.mcts import SampledMuZeroMCTSCtree as MCTSCtree
-# from lzero.mcts import SampledMuZeroMCTSPtree as MCTSPtree
-from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs
-from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 

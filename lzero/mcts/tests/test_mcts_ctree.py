@@ -143,7 +143,7 @@ assert len(action_mask[0]) == action_space_size
 action_num = [
     int(np.array(action_mask[i]).sum()) for i in range(env_nums)
 ]  # [3, 3, 5, 4, 3, 3, 6, 6, 3, 6, 6, 5, 2, 5, 1, 4]
-legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
+legal_actions_list = [np.nonzero(action_mask[j])[0].tolist() for j in range(env_nums)]
 # legal_actions_list =
 # [[3, 5, 6], [0, 3, 6], [0, 1, 4, 6, 8], [0, 3, 4, 5],
 # [2, 5, 8], [1, 2, 4], [0, 2, 3, 4, 7, 8], [0, 1, 2, 3, 4, 8],
