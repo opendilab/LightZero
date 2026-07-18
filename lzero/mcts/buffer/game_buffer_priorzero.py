@@ -174,20 +174,35 @@ class PriorZeroGameBufferOptimized(UniZeroGameBuffer):
         # 检查 vllm和policy_model的输入上下文是否一致 (only for non-padded positions)
         assert len(raw_obs_list) == len(history_obs_list) == len(llm_prior_per_tok_list) == len(cot_prefix_list) == len(llm_action_list)
         B, T = len(raw_obs_list), len(raw_obs_list[0])
-        for b in range(B):
-            for t in range(T - 1):
-                current_obs = raw_obs_list[b][t]
-                current_hist = history_obs_list[b][t]
 
-                old_prefix_cot = llm_prior_per_tok_list[b][t+1]['prefix_cot']
-                old_current_obs = llm_prior_per_tok_list[b][t+1]['current_obs']
-                old_history = llm_prior_per_tok_list[b][t+1]['history']
-                old_logprob = llm_prior_per_tok_list[b][t+1]['rollout_action_logprob']
-                cot_prefix = cot_prefix_list[b][t+1]
-                llm_action = llm_action_list[b][t+1]
+        # Only run dict-based consistency checks for LLM text path.
+        # In VL (image) mode, llm_prior_per_tok entries are numpy arrays (or None), not dicts.
+        # Additional 'prefix_cot' key check prevents false positives if VL path ever returns dicts.
+        _is_llm_text_mode = (
+            B > 0 and T > 1
+            and llm_prior_per_tok_list[0][1] is not None
+            and isinstance(llm_prior_per_tok_list[0][1], dict)
+            and 'prefix_cot' in llm_prior_per_tok_list[0][1]
+        )
+        if _is_llm_text_mode:
+            for b in range(B):
+                for t in range(T - 1):
+                    # Skip padded positions: mask[t] == 0 means the action at step t is padding,
+                    # so llm_prior_per_tok at t+1 is also padding and the alignment invariant doesn't hold.
+                    if mask_list[b][t] == 0.:
+                        continue
+                    current_obs = raw_obs_list[b][t]
+                    current_hist = history_obs_list[b][t]
 
-                assert llm_action in old_logprob
-                assert old_current_obs == current_obs and old_history == current_hist and old_prefix_cot == cot_prefix           
+                    old_prefix_cot = llm_prior_per_tok_list[b][t+1]['prefix_cot']
+                    old_current_obs = llm_prior_per_tok_list[b][t+1]['current_obs']
+                    old_history = llm_prior_per_tok_list[b][t+1]['history']
+                    old_logprob = llm_prior_per_tok_list[b][t+1]['rollout_action_logprob']
+                    cot_prefix = cot_prefix_list[b][t+1]
+                    llm_action = llm_action_list[b][t+1]
+
+                    assert llm_action in old_logprob
+                    assert old_current_obs == current_obs and old_history == current_hist and old_prefix_cot == cot_prefix
 
         current_batch.append(raw_obs_list)
         current_batch.append(history_obs_list)

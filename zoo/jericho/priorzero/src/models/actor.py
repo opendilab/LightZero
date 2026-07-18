@@ -10,6 +10,7 @@ from torch.optim import Optimizer
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+from transformers import AutoModelForCausalLM, AutoModelForVision2Seq, AutoConfig, BitsAndBytesConfig
 from peft import LoraConfig, PeftModel, TaskType, get_peft_model
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
@@ -88,13 +89,28 @@ class Actor(nn.Module):
         else:
             _ = None
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            pretrain_or_model,
-            trust_remote_code=True,
-            attn_implementation=attn_impl,
-            torch_dtype=torch.bfloat16 if bf16 else "auto",
-            device_map=device_map,
-        )
+        # Detect if model is VL (Vision-Language) or LLM (Language Model)
+        config = AutoConfig.from_pretrained(pretrain_or_model, trust_remote_code=True)
+        is_vl = hasattr(config, 'vision_config') or 'VL' in config.__class__.__name__
+
+        if is_vl:
+            # Use AutoModelForVision2Seq for VL models (e.g., Qwen2.5-VL, Qwen3-VL)
+            self.model = AutoModelForVision2Seq.from_pretrained(
+                pretrain_or_model,
+                trust_remote_code=True,
+                attn_implementation=attn_impl,
+                torch_dtype=torch.bfloat16 if bf16 else "auto",
+                device_map=device_map,
+            )
+        else:
+            # Use AutoModelForCausalLM for text-only LLM models
+            self.model = AutoModelForCausalLM.from_pretrained(
+                pretrain_or_model,
+                trust_remote_code=True,
+                attn_implementation=attn_impl,
+                torch_dtype=torch.bfloat16 if bf16 else "auto",
+                device_map=device_map,
+            )
         self.model.config.use_cache = False
 
         if self.train_mode == "lora":

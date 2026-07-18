@@ -27,11 +27,14 @@ class PriorZeroEvaluator(OriginalEvaluator):
     3) llm_prior_only: ignore world model and greedily pick best llm_prior action
     """
 
-    def __init__(self, llm_config: Dict, data_processor = None, **kwargs) -> None:
+    def __init__(self, llm_config: Dict, data_processor=None,
+                 obs_type: str = 'text', env_id: str = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.llm_cfg = llm_config
         self.data_processor = data_processor
-        
+        self.obs_type = obs_type
+        self.env_id = env_id or ''
+
         if self._rank == 0:
             self._logger_eval_episode, _ = build_logger(
                     f'./{self._exp_name}/log/evaluator', "evaluator_episode_info", need_tb=False
@@ -144,7 +147,28 @@ class PriorZeroEvaluator(OriginalEvaluator):
             if self.eval_mode.llm_prior and phase == 'llm':
                 self._tb_logger.add_scalar(f'{self._instance_name}_llm_iter/{k}_LLMPrior', llm_prior_info[k], llm_train_iter)    
 
-        
+        # Image mode: structured summary log
+        if self.obs_type == 'image':
+            self._logger_eval_episode.info("=" * 80)
+            self._logger_eval_episode.info(f"[Eval Summary] obs_type=image | env={self.env_id}")
+            self._logger_eval_episode.info("-" * 80)
+            for tag, info in modes:
+                self._logger_eval_episode.info(
+                    f"  [{tag}] reward_mean={info.get('reward_mean', 0):.2f} | "
+                    f"reward_max={info.get('reward_max', 0):.2f} | "
+                    f"reward_min={info.get('reward_min', 0):.2f} | "
+                    f"avg_steps={info.get('avg_envstep_per_episode', 0):.1f}"
+                )
+            if wm_llm_eval_episode_info is not None and len(wm_llm_eval_episode_info[0]) > 0:
+                ep = wm_llm_eval_episode_info[0]
+                ep_return = ep[-1]['info'].get('eval_episode_return', ep[-1]['info'].get('score', 'N/A'))
+                self._logger_eval_episode.info(f"  [WM_VLPrior ep0] steps={len(ep)} | return={ep_return}")
+            if llm_eval_episode_info is not None and len(llm_eval_episode_info[0]) > 0:
+                ep = llm_eval_episode_info[0]
+                ep_return = ep[-1]['info'].get('eval_episode_return', ep[-1]['info'].get('score', 'N/A'))
+                self._logger_eval_episode.info(f"  [VLPrior ep0] steps={len(ep)} | return={ep_return}")
+            self._logger_eval_episode.info("=" * 80)
+            
     def eval_with_llm_prior(self) -> Dict[str, Any]:
         n_episode = self._default_n_episode
         assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
@@ -410,24 +434,33 @@ class PriorZeroEvaluator(OriginalEvaluator):
             llm_policy = {env_id: {} for env_id in sorted(list(ready_env_id))}
             
             for env_id, llm_prior, valid_actions in zip(sorted(list(ready_env_id)), llm_prior_per_seq, valid_actions_list):
-                if len(llm_prior) == 1:   # 只有go,即valid_action_len=0
-                    assert len(valid_actions) == 0
+                # llm_prior can be a dict (text) or np.ndarray (image)
+                if isinstance(llm_prior, np.ndarray):
+                    # Image mode: prior is an array of probs, pick argmax
+                    actions[env_id] = int(np.argmax(llm_prior))
+                    for i, action_name in enumerate(valid_actions):
+                        llm_policy[env_id][action_name] = float(llm_prior[i]) if i < len(llm_prior) else 0.0
+                elif isinstance(llm_prior, dict):
+                    # Text mode: prior is a dict of action_str -> logprob
+                    if len(llm_prior) == 1:
+                        assert len(valid_actions) == 0
+                        actions[env_id] = 0
+                        continue
+                    if 'go' in llm_prior and 'go' not in valid_actions:
+                        llm_prior.pop('go')
+                    action_str_select, max_logprob = "", float(-1e9)
+                    for action_str, logprob in llm_prior.items():
+                        llm_policy[env_id][action_str] = np.exp(logprob)
+                        if logprob > max_logprob:
+                            action_str_select = action_str
+                            max_logprob = logprob
+                    all_values = [v for _, v in llm_policy[env_id].items()]
+                    for k, _ in llm_policy[env_id].items():
+                        llm_policy[env_id][k] /= sum(all_values)
+                    actions[env_id] = valid_actions.index(action_str_select)
+                else:
+                    # Fallback: uniform random
                     actions[env_id] = 0
-                    continue
-                if 'go' in llm_prior and 'go' not in valid_actions:
-                    llm_prior.pop('go')
-                action_str_select, max_logprob = "", float(-1e9)
-                for action_str, logprob in llm_prior.items():
-                    llm_policy[env_id][action_str] = np.exp(logprob)
-                    if logprob > max_logprob:
-                        action_str_select = action_str
-                        max_logprob = logprob
-                all_values = [v for _, v in llm_policy[env_id].items()]
-                for k, _ in llm_policy[env_id].items():
-                    llm_policy[env_id][k] /= sum(all_values)
-                
-                actions[env_id] = valid_actions.index(action_str_select)
-            
             # ============================================
             timesteps = self._env.step(actions)
             timesteps = to_tensor(timesteps, dtype=torch.float32)
@@ -465,23 +498,37 @@ class PriorZeroEvaluator(OriginalEvaluator):
         """
         import math
         T = self.llm_prior_temperature
-        if T <= 1e-8:
-            max_key = max(logprobs_dict, key=logprobs_dict.get)
-            return {k: (0.0 if k != max_key else 1.0) for k in logprobs_dict}
 
-        scaled_logits = {k: v / T for k, v in logprobs_dict.items()}
+        # Image mode: ndarray of probs → convert to log-probs, scale, convert back
+        if isinstance(logprobs_input, np.ndarray):
+            log_probs = np.log(logprobs_input + 1e-10)
+            if T <= 1e-8:
+                result = np.zeros_like(log_probs)
+                result[np.argmax(log_probs)] = 0.0  # log(1)=0
+                result[result == 0] = -1e10
+                result[np.argmax(logprobs_input)] = 0.0
+                return result if return_logprobs else np.exp(result)
+            scaled = log_probs / T
+            scaled -= scaled.max()
+            log_sum_exp = np.log(np.sum(np.exp(scaled)))
+            normalized = scaled - log_sum_exp
+            return normalized if return_logprobs else np.exp(normalized)
 
-        max_val = max(scaled_logits.values())
-        sum_exp = sum(math.exp(v - max_val) for v in scaled_logits.values())
-        log_sum_exp = math.log(sum_exp) + max_val
+        # Text mode: dict of action_str -> logprob
+        if isinstance(logprobs_input, dict):
+            if T <= 1e-8:
+                max_key = max(logprobs_input, key=logprobs_input.get)
+                return {k: (0.0 if k != max_key else 1.0) for k in logprobs_input}
 
-        result = {}
-        for k, v in scaled_logits.items():
-            normalized_logprob = v - log_sum_exp
-            
-            if return_logprobs:
-                result[k] = normalized_logprob
-            else:
-                result[k] = math.exp(normalized_logprob)
+            scaled_logits = {k: v / T for k, v in logprobs_input.items()}
+            max_val = max(scaled_logits.values())
+            sum_exp = sum(math.exp(v - max_val) for v in scaled_logits.values())
+            log_sum_exp = math.log(sum_exp) + max_val
 
-        return result
+            result = {}
+            for k, v in scaled_logits.items():
+                normalized_logprob = v - log_sum_exp
+                result[k] = normalized_logprob if return_logprobs else math.exp(normalized_logprob)
+            return result
+
+        return logprobs_input
