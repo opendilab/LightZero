@@ -151,19 +151,11 @@ class KVCachePool:
         Returns:
             The pool index where the cache was stored
         """
-        # ==================== BUG FIX: Defensive Deep Copy ====================
-        # CRITICAL: Always clone the input to prevent cache corruption.
-        # This provides an additional layer of protection in case the caller
-        # forgets to clone. The clone operation ensures that the stored cache
-        # is independent from the caller's object, preventing unintended mutations.
-        kv_cache_copy = kv_cache.clone()
-        # =======================================================================
-
         # Check if key already exists
         if cache_key in self._key_to_index:
             # Update existing entry
             pool_index = self._key_to_index[cache_key]
-            self._pool[pool_index] = kv_cache_copy  # Store cloned copy
+            self._pool[pool_index] = self._copy_into_slot(kv_cache, pool_index)
 
             if self.eviction_strategy == EvictionStrategy.LRU:
                 self._access_order.move_to_end(cache_key)
@@ -179,8 +171,9 @@ class KVCachePool:
         if old_key is not None:
             self._evict(old_key, pool_index)
 
-        # Store new entry (already cloned above)
-        self._pool[pool_index] = kv_cache_copy
+        # Store a private copy in the fixed slot. Subsequent writes reuse the
+        # same tensors to avoid recurrent MCTS allocation churn.
+        self._pool[pool_index] = self._copy_into_slot(kv_cache, pool_index)
         self._key_to_index[cache_key] = pool_index
         self._index_to_key[pool_index] = cache_key
 
@@ -190,6 +183,45 @@ class KVCachePool:
 
         logger.debug(f"[{self.name}] Stored cache for key={cache_key} at index={pool_index}")
         return pool_index
+
+    def _copy_into_slot(self, src_kv: KeysValues, pool_index: int) -> KeysValues:
+        """
+        Copy ``src_kv`` into a private pool slot and return the stored object.
+
+        ``KeysValues.clone()`` allocates a full cache object every time. MCTS
+        recurrent inference writes caches at high frequency, so pool slots are
+        allocated once and refreshed with ``copy_`` afterwards.
+        """
+        dst_kv = self._pool[pool_index]
+        if dst_kv is None or not self._is_compatible(dst_kv, src_kv):
+            return src_kv.clone()
+
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+        return dst_kv
+
+    @staticmethod
+    def _is_compatible(dst_kv: KeysValues, src_kv: KeysValues) -> bool:
+        """Return True if two cache containers can share the same storage layout."""
+        if len(dst_kv) != len(src_kv):
+            return False
+        for dst_layer, src_layer in zip(dst_kv._keys_values, src_kv._keys_values):
+            if dst_layer._k_cache._cache.shape != src_layer._k_cache._cache.shape:
+                return False
+            if dst_layer._v_cache._cache.shape != src_layer._v_cache._cache.shape:
+                return False
+            if dst_layer._k_cache._cache.device != src_layer._k_cache._cache.device:
+                return False
+            if dst_layer._v_cache._cache.device != src_layer._v_cache._cache.device:
+                return False
+            if dst_layer._k_cache._cache.dtype != src_layer._k_cache._cache.dtype:
+                return False
+            if dst_layer._v_cache._cache.dtype != src_layer._v_cache._cache.dtype:
+                return False
+        return True
 
     def _find_slot_for_new_entry(self, cache_key: int) -> int:
         """Find an appropriate slot for a new cache entry based on eviction strategy."""

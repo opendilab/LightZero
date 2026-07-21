@@ -176,8 +176,14 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
             
-            if world_model_cfg.latent_recon_loss_weight == 0:
-                self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
+            use_image_decoder = (
+                world_model_cfg.latent_recon_loss_weight > 0 or
+                world_model_cfg.perceptual_loss_weight > 0
+            )
+            if not use_image_decoder:
+                self.tokenizer = Tokenizer(
+                    encoder=self.representation_network, decoder=None, with_lpips=False, obs_type=world_model_cfg.obs_type
+                )
             else:
                 # TODO: customize LatentDecoder
                 self.decoder_network = LatentDecoder(
@@ -186,7 +192,12 @@ class UniZeroModel(nn.Module):
                     num_channels = 64,
                     activation=self.activation,
                 )
-                self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, with_lpips=True, obs_type=world_model_cfg.obs_type)
+                self.tokenizer = Tokenizer(
+                    encoder=self.representation_network,
+                    decoder=self.decoder_network,
+                    with_lpips=world_model_cfg.perceptual_loss_weight > 0,
+                    obs_type=world_model_cfg.obs_type
+                )
 
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
@@ -382,8 +393,9 @@ class UniZeroModel(nn.Module):
         logging.info(f'{"TOTAL":<30} {total_params:>15,} {total_trainable:>15,} {"100.0%":>15}')
         logging.info(f'{"=" * 80}\n')
         
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
-                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None,
+                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0,
+                          ready_env_id: Optional[list] = None) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of the UniZero model, which is the first step of the UniZero model.
@@ -411,7 +423,8 @@ class UniZeroModel(nn.Module):
         obs_act_dict = {
             'obs': obs_batch,
             'action': action_batch,
-            'current_obs': current_obs_batch
+            'current_obs': current_obs_batch,
+            'ready_env_id': ready_env_id,
         }
         
         # Perform initial inference using the world model

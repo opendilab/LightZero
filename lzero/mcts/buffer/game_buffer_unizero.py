@@ -672,14 +672,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
         """
-        # TODO: NOTE: -4 is batch_index_list
-        indices = train_data[0][-4]
-        metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
+        current_batch = train_data[0]
+        indices = current_batch[4]
+        make_times = current_batch[6]
+        metas = {'make_time': make_times, 'batch_priorities': batch_priorities}
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
 
-            # Handle ValueError by using the first timestamp of the segment for comparison.
-            first_transition_time = metas['make_time'][i][0]
+            make_time = np.asarray(metas['make_time'][i]).reshape(-1)
+            first_transition_time = float(make_time[0]) if make_time.size > 0 else 0.0
 
             if first_transition_time > self.clear_time:
                 # Handle IndexError by converting the float index to an integer before use.
@@ -688,4 +689,3 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
                 # Now, idx is a valid integer index.
                 self.game_pos_priorities[idx] = prio
-
