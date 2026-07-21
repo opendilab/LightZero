@@ -492,7 +492,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
         }
         return info, eval_episode_info
     
-    def apply_temperature_scaling(self, logprobs_dict: dict, return_logprobs: bool = True) -> dict:
+    def apply_temperature_scaling(self, logprobs_input: dict, return_logprobs: bool = True) -> dict:
         """
         对 Logprobs 字典进行温度缩放，控制分布的平缓程度。
         """
