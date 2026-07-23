@@ -55,6 +55,7 @@ class Node:
         self.value_prefix = 0.0
         self.children = {}
         self.children_index = []
+        self.sampled_actions = []
         self.simulation_index = 0
         self.batch_index = 0
 
@@ -113,35 +114,56 @@ class Node:
             log_prob = dist.log_prob(sampled_actions_before_tanh).unsqueeze(-1)
             log_prob = log_prob - torch.log(y).sum(-1, keepdim=True)
             self.legal_actions = []
+            self.sampled_actions = []
 
             for action_index in range(self.num_of_sampled_actions):
-                self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
+                action = Action(sampled_actions[action_index].detach().cpu().numpy())
+                self.children[action] = Node(
                     log_prob[action_index],
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space
                 )
-                self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
+                self.legal_actions.append(action)
+                self.sampled_actions.append(action)
         else:
-            if self.legal_actions is not None:
-                # first use the self.legal_actions to exclude the illegal actions
-                policy_tmp = [0. for _ in range(self.action_space_size)]
-                for index, legal_action in enumerate(self.legal_actions):
-                    policy_tmp[legal_action] = policy_logits[index]
-                policy_logits = policy_tmp
-            # then empty the self.legal_actions
-            self.legal_actions = []
-            prob = torch.softmax(torch.tensor(policy_logits), dim=-1)
-            sampled_actions = torch.multinomial(prob, self.num_of_sampled_actions, replacement=False)
+            candidate_actions = list(range(self.action_space_size)) if self.legal_actions is None else list(self.legal_actions)
+            if len(candidate_actions) == 0:
+                raise ValueError("legal_actions must not be empty when expanding a discrete Sampled EfficientZero node")
 
-            for action_index in range(self.num_of_sampled_actions):
-                self.children[Action(sampled_actions[action_index].detach().cpu().numpy())] = Node(
-                    prob[sampled_actions[action_index]],  #
+            policy_logits = torch.as_tensor(policy_logits, dtype=torch.float32)
+            candidate_actions_tensor = torch.as_tensor(candidate_actions, dtype=torch.long)
+            if policy_logits.numel() == self.action_space_size:
+                candidate_logits = policy_logits[candidate_actions_tensor]
+            elif policy_logits.numel() == len(candidate_actions):
+                candidate_logits = policy_logits
+            else:
+                raise ValueError(
+                    f"policy_logits length {policy_logits.numel()} does not match action_space_size "
+                    f"{self.action_space_size} or legal action count {len(candidate_actions)}"
+                )
+
+            prob = torch.softmax(candidate_logits, dim=-1)
+            num_sampled = min(self.num_of_sampled_actions, len(candidate_actions))
+            sampled_action_indices = torch.multinomial(prob, num_sampled, replacement=False)
+            sampled_actions = candidate_actions_tensor[sampled_action_indices]
+
+            self.legal_actions = []
+            self.sampled_actions = []
+
+            for action_index in range(num_sampled):
+                action = Action(sampled_actions[action_index].detach().cpu().numpy())
+                self.children[action] = Node(
+                    prob[sampled_action_indices[action_index]],
                     action_space_size=self.action_space_size,
                     num_of_sampled_actions=self.num_of_sampled_actions,
                     continuous_action_space=self.continuous_action_space
                 )
-                self.legal_actions.append(Action(sampled_actions[action_index].detach().cpu().numpy()))
+                self.legal_actions.append(action)
+                self.sampled_actions.append(action)
+
+            if self.sampled_actions:
+                self.sampled_actions.extend([self.sampled_actions[-1]] * (self.num_of_sampled_actions - num_sampled))
 
     def add_exploration_noise_to_sample_distribution(
             self, exploration_fraction: float, noises: List[float], policy_logits: List[float]
@@ -255,6 +277,7 @@ class Node:
                 distribution[a] = child.visit_count
             # only take the visit counts
             distribution = [v for k, v in distribution.items()]
+            distribution.extend([0] * (len(self.sampled_actions) - len(distribution)))
         return distribution
 
     def get_child(self, action: Union[int, float]) -> "Node":
@@ -459,7 +482,7 @@ class Roots:
         # TODO(pu): root_sampled_actions bug in discere action space?
         sampled_actions = []
         for i in range(self.root_num):
-            sampled_actions.append(self.roots[i].legal_actions)
+            sampled_actions.append(self.roots[i].sampled_actions)
 
         return sampled_actions
 

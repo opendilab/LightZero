@@ -48,6 +48,7 @@ namespace tree
         std::map<size_t, CNode> children;
 
         std::vector<CAction> legal_actions;
+        std::vector<CAction> sampled_actions;
 
         CNode();
         // sampled related core code
