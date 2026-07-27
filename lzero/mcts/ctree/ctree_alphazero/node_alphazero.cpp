@@ -15,7 +15,7 @@ PYBIND11_MODULE(node_alphazero, m) {
         .def("is_leaf", &Node::is_leaf)
         .def("is_root", &Node::is_root)
         .def("parent", [](const Node& self) -> std::shared_ptr<Node> {
-            return self.parent;
+            return self.parent.lock();
         })
         .def("children", [](const Node& self) -> std::map<int, std::shared_ptr<Node>> {
             return self.children;

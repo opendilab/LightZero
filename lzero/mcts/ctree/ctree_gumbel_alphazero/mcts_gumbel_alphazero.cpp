@@ -476,7 +476,10 @@ public:
     
     // This function returns the next action to take and the probabilities of each action based on the current state and the policy-value function.
     std::tuple<int, std::vector<double>, std::vector<double>> get_next_action(py::object state_config_for_env_reset, py::object policy_forward_fn, double temperature, bool sample) {
-        Node* root = new Node();
+        // Own the root so the whole search tree is freed when this call returns
+        // (~Node recursively deletes children); previously the tree leaked every move.
+        std::unique_ptr<Node> root_owner(new Node());
+        Node* root = root_owner.get();
         py::object init_state = state_config_for_env_reset["init_state"];
         if (!init_state.is_none()) {
             init_state = py::bytes(init_state.attr("tobytes")());

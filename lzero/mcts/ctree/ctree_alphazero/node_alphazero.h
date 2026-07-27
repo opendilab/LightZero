@@ -9,8 +9,10 @@
 
 class Node : public std::enable_shared_from_this<Node> {
 public:
-    // Parent and child nodes are managed using shared_ptr
-    std::shared_ptr<Node> parent;
+    // The parent is held as a weak_ptr: children own nothing about their parent, so the
+    // parent<->child shared_ptr cycle is broken and trees are actually freed once the
+    // last external reference to the root is dropped.
+    std::weak_ptr<Node> parent;
     std::map<int, std::shared_ptr<Node>> children;
 
     // Constructor
@@ -39,16 +41,16 @@ public:
             // Self-play mode: update the current node and recursively update the parent node
             // (pass the negative leaf_value).
             update(leaf_value);
-            if (!is_root()) {
-                parent->update_recursive(-leaf_value, battle_mode_in_simulation_env);
+            if (auto p = parent.lock()) {
+                p->update_recursive(-leaf_value, battle_mode_in_simulation_env);
             }
         }
         else if (battle_mode_in_simulation_env == "play_with_bot_mode") {
             // Play-with-bot mode: update the current node and recursively update the parent node
             // (pass the same leaf_value).
             update(leaf_value);
-            if (!is_root()) {
-                parent->update_recursive(leaf_value, battle_mode_in_simulation_env);
+            if (auto p = parent.lock()) {
+                p->update_recursive(leaf_value, battle_mode_in_simulation_env);
             }
         }
         else {
@@ -66,7 +68,7 @@ public:
 
     // Check if the node is the root node
     bool is_root() const {
-        return parent == nullptr;
+        return parent.expired();
     }
 
     // Add a child node
@@ -79,7 +81,7 @@ public:
 
     // Get the parent node
     std::shared_ptr<Node> get_parent() const {
-        return parent;
+        return parent.lock();
     }
 
     // Get the child nodes
