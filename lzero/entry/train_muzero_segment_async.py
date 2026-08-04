@@ -645,7 +645,12 @@ def train_muzero_segment_async(
     _configure_policy_device(cfg, create_cfg.policy.type)
 
     GameBuffer = _select_game_buffer(create_cfg.policy.type)
-    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    # Structured launchers create cfg.exp_name before entering the pipeline in
+    # order to store metadata and console.log.  Do not treat that as a name
+    # collision and split one run across a second timestamp-suffixed directory.
+    cfg = compile_config(
+        cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True, renew_dir=False
+    )
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])

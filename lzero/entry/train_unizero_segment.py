@@ -66,7 +66,13 @@ def train_unizero_segment(
     logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
     # Compile the configuration
-    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    # The config launcher creates the per-run directory first so it can place
+    # metadata and console.log there.  Keep that explicit directory name
+    # instead of letting DI-engine append another timestamp merely because the
+    # directory already exists.
+    cfg = compile_config(
+        cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True, renew_dir=False
+    )
 
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
