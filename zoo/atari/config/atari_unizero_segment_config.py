@@ -47,7 +47,16 @@ def _safe_run_name(value):
     return value
 
 
-def main(env_id, seed, output_root='data_unizero/rjob', run_name=None, use_new_cache_manager=False):
+def main(
+        env_id,
+        seed,
+        output_root='data_unizero/rjob',
+        run_name=None,
+        use_new_cache_manager=False,
+        disable_adaptive_alpha=True,
+        fixed_alpha=5e-3,
+        disable_policy_label_smoothing=True,
+):
     action_space_size = atari_env_action_space_map[env_id]
 
     # ==============================================================
@@ -111,7 +120,8 @@ def main(env_id, seed, output_root='data_unizero/rjob', run_name=None, use_new_c
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse',
                     support_size=601,
-                    policy_entropy_weight=5e-3,
+                    # Used as the fixed entropy coefficient when adaptive alpha is disabled.
+                    policy_entropy_weight=fixed_alpha,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
@@ -144,7 +154,7 @@ def main(env_id, seed, output_root='data_unizero/rjob', run_name=None, use_new_c
             use_augmentation=False,
 
             # Adaptive target entropy settings from the 2025 Pong run.
-            use_adaptive_entropy_weight=True,
+            use_adaptive_entropy_weight=not disable_adaptive_alpha,
             adaptive_entropy_alpha_lr=1e-4,
             target_entropy_start_ratio=0.98,
             target_entropy_end_ratio=0.7,
@@ -160,8 +170,8 @@ def main(env_id, seed, output_root='data_unizero/rjob', run_name=None, use_new_c
             latent_norm_clip_threshold=0.0,
 
             # Policy smoothing decays 0.05->0.01; value/reward use 0.1.
-            policy_ls_eps_start=0.05,
-            policy_ls_eps_end=0.01,
+            policy_ls_eps_start=0.0 if disable_policy_label_smoothing else 0.05,
+            policy_ls_eps_end=0.0 if disable_policy_label_smoothing else 0.01,
             policy_ls_eps_decay_steps=50000,
             label_smoothing_eps=0.1,
             use_continuous_label_smoothing=False,
@@ -236,6 +246,9 @@ def main(env_id, seed, output_root='data_unizero/rjob', run_name=None, use_new_c
             'target_entropy_decay_steps': 100000,
             'encoder_clip_enabled': False,
             'use_new_cache_manager': use_new_cache_manager,
+            'adaptive_alpha_enabled': not disable_adaptive_alpha,
+            'fixed_alpha': fixed_alpha,
+            'policy_label_smoothing_enabled': not disable_policy_label_smoothing,
             'buffer_reanalyze_freq': buffer_reanalyze_freq,
             'reanalyze_batch_size': reanalyze_batch_size,
             'reanalyze_partition': reanalyze_partition,
@@ -283,6 +296,29 @@ if __name__ == "__main__":
         '--use-new-cache-manager', action='store_true',
         help='Enable the new UniZero KV cache manager; disabled by default for baseline compatibility.'
     )
+    adaptive_alpha_group = parser.add_mutually_exclusive_group()
+    adaptive_alpha_group.add_argument(
+        '--use-adaptive-alpha', dest='disable_adaptive_alpha', action='store_false',
+        help='Enable adaptive entropy alpha instead of the fixed coefficient.'
+    )
+    adaptive_alpha_group.add_argument(
+        '--disable-adaptive-alpha', dest='disable_adaptive_alpha', action='store_true',
+        help='Disable adaptive entropy alpha and use --fixed-alpha instead (default).'
+    )
+    parser.add_argument(
+        '--fixed-alpha', type=float, default=5e-3,
+        help='Fixed policy entropy coefficient used when adaptive alpha is disabled.'
+    )
+    policy_smoothing_group = parser.add_mutually_exclusive_group()
+    policy_smoothing_group.add_argument(
+        '--enable-policy-label-smoothing', dest='disable_policy_label_smoothing', action='store_false',
+        help='Enable the 0.05 to 0.01 policy label-smoothing schedule.'
+    )
+    policy_smoothing_group.add_argument(
+        '--disable-policy-label-smoothing', dest='disable_policy_label_smoothing', action='store_true',
+        help='Set policy label-smoothing epsilon to zero (default); value/reward smoothing is unchanged.'
+    )
+    parser.set_defaults(disable_adaptive_alpha=True, disable_policy_label_smoothing=True)
     args = parser.parse_args()
 
     main(
@@ -291,4 +327,7 @@ if __name__ == "__main__":
         output_root=args.output_root,
         run_name=args.run_name,
         use_new_cache_manager=args.use_new_cache_manager,
+        disable_adaptive_alpha=args.disable_adaptive_alpha,
+        fixed_alpha=args.fixed_alpha,
+        disable_policy_label_smoothing=args.disable_policy_label_smoothing,
     )

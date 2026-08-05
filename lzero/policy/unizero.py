@@ -189,7 +189,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
-                policy_entropy_weight=0,
+                policy_entropy_weight=5e-3,
                 # (str) The normalization type for the final layer in both the head and the encoder.
                 # This option must be the same for both 'final_norm_option_in_head' and 'final_norm_option_in_encoder'.
                 # Valid options are 'LayerNorm' and 'SimNorm'.
@@ -265,7 +265,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # so leaving it off avoids expensive compile/recompile overhead in online RL runs.
         torch_compile=False,
         # (bool) Whether to enable adaptive policy entropy weight (alpha)
-        use_adaptive_entropy_weight=True,
+        use_adaptive_entropy_weight=False,
         # (float) Learning rate for adaptive alpha optimizer
         adaptive_entropy_alpha_lr=1e-3,
         # (float) Lower/upper bounds for adaptive entropy alpha. The lower bound must stay well below
@@ -325,9 +325,9 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: Policy Label Smoothing Config ====================
         # (float) Starting epsilon value for policy label smoothing (higher = more smoothing)
-        policy_ls_eps_start=0.05,
+        policy_ls_eps_start=0.0,
         # (float) Ending epsilon value for policy label smoothing (lower = less smoothing)
-        policy_ls_eps_end=0.01,
+        policy_ls_eps_end=0.0,
         # (int) Number of training steps to decay label smoothing epsilon from start to end
         policy_ls_eps_decay_steps=50000,
         

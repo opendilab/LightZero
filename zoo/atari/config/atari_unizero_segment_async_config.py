@@ -212,8 +212,8 @@ def main(
             grad_clip_value=5,
             use_augmentation=False,
 
-            # Match the tuned synchronous Pong baseline on GPU 2.
-            use_adaptive_entropy_weight=True,
+            # Fixed entropy coefficient is the default; adaptive alpha is opt-in.
+            use_adaptive_entropy_weight=False,
             adaptive_entropy_alpha_lr=1e-4,
             target_entropy_start_ratio=0.98,
             target_entropy_end_ratio=0.7,
@@ -224,8 +224,8 @@ def main(
             encoder_clip_end_value=10.0,
             encoder_clip_anneal_steps=100000,
             latent_norm_clip_threshold=0.0,
-            policy_ls_eps_start=0.05,
-            policy_ls_eps_end=0.01,
+            policy_ls_eps_start=0.0,
+            policy_ls_eps_end=0.0,
             policy_ls_eps_decay_steps=50000,
             label_smoothing_eps=0.1,
             use_continuous_label_smoothing=False,
@@ -323,6 +323,9 @@ def main(
             'replay_ratio': replay_ratio,
             'target_entropy_ratio': [0.98, 0.7],
             'target_entropy_decay_steps': 100000,
+            'adaptive_alpha_enabled': False,
+            'fixed_alpha': 5e-3,
+            'policy_label_smoothing_enabled': False,
             'encoder_clip_enabled': False,
             'num_collector_actors': num_collector_actors,
             'max_train_chunk_steps': max_train_chunk_steps,
