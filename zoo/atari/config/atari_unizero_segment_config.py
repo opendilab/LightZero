@@ -50,7 +50,7 @@ def _safe_run_name(value):
 def main(
         env_id,
         seed,
-        output_root='data_unizero/rjob',
+        output_root='data_unizero',
         run_name=None,
         use_new_cache_manager=False,
         disable_adaptive_alpha=True,
@@ -71,7 +71,6 @@ def main(
     infer_context_length = 4
 
     num_simulations = 50
-    # Reproduce the strong 2025-10-10 Pong baseline.
     batch_size = 256
     replay_ratio = 0.1
 
@@ -79,8 +78,7 @@ def main(
     norm_type = "LN"
 
     if env_id == 'ALE/Pong-v5':
-        # max_env_step = int(5e5)
-        max_env_step = int(10e6)
+        max_env_step = int(1e6)
     else:
         max_env_step = int(10e6)
 
@@ -110,8 +108,10 @@ def main(
                 reward_support_range=(-300., 301., 1.),
                 value_support_range=(-300., 301., 1.),
                 norm_type=norm_type,
-                num_res_blocks=2,
-                num_channels=128,
+                # num_res_blocks=2,
+                # num_channels=128,
+                num_res_blocks=1,
+                num_channels=64,
                 world_model_cfg=dict(
                     latent_recon_loss_weight=0.0,
                     perceptual_loss_weight=0.0,
@@ -160,14 +160,18 @@ def main(
             target_entropy_end_ratio=0.7,
             target_entropy_decay_steps=100000,
 
-            # The old run name mentioned 30->10 encoder clipping, but the
-            # implementation did not apply it. Keep it explicitly disabled.
-            use_encoder_clip_annealing=False,
+            # Encoder latent norm clipping — matches the 2025-10-10 Pong run that
+            # converged to reward_mean=20 at ~200k env steps.
+            # The successful run used encoder-clip 30→10 over 100k steps (cosine).
+            # With use_encoder_clip_annealing=False the clip code was unreachable
+            # (bug fixed in unizero.py); keeping annealing=True mirrors the known-good
+            # baseline and gradually tightens the clip as the model stabilises.
+            use_encoder_clip_annealing=True,
             encoder_clip_anneal_type='cosine',
             encoder_clip_start_value=30.0,
             encoder_clip_end_value=10.0,
             encoder_clip_anneal_steps=100000,
-            latent_norm_clip_threshold=0.0,
+            latent_norm_clip_threshold=10.0,  # fallback fixed threshold once annealing completes
 
             # Policy smoothing decays 0.05->0.01; value/reward use 0.1.
             policy_ls_eps_start=0.0 if disable_policy_label_smoothing else 0.05,
@@ -177,10 +181,17 @@ def main(
             use_continuous_label_smoothing=False,
             monitor_norm_freq=10000,
 
-            # Priority settings
+            # Priority settings.
+            # Reverted from config's hard override of 1/1 to softer values:
+            #   alpha=1.0 = fully prioritised sampling; this concentrates the
+            #   gradient signal on a few high-TD-error transitions and causes
+            #   the policy to oscillate (reward_mean swings 13→3→11→7...).
+            #   beta=1.0 with no IS-correction amplifies the same instability.
+            # Softer values (policy defaults) give more uniform coverage and
+            # more stable training.
             use_priority=True,
-            priority_prob_alpha=1,
-            priority_prob_beta=1,
+            priority_prob_alpha=0.6,
+            priority_prob_beta=0.4,
 
             # Reanalyze settings
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -216,7 +227,7 @@ def main(
     game_name = _atari_game_name(env_id)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     if run_name is None:
-        run_name = f'{game_name.lower()}_sync_2025baseline_seed{seed}_{timestamp}'
+        run_name = f'{game_name.lower()}_sync_seed{seed}_{timestamp}'
     run_name = _safe_run_name(run_name)
 
     # LightZero internally prefixes exp_name with "./", so keep it relative to
@@ -238,10 +249,11 @@ def main(
         'env_id': env_id,
         'seed': seed,
         'cuda_visible_devices': os.environ.get('CUDA_VISIBLE_DEVICES'),
-        'variant': 'sync_2025baseline_encoder_clip_off',
+        'variant': 'sync_fast_convergence_v2',
         'key_hyperparameters': {
             'batch_size': batch_size,
             'replay_ratio': replay_ratio,
+            'evaluator_env_num': evaluator_env_num,
             'target_entropy_ratio': [0.98, 0.7],
             'target_entropy_decay_steps': 100000,
             'encoder_clip_enabled': False,
@@ -249,6 +261,9 @@ def main(
             'adaptive_alpha_enabled': not disable_adaptive_alpha,
             'fixed_alpha': fixed_alpha,
             'policy_label_smoothing_enabled': not disable_policy_label_smoothing,
+            'priority_prob_alpha': 0.6,
+            'priority_prob_beta': 0.4,
+            'latent_norm_clip_threshold': 20.0,
             'buffer_reanalyze_freq': buffer_reanalyze_freq,
             'reanalyze_batch_size': reanalyze_batch_size,
             'reanalyze_partition': reanalyze_partition,
@@ -285,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, help='The environment to use', default='ALE/Pong-v5')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     parser.add_argument(
-        '--output-root', type=str, default='data_unizero/rjob',
+        '--output-root', type=str, default='data_unizero',
         help='Root directory containing one self-contained folder per run.'
     )
     parser.add_argument(

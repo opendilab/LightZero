@@ -2088,23 +2088,29 @@ class WorldModel(nn.Module):
                 )
 
         if self.config.use_priority:
-            # Calculate value_priority, similar to MuZero.
+            # Calculate value_priority following MuZero: average absolute TD error
+            # over all valid unroll steps (not just step 0).
+            # Bug-fix: the original implementation only used logits_value[:, 0, :] (step 0),
+            # giving near-zero variance in priority across samples during early Pong training
+            # and making PER degrade to uniform sampling even when use_priority=True.
             with torch.no_grad():
-                # 1. Get the predicted value logits for the first step of the sequence (t=0).
-                # The shape is (B, support_size).
-                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+                B, T, support_size = outputs.logits_value.shape
 
-                # 2. Convert the categorical prediction to a scalar value.
-                # The shape becomes (B, 1).
-                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+                # Reshape to [B*T, support_size], invert the categorical transform,
+                # then reshape back to [B, T].
+                all_value_logits = outputs.logits_value.reshape(B * T, support_size)
+                all_scalar_values = inverse_scalar_transform_handle(all_value_logits)  # [B*T, 1]
+                all_scalar_values = all_scalar_values.squeeze(-1).reshape(B, T)        # [B, T]
 
-                # 3. Get the target scalar value for the first step from the batch.
-                # The shape is (B, num_unroll_steps), so we take the first column.
-                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+                # Target values aligned to [B, T].
+                target_scalar_values = batch['scalar_target_value'][:, :T]             # [B, T]
 
-                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
-                # This is the priority. We use reduction='none' to get per-sample priorities.
-                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
+                # Per-step absolute TD error.
+                per_step_td = F.l1_loss(all_scalar_values, target_scalar_values, reduction='none')  # [B, T]
+
+                # Average over valid (non-padding) steps; clamp denominator to avoid div/0.
+                mask = batch['mask_padding']  # [B, T], True = valid
+                value_priority = (per_step_td * mask).sum(1) / mask.sum(1).clamp_min(1)  # [B]
         else:
             value_priority = torch.tensor(0.)
 

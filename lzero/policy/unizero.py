@@ -1133,15 +1133,18 @@ class UniZeroPolicy(MuZeroPolicy):
             # ===================== END: Dynamically calculate current Clip threshold =====================
 
             # 1. Encoder-Clip (using dynamically calculated current_clip_value)
-            if self.use_encoder_clip_annealing and current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            # Bug-fix: previously this block was guarded by `self.use_encoder_clip_annealing`,
+            # which made `latent_norm_clip_threshold` a dead config when annealing was disabled.
+            # Now the clip fires whenever current_clip_value > 0, regardless of annealing mode.
+            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
                 obs_embeddings = losses.intermediate_losses['obs_embeddings']
                 if obs_embeddings is not None:
                     max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
                     if max_latent_norm > current_clip_value:
                         scale_factor = current_clip_value / max_latent_norm.item()
-                        # No longer print frequently, or can be changed to print every N steps
                         if train_iter % 1000 == 0:
-                            logging.info(f"[Encoder-Clip Annealing] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
+                            clip_mode = "Annealing" if self.use_encoder_clip_annealing else "Fixed"
+                            logging.info(f"[Encoder-Clip {clip_mode}] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
                         scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
             if self.use_head_clip and self.head_clip_manager is not None:
