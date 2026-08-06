@@ -1,10 +1,8 @@
-import datetime
 import logging
 import os
 from collections import OrderedDict, defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,8 +12,6 @@ from lzero.model.common import SimNorm
 from lzero.model.utils import (calculate_dormant_ratio,
                                compute_average_weight_magnitude,
                                compute_effective_rank)
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-from sklearn.manifold import TSNE
 from torch.distributions import (Categorical, Independent, Normal,
                                  TanhTransform, TransformedDistribution)
 
@@ -78,7 +74,7 @@ class WorldModel(nn.Module):
         if not self.config.rotary_emb:
             self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             self.precompute_pos_emb_diff_kv()
-            print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+            logging.info(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         if self.task_embed_option == "concat_task_embed":
@@ -333,6 +329,13 @@ class WorldModel(nn.Module):
                 predicted_rewards (torch.Tensor): Predicted scalar Rewards, shape (B*L,)
                 step_counter (int): Global training step count
             """
+            # Plotting/ML dependencies are imported lazily: this analysis path is only enabled
+            # for occasional debugging and should not add hard dependencies to normal training.
+            import datetime
+            import matplotlib.pyplot as plt
+            from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+            from sklearn.manifold import TSNE
+
             # Ensure latent_states and game_states have shape (N, ...)
             if latent_states.dim() > 2:
                 latent_states = latent_states.reshape(-1, latent_states.shape[-1])
@@ -343,11 +346,11 @@ class WorldModel(nn.Module):
                 l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
                 mean = latent_states.mean()
                 std = latent_states.std()
-                print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
+                logging.info(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
 
             # t-SNE visualization with images and V/R values
             if step_counter >= 0:
-                print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
+                logging.info(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
 
                 # Convert data to CPU
                 latents_np = latent_states.detach().cpu().numpy()
@@ -397,10 +400,13 @@ class WorldModel(nn.Module):
                 sm.set_array([])
                 fig.colorbar(sm, ax=ax, label='Predicted Value')
 
-                # Modified section: Check if file exists, add timestamp if it does
-                base_save_path = (
-                    f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
-                    f'tsne_with_vr_{self.config.optim_type}_step_{step_counter}.png'
+                # Save under a configurable analysis directory (defaults to ./analysis);
+                # if the file exists, append a timestamp to the filename.
+                analysis_save_dir = getattr(self.config, 'analysis_save_dir', './analysis')
+                os.makedirs(analysis_save_dir, exist_ok=True)
+                base_save_path = os.path.join(
+                    analysis_save_dir,
+                    f'tsne_with_vr_{getattr(self.config, "optim_type", "default")}_step_{step_counter}.png'
                 )
 
                 # Check if file exists and determine final save path
@@ -409,7 +415,7 @@ class WorldModel(nn.Module):
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     path_root, path_ext = os.path.splitext(base_save_path)
                     save_path = f"{path_root}_{timestamp}{path_ext}"
-                    print(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
+                    logging.info(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
                 else:
                     # If file doesn't exist, use original path
                     save_path = base_save_path
@@ -417,7 +423,7 @@ class WorldModel(nn.Module):
                 # Save image
                 plt.savefig(save_path)
                 plt.close(fig)  # Explicitly close figure object
-                print(f"t-SNE plot with V/R annotations saved to {save_path}")
+                logging.info(f"t-SNE plot with V/R annotations saved to {save_path}")
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """

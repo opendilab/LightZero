@@ -229,7 +229,7 @@ if __name__ == "__main__":
         export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
         cd /path/to/your/project/
 
-        torchrun --nproc_per_node=4 /mnt/shared-storage-user/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
+        torchrun --nproc_per_node=4 zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py
     """
     from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
