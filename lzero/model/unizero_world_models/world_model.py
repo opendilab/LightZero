@@ -155,9 +155,13 @@ class WorldModel(nn.Module):
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
-        # Set to game_segment_length first to keep self.shared_pool_init_infer valid
-        # TODO: Very important, should be changed to match segment_length
-        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+        # Per-env ring-buffer capacity for the init-inference kv caches. It must be at least
+        # num_simulations: one MCTS search writes up to num_simulations distinct entries per env, and a
+        # smaller ring wraps around mid-search, overwriting entries before they can be re-queried (the
+        # old value, game_segment_length=20, was far below num_simulations=50, so the pool was
+        # effectively non-functional). max_cache_size acts as a memory guard.
+        self.shared_pool_size_init = min(int(getattr(self.config, 'max_cache_size', 5000)),
+                                         max(256, 2 * int(getattr(self.config, 'num_simulations', 50))))
 
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
@@ -1909,6 +1913,10 @@ class WorldModel(nn.Module):
         Returns:
             - list: Sizes of the key-value caches for each environment.
         """
+        # The per-env cache structures (past_kv_cache_init_infer_envs, shared_pool_init_infer, ...)
+        # are sized by env_num; serving more envs than that would silently cross-contaminate caches.
+        assert ready_env_num <= self.env_num, \
+            f'ready_env_num ({ready_env_num}) exceeds env_num ({self.env_num})'
         for index in range(ready_env_num):
             self.total_query_count += 1
             cache_env_id = index
@@ -2329,6 +2337,27 @@ class WorldModel(nn.Module):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
 
+        # ==================== Per-sample losses for PER importance-sampling weights ====================
+        # The ``discounted_*`` losses above are batch-level scalars, so multiplying them by per-sample
+        # IS weights in the policy collapses to ``loss * mean(weights)`` and the weights have no effect.
+        # These [B] counterparts let the policy apply the weights per sample. Each sample's loss is the
+        # discounted sum over its unmasked timesteps, normalized by its own valid-step count.
+        per_sample_kwargs = {}
+        if not self.continuous_action_space:
+            num_steps = batch['actions'].shape[1]
+            mask_float = batch['mask_padding'].float()
+            per_sample_valid_count = mask_float.sum(dim=1).clamp_min(1)
+            per_sample_obs_valid_count = mask_float[:, 1:].sum(dim=1).clamp_min(1)
+            per_sample_kwargs = dict(
+                per_sample_loss_obs=(loss_obs.view(-1, num_steps - 1) * discounts[1:]).sum(dim=1) / per_sample_obs_valid_count,
+                per_sample_loss_rewards=(loss_rewards.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_value=(loss_value.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy=(loss_policy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_orig_policy=(orig_policy_loss.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy_entropy=(policy_entropy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+            )
+        # =================================================================================================
+
         # Add encoder output to return dictionary for external training loop access
         # Using .detach() because this tensor is only used for subsequent clip operations and should not affect gradient computation
         detached_obs_embeddings = obs_embeddings.detach()
@@ -2400,6 +2429,7 @@ class WorldModel(nn.Module):
                 logits_value=outputs.logits_value.detach(),
                 logits_reward=outputs.logits_rewards.detach(),
                 logits_policy=outputs.logits_policy.detach(),
+                **per_sample_kwargs,
             )
 
     

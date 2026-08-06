@@ -132,15 +132,18 @@ class GameBuffer(ABC, object):
             # Sort the batch indices if reanalyze is enabled
             batch_index_list.sort()
         
-        # Calculate weights for the sampled transitions
-        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
-        weights_list /= weights_list.max()  # Normalize weights
-
         game_segment_list = []
         pos_in_game_segment_list = []
+        # The position resampling inside the loop below may move a sample to a different transition
+        # within the same game segment. Track the buffer flat index of the position actually used so
+        # that the IS weights and the later update_priority() refer to the trained transition rather
+        # than the originally drawn one. (look_up entries of one segment are contiguous flat indices
+        # ``segment_base + step_pos``, so the adjusted index is ``idx - orig_pos + new_pos``.)
+        adjusted_index_list = []
 
         for idx in batch_index_list:
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+            orig_pos_in_game_segment = pos_in_game_segment
             game_segment_idx -= self.base_idx  # Adjust index based on base index
             game_segment = self.game_segment_buffer[game_segment_idx]
 
@@ -226,20 +229,27 @@ class GameBuffer(ABC, object):
                         pos_in_game_segment = 0
 
             pos_in_game_segment_list.append(pos_in_game_segment)
-            
+            adjusted_index_list.append(idx - orig_pos_in_game_segment + pos_in_game_segment)
 
-        # make_time = [time.time() for _ in range(len(batch_index_list))]
+        adjusted_index_list = np.asarray(adjusted_index_list)
 
-        # Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).
-        make_time = [0. for _ in range(len(batch_index_list))]
+        # Calculate the IS weights from the probabilities of the transitions actually used (which may
+        # differ from the originally sampled ones after the position resampling above).
+        weights_list = (num_of_transitions * probs[adjusted_index_list]) ** (-self._beta)
+        weights_list /= weights_list.max()  # Normalize weights
 
-        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
-        
+        # Record the actual sampling time: update_priority() only writes back priorities for samples
+        # whose make_time is newer than the last buffer reset (clear_time). Using placeholder zeros
+        # here would make that guard unconditionally False and silently drop ALL priority updates.
+        make_time = [time.time() for _ in range(len(adjusted_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, adjusted_index_list, weights_list, make_time)
+
         if print_priority_logs:
-            print(f"Sampled batch indices: {batch_index_list}")
-            print(f"Sampled priorities: {self.game_pos_priorities[batch_index_list]}")
+            print(f"Sampled batch indices: {adjusted_index_list}")
+            print(f"Sampled priorities: {self.game_pos_priorities[adjusted_index_list]}")
             print(f"Sampled weights: {weights_list}")
-            
+
         return orig_data
 
     def _sample_orig_reanalyze_batch(self, batch_size: int) -> Tuple:

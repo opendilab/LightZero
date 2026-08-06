@@ -345,8 +345,13 @@ class KVCacheManager:
 
     def _init_cache_pools(self):
         """Initialize all cache pools."""
-        # Initial inference pools (one per environment)
-        init_pool_size = int(self.config.game_segment_length)
+        # Initial inference pools (one per environment). Must hold at least num_simulations entries:
+        # one MCTS search writes up to num_simulations distinct entries per env, and a smaller pool
+        # evicts entries mid-search before they can be re-queried (the old value,
+        # game_segment_length=20, was far below num_simulations=50). Sized like the legacy system
+        # (WorldModel.shared_pool_size_init), with max_cache_size as a memory guard.
+        num_simulations = int(getattr(self.config, 'num_simulations', 50))
+        init_pool_size = min(int(getattr(self.config, 'max_cache_size', 5000)), max(256, 2 * num_simulations))
         self.init_pools: List[KVCachePool] = []
         for env_id in range(self.env_num):
             pool = KVCachePool(

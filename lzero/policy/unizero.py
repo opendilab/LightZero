@@ -46,6 +46,67 @@ def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float
     vector_to_parameters(params_vec, trainable_params)
 
 
+def scale_encoder_final_norm(encoder: torch.nn.Module, scale_factor: float) -> bool:
+    """
+    Scale only the affine parameters of the encoder's final norm layer.
+
+    The UniZero encoder ends with a LayerNorm (``final_norm``), so scaling *all* encoder weights is
+    mostly a no-op for the output scale: any scaling applied to the conv/linear stack upstream of the
+    final LayerNorm is normalized away, and only the LayerNorm's own affine parameters actually change
+    the output norm. Scaling just those parameters achieves the intended latent-norm clip directly and
+    leaves the rest of the encoder untouched.
+
+    Returns:
+        - bool: True if the final-norm affine parameters were scaled, False if the encoder has no
+          trainable final-norm parameters (caller should fall back to full-module scaling).
+    """
+    if not (0.0 < scale_factor < 1.0):
+        return True  # Treat an invalid scaling factor as "nothing to do" and skip the fallback.
+    final_norm = getattr(encoder, 'final_norm', None)
+    if final_norm is None:
+        return False
+    norm_params = [p for p in final_norm.parameters() if p.requires_grad]
+    if not norm_params:
+        return False
+    with torch.no_grad():
+        for p in norm_params:
+            p.mul_(scale_factor)
+    return True
+
+
+def apply_per_sample_is_weights(weights, losses, per_sample_policy_loss, scalar_total_loss):
+    """
+    Compute the importance-sampling-weighted total loss.
+
+    When the world model returns per-sample loss components ([B] tensors in
+    ``losses.intermediate_losses``, discrete action space only), rebuild the total loss per sample so
+    that the per-sample IS weights from the replay buffer are actually applied. Otherwise fall back to
+    the legacy scalar path ``(weights * scalar_total_loss).mean()``.
+
+    Arguments:
+        - weights (:obj:`torch.Tensor`): [B] per-sample IS weights from the replay buffer.
+        - losses (:obj:`LossWithIntermediateLosses`): loss container returned by the world model.
+        - per_sample_policy_loss (:obj:`Optional[torch.Tensor]`): [B] per-sample policy loss to use
+          (allows the caller to substitute the adaptive-entropy-weight variant); None forces fallback.
+        - scalar_total_loss (:obj:`torch.Tensor`): batch-level scalar total loss for the fallback path.
+    """
+    per_sample_loss_obs = losses.intermediate_losses.get('per_sample_loss_obs', None)
+    if per_sample_loss_obs is None or per_sample_policy_loss is None:
+        return (weights * scalar_total_loss).mean()
+    per_sample_total_loss = (
+        losses.obs_loss_weight * per_sample_loss_obs
+        + losses.reward_loss_weight * losses.intermediate_losses['per_sample_loss_rewards']
+        + losses.value_loss_weight * losses.intermediate_losses['per_sample_loss_value']
+        + losses.policy_loss_weight * per_sample_policy_loss
+    )
+    # Auxiliary regularizers are not part of the prioritized signal; add them unweighted.
+    auxiliary_loss = (
+        losses.latent_recon_loss_weight * losses.intermediate_losses['latent_recon_loss']
+        + losses.perceptual_loss_weight * losses.intermediate_losses['perceptual_loss']
+    )
+    return (weights.reshape(-1) * per_sample_total_loss).mean() + auxiliary_loss
+
+
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
     """
     Configure optimizer with differentiated learning rates and weight decay for encoder/backbone/head of UniZero model.
@@ -1023,7 +1084,16 @@ class UniZeroPolicy(MuZeroPolicy):
         # Convert to numpy array for the replay buffer, adding a small epsilon.
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
 
-        weighted_total_loss = (weights * losses.loss_total).mean()
+        # ==================== START: PER importance-sampling weighting ====================
+        # NOTE: losses.loss_total is a batch-level scalar, so ``(weights * losses.loss_total).mean()``
+        # collapses to ``losses.loss_total * weights.mean()`` and the per-sample IS weights from the
+        # replay buffer would have no effect. When the world model returns per-sample loss components
+        # ([B] tensors, discrete action space only), rebuild the total loss per sample so that the
+        # weights are actually applied.
+        weighted_total_loss = apply_per_sample_is_weights(
+            weights, losses, losses.intermediate_losses.get('per_sample_loss_policy', None), losses.loss_total
+        )
+        # ==================== END: PER importance-sampling weighting ====================
 
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
@@ -1106,7 +1176,14 @@ class UniZeroPolicy(MuZeroPolicy):
                 losses.latent_recon_loss_weight * latent_recon_loss +
                 losses.perceptual_loss_weight * perceptual_loss
             )
-            weighted_total_loss = (weights * total_loss).mean()
+            # Per-sample counterpart of ``weighted_policy_loss`` for correct IS weighting.
+            per_sample_orig_policy_loss = losses.intermediate_losses.get('per_sample_loss_orig_policy', None)
+            if per_sample_orig_policy_loss is not None:
+                per_sample_weighted_policy_loss = per_sample_orig_policy_loss \
+                    - current_alpha * losses.intermediate_losses['per_sample_loss_policy_entropy']
+            else:
+                per_sample_weighted_policy_loss = None
+            weighted_total_loss = apply_per_sample_is_weights(weights, losses, per_sample_weighted_policy_loss, total_loss)
         # ===================== END: Target Entropy Regularization Update Logic =====================
 
         # Scale the loss by the number of accumulation steps
@@ -1145,7 +1222,12 @@ class UniZeroPolicy(MuZeroPolicy):
                         if train_iter % 1000 == 0:
                             clip_mode = "Annealing" if self.use_encoder_clip_annealing else "Fixed"
                             logging.info(f"[Encoder-Clip {clip_mode}] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
-                        scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
+                        # The encoder ends with a LayerNorm, so scaling all of its weights only
+                        # changes the output through the final norm's affine parameters; scale those
+                        # directly and fall back to full-module scaling when the encoder has no
+                        # trainable final-norm parameters (e.g. LayerNormNoAffine/SimNorm).
+                        if not scale_encoder_final_norm(self._model.world_model.tokenizer.encoder, scale_factor):
+                            scale_module_weights_vectorized(self._model.world_model.tokenizer.encoder, scale_factor)
 
             if self.use_head_clip and self.head_clip_manager is not None:
                 head_clip_results = self.head_clip_manager.apply_head_clip(
@@ -1771,11 +1853,13 @@ class UniZeroPolicy(MuZeroPolicy):
                             logging.info(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
                     # =============================================================================
 
-        # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
+        # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
+        # Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after
+        # every single collected/evaluated segment and making cross-segment cache reuse impossible.
+        clear_interval = int(getattr(self._cfg, 'kv_cache_clear_interval', 2000))
 
         # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps is not None and current_steps % clear_interval == 0:
+        if current_steps is not None and clear_interval > 0 and current_steps % clear_interval == 0:
             logging.debug(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
@@ -1869,10 +1953,12 @@ class UniZeroPolicy(MuZeroPolicy):
                     torch.cuda.empty_cache()
                 return
 
-        # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else self._cfg.game_segment_length
+        # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
+        # Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after
+        # every single collected/evaluated segment and making cross-segment cache reuse impossible.
+        clear_interval = int(getattr(self._cfg, 'kv_cache_clear_interval', 2000))
         # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps is not None and current_steps % clear_interval == 0:
+        if current_steps is not None and clear_interval > 0 and current_steps % clear_interval == 0:
             logging.debug(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the eval model's world model

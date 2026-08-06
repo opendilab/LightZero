@@ -11,22 +11,22 @@ from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_m
 
 
 class _Tee:
-    """Mirror console output to both the terminal and the run directory."""
+    """Mirror all output to both the terminal and console.log."""
 
     def __init__(self, *streams):
         self.streams = streams
 
     def write(self, data):
-        for stream in self.streams:
-            stream.write(data)
+        for s in self.streams:
+            s.write(data)
         return len(data)
 
     def flush(self):
-        for stream in self.streams:
-            stream.flush()
+        for s in self.streams:
+            s.flush()
 
     def isatty(self):
-        return any(getattr(stream, 'isatty', lambda: False)() for stream in self.streams)
+        return any(getattr(s, 'isatty', lambda: False)() for s in self.streams)
 
     def fileno(self):
         return self.streams[0].fileno()
@@ -34,7 +34,6 @@ class _Tee:
     @property
     def encoding(self):
         return getattr(self.streams[0], 'encoding', 'utf-8')
-
 
 def _atari_game_name(env_id):
     return env_id.split('/')[-1].split('-')[0]
@@ -66,7 +65,10 @@ def main(
     num_segments = 8
     evaluator_env_num = 3
 
-    game_segment_length = 20
+    # game_segment_length=20 makes only 20-(num_unroll_steps+td_steps)=5 of the 20 positions in each
+    # non-terminal segment eligible as sampling roots (valid_len in game_buffer._push_game_segment),
+    # i.e. 75% of the collected transitions can never be trained on. 200 restores ~92.5% coverage.
+    game_segment_length = 200
     num_unroll_steps = 10
     infer_context_length = 4
 
@@ -149,6 +151,9 @@ def main(
             num_unroll_steps=num_unroll_steps,
             num_segments=num_segments,
             game_segment_length=game_segment_length,
+            # KV caches are cleared once per env per this many env steps. Was hardcoded to
+            # game_segment_length, which wiped all MCTS kv caches after every single segment.
+            kv_cache_clear_interval=2000,
             num_simulations=num_simulations,
             grad_clip_value=5,
             use_augmentation=False,
@@ -227,7 +232,7 @@ def main(
     game_name = _atari_game_name(env_id)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     if run_name is None:
-        run_name = f'{game_name.lower()}_sync_seed{seed}_{timestamp}'
+        run_name = f'{game_name.lower()}/{game_name.lower()}_sync_seed{seed}_{timestamp}'
     run_name = _safe_run_name(run_name)
 
     # LightZero internally prefixes exp_name with "./", so keep it relative to
@@ -237,41 +242,6 @@ def main(
         raise FileExistsError(f'Run directory already exists: {os.path.abspath(run_dir)}')
     os.makedirs(run_dir)
     main_config.exp_name = run_dir
-
-    metadata = {
-        'run_name': run_name,
-        'run_dir': os.path.abspath(run_dir),
-        'started_at': datetime.now().astimezone().isoformat(),
-        'hostname': socket.gethostname(),
-        'pid': os.getpid(),
-        'command': sys.argv,
-        'config_file': os.path.abspath(__file__),
-        'env_id': env_id,
-        'seed': seed,
-        'cuda_visible_devices': os.environ.get('CUDA_VISIBLE_DEVICES'),
-        'variant': 'sync_fast_convergence_v2',
-        'key_hyperparameters': {
-            'batch_size': batch_size,
-            'replay_ratio': replay_ratio,
-            'evaluator_env_num': evaluator_env_num,
-            'target_entropy_ratio': [0.98, 0.7],
-            'target_entropy_decay_steps': 100000,
-            'encoder_clip_enabled': False,
-            'use_new_cache_manager': use_new_cache_manager,
-            'adaptive_alpha_enabled': not disable_adaptive_alpha,
-            'fixed_alpha': fixed_alpha,
-            'policy_label_smoothing_enabled': not disable_policy_label_smoothing,
-            'priority_prob_alpha': 0.6,
-            'priority_prob_beta': 0.4,
-            'latent_norm_clip_threshold': 20.0,
-            'buffer_reanalyze_freq': buffer_reanalyze_freq,
-            'reanalyze_batch_size': reanalyze_batch_size,
-            'reanalyze_partition': reanalyze_partition,
-        },
-    }
-    with open(os.path.join(run_dir, 'run_metadata.json'), 'w', encoding='utf-8') as file:
-        json.dump(metadata, file, indent=2, ensure_ascii=False)
-        file.write('\n')
     with open(os.path.join(run_dir, 'pid'), 'w', encoding='utf-8') as file:
         file.write(f'{os.getpid()}\n')
 
