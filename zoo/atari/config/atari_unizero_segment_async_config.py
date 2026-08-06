@@ -78,7 +78,10 @@ def main(
     num_segments = 8
     evaluator_env_num = 3
 
-    game_segment_length = 20
+    # game_segment_length=20 makes only 20-(num_unroll_steps+td_steps)=5 of the 20 positions in each
+    # non-terminal segment eligible as sampling roots (valid_len in game_buffer._push_game_segment),
+    # i.e. 75% of the collected transitions can never be trained on. 200 restores ~92.5% coverage.
+    game_segment_length = 200
     num_unroll_steps = 10
     infer_context_length = 4
 
