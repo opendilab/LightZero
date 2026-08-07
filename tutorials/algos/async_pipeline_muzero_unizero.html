@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MuZero / UniZero Async Segment Pipeline &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="How to Customize Your Environments in LightZero?" href="../envs/customize_envs.html" />
+    <link rel="prev" title="How to Customize Your Algorithms in LightZero?" href="customize_algos.html" />
+    <link href="../../_static/css/style.css" rel="stylesheet" type="text/css">
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">MuZero / UniZero Async Segment Pipeline</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">1. Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#architecture">2. Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#roles-and-data-flow">2.1 Roles and data flow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#correctness-boundary-single-owner-principle">2.2 Correctness boundary (single-owner principle)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#weight-publishing-and-policy-lag">2.3 Weight publishing and policy lag</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#differences-from-the-sync-pipeline">3. Differences from the sync pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-and-usage">4. Configuration and usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#enabling-async">4.1 Enabling async</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#key-parameters-policy-async-pipeline">4.2 Key parameters (<code class="docutils literal notranslate"><span class="pre">policy.async_pipeline</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#local-validation">4.3 Local validation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#unizero-specific-constraints">5. UniZero-specific constraints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#notes-and-known-limits">6. Notes and known limits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#validation-status">7. Validation status</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/config.html">How to Set Configuration Files in LightZero</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">MuZero / UniZero Async Segment Pipeline</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/algos/async_pipeline_muzero_unizero.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="muzero-unizero-async-segment-pipeline">
+<h1>MuZero / UniZero Async Segment Pipeline<a class="headerlink" href="#muzero-unizero-async-segment-pipeline" title="Permalink to this heading"></a></h1>
+<p>This document describes the async segment training pipeline for the MuZero family and UniZero in LightZero: architecture, differences from the synchronous (sync) pipeline, and usage.</p>
+<section id="overview">
+<h2>1. Overview<a class="headerlink" href="#overview" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Sync pipeline</strong> (<code class="docutils literal notranslate"><span class="pre">train_muzero_segment</span></code> / <code class="docutils literal notranslate"><span class="pre">train_unizero_segment</span></code>): a single process runs collect → train → evaluate sequentially; whenever one stage runs, the others idle.</p></li>
+<li><p><strong>Async pipeline</strong> (<code class="docutils literal notranslate"><span class="pre">train_muzero_segment_async</span></code> / <code class="docutils literal notranslate"><span class="pre">train_unizero_segment_async</span></code>): based on Ray, collector and evaluator run as separate actor processes and overlap with the learner, improving GPU utilization and wall-clock throughput.</p></li>
+<li><p><strong>Training semantics are unchanged</strong>: the replay buffer, sampling, reanalyze, and priority updates are still owned by the driver process. Async only changes <em>who runs what and when</em>, not the data flow or update rules.</p></li>
+<li><p><strong>Throughput reference</strong> (Atari Pong, same ~6.2 h wall-clock window, 2026-07-02, 2 collector actors): async ≈ 36.3 env steps/s (809.5k env steps) vs sync ≈ 22.4 env steps/s (499.8k env steps) — ~1.6×. The gain comes from overlapping collection/evaluation with learning, not from faster collection itself.</p></li>
+</ul>
+<p>Supported policy types: <code class="docutils literal notranslate"><span class="pre">muzero</span></code>, <code class="docutils literal notranslate"><span class="pre">muzero_context</span></code>, <code class="docutils literal notranslate"><span class="pre">muzero_rnn_full_obs</span></code>, <code class="docutils literal notranslate"><span class="pre">efficientzero</span></code>, <code class="docutils literal notranslate"><span class="pre">sampled_efficientzero</span></code>, <code class="docutils literal notranslate"><span class="pre">sampled_muzero</span></code>, <code class="docutils literal notranslate"><span class="pre">gumbel_muzero</span></code>, <code class="docutils literal notranslate"><span class="pre">stochastic_muzero</span></code>, <code class="docutils literal notranslate"><span class="pre">unizero</span></code>, <code class="docutils literal notranslate"><span class="pre">sampled_unizero</span></code>.</p>
+</section>
+<section id="architecture">
+<h2>2. Architecture<a class="headerlink" href="#architecture" title="Permalink to this heading"></a></h2>
+<section id="roles-and-data-flow">
+<h3>2.1 Roles and data flow<a class="headerlink" href="#roles-and-data-flow" title="Permalink to this heading"></a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>driver (main process):
+  creates the learner (learn_mode policy) + GameBuffer — the single owner of both
+  publishes CPU model snapshots (version = train_iter); the same version reuses one Ray ObjectRef
+  launches collector / evaluator actors
+  main loop:
+    consume finished collect results (segments + envstep_delta + policy_version)
+    push segments into the GameBuffer
+    enqueue one train budget (update_per_collect) per collect batch
+    train short chunks from the local GameBuffer (yield after max_train_chunk_steps)
+    publish new snapshots per weight-sync policy (weight_sync_interval / max_policy_lag)
+    consume finished eval results (reward_mean / stop); optionally save the exact evaluated checkpoint
+
+collector actor (one process per actor):
+  owns its env manager + collect policy
+  loads a model snapshot only at collect boundaries (policy version is fixed within one collect)
+  runs MuZeroSegmentCollector.collect() and returns the rollout data
+
+evaluator actor:
+  owns its env manager + eval policy
+  evaluates an immutable model snapshot and returns reward_mean / stop flag
+</pre></div>
+</div>
+</section>
+<section id="correctness-boundary-single-owner-principle">
+<h3>2.2 Correctness boundary (single-owner principle)<a class="headerlink" href="#correctness-boundary-single-owner-principle" title="Permalink to this heading"></a></h3>
+<p>All replay-buffer mutation, sampling, reanalyze, and priority updates happen inside the single driver process. Actors receive immutable snapshots and return data; no mutable state is shared. Hence <code class="docutils literal notranslate"><span class="pre">game_segment_buffer</span></code>, <code class="docutils literal notranslate"><span class="pre">game_pos_priorities</span></code>, <code class="docutils literal notranslate"><span class="pre">game_segment_game_pos_look_up</span></code>, and UniZero’s target-model-based target inference are free of data races. This is a deliberate trade-off: the buffer/reanalyze are not Ray actors — the throughput ceiling is lower than a fully distributed design, but the correctness boundary is much cleaner.</p>
+</section>
+<section id="weight-publishing-and-policy-lag">
+<h3>2.3 Weight publishing and policy lag<a class="headerlink" href="#weight-publishing-and-policy-lag" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">weight_sync_interval</span></code>: a new snapshot is published only after the learner version (train_iter) has advanced by at least this many steps.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_policy_lag</span></code>: the maximum version lag tolerated by collectors; exceeding it forces a publish.</p></li>
+<li><p>Cold start is controlled by the policy-level <code class="docutils literal notranslate"><span class="pre">train_start_after_envsteps</span></code>: before the buffer is trainable the driver only collects, and budget-queue throttling is disabled to avoid collector starvation.</p></li>
+</ul>
+</section>
+</section>
+<section id="differences-from-the-sync-pipeline">
+<h2>3. Differences from the sync pipeline<a class="headerlink" href="#differences-from-the-sync-pipeline" title="Permalink to this heading"></a></h2>
+<p>| Aspect | sync | async |
+| — | — | — |
+| Execution | Single process, sequential collect→train→eval | Collector/evaluator are Ray actors overlapping the learner |
+| Throughput / GPU util | GPU idles during collect/eval | Stages overlap; ~1.6× wall-clock throughput (measured on Pong) |
+| Data freshness | Collect policy is always the latest weights | Collector policy may lag (bounded by <code class="docutils literal notranslate"><span class="pre">max_policy_lag</span></code>); version fixed within one collect |
+| Training semantics | Baseline | Identical: buffer/sampling/priority updates stay in the single driver process |
+| Extra dependency | None | Ray |
+| Best for | Debugging, small-scale runs, correctness checks | Large-scale / long runs where throughput matters |</p>
+</section>
+<section id="configuration-and-usage">
+<h2>4. Configuration and usage<a class="headerlink" href="#configuration-and-usage" title="Permalink to this heading"></a></h2>
+<section id="enabling-async">
+<h3>4.1 Enabling async<a class="headerlink" href="#enabling-async" title="Permalink to this heading"></a></h3>
+<p>The Atari example configs support both modes; sync is the default, <code class="docutils literal notranslate"><span class="pre">--async-pipeline</span></code> switches to async:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># MuZero</span>
+python<span class="w"> </span>zoo/atari/config/atari_muzero_segment_async_config.py<span class="w"> </span>--env<span class="w"> </span>ALE/Pong-v5<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--async-pipeline
+<span class="c1"># UniZero</span>
+python<span class="w"> </span>zoo/atari/config/atari_unizero_segment_async_config.py<span class="w"> </span>--env<span class="w"> </span>ALE/Pong-v5<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--async-pipeline
+</pre></div>
+</div>
+<p>Equivalent config-level form (in the policy config):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">async_pipeline</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_collector_actors</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="key-parameters-policy-async-pipeline">
+<h3>4.2 Key parameters (<code class="docutils literal notranslate"><span class="pre">policy.async_pipeline</span></code>)<a class="headerlink" href="#key-parameters-policy-async-pipeline" title="Permalink to this heading"></a></h3>
+<p>| Parameter | Default | Description |
+| — | — | — |
+| <code class="docutils literal notranslate"><span class="pre">enabled</span></code> | <code class="docutils literal notranslate"><span class="pre">True</span></code> (in async entry) | Enable the async pipeline |
+| <code class="docutils literal notranslate"><span class="pre">num_collector_actors</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | Number of collector actors; increase for parallel collection |
+| <code class="docutils literal notranslate"><span class="pre">num_evaluator_actors</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | Number of evaluator actors |
+| <code class="docutils literal notranslate"><span class="pre">max_collect_inflight</span></code> | <code class="docutils literal notranslate"><span class="pre">num_collector_actors</span></code> | Max concurrently running collect tasks |
+| <code class="docutils literal notranslate"><span class="pre">max_eval_inflight</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | Max concurrently running eval tasks |
+| <code class="docutils literal notranslate"><span class="pre">max_train_chunk_steps</span></code> | <code class="docutils literal notranslate"><span class="pre">4</span></code> | Max consecutive learner updates before yielding to actor messages |
+| <code class="docutils literal notranslate"><span class="pre">weight_sync_interval</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | Min train_iter gap between weight snapshot publishes |
+| <code class="docutils literal notranslate"><span class="pre">max_policy_lag</span></code> | <code class="docutils literal notranslate"><span class="pre">0</span></code> | Max tolerated collector policy version lag; exceeding it forces a publish |
+| <code class="docutils literal notranslate"><span class="pre">max_train_budget_queue_size</span></code> | <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">num_collector_actors</span></code> | Train-budget queue cap (backpressure); inactive until the buffer is trainable |
+| <code class="docutils literal notranslate"><span class="pre">eval_at_start</span></code> | <code class="docutils literal notranslate"><span class="pre">False</span></code> | Run one evaluation before training starts |
+| <code class="docutils literal notranslate"><span class="pre">collector_num_cpus</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluator_num_cpus</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | Ray CPU resources per actor |
+| <code class="docutils literal notranslate"><span class="pre">collector_num_gpus</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluator_num_gpus</span></code> | <code class="docutils literal notranslate"><span class="pre">0</span></code> | Ray GPU resources per actor (fractional allowed); actors are CPU-only by default |
+| <code class="docutils literal notranslate"><span class="pre">buffer_stats_interval</span></code> | <code class="docutils literal notranslate"><span class="pre">100</span></code> | Buffer statistics logging interval (train_iter) |
+| <code class="docutils literal notranslate"><span class="pre">poll_interval_s</span></code> | <code class="docutils literal notranslate"><span class="pre">0.1</span></code> | Driver event-loop poll interval (seconds) |
+| <code class="docutils literal notranslate"><span class="pre">shutdown_timeout_s</span></code> | <code class="docutils literal notranslate"><span class="pre">30</span></code> | Timeout for actor shutdown at exit (seconds) |
+| <code class="docutils literal notranslate"><span class="pre">ray_local_mode</span></code> | <code class="docutils literal notranslate"><span class="pre">False</span></code> | Ray local mode (for debugging) |</p>
+<p>All other training parameters (batch size, replay_ratio, reanalyze, etc.) are identical to sync.</p>
+</section>
+<section id="local-validation">
+<h3>4.3 Local validation<a class="headerlink" href="#local-validation" title="Permalink to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w"> </span>tests/test_train_muzero_segment_async.py
+</pre></div>
+</div>
+</section>
+</section>
+<section id="unizero-specific-constraints">
+<h2>5. UniZero-specific constraints<a class="headerlink" href="#unizero-specific-constraints" title="Permalink to this heading"></a></h2>
+<p>UniZero’s world model and KV cache add three constraints compared with MuZero:</p>
+<ul class="simple">
+<li><p><strong>KV-cache lifecycle</strong>: collector/evaluator <code class="docutils literal notranslate"><span class="pre">initial_inference</span></code> depends on per-env KV caches. After loading new weights, an actor must clear its collect/eval/target world-model caches (otherwise they hold old-weight content). On the driver side, the learner calls <code class="docutils literal notranslate"><span class="pre">recompute_pos_emb_diff_and_clear_cache()</span></code> after each completed collect budget, and caches are cleared periodically every <code class="docutils literal notranslate"><span class="pre">kv_cache_clear_interval</span></code> env steps (default 2000; 0 disables periodic clearing).</p></li>
+<li><p><strong>Learner input includes <code class="docutils literal notranslate"><span class="pre">train_iter</span></code></strong>: UniZero <code class="docutils literal notranslate"><span class="pre">_forward_learn</span></code> expects <code class="docutils literal notranslate"><span class="pre">[current_batch,</span> <span class="pre">target_batch,</span> <span class="pre">train_iter]</span></code> (<code class="docutils literal notranslate"><span class="pre">train_iter</span></code> drives label smoothing, loss schedules, encoder clipping, and monitoring). The async driver appends it automatically before each learn call.</p></li>
+<li><p><strong>The buffer must stay single-owner</strong>: UniZero <code class="docutils literal notranslate"><span class="pre">GameBuffer.sample()</span></code> uses the target model for target inference and MCTS reanalyze, which cannot be safely distributed across actors.</p></li>
+</ul>
+</section>
+<section id="notes-and-known-limits">
+<h2>6. Notes and known limits<a class="headerlink" href="#notes-and-known-limits" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p>Ray is required only by the async entry; a clear error is raised if it is missing.</p></li>
+<li><p>Prioritized replay relies on the <code class="docutils literal notranslate"><span class="pre">make_time</span></code> timestamp recorded at sampling time: samples drawn before a buffer clear (which bumps <code class="docutils literal notranslate"><span class="pre">clear_time</span></code>) are never written back, preventing stale-index corruption.</p></li>
+<li><p>Evaluator checkpoints are exact snapshots of the evaluated version, saved under <code class="docutils literal notranslate"><span class="pre">exp_name/ckpt/</span></code>.</p></li>
+<li><p>The replay buffer and reanalyze are not distributed (see 2.2); with multiple collectors, the driver’s sequential sampling/training is the throughput ceiling.</p></li>
+</ul>
+</section>
+<section id="validation-status">
+<h2>7. Validation status<a class="headerlink" href="#validation-status" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_train_muzero_segment_async.py</span></code>: 6 passed, 1 skipped.</p></li>
+<li><p>Related regression tests: <code class="docutils literal notranslate"><span class="pre">lzero/mcts/tests/test_game_buffer_index_alignment.py</span></code> (sampling index/weight alignment and priority write-back), <code class="docutils literal notranslate"><span class="pre">lzero/model/unizero_world_models/tests/test_per_sample_is_weights.py</span></code> (per-sample IS weighting).</p></li>
+<li><p>For cluster-scale 1M reward curves and multi-collector throughput comparisons, refer to the latest experiment records.</p></li>
+</ul>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="customize_algos.html" class="btn btn-neutral float-left" title="How to Customize Your Algorithms in LightZero?" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../envs/customize_envs.html" class="btn btn-neutral float-right" title="How to Customize Your Environments in LightZero?" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

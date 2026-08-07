@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MuZero / UniZero 异步训练流水线（Async Segment Pipeline） &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link href="../../_static/css/style.css" rel="stylesheet" type="text/css">
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/config.html">How to Set Configuration Files in LightZero</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">MuZero / UniZero 异步训练流水线（Async Segment Pipeline）</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/algos/async_pipeline_muzero_unizero_zh.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="muzero-unizero-async-segment-pipeline">
+<h1>MuZero / UniZero 异步训练流水线（Async Segment Pipeline）<a class="headerlink" href="#muzero-unizero-async-segment-pipeline" title="Permalink to this heading"></a></h1>
+<p>本文档介绍 LightZero 中 MuZero 系列与 UniZero 的异步（async）segment 训练流水线：架构设计、与同步（sync）管线的区别，以及配置与使用方法。</p>
+<section id="id1">
+<h2>1. 概述<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>同步管线</strong>（<code class="docutils literal notranslate"><span class="pre">train_muzero_segment</span></code> / <code class="docutils literal notranslate"><span class="pre">train_unizero_segment</span></code>）：单进程串行执行「采集 → 训练 → 评估」，任一阶段运行时其余阶段空闲。</p></li>
+<li><p><strong>异步管线</strong>（<code class="docutils literal notranslate"><span class="pre">train_muzero_segment_async</span></code> / <code class="docutils literal notranslate"><span class="pre">train_unizero_segment_async</span></code>）：基于 Ray，将 collector / evaluator 放入独立 actor 进程，与 learner 重叠执行，提升 GPU 利用率与 wall-clock 吞吐。</p></li>
+<li><p><strong>训练语义不变</strong>：replay buffer、采样、reanalyze、优先级更新仍由 driver 单进程持有；async 只改变「谁在何时执行」，不改变数据流与更新规则。</p></li>
+<li><p><strong>吞吐参考</strong>（Atari Pong，同一约 6.2 小时 wall-clock 窗口，2026-07-02，2 个 collector actor）：async 约 36.3 envstep/s（809.5k envsteps），sync 约 22.4 envstep/s（499.8k envsteps），约 1.6×。收益来自采集/评估与学习的流水线重叠，而非单次采集更快。</p></li>
+</ul>
+<p>支持的 policy 类型：<code class="docutils literal notranslate"><span class="pre">muzero</span></code>、<code class="docutils literal notranslate"><span class="pre">muzero_context</span></code>、<code class="docutils literal notranslate"><span class="pre">muzero_rnn_full_obs</span></code>、<code class="docutils literal notranslate"><span class="pre">efficientzero</span></code>、<code class="docutils literal notranslate"><span class="pre">sampled_efficientzero</span></code>、<code class="docutils literal notranslate"><span class="pre">sampled_muzero</span></code>、<code class="docutils literal notranslate"><span class="pre">gumbel_muzero</span></code>、<code class="docutils literal notranslate"><span class="pre">stochastic_muzero</span></code>、<code class="docutils literal notranslate"><span class="pre">unizero</span></code>、<code class="docutils literal notranslate"><span class="pre">sampled_unizero</span></code>。</p>
+</section>
+<section id="id2">
+<h2>2. 架构设计<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<section id="id3">
+<h3>2.1 角色与数据流<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>driver（主进程）:
+  创建 learner（learn_mode policy）+ GameBuffer —— 均为唯一 owner
+  发布 CPU 模型快照（version = train_iter），同版本复用同一 Ray ObjectRef
+  启动 collector / evaluator actor
+  主循环：
+    收取已完成的 collect 结果（segments + envstep_delta + policy_version）
+    将 segments 写入 GameBuffer
+    按 collect 批次 enqueue 训练预算（update_per_collect）
+    从本地 GameBuffer 采样训练短 chunk（不超过 max_train_chunk_steps 后让出事件循环）
+    按权重发布策略（weight_sync_interval / max_policy_lag）推送新快照
+    处理已完成的 eval 结果（reward_mean / stop），按需保存被评估的精确 checkpoint 快照
+
+collector actor（每个 actor 独立进程）:
+  持有自己的 env manager + collect policy
+  仅在 collect 边界加载模型快照（一次 collect 内策略版本固定）
+  执行 MuZeroSegmentCollector.collect()，返回采样结果
+
+evaluator actor:
+  持有自己的 env manager + eval policy
+  评估不可变模型快照，返回 reward_mean / stop 标志
+</pre></div>
+</div>
+</section>
+<section id="owner">
+<h3>2.2 正确性边界（单 owner 原则）<a class="headerlink" href="#owner" title="Permalink to this heading"></a></h3>
+<p>Replay buffer 的写入、采样、reanalyze、优先级更新全部发生在 driver 单进程内；actor 只接收不可变快照、返回采样/评估数据，不共享任何可变状态。因此 <code class="docutils literal notranslate"><span class="pre">game_segment_buffer</span></code>、<code class="docutils literal notranslate"><span class="pre">game_pos_priorities</span></code>、<code class="docutils literal notranslate"><span class="pre">game_segment_game_pos_look_up</span></code> 以及 UniZero 依赖 target model 的 target inference 都不存在并发读写问题。这是本设计刻意不做的事：没有把 replay buffer / reanalyze 拆成 Ray actor——吞吐上限低于完全分布式方案，但正确性边界清晰。</p>
+</section>
+<section id="policy-lag">
+<h3>2.3 权重发布与 policy lag<a class="headerlink" href="#policy-lag" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">weight_sync_interval</span></code>：learner 版本（train_iter）至少前进该步数才发布新快照。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_policy_lag</span></code>：collector 允许的最大版本滞后，超过即强制发布。</p></li>
+<li><p>冷启动由 policy 级参数 <code class="docutils literal notranslate"><span class="pre">train_start_after_envsteps</span></code> 控制：buffer 数据不足时只采集不训练，且此阶段不对训练预算队列限流，避免 collector 饿死。</p></li>
+</ul>
+</section>
+</section>
+<section id="sync">
+<h2>3. 与 sync 管线的区别<a class="headerlink" href="#sync" title="Permalink to this heading"></a></h2>
+<p>| 维度 | sync | async |
+| — | — | — |
+| 执行方式 | 单进程串行：采集→训练→评估 | collector/evaluator 为 Ray actor，与 learner 重叠 |
+| 吞吐 / GPU 利用 | 采集/评估期间 GPU 空闲 | 各阶段流水重叠，wall-clock 吞吐约 1.6×（Pong 实测） |
+| 数据新鲜度 | 采集策略恒为最新权重 | collector 策略允许滞后（上界 <code class="docutils literal notranslate"><span class="pre">max_policy_lag</span></code>），每次 collect 内部版本固定 |
+| 训练语义 | 基准语义 | 完全一致：buffer/采样/优先级更新仍在 driver 单进程，仅执行位置变化 |
+| 额外依赖 | 无 | 需要 Ray |
+| 适用场景 | 调试、小规模实验、正确性验证 | 大规模/长跑训练、追求吞吐的实验 |</p>
+</section>
+<section id="id4">
+<h2>4. 配置与使用<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<section id="async">
+<h3>4.1 开启 async<a class="headerlink" href="#async" title="Permalink to this heading"></a></h3>
+<p>Atari 示例配置同时支持两种模式，默认 sync，<code class="docutils literal notranslate"><span class="pre">--async-pipeline</span></code> 切换为 async：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># MuZero</span>
+python<span class="w"> </span>zoo/atari/config/atari_muzero_segment_async_config.py<span class="w"> </span>--env<span class="w"> </span>ALE/Pong-v5<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--async-pipeline
+<span class="c1"># UniZero</span>
+python<span class="w"> </span>zoo/atari/config/atari_unizero_segment_async_config.py<span class="w"> </span>--env<span class="w"> </span>ALE/Pong-v5<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span><span class="w"> </span>--async-pipeline
+</pre></div>
+</div>
+<p>等价的配置项写法（在 policy config 中）：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">async_pipeline</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_collector_actors</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="policy-async-pipeline">
+<h3>4.2 关键参数（<code class="docutils literal notranslate"><span class="pre">policy.async_pipeline</span></code>）<a class="headerlink" href="#policy-async-pipeline" title="Permalink to this heading"></a></h3>
+<p>| 参数 | 默认值 | 说明 |
+| — | — | — |
+| <code class="docutils literal notranslate"><span class="pre">enabled</span></code> | <code class="docutils literal notranslate"><span class="pre">True</span></code>（async 入口内） | 是否启用 async 流水线 |
+| <code class="docutils literal notranslate"><span class="pre">num_collector_actors</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | collector actor 数；增大可并行采集 |
+| <code class="docutils literal notranslate"><span class="pre">num_evaluator_actors</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | evaluator actor 数 |
+| <code class="docutils literal notranslate"><span class="pre">max_collect_inflight</span></code> | <code class="docutils literal notranslate"><span class="pre">num_collector_actors</span></code> | 同时在飞的 collect 任务上限 |
+| <code class="docutils literal notranslate"><span class="pre">max_eval_inflight</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | 同时在飞的 eval 任务上限 |
+| <code class="docutils literal notranslate"><span class="pre">max_train_chunk_steps</span></code> | <code class="docutils literal notranslate"><span class="pre">4</span></code> | learner 每次连续训练的最大步数，到达后让出事件循环处理 actor 消息 |
+| <code class="docutils literal notranslate"><span class="pre">weight_sync_interval</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | 发布新权重快照的最小 train_iter 间隔 |
+| <code class="docutils literal notranslate"><span class="pre">max_policy_lag</span></code> | <code class="docutils literal notranslate"><span class="pre">0</span></code> | collector 策略允许的最大版本滞后，超过强制发布 |
+| <code class="docutils literal notranslate"><span class="pre">max_train_budget_queue_size</span></code> | <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">num_collector_actors</span></code> | 训练预算队列上限（背压）；buffer 可训练前不生效 |
+| <code class="docutils literal notranslate"><span class="pre">eval_at_start</span></code> | <code class="docutils literal notranslate"><span class="pre">False</span></code> | 是否在训练开始前先评估一次 |
+| <code class="docutils literal notranslate"><span class="pre">collector_num_cpus</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluator_num_cpus</span></code> | <code class="docutils literal notranslate"><span class="pre">1</span></code> | 每个 actor 的 Ray CPU 资源 |
+| <code class="docutils literal notranslate"><span class="pre">collector_num_gpus</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluator_num_gpus</span></code> | <code class="docutils literal notranslate"><span class="pre">0</span></code> | 每个 actor 的 Ray GPU 资源（支持小数）；默认 actor 仅用 CPU |
+| <code class="docutils literal notranslate"><span class="pre">buffer_stats_interval</span></code> | <code class="docutils literal notranslate"><span class="pre">100</span></code> | buffer 统计日志间隔（train_iter） |
+| <code class="docutils literal notranslate"><span class="pre">poll_interval_s</span></code> | <code class="docutils literal notranslate"><span class="pre">0.1</span></code> | driver 事件循环轮询间隔（秒） |
+| <code class="docutils literal notranslate"><span class="pre">shutdown_timeout_s</span></code> | <code class="docutils literal notranslate"><span class="pre">30</span></code> | 结束时等待 actor 退出的超时（秒） |
+| <code class="docutils literal notranslate"><span class="pre">ray_local_mode</span></code> | <code class="docutils literal notranslate"><span class="pre">False</span></code> | Ray local mode（调试用） |</p>
+<p>其余训练参数（batch size、replay_ratio、reanalyze 等）与 sync 完全一致。</p>
+</section>
+<section id="id5">
+<h3>4.3 本地验证<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w"> </span>tests/test_train_muzero_segment_async.py
+</pre></div>
+</div>
+</section>
+</section>
+<section id="unizero">
+<h2>5. UniZero 特有约束<a class="headerlink" href="#unizero" title="Permalink to this heading"></a></h2>
+<p>UniZero 的 world model 与 KV cache 使其在 async 下比 MuZero 多三条约束：</p>
+<ul class="simple">
+<li><p><strong>KV cache 生命周期</strong>：collector/evaluator 的 <code class="docutils literal notranslate"><span class="pre">initial_inference</span></code> 依赖 per-env KV cache。actor 加载新权重后必须清空 collect/eval/target world-model 的 cache，否则 cache 内容来自旧权重；driver 侧 learner 在每个 collect 预算完成后调用 <code class="docutils literal notranslate"><span class="pre">recompute_pos_emb_diff_and_clear_cache()</span></code>；运行期按 <code class="docutils literal notranslate"><span class="pre">kv_cache_clear_interval</span></code>（单位 env step，默认 2000，0 表示禁用）定期清理。</p></li>
+<li><p><strong>learner 输入含 <code class="docutils literal notranslate"><span class="pre">train_iter</span></code></strong>：UniZero 的 <code class="docutils literal notranslate"><span class="pre">_forward_learn</span></code> 需要 <code class="docutils literal notranslate"><span class="pre">[current_batch,</span> <span class="pre">target_batch,</span> <span class="pre">train_iter]</span></code> 三元组（<code class="docutils literal notranslate"><span class="pre">train_iter</span></code> 驱动 label smoothing、loss schedule、encoder clip 与监控）。async driver 在每次 learn 前自动追加，无需用户处理。</p></li>
+<li><p><strong>buffer 必须单 owner</strong>：UniZero <code class="docutils literal notranslate"><span class="pre">GameBuffer.sample()</span></code> 会使用 target model 做 target inference 与 MCTS reanalyze，无法安全地拆到多个 actor 并发执行。</p></li>
+</ul>
+</section>
+<section id="id6">
+<h2>6. 注意事项与已知边界<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p>仅 async 入口依赖 Ray；未安装时入口会给出明确报错。</p></li>
+<li><p>优先级回放（PER）依赖采样时记录的 <code class="docutils literal notranslate"><span class="pre">make_time</span></code> 时间戳：buffer 被清空（<code class="docutils literal notranslate"><span class="pre">clear_time</span></code> 更新）前采出的样本不会再被写回优先级，防止陈旧索引误写。</p></li>
+<li><p>evaluator 保存的 checkpoint 是「被评估的那一版」精确快照，保存在 <code class="docutils literal notranslate"><span class="pre">exp_name/ckpt/</span></code>。</p></li>
+<li><p>replay buffer 与 reanalyze 未分布式化（见 2.2），多 collector 场景下 driver 的采样/训练串行是吞吐瓶颈上限。</p></li>
+</ul>
+</section>
+<section id="id7">
+<h2>7. 验证状态<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_train_muzero_segment_async.py</span></code>：6 passed, 1 skipped。</p></li>
+<li><p>相关回归测试：<code class="docutils literal notranslate"><span class="pre">lzero/mcts/tests/test_game_buffer_index_alignment.py</span></code>（采样索引/权重对齐与优先级写回）、<code class="docutils literal notranslate"><span class="pre">lzero/model/unizero_world_models/tests/test_per_sample_is_weights.py</span></code>（逐样本 IS 权重）。</p></li>
+<li><p>集群侧 1M 量级 reward 曲线与多 collector 吞吐对比以最新实验记录为准。</p></li>
+</ul>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

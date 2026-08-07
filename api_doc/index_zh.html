@@ -49,6 +49,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/installation/installation_and_quickstart_zh.html">安装和快速入门指南</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/algos/async_pipeline_muzero_unizero_zh.html">MuZero / UniZero 异步训练流水线（Async Segment Pipeline）</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/envs/customize_envs_zh.html">LightZero 中如何自定义环境?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/config/config_zh.html">LightZero 中如何设置配置文件？</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorials/logs/logs_zh.html">LightZero的日志监控体系</a></li>
@@ -3436,14 +3437,17 @@
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._monitor_gradient_norms"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._monitor_gradient_norms()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._monitor_model_norms"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._monitor_model_norms()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._monitor_vars_learn"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._monitor_vars_learn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._normalize_ready_env_id"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._normalize_ready_env_id()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._process_transition"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._process_transition()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._reset_collect"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._reset_collect()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._reset_eval"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._reset_eval()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._reset_learn"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._reset_learn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._select_last_infer_inputs"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._select_last_infer_inputs()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._set_attribute"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._set_attribute()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._state_dict_collect"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._state_dict_collect()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._state_dict_eval"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._state_dict_eval()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._state_dict_learn"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._state_dict_learn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy._update_last_infer_inputs"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy._update_last_infer_inputs()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy.cfg"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy.cfg</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy.collect_function"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy.collect_function</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="policy/index.html#lzero.policy.unizero.UniZeroPolicy.collect_mode"><code class="docutils literal notranslate"><span class="pre">UniZeroPolicy.collect_mode</span></code></a></li>

@@ -48,6 +48,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html">安装和快速入门指南</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/algos/async_pipeline_muzero_unizero_zh.html">MuZero / UniZero 异步训练流水线（Async Segment Pipeline）</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/envs/customize_envs_zh.html">LightZero 中如何自定义环境?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/config/config_zh.html">LightZero 中如何设置配置文件？</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/logs/logs_zh.html">LightZero的日志监控体系</a></li>
@@ -2279,6 +2280,8 @@
         <li><a href="api_doc/model/stochastic_muzero_model_mlp.html#lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP._non_persistent_buffers_set">(lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._normalize_ready_env_id">_normalize_ready_env_id() (lzero.policy.unizero.UniZeroPolicy static method)</a>
+</li>
       <li><a href="api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._np_random">_np_random (lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper property)</a>
 
       <ul>
@@ -2823,6 +2826,8 @@
       </ul></li>
       <li><a href="api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._scalar_reward">_scalar_reward() (lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer method)</a>
 </li>
+      <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._select_last_infer_inputs">_select_last_infer_inputs() (lzero.policy.unizero.UniZeroPolicy method)</a>
+</li>
       <li><a href="api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.OnehotArgmax._sequence_nr">_sequence_nr() (lzero.model.stochastic_muzero_model.OnehotArgmax method)</a>
 </li>
       <li><a href="api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._set_attribute">_set_attribute() (lzero.policy.alphazero.AlphaZeroPolicy method)</a>
@@ -3087,6 +3092,8 @@
         <li><a href="api_doc/model/stochastic_muzero_model_mlp.html#lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP._state_dict_pre_hooks">(lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._update_last_infer_inputs">_update_last_infer_inputs() (lzero.policy.unizero.UniZeroPolicy method)</a>
+</li>
       <li><a href="api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel._version">_version (lzero.model.alphazero_model.AlphaZeroModel attribute)</a>
 
       <ul>

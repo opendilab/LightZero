@@ -48,6 +48,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -137,6 +138,67 @@
 
     <span class="c1"># 3. Copy the scaled vector back to the individual parameters of the module</span>
     <span class="n">vector_to_parameters</span><span class="p">(</span><span class="n">params_vec</span><span class="p">,</span> <span class="n">trainable_params</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">scale_encoder_final_norm</span><span class="p">(</span><span class="n">encoder</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">scale_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Scale only the affine parameters of the encoder&#39;s final norm layer.</span>
+
+<span class="sd">    The UniZero encoder ends with a LayerNorm (``final_norm``), so scaling *all* encoder weights is</span>
+<span class="sd">    mostly a no-op for the output scale: any scaling applied to the conv/linear stack upstream of the</span>
+<span class="sd">    final LayerNorm is normalized away, and only the LayerNorm&#39;s own affine parameters actually change</span>
+<span class="sd">    the output norm. Scaling just those parameters achieves the intended latent-norm clip directly and</span>
+<span class="sd">    leaves the rest of the encoder untouched.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        - bool: True if the final-norm affine parameters were scaled, False if the encoder has no</span>
+<span class="sd">          trainable final-norm parameters (caller should fall back to full-module scaling).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mf">0.0</span> <span class="o">&lt;</span> <span class="n">scale_factor</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">True</span>  <span class="c1"># Treat an invalid scaling factor as &quot;nothing to do&quot; and skip the fallback.</span>
+    <span class="n">final_norm</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">encoder</span><span class="p">,</span> <span class="s1">&#39;final_norm&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">final_norm</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">norm_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">final_norm</span><span class="o">.</span><span class="n">parameters</span><span class="p">()</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">norm_params</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">norm_params</span><span class="p">:</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">mul_</span><span class="p">(</span><span class="n">scale_factor</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">apply_per_sample_is_weights</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">losses</span><span class="p">,</span> <span class="n">per_sample_policy_loss</span><span class="p">,</span> <span class="n">scalar_total_loss</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute the importance-sampling-weighted total loss.</span>
+
+<span class="sd">    When the world model returns per-sample loss components ([B] tensors in</span>
+<span class="sd">    ``losses.intermediate_losses``, discrete action space only), rebuild the total loss per sample so</span>
+<span class="sd">    that the per-sample IS weights from the replay buffer are actually applied. Otherwise fall back to</span>
+<span class="sd">    the legacy scalar path ``(weights * scalar_total_loss).mean()``.</span>
+
+<span class="sd">    Arguments:</span>
+<span class="sd">        - weights (:obj:`torch.Tensor`): [B] per-sample IS weights from the replay buffer.</span>
+<span class="sd">        - losses (:obj:`LossWithIntermediateLosses`): loss container returned by the world model.</span>
+<span class="sd">        - per_sample_policy_loss (:obj:`Optional[torch.Tensor]`): [B] per-sample policy loss to use</span>
+<span class="sd">          (allows the caller to substitute the adaptive-entropy-weight variant); None forces fallback.</span>
+<span class="sd">        - scalar_total_loss (:obj:`torch.Tensor`): batch-level scalar total loss for the fallback path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">per_sample_loss_obs</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;per_sample_loss_obs&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">per_sample_loss_obs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">per_sample_policy_loss</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">weights</span> <span class="o">*</span> <span class="n">scalar_total_loss</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    <span class="n">per_sample_total_loss</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">losses</span><span class="o">.</span><span class="n">obs_loss_weight</span> <span class="o">*</span> <span class="n">per_sample_loss_obs</span>
+        <span class="o">+</span> <span class="n">losses</span><span class="o">.</span><span class="n">reward_loss_weight</span> <span class="o">*</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;per_sample_loss_rewards&#39;</span><span class="p">]</span>
+        <span class="o">+</span> <span class="n">losses</span><span class="o">.</span><span class="n">value_loss_weight</span> <span class="o">*</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;per_sample_loss_value&#39;</span><span class="p">]</span>
+        <span class="o">+</span> <span class="n">losses</span><span class="o">.</span><span class="n">policy_loss_weight</span> <span class="o">*</span> <span class="n">per_sample_policy_loss</span>
+    <span class="p">)</span>
+    <span class="c1"># Auxiliary regularizers are not part of the prioritized signal; add them unweighted.</span>
+    <span class="n">auxiliary_loss</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">losses</span><span class="o">.</span><span class="n">latent_recon_loss_weight</span> <span class="o">*</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;latent_recon_loss&#39;</span><span class="p">]</span>
+        <span class="o">+</span> <span class="n">losses</span><span class="o">.</span><span class="n">perceptual_loss_weight</span> <span class="o">*</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;perceptual_loss&#39;</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">weights</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">per_sample_total_loss</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="o">+</span> <span class="n">auxiliary_loss</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">configure_optimizer_unizero</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">,</span> <span class="n">weight_decay</span><span class="p">,</span> <span class="n">device_type</span><span class="p">,</span> <span class="n">betas</span><span class="p">):</span>
@@ -273,6 +335,8 @@
                 <span class="n">support_size</span><span class="o">=</span><span class="mi">101</span><span class="p">,</span>
                 <span class="c1"># (int) The maximum size of the cache.</span>
                 <span class="n">max_cache_size</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span>
+                <span class="c1"># (bool) Whether to use the structured KVCacheManager instead of legacy dict pools.</span>
+                <span class="n">use_new_cache_manager</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                 <span class="c1"># (int) The number of environments.</span>
                 <span class="n">env_num</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
                 <span class="c1"># (float) The weight of the latent reconstruction loss.</span>
@@ -280,7 +344,7 @@
                 <span class="c1"># (float) The weight of the perceptual loss.</span>
                 <span class="n">perceptual_loss_weight</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span>
                 <span class="c1"># (float) The weight of the policy entropy loss.</span>
-                <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mf">5e-3</span><span class="p">,</span>
                 <span class="c1"># (str) The normalization type for the final layer in both the head and the encoder.</span>
                 <span class="c1"># This option must be the same for both &#39;final_norm_option_in_head&#39; and &#39;final_norm_option_in_encoder&#39;.</span>
                 <span class="c1"># Valid options are &#39;LayerNorm&#39; and &#39;SimNorm&#39;.</span>
@@ -329,6 +393,10 @@
                 <span class="n">use_softmoe_head</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                 <span class="c1"># (bool) Whether to use Mixture-of-Experts (MoE) head.</span>
                 <span class="n">use_moe_head</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># (bool) Whether to initialize selected output heads&#39; last linear layer to zero.</span>
+                <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="c1"># (list/None) Output heads to zero-init. None preserves the legacy behavior of zero-initializing all heads.</span>
+                <span class="n">zero_init_head_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="c1"># (int) Number of experts in the MoE head.</span>
                 <span class="n">num_experts_in_moe_head</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
                 <span class="c1"># (bool) Whether to use MoE in the transformer layers.</span>
@@ -347,10 +415,18 @@
             <span class="p">),</span>
         <span class="p">),</span>
         <span class="c1"># ****** common ******</span>
+        <span class="c1"># (bool) Whether to use torch.compile for UniZero models.</span>
+        <span class="c1"># It can be faster for static graphs, but UniZero training uses dynamic dictionaries and cache state,</span>
+        <span class="c1"># so leaving it off avoids expensive compile/recompile overhead in online RL runs.</span>
+        <span class="n">torch_compile</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to enable adaptive policy entropy weight (alpha)</span>
-        <span class="n">use_adaptive_entropy_weight</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">use_adaptive_entropy_weight</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (float) Learning rate for adaptive alpha optimizer</span>
         <span class="n">adaptive_entropy_alpha_lr</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span>
+        <span class="c1"># (float) Lower/upper bounds for adaptive entropy alpha. The lower bound must stay well below</span>
+        <span class="c1"># typical Atari entropy weights so alpha can keep decaying when the target entropy anneals.</span>
+        <span class="n">adaptive_entropy_alpha_min</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+        <span class="n">adaptive_entropy_alpha_max</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
         <span class="c1"># (float) Target entropy ratio at the start of training (higher = more exploration)</span>
         <span class="n">target_entropy_start_ratio</span><span class="o">=</span><span class="mf">0.98</span><span class="p">,</span>
         <span class="c1"># (float) Target entropy ratio at the end of training (lower = more exploitation)</span>
@@ -404,9 +480,9 @@
 
         <span class="c1"># ==================== START: Policy Label Smoothing Config ====================</span>
         <span class="c1"># (float) Starting epsilon value for policy label smoothing (higher = more smoothing)</span>
-        <span class="n">policy_ls_eps_start</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">policy_ls_eps_start</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
         <span class="c1"># (float) Ending epsilon value for policy label smoothing (lower = less smoothing)</span>
-        <span class="n">policy_ls_eps_end</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+        <span class="n">policy_ls_eps_end</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
         <span class="c1"># (int) Number of training steps to decay label smoothing epsilon from start to end</span>
         <span class="n">policy_ls_eps_decay_steps</span><span class="o">=</span><span class="mi">50000</span><span class="p">,</span>
         
@@ -457,6 +533,8 @@
         <span class="n">battle_mode</span><span class="o">=</span><span class="s1">&#39;play_with_bot_mode&#39;</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to monitor extra statistics in tensorboard.</span>
         <span class="n">monitor_extra_statistics</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to call torch.cuda.empty_cache() when resetting inference caches after each train epoch.</span>
+        <span class="n">empty_cuda_cache_on_cache_reset</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="c1"># (int) The transition number of one ``GameSegment``.</span>
         <span class="n">game_segment_length</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to analyze simulation normalization.</span>
@@ -741,10 +819,11 @@
 
         <span class="c1"># use model_wrapper for specialized demands of different modes</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">)</span>
-        <span class="c1"># Ensure that the installed torch version is greater than or equal to 2.0</span>
-        <span class="k">assert</span> <span class="nb">int</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="nb">str</span><span class="o">.</span><span class="n">isdigit</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">__version__</span><span class="p">)))</span> <span class="o">&gt;=</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;We need torch version &gt;= 2.0&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">torch_compile</span><span class="p">:</span>
+            <span class="c1"># Ensure that the installed torch version is greater than or equal to 2.0</span>
+            <span class="k">assert</span> <span class="nb">int</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="nb">str</span><span class="o">.</span><span class="n">isdigit</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">__version__</span><span class="p">)))</span> <span class="o">&gt;=</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;We need torch version &gt;= 2.0&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">)</span>
         <span class="c1"># NOTE: soft target</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">model_wrap</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">,</span>
@@ -800,6 +879,12 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">target_entropy_start_ratio</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">target_entropy_start_ratio</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">target_entropy_end_ratio</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">target_entropy_end_ratio</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">target_entropy_decay_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">target_entropy_decay_steps</span>  <span class="c1"># e.g., complete annealing within 200k steps (2M envsteps)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_min</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;adaptive_entropy_alpha_min&#39;</span><span class="p">,</span> <span class="mf">1e-4</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_max</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;adaptive_entropy_alpha_max&#39;</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_min</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_max</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;adaptive entropy alpha bounds must be positive&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_min</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_max</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;adaptive_entropy_alpha_min must be &lt;= adaptive_entropy_alpha_max&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_adaptive_entropy_weight</span><span class="p">:</span>
             <span class="c1"># 1. Set target entropy. For discrete action spaces, a common heuristic is the negative logarithm</span>
@@ -821,6 +906,10 @@
             <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;&gt;&gt;&gt; Target Entropy Regularization (Adaptive Alpha) Enabled &lt;&lt;&lt;&quot;</span><span class="p">)</span>
             <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Target Entropy: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">target_entropy</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Alpha Optimizer Learning Rate: </span><span class="si">{</span><span class="n">alpha_lr</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;    Alpha Bounds: [</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_min</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_max</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">]&quot;</span>
+            <span class="p">)</span>
             <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">20</span><span class="p">)</span>
         <span class="c1"># ===================== END: Target Entropy Regularization Initialization =====================</span>
 
@@ -979,8 +1068,11 @@
 
         <span class="c1"># Extract valid target policy data and compute entropy</span>
         <span class="n">valid_target_policy</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_policy&#39;</span><span class="p">][</span><span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]]</span>
-        <span class="n">target_policy_entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="n">average_target_policy_entropy</span> <span class="o">=</span> <span class="n">target_policy_entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">valid_target_policy</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">average_target_policy_entropy</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_policy&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">new_tensor</span><span class="p">(</span><span class="mf">0.</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">target_policy_entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">average_target_policy_entropy</span> <span class="o">=</span> <span class="n">target_policy_entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
 
         <span class="c1"># Update world model</span>
         <span class="n">losses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">compute_loss</span><span class="p">(</span>
@@ -1086,7 +1178,16 @@
         <span class="c1"># Convert to numpy array for the replay buffer, adding a small epsilon.</span>
         <span class="n">value_priority_np</span> <span class="o">=</span> <span class="n">value_priority_tensor</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="o">+</span> <span class="mf">1e-6</span>
 
-        <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="p">(</span><span class="n">weights</span> <span class="o">*</span> <span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="c1"># ==================== START: PER importance-sampling weighting ====================</span>
+        <span class="c1"># NOTE: losses.loss_total is a batch-level scalar, so ``(weights * losses.loss_total).mean()``</span>
+        <span class="c1"># collapses to ``losses.loss_total * weights.mean()`` and the per-sample IS weights from the</span>
+        <span class="c1"># replay buffer would have no effect. When the world model returns per-sample loss components</span>
+        <span class="c1"># ([B] tensors, discrete action space only), rebuild the total loss per sample so that the</span>
+        <span class="c1"># weights are actually applied.</span>
+        <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="n">apply_per_sample_is_weights</span><span class="p">(</span>
+            <span class="n">weights</span><span class="p">,</span> <span class="n">losses</span><span class="p">,</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;per_sample_loss_policy&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span>
+        <span class="p">)</span>
+        <span class="c1"># ==================== END: PER importance-sampling weighting ====================</span>
 
         <span class="k">for</span> <span class="n">loss_name</span><span class="p">,</span> <span class="n">loss_value</span> <span class="ow">in</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">loss_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">loss_value</span>
@@ -1147,10 +1248,12 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">alpha_optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
             <span class="n">alpha_loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">alpha_optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-            <span class="c1"># [Optimization suggestion] Add log_alpha clipping as a safety measure</span>
+            <span class="c1"># Keep alpha numerically bounded without preventing late-stage entropy annealing.</span>
             <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-                <span class="c1"># Limit alpha to a range, e.g., [1e-4, 10.0]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">clamp_</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">5e-2</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">10.0</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">clamp_</span><span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_min</span><span class="p">),</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">adaptive_entropy_alpha_max</span><span class="p">)</span>
+                <span class="p">)</span>
 
             <span class="c1"># Use current updated alpha (with gradient flow truncated)</span>
             <span class="n">current_alpha</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
@@ -1158,36 +1261,23 @@
             <span class="c1"># Recalculate weighted policy loss and total loss</span>
             <span class="c1"># Note: policy_entropy here is already an average value of a batch</span>
             <span class="n">weighted_policy_loss</span> <span class="o">=</span> <span class="n">orig_policy_loss</span> <span class="o">-</span> <span class="n">current_alpha</span> <span class="o">*</span> <span class="n">policy_entropy</span>
-            <span class="c1"># Rebuild total loss (not using losses.loss_total)</span>
-            <span class="c1"># Ensure the weights here are consistent with the calculation in LossWithIntermediateLosses class</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">obs_loss_weight</span> <span class="o">=</span> <span class="mi">2</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">value_loss_weight</span> <span class="o">=</span> <span class="mf">0.5</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">reward_loss_weight</span> <span class="o">=</span> <span class="mf">1.</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">policy_loss_weight</span> <span class="o">=</span> <span class="mf">1.</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">ends_loss_weight</span> <span class="o">=</span> <span class="mf">0.</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">latent_recon_loss_weight</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">world_model_cfg</span><span class="o">.</span><span class="n">latent_recon_loss_weight</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">perceptual_loss_weight</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">world_model_cfg</span><span class="o">.</span><span class="n">perceptual_loss_weight</span>
-
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">latent_recon_loss_weight</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
-                <span class="n">total_loss</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">reward_loss_weight</span> <span class="o">*</span> <span class="n">reward_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">value_loss_weight</span> <span class="o">*</span> <span class="n">value_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">policy_loss_weight</span> <span class="o">*</span> <span class="n">weighted_policy_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">obs_loss_weight</span>  <span class="o">*</span> <span class="n">obs_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">latent_recon_loss_weight</span> <span class="o">*</span> <span class="n">latent_recon_loss</span><span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">perceptual_loss_weight</span><span class="o">*</span><span class="n">perceptual_loss</span>
-                <span class="p">)</span>
+            <span class="c1"># Rebuild total loss with the same weights used by LossWithIntermediateLosses.</span>
+            <span class="n">total_loss</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">losses</span><span class="o">.</span><span class="n">reward_loss_weight</span> <span class="o">*</span> <span class="n">reward_loss</span> <span class="o">+</span>
+                <span class="n">losses</span><span class="o">.</span><span class="n">value_loss_weight</span> <span class="o">*</span> <span class="n">value_loss</span> <span class="o">+</span>
+                <span class="n">losses</span><span class="o">.</span><span class="n">policy_loss_weight</span> <span class="o">*</span> <span class="n">weighted_policy_loss</span> <span class="o">+</span>
+                <span class="n">losses</span><span class="o">.</span><span class="n">obs_loss_weight</span> <span class="o">*</span> <span class="n">obs_loss</span> <span class="o">+</span>
+                <span class="n">losses</span><span class="o">.</span><span class="n">latent_recon_loss_weight</span> <span class="o">*</span> <span class="n">latent_recon_loss</span> <span class="o">+</span>
+                <span class="n">losses</span><span class="o">.</span><span class="n">perceptual_loss_weight</span> <span class="o">*</span> <span class="n">perceptual_loss</span>
+            <span class="p">)</span>
+            <span class="c1"># Per-sample counterpart of ``weighted_policy_loss`` for correct IS weighting.</span>
+            <span class="n">per_sample_orig_policy_loss</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;per_sample_loss_orig_policy&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">per_sample_orig_policy_loss</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">per_sample_weighted_policy_loss</span> <span class="o">=</span> <span class="n">per_sample_orig_policy_loss</span> \
+                    <span class="o">-</span> <span class="n">current_alpha</span> <span class="o">*</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;per_sample_loss_policy_entropy&#39;</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span>
-
-                <span class="n">total_loss</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">reward_loss_weight</span> <span class="o">*</span> <span class="n">reward_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">value_loss_weight</span> <span class="o">*</span> <span class="n">value_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">policy_loss_weight</span> <span class="o">*</span> <span class="n">weighted_policy_loss</span> <span class="o">+</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">obs_loss_weight</span>  <span class="o">*</span> <span class="n">obs_loss</span>
-
-                <span class="p">)</span>
-            <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="p">(</span><span class="n">weights</span> <span class="o">*</span> <span class="n">total_loss</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+                <span class="n">per_sample_weighted_policy_loss</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="n">apply_per_sample_is_weights</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">losses</span><span class="p">,</span> <span class="n">per_sample_weighted_policy_loss</span><span class="p">,</span> <span class="n">total_loss</span><span class="p">)</span>
         <span class="c1"># ===================== END: Target Entropy Regularization Update Logic =====================</span>
 
         <span class="c1"># Scale the loss by the number of accumulation steps</span>
@@ -1214,16 +1304,24 @@
             <span class="c1"># ===================== END: Dynamically calculate current Clip threshold =====================</span>
 
             <span class="c1"># 1. Encoder-Clip (using dynamically calculated current_clip_value)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_encoder_clip_annealing</span> <span class="ow">and</span> <span class="n">current_clip_value</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="s1">&#39;obs_embeddings&#39;</span> <span class="ow">in</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">:</span>
+            <span class="c1"># Bug-fix: previously this block was guarded by `self.use_encoder_clip_annealing`,</span>
+            <span class="c1"># which made `latent_norm_clip_threshold` a dead config when annealing was disabled.</span>
+            <span class="c1"># Now the clip fires whenever current_clip_value &gt; 0, regardless of annealing mode.</span>
+            <span class="k">if</span> <span class="n">current_clip_value</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="s1">&#39;obs_embeddings&#39;</span> <span class="ow">in</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">:</span>
                 <span class="n">obs_embeddings</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;obs_embeddings&#39;</span><span class="p">]</span>
                 <span class="k">if</span> <span class="n">obs_embeddings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">max_latent_norm</span> <span class="o">=</span> <span class="n">obs_embeddings</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
                     <span class="k">if</span> <span class="n">max_latent_norm</span> <span class="o">&gt;</span> <span class="n">current_clip_value</span><span class="p">:</span>
                         <span class="n">scale_factor</span> <span class="o">=</span> <span class="n">current_clip_value</span> <span class="o">/</span> <span class="n">max_latent_norm</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                        <span class="c1"># No longer print frequently, or can be changed to print every N steps</span>
                         <span class="k">if</span> <span class="n">train_iter</span> <span class="o">%</span> <span class="mi">1000</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Encoder-Clip Annealing] Iter </span><span class="si">{</span><span class="n">train_iter</span><span class="si">}</span><span class="s2">: Max latent norm </span><span class="si">{</span><span class="n">max_latent_norm</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> &gt; </span><span class="si">{</span><span class="n">current_clip_value</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">. Scaling by </span><span class="si">{</span><span class="n">scale_factor</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
-                        <span class="n">scale_module_weights_vectorized</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encoder</span><span class="p">,</span> <span class="n">scale_factor</span><span class="p">)</span>
+                            <span class="n">clip_mode</span> <span class="o">=</span> <span class="s2">&quot;Annealing&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_encoder_clip_annealing</span> <span class="k">else</span> <span class="s2">&quot;Fixed&quot;</span>
+                            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Encoder-Clip </span><span class="si">{</span><span class="n">clip_mode</span><span class="si">}</span><span class="s2">] Iter </span><span class="si">{</span><span class="n">train_iter</span><span class="si">}</span><span class="s2">: Max latent norm </span><span class="si">{</span><span class="n">max_latent_norm</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> &gt; </span><span class="si">{</span><span class="n">current_clip_value</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">. Scaling by </span><span class="si">{</span><span class="n">scale_factor</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+                        <span class="c1"># The encoder ends with a LayerNorm, so scaling all of its weights only</span>
+                        <span class="c1"># changes the output through the final norm&#39;s affine parameters; scale those</span>
+                        <span class="c1"># directly and fall back to full-module scaling when the encoder has no</span>
+                        <span class="c1"># trainable final-norm parameters (e.g. LayerNormNoAffine/SimNorm).</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">scale_encoder_final_norm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encoder</span><span class="p">,</span> <span class="n">scale_factor</span><span class="p">):</span>
+                            <span class="n">scale_module_weights_vectorized</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encoder</span><span class="p">,</span> <span class="n">scale_factor</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_head_clip</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">head_clip_manager</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">head_clip_results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">head_clip_manager</span><span class="o">.</span><span class="n">apply_head_clip</span><span class="p">(</span>
@@ -1346,6 +1444,30 @@
 
             <span class="s2">&quot;current_policy_label_eps&quot;</span><span class="p">:</span><span class="n">current_policy_label_eps</span><span class="p">,</span>
         <span class="p">}</span>
+        <span class="n">return_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+            <span class="s1">&#39;loss/weighted_total&#39;</span><span class="p">:</span> <span class="n">weighted_total_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/obs&#39;</span><span class="p">:</span> <span class="n">obs_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/reward&#39;</span><span class="p">:</span> <span class="n">reward_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/value&#39;</span><span class="p">:</span> <span class="n">value_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/policy&#39;</span><span class="p">:</span> <span class="n">policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/policy_orig&#39;</span><span class="p">:</span> <span class="n">orig_policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/policy_entropy&#39;</span><span class="p">:</span> <span class="n">policy_entropy</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/latent_recon&#39;</span><span class="p">:</span> <span class="n">latent_recon_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;loss/perceptual&#39;</span><span class="p">:</span> <span class="n">perceptual_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target/reward&#39;</span><span class="p">:</span> <span class="n">target_reward</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target/value&#39;</span><span class="p">:</span> <span class="n">target_value</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target/policy_entropy&#39;</span><span class="p">:</span> <span class="n">average_target_policy_entropy</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target/transformed_reward&#39;</span><span class="p">:</span> <span class="n">transformed_target_reward</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target/transformed_value&#39;</span><span class="p">:</span> <span class="n">transformed_target_value</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;priority/value&#39;</span><span class="p">:</span> <span class="n">value_priority_np</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;lr/world_model&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">param_groups</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;lr&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;grad/world_model_total_norm&#39;</span><span class="p">:</span> <span class="n">total_grad_norm_before_clip_wm</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;memory/current_gpu_gb&#39;</span><span class="p">:</span> <span class="n">current_memory_allocated_gb</span><span class="p">,</span>
+            <span class="s1">&#39;memory/max_gpu_gb&#39;</span><span class="p">:</span> <span class="n">max_memory_allocated_gb</span><span class="p">,</span>
+            <span class="s1">&#39;collect/epsilon&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span><span class="p">,</span>
+            <span class="s1">&#39;collect/mcts_temperature&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span>
+            <span class="s1">&#39;schedule/policy_label_eps&#39;</span><span class="p">:</span> <span class="n">current_policy_label_eps</span><span class="p">,</span>
+        <span class="p">})</span>
 
         <span class="k">if</span> <span class="n">norm_log_dict</span><span class="p">:</span>
             <span class="n">return_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">norm_log_dict</span><span class="p">)</span>
@@ -1374,22 +1496,32 @@
 
                 <span class="c1"># Monitor target_policy entropy statistics (minimum entropy indicates extreme distributions)</span>
                 <span class="n">valid_target_policy</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_policy&#39;</span><span class="p">][</span><span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]]</span>
-                <span class="n">target_policy_entropies</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
-                    <span class="n">valid_target_policy</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span>
-                <span class="p">)</span>
-                <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/min&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/max&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/std&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">std</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">valid_target_policy</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/min&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/max&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/std&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">target_policy_entropies</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+                        <span class="n">valid_target_policy</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span>
+                    <span class="p">)</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/min&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/max&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                    <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;target_policy_entropy/std&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy_entropies</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">unbiased</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
         <span class="c1"># ================================================================================</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_adaptive_entropy_weight</span><span class="p">:</span>
             <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;adaptive_alpha&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_alpha</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
             <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;adaptive_target_entropy_ratio&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_ratio</span>
             <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;alpha_loss&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">alpha_loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+            <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;entropy/adaptive_alpha&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_alpha</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+            <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;entropy/target_ratio&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_ratio</span>
+            <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;entropy/alpha_loss&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">alpha_loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_encoder_clip_annealing</span><span class="p">:</span>
             <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;current_encoder_clip_value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_clip_value</span>
+            <span class="n">return_log_dict</span><span class="p">[</span><span class="s1">&#39;stability/current_encoder_clip_value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_clip_value</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_head_clip</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">head_clip_manager</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="c1"># Add head clip results to log (if any)</span>
@@ -1427,7 +1559,8 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="p">(</span><span class="n">mcts_collect_cfg</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="p">(</span><span class="n">mcts_collect_cfg</span><span class="p">)</span>
+            <span class="c1"># NOTE: a python-tree MCTS variant for UniZero is not implemented in this fork.</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;UniZero policy only supports mcts_ctree=True (C++ tree MCTS).&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span> <span class="o">=</span> <span class="mf">1.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span> <span class="o">=</span> <span class="mf">0.0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span>
@@ -1439,6 +1572,49 @@
                 <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">],</span> <span class="n">fill_value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span><span class="p">,</span>
             <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._normalize_ready_env_id"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._normalize_ready_env_id">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_normalize_ready_env_id</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">,</span> <span class="n">active_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">active_env_num</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">,</span> <span class="nb">set</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._select_last_infer_inputs"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._select_last_infer_inputs">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_select_last_infer_inputs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">last_obs</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">last_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+                                  <span class="n">total_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">List</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Select previous observations/actions by true env id for root KV-cache lookup.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">last_obs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">total_env_num</span><span class="p">:</span>
+            <span class="n">last_obs_batch</span> <span class="o">=</span> <span class="n">last_obs</span><span class="p">[</span><span class="n">ready_env_id</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">last_obs_batch</span> <span class="o">=</span> <span class="n">last_obs</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">last_actions</span><span class="p">)</span> <span class="o">==</span> <span class="n">total_env_num</span><span class="p">:</span>
+            <span class="n">last_action_batch</span> <span class="o">=</span> <span class="p">[</span><span class="n">last_actions</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">last_action_batch</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">last_actions</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">last_obs_batch</span><span class="p">,</span> <span class="n">last_action_batch</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._update_last_infer_inputs"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._update_last_infer_inputs">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_update_last_infer_inputs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs_attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">action_attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+                                  <span class="n">batch_action</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write current observations/actions back to per-env slots without shrinking the buffers.&quot;&quot;&quot;</span>
+        <span class="n">last_obs</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs_attr</span><span class="p">)</span>
+        <span class="n">last_actions</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action_attr</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">last_obs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">total_env_num</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">last_actions</span><span class="p">)</span> <span class="o">!=</span> <span class="n">total_env_num</span><span class="p">:</span>
+            <span class="n">last_obs</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
+                <span class="n">total_env_num</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
+            <span class="p">)</span>
+            <span class="n">last_actions</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">total_env_num</span><span class="p">)]</span>
+
+        <span class="k">for</span> <span class="n">batch_idx</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
+            <span class="n">last_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">batch_idx</span><span class="p">])</span>
+            <span class="n">last_actions</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch_action</span><span class="p">[</span><span class="n">batch_idx</span><span class="p">]</span>
+
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs_attr</span><span class="p">,</span> <span class="n">last_obs</span><span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action_attr</span><span class="p">,</span> <span class="n">last_actions</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="UniZeroPolicy._forward_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._forward_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_collect</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
@@ -1482,12 +1658,16 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span> <span class="o">=</span> <span class="n">temperature</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span> <span class="o">=</span> <span class="n">epsilon</span>
         <span class="n">active_collect_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
+        <span class="n">ready_env_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_ready_env_id</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">)</span>
         <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
 
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-            <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_collect</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+            <span class="n">last_obs_batch</span><span class="p">,</span> <span class="n">last_action_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_last_infer_inputs</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_collect</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span>
+            <span class="p">)</span>
+            <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span>
+                <span class="n">last_obs_batch</span><span class="p">,</span> <span class="n">last_action_batch</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="o">=</span><span class="n">ready_env_id</span>
+            <span class="p">)</span>
             <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">reward_roots</span><span class="p">,</span> <span class="n">pred_values</span><span class="p">,</span> <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">mz_network_output_unpack</span><span class="p">(</span><span class="n">network_output</span><span class="p">)</span>
 
             <span class="n">pred_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value_inverse_scalar_transform_handle</span><span class="p">(</span><span class="n">pred_values</span><span class="p">)</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
@@ -1558,23 +1738,17 @@
                 <span class="p">}</span>
                 <span class="n">batch_action</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_collect</span> <span class="o">=</span> <span class="n">data</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span> <span class="o">=</span> <span class="n">batch_action</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_last_infer_inputs</span><span class="p">(</span>
+                <span class="s1">&#39;last_batch_obs_collect&#39;</span><span class="p">,</span> <span class="s1">&#39;last_batch_action_collect&#39;</span><span class="p">,</span>
+                <span class="n">data</span><span class="p">,</span> <span class="n">batch_action</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span>
+            <span class="p">)</span>
 
             <span class="c1"># This logic is a temporary workaround specific to the muzero_segment_collector.</span>
             <span class="k">if</span> <span class="n">active_collect_env_num</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">:</span>
-                <span class="c1"># When an environment finishes an episode (&#39;done&#39;), the length of `self.last_batch_obs_collect` passed back</span>
-                <span class="c1"># becomes smaller than the total number of collector environments.</span>
-                <span class="c1"># Handling this dynamic batch size is complex, as the transformer&#39;s KV cache retrieval</span>
-                <span class="c1"># requires a stable environment ID for correct indexing. A mismatch would cause retrieval errors.</span>
-                <span class="c1">#</span>
-                <span class="c1"># Therefore, as a simpler solution, we reset the collection state for ALL environments.</span>
-                <span class="c1"># By resetting `self.last_batch_action_collect` to -1 for all `self.collector_env_num` environments,</span>
-                <span class="c1"># we force the transformer to start its context from scratch, avoiding incorrect cache lookups.</span>
-                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;========== collect_forward ============&#39;</span><span class="p">)</span>
-                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;An environment has finished. Active envs: </span><span class="si">{</span><span class="n">active_collect_env_num</span><span class="si">}</span><span class="s1"> &lt; Total envs: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="si">}</span><span class="s1">. Resetting all.&#39;</span><span class="p">)</span>
-
-                <span class="bp">self</span><span class="o">.</span><span class="n">_reset_collect</span><span class="p">(</span><span class="n">reset_init_data</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s1">&#39;Partial collect batch: active envs </span><span class="si">{</span><span class="n">active_collect_env_num</span><span class="si">}</span><span class="s1"> &lt; total envs &#39;</span>
+                    <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="si">}</span><span class="s1">; preserving per-env KV cache slots.&#39;</span>
+                <span class="p">)</span>
 
                 <span class="c1"># If the sampling type is &#39;episode&#39;, it&#39;s unexpected for the number of active environments to drop,</span>
                 <span class="c1"># as this suggests an inconsistent state or a potential issue in the collection logic.</span>
@@ -1597,7 +1771,8 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="p">(</span><span class="n">mcts_eval_cfg</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="p">(</span><span class="n">mcts_eval_cfg</span><span class="p">)</span>
+            <span class="c1"># NOTE: a python-tree MCTS variant for UniZero is not implemented in this fork.</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;UniZero policy only supports mcts_ctree=True (C++ tree MCTS).&#39;</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span>
 
@@ -1639,11 +1814,15 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
         <span class="n">active_eval_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)</span>
+        <span class="n">ready_env_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_ready_env_id</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">,</span> <span class="n">active_eval_env_num</span><span class="p">)</span>
         <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-            <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_eval</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+            <span class="n">last_obs_batch</span><span class="p">,</span> <span class="n">last_action_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_last_infer_inputs</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_eval</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span>
+            <span class="p">)</span>
+            <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span>
+                <span class="n">last_obs_batch</span><span class="p">,</span> <span class="n">last_action_batch</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="o">=</span><span class="n">ready_env_id</span>
+            <span class="p">)</span>
             <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">reward_roots</span><span class="p">,</span> <span class="n">pred_values</span><span class="p">,</span> <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">mz_network_output_unpack</span><span class="p">(</span><span class="n">network_output</span><span class="p">)</span>
 
             <span class="c1"># if not in training, obtain the scalars of the value/reward</span>
@@ -1702,8 +1881,10 @@
                 <span class="p">}</span>
                 <span class="n">batch_action</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span> <span class="o">=</span> <span class="n">data</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_eval</span> <span class="o">=</span> <span class="n">batch_action</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_update_last_infer_inputs</span><span class="p">(</span>
+                <span class="s1">&#39;last_batch_obs_eval&#39;</span><span class="p">,</span> <span class="s1">&#39;last_batch_action_eval&#39;</span><span class="p">,</span>
+                <span class="n">data</span><span class="p">,</span> <span class="n">batch_action</span><span class="p">,</span> <span class="n">ready_env_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span>
+            <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">output</span></div>
 
@@ -1719,24 +1900,38 @@
 <span class="sd">              whether to clear caches.</span>
 <span class="sd">            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">reset_init_data</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_collect</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">,</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-                <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
-            <span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span>
-
-
         <span class="c1"># We must handle both single int and list of ints for env_id.</span>
         <span class="k">if</span> <span class="n">env_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
                 <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span> <span class="c1"># Assumes it&#39;s a list</span>
-                <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="n">env_id</span>
+                <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">eid</span><span class="p">)</span> <span class="k">for</span> <span class="n">eid</span> <span class="ow">in</span> <span class="n">env_id</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="n">reset_init_data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">env_ids_to_reset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_collect</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                    <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">reset_obs</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">env_ids_to_reset</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                    <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">eid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">env_ids_to_reset</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">eid</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_collect</span><span class="p">[</span><span class="n">eid</span><span class="p">]</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">reset_obs</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_collect</span><span class="p">[</span><span class="n">eid</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
 
             <span class="c1"># The key condition: `current_steps` is None only on the end-of-episode reset call from the collector.</span>
+        <span class="k">if</span> <span class="n">env_ids_to_reset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">current_steps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">world_model</span>
                 <span class="k">for</span> <span class="n">eid</span> <span class="ow">in</span> <span class="n">env_ids_to_reset</span><span class="p">:</span>
@@ -1754,12 +1949,14 @@
                             <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;&gt;&gt;&gt; [Collector] Cleared KV cache for env_id: </span><span class="si">{</span><span class="n">eid</span><span class="si">}</span><span class="s1"> at episode end (OLD system).&#39;</span><span class="p">)</span>
                     <span class="c1"># =============================================================================</span>
 
-        <span class="c1"># Determine the clear interval based on the environment&#39;s sample type</span>
-        <span class="n">clear_interval</span> <span class="o">=</span> <span class="mi">2000</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;sample_type&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;episode&#39;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span>
+        <span class="c1"># Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.</span>
+        <span class="c1"># Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after</span>
+        <span class="c1"># every single collected/evaluated segment and making cross-segment cache reuse impossible.</span>
+        <span class="n">clear_interval</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;kv_cache_clear_interval&#39;</span><span class="p">,</span> <span class="mi">2000</span><span class="p">))</span>
 
         <span class="c1"># Clear caches if the current steps are a multiple of the clear interval</span>
-        <span class="k">if</span> <span class="n">current_steps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">current_steps</span> <span class="o">%</span> <span class="n">clear_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;clear_interval: </span><span class="si">{</span><span class="n">clear_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">current_steps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">clear_interval</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">current_steps</span> <span class="o">%</span> <span class="n">clear_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;clear_interval: </span><span class="si">{</span><span class="n">clear_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
 
             <span class="c1"># Clear various caches in the collect model&#39;s world model</span>
             <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">world_model</span>
@@ -1768,10 +1965,10 @@
             <span class="n">world_model</span><span class="o">.</span><span class="n">clear_caches</span><span class="p">()</span>
             <span class="c1"># ======================================================================================</span>
 
-            <span class="c1"># Free up GPU memory</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">empty_cuda_cache_on_cache_reset</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
 
-            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_steps_lst[</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s1">]: </span><span class="si">{</span><span class="n">current_steps</span><span class="si">}</span><span class="s1">, collector: collect_model clear()&#39;</span><span class="p">)</span></div>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_steps_lst[</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s1">]: </span><span class="si">{</span><span class="n">current_steps</span><span class="si">}</span><span class="s1">, collector: collect_model clear()&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="UniZeroPolicy._reset_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._reset_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">current_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reset_init_data</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">task_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -1785,35 +1982,44 @@
 <span class="sd">              whether to clear caches.</span>
 <span class="sd">            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">reset_init_data</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">task_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape_list</span><span class="p">[</span><span class="n">task_id</span><span class="p">],</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-                    <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
-                <span class="p">)</span>
-                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;unizero.py task_id:</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s1"> after _reset_eval: last_batch_obs_eval:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
-
-            <span class="k">else</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-                    <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
-                <span class="p">)</span>
-                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;unizero.py task_id:</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s1"> after _reset_eval: last_batch_obs_eval:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_eval</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span>
-
-        <span class="c1"># This logic handles the crucial end-of-episode cache clearing for evaluation.</span>
-        <span class="c1"># The evaluator calls `_policy.reset([env_id])` when an episode is done.</span>
         <span class="k">if</span> <span class="n">env_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
                 <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span> <span class="c1"># Assumes it&#39;s a list</span>
-                <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="n">env_id</span>
+                <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">eid</span><span class="p">)</span> <span class="k">for</span> <span class="n">eid</span> <span class="ow">in</span> <span class="n">env_id</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">env_ids_to_reset</span> <span class="o">=</span> <span class="kc">None</span>
 
+        <span class="k">if</span> <span class="n">reset_init_data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">task_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">reset_obs</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape_list</span><span class="p">[</span><span class="n">task_id</span><span class="p">],</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span> <span class="k">if</span> <span class="n">env_ids_to_reset</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">len</span><span class="p">(</span><span class="n">env_ids_to_reset</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                    <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
+                <span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">reset_obs</span> <span class="o">=</span> <span class="n">initialize_pad_batch</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span> <span class="k">if</span> <span class="n">env_ids_to_reset</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">len</span><span class="p">(</span><span class="n">env_ids_to_reset</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                    <span class="n">pad_token_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pad_token_id</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">env_ids_to_reset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span> <span class="o">=</span> <span class="n">reset_obs</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_eval</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">eid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">env_ids_to_reset</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">eid</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span><span class="p">[</span><span class="n">eid</span><span class="p">]</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">reset_obs</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action_eval</span><span class="p">[</span><span class="n">eid</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;unizero.py task_id:</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s1"> after _reset_eval: last_batch_obs_eval:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs_eval</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="c1"># This logic handles the crucial end-of-episode cache clearing for evaluation.</span>
+        <span class="c1"># The evaluator calls `_policy.reset([env_id])` when an episode is done.</span>
+        <span class="k">if</span> <span class="n">env_ids_to_reset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="c1"># The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.</span>
             <span class="k">if</span> <span class="n">current_steps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">world_model</span>
@@ -1839,14 +2045,17 @@
                 <span class="c1"># ======================================================================================</span>
 
                 <span class="n">world_model</span><span class="o">.</span><span class="n">keys_values_wm_list</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-                <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">empty_cuda_cache_on_cache_reset</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+                    <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
                 <span class="k">return</span>
 
-        <span class="c1"># Determine the clear interval based on the environment&#39;s sample type</span>
-        <span class="n">clear_interval</span> <span class="o">=</span> <span class="mi">2000</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;sample_type&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;episode&#39;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span>
+        <span class="c1"># Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.</span>
+        <span class="c1"># Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after</span>
+        <span class="c1"># every single collected/evaluated segment and making cross-segment cache reuse impossible.</span>
+        <span class="n">clear_interval</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;kv_cache_clear_interval&#39;</span><span class="p">,</span> <span class="mi">2000</span><span class="p">))</span>
         <span class="c1"># Clear caches if the current steps are a multiple of the clear interval</span>
-        <span class="k">if</span> <span class="n">current_steps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">current_steps</span> <span class="o">%</span> <span class="n">clear_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;clear_interval: </span><span class="si">{</span><span class="n">clear_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">current_steps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">clear_interval</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">current_steps</span> <span class="o">%</span> <span class="n">clear_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;clear_interval: </span><span class="si">{</span><span class="n">clear_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
 
             <span class="c1"># Clear various caches in the eval model&#39;s world model</span>
             <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">world_model</span>
@@ -1855,11 +2064,11 @@
             <span class="n">world_model</span><span class="o">.</span><span class="n">clear_caches</span><span class="p">()</span>
             <span class="c1"># ======================================================================================</span>
 
-            <span class="c1"># Free up GPU memory</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">empty_cuda_cache_on_cache_reset</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
 
-            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;evaluator: eval_model clear()&#39;</span><span class="p">)</span>
-            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_steps_lst[</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s1">]: </span><span class="si">{</span><span class="n">current_steps</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span></div>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;evaluator: eval_model clear()&#39;</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_steps_lst[</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s1">]: </span><span class="si">{</span><span class="n">current_steps</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="UniZeroPolicy._monitor_vars_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._monitor_vars_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_monitor_vars_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -2049,15 +2258,22 @@
 
 <div class="viewcode-block" id="UniZeroPolicy.recompute_pos_emb_diff_and_clear_cache"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.recompute_pos_emb_diff_and_clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">recompute_pos_emb_diff_and_clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Overview:</span>
+<span class="sd">            Overview:</span>
 <span class="sd">            Clear the caches and precompute positional embedding matrices in the model.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">]:</span>
+        <span class="n">models</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;_learn_model&#39;</span><span class="p">,</span> <span class="s1">&#39;_collect_model&#39;</span><span class="p">,</span> <span class="s1">&#39;_eval_model&#39;</span><span class="p">,</span> <span class="s1">&#39;_target_model&#39;</span><span class="p">):</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">model</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">models</span><span class="p">:</span>
+                <span class="n">models</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="n">models</span><span class="p">:</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">world_model_cfg</span><span class="o">.</span><span class="n">rotary_emb</span><span class="p">:</span>
                 <span class="c1"># If rotary_emb is False, nn.Embedding is used for absolute position encoding.</span>
                 <span class="n">model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">precompute_pos_emb_diff_kv</span><span class="p">()</span>
             <span class="n">model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">clear_caches</span><span class="p">()</span>
-        <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span></div></div>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">empty_cuda_cache_on_cache_reset</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span></div></div>
 </pre></div>
 
 

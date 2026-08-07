@@ -48,6 +48,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -225,15 +226,18 @@
             <span class="c1"># Sort the batch indices if reanalyze is enabled</span>
             <span class="n">batch_index_list</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
         
-        <span class="c1"># Calculate weights for the sampled transitions</span>
-        <span class="n">weights_list</span> <span class="o">=</span> <span class="p">(</span><span class="n">num_of_transitions</span> <span class="o">*</span> <span class="n">probs</span><span class="p">[</span><span class="n">batch_index_list</span><span class="p">])</span> <span class="o">**</span> <span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_beta</span><span class="p">)</span>
-        <span class="n">weights_list</span> <span class="o">/=</span> <span class="n">weights_list</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>  <span class="c1"># Normalize weights</span>
-
         <span class="n">game_segment_list</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">pos_in_game_segment_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># The position resampling inside the loop below may move a sample to a different transition</span>
+        <span class="c1"># within the same game segment. Track the buffer flat index of the position actually used so</span>
+        <span class="c1"># that the IS weights and the later update_priority() refer to the trained transition rather</span>
+        <span class="c1"># than the originally drawn one. (look_up entries of one segment are contiguous flat indices</span>
+        <span class="c1"># ``segment_base + step_pos``, so the adjusted index is ``idx - orig_pos + new_pos``.)</span>
+        <span class="n">adjusted_index_list</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">batch_index_list</span><span class="p">:</span>
             <span class="n">game_segment_idx</span><span class="p">,</span> <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+            <span class="n">orig_pos_in_game_segment</span> <span class="o">=</span> <span class="n">pos_in_game_segment</span>
             <span class="n">game_segment_idx</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_idx</span>  <span class="c1"># Adjust index based on base index</span>
             <span class="n">game_segment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">game_segment_idx</span><span class="p">]</span>
 
@@ -319,20 +323,27 @@
                         <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="mi">0</span>
 
             <span class="n">pos_in_game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pos_in_game_segment</span><span class="p">)</span>
-            
+            <span class="n">adjusted_index_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span> <span class="o">-</span> <span class="n">orig_pos_in_game_segment</span> <span class="o">+</span> <span class="n">pos_in_game_segment</span><span class="p">)</span>
 
-        <span class="c1"># make_time = [time.time() for _ in range(len(batch_index_list))]</span>
+        <span class="n">adjusted_index_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">adjusted_index_list</span><span class="p">)</span>
 
-        <span class="c1"># Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).</span>
-        <span class="n">make_time</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">batch_index_list</span><span class="p">))]</span>
+        <span class="c1"># Calculate the IS weights from the probabilities of the transitions actually used (which may</span>
+        <span class="c1"># differ from the originally sampled ones after the position resampling above).</span>
+        <span class="n">weights_list</span> <span class="o">=</span> <span class="p">(</span><span class="n">num_of_transitions</span> <span class="o">*</span> <span class="n">probs</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">])</span> <span class="o">**</span> <span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_beta</span><span class="p">)</span>
+        <span class="n">weights_list</span> <span class="o">/=</span> <span class="n">weights_list</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>  <span class="c1"># Normalize weights</span>
 
-        <span class="n">orig_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">,</span> <span class="n">weights_list</span><span class="p">,</span> <span class="n">make_time</span><span class="p">)</span>
-        
+        <span class="c1"># Record the actual sampling time: update_priority() only writes back priorities for samples</span>
+        <span class="c1"># whose make_time is newer than the last buffer reset (clear_time). Using placeholder zeros</span>
+        <span class="c1"># here would make that guard unconditionally False and silently drop ALL priority updates.</span>
+        <span class="n">make_time</span> <span class="o">=</span> <span class="p">[</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">adjusted_index_list</span><span class="p">))]</span>
+
+        <span class="n">orig_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">adjusted_index_list</span><span class="p">,</span> <span class="n">weights_list</span><span class="p">,</span> <span class="n">make_time</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="n">print_priority_logs</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled batch indices: </span><span class="si">{</span><span class="n">batch_index_list</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled priorities: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">[</span><span class="n">batch_index_list</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled batch indices: </span><span class="si">{</span><span class="n">adjusted_index_list</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled priorities: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled weights: </span><span class="si">{</span><span class="n">weights_list</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            
+
         <span class="k">return</span> <span class="n">orig_data</span></div>
 
 <div class="viewcode-block" id="GameBuffer._sample_orig_reanalyze_batch"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_batch">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_orig_reanalyze_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
@@ -439,7 +450,6 @@
             <span class="n">game_segment_list</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">pos_in_game_segment_list</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">batch_index_list</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;selected_game_segments:</span><span class="si">{</span><span class="n">selected_game_segments</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">game_segment_idx</span> <span class="ow">in</span> <span class="n">selected_game_segments</span><span class="p">:</span>
                 <span class="c1"># =========================================================================</span>
                 <span class="c1"># FIX: The line below is the source of the error and has been removed.</span>

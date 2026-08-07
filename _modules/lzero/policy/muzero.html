@@ -48,6 +48,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -270,7 +271,9 @@
         <span class="c1"># (float) The weight of policy loss.</span>
         <span class="n">policy_loss_weight</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
         <span class="c1"># (float) The weight of policy entropy loss.</span>
-        <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mf">5e-3</span><span class="p">,</span>
+        <span class="c1"># (float) Policy-target label smoothing epsilon. Disabled by default.</span>
+        <span class="n">policy_label_smoothing</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
         <span class="c1"># (float) The weight of ssl (self-supervised learning) loss.</span>
         <span class="n">ssl_loss_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to use piecewise constant learning rate decay.</span>
@@ -540,6 +543,14 @@
         <span class="c1"># ==============================================================</span>
         <span class="c1"># calculate policy and value loss for the first step.</span>
         <span class="c1"># ==============================================================</span>
+        <span class="n">policy_label_smoothing</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">policy_label_smoothing</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">policy_label_smoothing</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;policy_label_smoothing must be in [0, 1)&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">policy_label_smoothing</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">action_dim</span> <span class="o">=</span> <span class="n">target_policy</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">target_policy</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">target_policy</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">policy_label_smoothing</span><span class="p">)</span> <span class="o">+</span> <span class="n">policy_label_smoothing</span> <span class="o">/</span> <span class="n">action_dim</span>
+            <span class="p">)</span>
         <span class="n">policy_loss</span> <span class="o">=</span> <span class="n">cross_entropy_loss</span><span class="p">(</span><span class="n">policy_logits</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
         <span class="n">value_loss</span> <span class="o">=</span> <span class="n">cross_entropy_loss</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">target_value_categorical</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
 
@@ -1148,7 +1159,6 @@
 <div class="viewcode-block" id="MuZeroPolicy._get_train_sample"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._get_train_sample">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_train_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="c1"># be compatible with DI-engine Policy class</span>
         <span class="k">pass</span></div></div>
-
 </pre></div>
 
 
