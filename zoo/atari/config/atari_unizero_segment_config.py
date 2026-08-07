@@ -191,15 +191,14 @@ def main(
             monitor_norm_freq=10000,
 
             # Priority settings.
-            # Default OFF (uniform sampling): in the 2026-08-06 Pong A/B at matched train_iters,
-            # the run with PER effectively disabled (kimi-fix) learned consistently faster early
-            # than the run with PER active (allfix), e.g. -4.0 vs -9.0 at iter 20k and -3.7 vs
-            # -6.3 at iter 25k. With sparse-reward Pong, TD-error priorities over-sample rare
-            # scoring transitions and distort the training distribution.
-            # NOTE: keep model.world_model_cfg.use_priority=True so the [B] value_priority tensor
-            # is still computed and update_priority() stays shape-compatible; with use_priority
-            # False here, the buffer samples uniformly and priority write-backs are discarded.
-            use_priority=False,
+            # Default ON. A 2026-08-06 Pong A/B suggested PER-off learned faster in the first
+            # ~25k train iters, but the advantage did not reproduce at later iterations (PER-on
+            # matched or exceeded PER-off by iter 35k-40k), so PER remains enabled by default.
+            # NOTE: model.world_model_cfg.use_priority=True is kept in sync so the [B]
+            # value_priority tensor is computed and update_priority() stays shape-compatible;
+            # setting use_priority=False here switches the buffer to uniform sampling and
+            # priority write-backs are then discarded.
+            use_priority=True,
             priority_prob_alpha=0.6,
             priority_prob_beta=0.4,
 
