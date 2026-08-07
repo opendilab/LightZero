@@ -12,6 +12,7 @@ For those interested in customizing environments and algorithms, we provide rele
 - [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/algos/customize_algos.md)
 - [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/config/config.md)
 - [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/logs/logs.md)
+- [MuZero / UniZero Async Segment Pipeline](async_pipeline_muzero_unizero.md) / [中文说明](async_pipeline_muzero_unizero_zh.md)
 
 Should you have any questions, feel free to contact us for support.
 

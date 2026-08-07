@@ -91,6 +91,8 @@ def main(env_id, seed):
             target_update_freq=100,
             num_simulations=num_simulations,
             ssl_loss_weight=2,
+            policy_entropy_weight=5e-3,
+            policy_label_smoothing=0.0,
             eval_freq=int(5e3),
             replay_buffer_size=int(1e6),
             collector_env_num=collector_env_num,

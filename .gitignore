@@ -13,12 +13,13 @@
 *.mov
 *.pkl
 data_*
+rjob_logs/
 *.so
 *.gv
 *.png
 !lzero/loss_landscape/images/**/*.png
 *.csv
-
+zoo/atari/runs/rjob/
 pkg/
 src/
 

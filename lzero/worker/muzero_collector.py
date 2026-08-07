@@ -399,10 +399,14 @@ class MuZeroCollector(ISerialCollector):
                 remain_episode -= min(len(new_available_env_id), remain_episode)
                 
                 # Prepare policy inputs.
-                stack_obs_list = [game_segments[env_id].get_obs() for env_id in ready_env_id]
-                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
-                to_play = [to_play_dict[env_id] for env_id in ready_env_id]
-                timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+                # NOTE: build inputs from a sorted list (not the raw set) so batch rows stay aligned
+                # with the ready_env_id order used inside the policy (which sorts the ids); a raw
+                # set's iteration order can differ after envs are removed and re-added.
+                ready_env_id_list = sorted(ready_env_id)
+                stack_obs_list = [game_segments[env_id].get_obs() for env_id in ready_env_id_list]
+                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id_list]
+                to_play = [to_play_dict[env_id] for env_id in ready_env_id_list]
+                timestep = [timestep_dict[env_id] for env_id in ready_env_id_list]
                 
                 stack_obs_array = to_ndarray(stack_obs_list)
                 stack_obs_tensor = prepare_observation(stack_obs_array, self.policy_config.model.model_type)
@@ -417,7 +421,7 @@ class MuZeroCollector(ISerialCollector):
                     'temperature': temperature,
                     'to_play': to_play,
                     'epsilon': epsilon,
-                    'ready_env_id': ready_env_id,
+                    'ready_env_id': ready_env_id_list,
                     'timestep': timestep
                 }
                 if self.task_id is not None:

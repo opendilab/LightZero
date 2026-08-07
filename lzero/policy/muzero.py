@@ -177,7 +177,9 @@ class MuZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_weight=0,
+        policy_entropy_weight=5e-3,
+        # (float) Policy-target label smoothing epsilon. Disabled by default.
+        policy_label_smoothing=0.0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -447,6 +449,14 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         # calculate policy and value loss for the first step.
         # ==============================================================
+        policy_label_smoothing = float(self._cfg.policy_label_smoothing)
+        if not 0.0 <= policy_label_smoothing < 1.0:
+            raise ValueError("policy_label_smoothing must be in [0, 1)")
+        if policy_label_smoothing > 0.0:
+            action_dim = target_policy.shape[-1]
+            target_policy = (
+                target_policy * (1.0 - policy_label_smoothing) + policy_label_smoothing / action_dim
+            )
         policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
@@ -1055,4 +1065,3 @@ class MuZeroPolicy(Policy):
     def _get_train_sample(self, data):
         # be compatible with DI-engine Policy class
         pass
-

@@ -232,6 +232,13 @@ cd LightZero
 python3 -u zoo/atari/config/atari_muzero_segment_config.py
 ```
 
+Train an experimental Ray async MuZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
+
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_muzero_segment_async_config.py
+```
+
 Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
 
 ```bash
@@ -246,6 +253,10 @@ cd LightZero
 python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
 
+### Experimental Async Segment Training
+
+The Atari segment async pipeline uses Ray collector/evaluator actors while keeping the learner and replay buffer in the driver process. It supports MuZero-family segment policies and UniZero segment policies through the explicit `--async-pipeline` config flag. In a same-window Pong MuZero rjob comparison (2026-07-02, 2 collector actors, ~6.2 h wall-clock), async collected 809.5k env steps (≈36.3 env steps/s) versus 499.8k env steps (≈22.4 env steps/s) for the synchronous baseline — about 1.6× end-to-end throughput, with eval rewards statistically comparable at this early training stage. For design details and UniZero differences, see [Async Pipeline](docs/source/tutorials/algos/async_pipeline_muzero_unizero.md) and [中文说明](docs/source/tutorials/algos/async_pipeline_muzero_unizero_zh.md).
+
 ## 📚 Documentation
 
 The LightZero documentation can be found [here](https://opendilab.github.io/LightZero/). It contains tutorials and the API reference.
@@ -257,6 +268,7 @@ For those interested in customizing environments and algorithms, we provide rele
 - [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/config/config.md)
 - [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/logs/logs.md)
 - [Loss Landscape Visualization](https://github.com/opendilab/LightZero/blob/main/lzero/loss_landscape/README.md)
+- [MuZero / UniZero Async Segment Pipeline](docs/source/tutorials/algos/async_pipeline_muzero_unizero.md)
 
 Should you have any questions, feel free to contact us for support.
 

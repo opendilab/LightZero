@@ -1,10 +1,8 @@
-import datetime
 import logging
 import os
 from collections import OrderedDict, defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,8 +12,6 @@ from lzero.model.common import SimNorm
 from lzero.model.utils import (calculate_dormant_ratio,
                                compute_average_weight_magnitude,
                                compute_effective_rank)
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-from sklearn.manifold import TSNE
 from torch.distributions import (Categorical, Independent, Normal,
                                  TanhTransform, TransformedDistribution)
 
@@ -78,7 +74,7 @@ class WorldModel(nn.Module):
         if not self.config.rotary_emb:
             self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             self.precompute_pos_emb_diff_kv()
-            print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+            logging.info(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         if self.task_embed_option == "concat_task_embed":
@@ -150,13 +146,18 @@ class WorldModel(nn.Module):
 
         # Initialize keys and values for transformer
         self._initialize_transformer_keys_values()
+        self.current_infer_env_ids: Optional[List[int]] = None
 
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
-        # Set to game_segment_length first to keep self.shared_pool_init_infer valid
-        # TODO: Very important, should be changed to match segment_length
-        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+        # Per-env ring-buffer capacity for the init-inference kv caches. It must be at least
+        # num_simulations: one MCTS search writes up to num_simulations distinct entries per env, and a
+        # smaller ring wraps around mid-search, overwriting entries before they can be re-queried (the
+        # old value, game_segment_length=20, was far below num_simulations=50, so the pool was
+        # effectively non-functional). max_cache_size acts as a memory guard.
+        self.shared_pool_size_init = min(int(getattr(self.config, 'max_cache_size', 5000)),
+                                         max(256, 2 * int(getattr(self.config, 'num_simulations', 50))))
 
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
@@ -328,6 +329,13 @@ class WorldModel(nn.Module):
                 predicted_rewards (torch.Tensor): Predicted scalar Rewards, shape (B*L,)
                 step_counter (int): Global training step count
             """
+            # Plotting/ML dependencies are imported lazily: this analysis path is only enabled
+            # for occasional debugging and should not add hard dependencies to normal training.
+            import datetime
+            import matplotlib.pyplot as plt
+            from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+            from sklearn.manifold import TSNE
+
             # Ensure latent_states and game_states have shape (N, ...)
             if latent_states.dim() > 2:
                 latent_states = latent_states.reshape(-1, latent_states.shape[-1])
@@ -338,11 +346,11 @@ class WorldModel(nn.Module):
                 l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
                 mean = latent_states.mean()
                 std = latent_states.std()
-                print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
+                logging.info(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
 
             # t-SNE visualization with images and V/R values
             if step_counter >= 0:
-                print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
+                logging.info(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
 
                 # Convert data to CPU
                 latents_np = latent_states.detach().cpu().numpy()
@@ -392,10 +400,13 @@ class WorldModel(nn.Module):
                 sm.set_array([])
                 fig.colorbar(sm, ax=ax, label='Predicted Value')
 
-                # Modified section: Check if file exists, add timestamp if it does
-                base_save_path = (
-                    f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
-                    f'tsne_with_vr_{self.config.optim_type}_step_{step_counter}.png'
+                # Save under a configurable analysis directory (defaults to ./analysis);
+                # if the file exists, append a timestamp to the filename.
+                analysis_save_dir = getattr(self.config, 'analysis_save_dir', './analysis')
+                os.makedirs(analysis_save_dir, exist_ok=True)
+                base_save_path = os.path.join(
+                    analysis_save_dir,
+                    f'tsne_with_vr_{getattr(self.config, "optim_type", "default")}_step_{step_counter}.png'
                 )
 
                 # Check if file exists and determine final save path
@@ -404,7 +415,7 @@ class WorldModel(nn.Module):
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     path_root, path_ext = os.path.splitext(base_save_path)
                     save_path = f"{path_root}_{timestamp}{path_ext}"
-                    print(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
+                    logging.info(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
                 else:
                     # If file doesn't exist, use original path
                     save_path = base_save_path
@@ -412,7 +423,7 @@ class WorldModel(nn.Module):
                 # Save image
                 plt.savefig(save_path)
                 plt.close(fig)  # Explicitly close figure object
-                print(f"t-SNE plot with V/R annotations saved to {save_path}")
+                logging.info(f"t-SNE plot with V/R annotations saved to {save_path}")
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
@@ -774,12 +785,32 @@ class WorldModel(nn.Module):
 
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
-        last_linear_layer_init_zero = True  # TODO
+        last_linear_layer_init_zero = getattr(self.config, 'last_linear_layer_init_zero', True)
         if last_linear_layer_init_zero:
+            zero_init_head_names = getattr(self.config, 'zero_init_head_names', None)
             if self.continuous_action_space:
-                module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
+                default_heads_to_initialize = ['value', 'reward', 'observation']
             else:
-                module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
+                default_heads_to_initialize = ['policy', 'value', 'reward', 'observation']
+            if zero_init_head_names is None:
+                zero_init_head_names = default_heads_to_initialize
+            elif isinstance(zero_init_head_names, str):
+                zero_init_head_names = [zero_init_head_names]
+
+            head_map = {
+                'policy': self.head_policy,
+                'value': self.head_value,
+                'reward': self.head_rewards,
+                'rewards': self.head_rewards,
+                'observation': self.head_observations,
+                'observations': self.head_observations,
+            }
+            module_to_initialize = []
+            for head_name in zero_init_head_names:
+                if head_name not in head_map:
+                    raise ValueError(f"Unknown zero-init head name: {head_name}")
+                module_to_initialize.append(head_map[head_name])
+
             for head in module_to_initialize:
                 for layer in reversed(head.head_module):
                     if isinstance(layer, nn.Linear):
@@ -1216,6 +1247,7 @@ class WorldModel(nn.Module):
             batch_obs = obs_act_dict['obs']  # obs_act_dict['obs'] is at timestep t
             batch_action = obs_act_dict['action'] # obs_act_dict['action'] is at timestep t
             batch_current_obs = obs_act_dict['current_obs'] # obs_act_dict['current_obs'] is at timestep t+1
+            ready_env_id = obs_act_dict.get('ready_env_id', None)
 
         # Encode observations to latent embeddings.
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_obs)
@@ -1227,7 +1259,7 @@ class WorldModel(nn.Module):
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
-                                                                                   current_obs_embeddings, start_pos)
+                                                                 current_obs_embeddings, start_pos, ready_env_id)
         else:
             # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
             self.latent_state = obs_embeddings
@@ -1237,9 +1269,14 @@ class WorldModel(nn.Module):
 
     #@profile
     @torch.no_grad()
-    def wm_forward_for_initial_infererence(self, last_obs_embeddings: torch.LongTensor,
-                                                             batch_action=None,
-                                                             current_obs_embeddings=None, start_pos: int = 0) -> torch.FloatTensor:
+    def wm_forward_for_initial_infererence(
+            self,
+            last_obs_embeddings: torch.LongTensor,
+            batch_action=None,
+            current_obs_embeddings=None,
+            start_pos: int = 0,
+            ready_env_id: Optional[List[int]] = None
+    ) -> torch.FloatTensor:
         """
         Refresh key-value pairs with the initial latent state for inference.
 
@@ -1251,6 +1288,79 @@ class WorldModel(nn.Module):
             - torch.FloatTensor: The outputs from the world model.
         """
         n, num_observations_tokens, _ = last_obs_embeddings.shape
+
+        def _slice_batch(value, indices: List[int]):
+            if value is None:
+                return None
+            if isinstance(value, torch.Tensor):
+                return value[indices]
+            if isinstance(value, np.ndarray):
+                return value[indices]
+            return [value[i] for i in indices]
+
+        def _start_pos_value(value, index: int) -> int:
+            if isinstance(value, (int, float)):
+                return int(value)
+            item = value[index]
+            if hasattr(item, "item"):
+                return int(item.item())
+            return int(item)
+
+        def _merge_world_model_outputs(chunks: List[Tuple[List[int], WorldModelOutput]],
+                                       batch_size: int) -> WorldModelOutput:
+            sample_output = chunks[0][1]
+
+            def _merge_tensor(attr: str):
+                sample_tensor = getattr(sample_output, attr)
+                if sample_tensor is None:
+                    return None
+                for _, output in chunks[1:]:
+                    source_tensor = getattr(output, attr)
+                    if source_tensor is None:
+                        return None
+                    if source_tensor.shape[1:] != sample_tensor.shape[1:]:
+                        if attr in {"output_sequence", "logits_policy", "logits_value"}:
+                            raise RuntimeError(
+                                f"Cannot merge mixed UniZero root batch: {attr} has incompatible shapes "
+                                f"{sample_tensor.shape[1:]} and {source_tensor.shape[1:]}."
+                            )
+                        logging.debug(
+                            f"Skipping mixed root batch merge for auxiliary {attr}: "
+                            f"incompatible shapes {sample_tensor.shape[1:]} and {source_tensor.shape[1:]}."
+                        )
+                        return None
+                merged = torch.empty(
+                    (batch_size, *sample_tensor.shape[1:]),
+                    dtype=sample_tensor.dtype,
+                    device=sample_tensor.device,
+                )
+                for indices, output in chunks:
+                    source_tensor = getattr(output, attr)
+                    for local_idx, batch_idx in enumerate(indices):
+                        merged[batch_idx].copy_(source_tensor[local_idx])
+                return merged
+
+            return WorldModelOutput(
+                output_sequence=_merge_tensor("output_sequence"),
+                logits_observations=_merge_tensor("logits_observations"),
+                logits_rewards=_merge_tensor("logits_rewards"),
+                logits_ends=_merge_tensor("logits_ends"),
+                logits_policy=_merge_tensor("logits_policy"),
+                logits_value=_merge_tensor("logits_value"),
+            )
+
+        if current_obs_embeddings is not None:
+            ready_env_num = current_obs_embeddings.shape[0]
+            if ready_env_id is None:
+                ready_env_id = list(range(ready_env_num))
+            else:
+                ready_env_id = [int(env_id) for env_id in ready_env_id]
+                if len(ready_env_id) != ready_env_num:
+                    raise ValueError(
+                        f"ready_env_id length ({len(ready_env_id)}) must match "
+                        f"current_obs_embeddings batch ({ready_env_num})."
+                    )
+            self.current_infer_env_ids = ready_env_id
         if n <= self.env_num and current_obs_embeddings is not None:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
@@ -1258,7 +1368,40 @@ class WorldModel(nn.Module):
                 if self.continuous_action_space:
                     first_step_flag = not isinstance(batch_action[0], np.ndarray)
                 else:
-                    first_step_flag = max(batch_action) == -1
+                    first_step_flags = [int(action) == -1 for action in batch_action]
+                    first_step_flag = any(first_step_flags)
+                    if first_step_flag and not all(first_step_flags):
+                        logging.debug(
+                            "Mixed first-step and continuing envs in one UniZero root batch; "
+                            "splitting the batch to preserve per-env KV-cache context."
+                        )
+                        first_indices = [idx for idx, flag in enumerate(first_step_flags) if flag]
+                        continuing_indices = [idx for idx, flag in enumerate(first_step_flags) if not flag]
+                        chunks = []
+                        if first_indices:
+                            chunks.append((
+                                first_indices,
+                                self.wm_forward_for_initial_infererence(
+                                    _slice_batch(last_obs_embeddings, first_indices),
+                                    _slice_batch(batch_action, first_indices),
+                                    _slice_batch(current_obs_embeddings, first_indices),
+                                    _slice_batch(start_pos, first_indices),
+                                    _slice_batch(ready_env_id, first_indices),
+                                )
+                            ))
+                        if continuing_indices:
+                            chunks.append((
+                                continuing_indices,
+                                self.wm_forward_for_initial_infererence(
+                                    _slice_batch(last_obs_embeddings, continuing_indices),
+                                    _slice_batch(batch_action, continuing_indices),
+                                    _slice_batch(current_obs_embeddings, continuing_indices),
+                                    _slice_batch(start_pos, continuing_indices),
+                                    _slice_batch(ready_env_id, continuing_indices),
+                                )
+                            ))
+                        self.current_infer_env_ids = ready_env_id
+                        return _merge_world_model_outputs(chunks, ready_env_num)
                 if first_step_flag:
                     # ------------------------- First Step of an Episode -------------------------
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
@@ -1268,7 +1411,7 @@ class WorldModel(nn.Module):
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
                     # Copy and store keys_values_wm for a single environment
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True, env_ids=ready_env_id)
                 else:
                     # --------------------- Continuing an Episode (Multi-environment) ---------------------
                     # current_obs_embeddings is the new latent_state, containing information from ready_env_num environments
@@ -1277,6 +1420,7 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list = []
 
                     for i in range(ready_env_num):
+                        cache_env_id = ready_env_id[i]
                         # Retrieve latent state for a single environment
                         # TODO: len(last_obs_embeddings) may smaller than len(current_obs_embeddings), because some environments may have done
 
@@ -1288,12 +1432,12 @@ class WorldModel(nn.Module):
                         # Retrieve cached value
                         if self.use_new_cache_manager:
                             # NEW SYSTEM: Use KVCacheManager
-                            matched_value = self.kv_cache_manager.get_init_cache(env_id=i, cache_key=cache_key)
+                            matched_value = self.kv_cache_manager.get_init_cache(env_id=cache_env_id, cache_key=cache_key)
                         else:
                             # OLD SYSTEM: Use legacy cache dictionaries
-                            cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+                            cache_index = self.past_kv_cache_init_infer_envs[cache_env_id].get(cache_key)
                             if cache_index is not None:
-                                matched_value = self.shared_pool_init_infer[i][cache_index]
+                                matched_value = self.shared_pool_init_infer[cache_env_id][cache_index]
                             else:
                                 matched_value = None
                         # =============================================================================
@@ -1319,9 +1463,9 @@ class WorldModel(nn.Module):
                             # If using RoPE positional encoding, then at reset, the pos_embed should use the absolute position start_pos[i].
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True, start_pos=start_pos[i].item())
+                                                      is_init_infer=True, start_pos=_start_pos_value(start_pos, i))
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
-                            self.keys_values_wm_size_list.append(1)
+                            self.keys_values_wm_size_list.append(self.keys_values_wm_single_env.size)
 
                     # Input self.keys_values_wm_list, output self.keys_values_wm
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
@@ -1352,7 +1496,7 @@ class WorldModel(nn.Module):
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
                     # Copy and store keys_values_wm for a single environment
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True, env_ids=ready_env_id)
 
         elif batch_action is not None and current_obs_embeddings is None:
             # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
@@ -1557,7 +1701,7 @@ class WorldModel(nn.Module):
 
     #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             search_depth=[], valid_context_lengths=None):
+                             search_depth=[], valid_context_lengths=None, env_ids: Optional[List[int]] = None):
         """
         Update the cache context with the given latent state.
 
@@ -1571,8 +1715,18 @@ class WorldModel(nn.Module):
         if self.context_length <= 2:
             # No context to update if the context length is less than or equal to 2.
             return
+        if is_init_infer:
+            if env_ids is None:
+                env_ids = list(range(latent_state.size(0)))
+            else:
+                env_ids = [int(env_id) for env_id in env_ids]
+                if len(env_ids) != latent_state.size(0):
+                    raise ValueError(
+                        f"env_ids length ({len(env_ids)}) must match latent_state batch ({latent_state.size(0)})."
+                    )
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
+            cache_env_id = env_ids[i] if is_init_infer else i
             cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor
             context_length = self.context_length
 
@@ -1691,48 +1845,42 @@ class WorldModel(nn.Module):
 
             if self.use_new_cache_manager:
                 # NEW SYSTEM: Use KVCacheManager for cache storage
-                # ==================== BUG FIX: Deep Copy Before Storage ====================
-                # CRITICAL: Must clone before storing to prevent cache corruption.
-                # self.keys_values_wm_single_env is a shared object that gets modified.
-                # Without cloning, all cache entries would point to the same object,
-                # causing incorrect KV retrieval and training divergence.
-                kv_cache_to_store = self.keys_values_wm_single_env.clone()
-                # =============================================================================
-
+                # The manager stores a private fixed-pool copy, so callers do not
+                # allocate an extra clone on every recurrent MCTS update.
                 if is_init_infer:
                     # Store to per-environment init cache pool
                     # Note: KVCacheManager automatically handles eviction logic (FIFO/LRU)
                     self.kv_cache_manager.set_init_cache(
-                        env_id=i,
+                        env_id=cache_env_id,
                         cache_key=cache_key,
-                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
+                        kv_cache=self.keys_values_wm_single_env
                     )
                 else:
                     # Store to global recurrent cache pool
                     self.kv_cache_manager.set_recur_cache(
                         cache_key=cache_key,
-                        kv_cache=kv_cache_to_store  # Store cloned copy, not reference
+                        kv_cache=self.keys_values_wm_single_env
                     )
             else:
                 # OLD SYSTEM: Use legacy cache with manual eviction
                 if is_init_infer:
                     # ==================== Active Eviction Fix Logic ====================
                     # 1. Get the physical index that will be overwritten
-                    index_to_write = self.shared_pool_index_init_envs[i]
+                    index_to_write = self.shared_pool_index_init_envs[cache_env_id]
                     # 2. Use auxiliary list to find the old key stored at this index
-                    old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
+                    old_key_to_evict = self.pool_idx_to_key_map_init_envs[cache_env_id][index_to_write]
                     # 3. If old key exists, delete it from the main cache map
                     if old_key_to_evict is not None:
                         # Ensure the key to be deleted actually exists to avoid unexpected errors
-                        if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
-                            del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
+                        if old_key_to_evict in self.past_kv_cache_init_infer_envs[cache_env_id]:
+                            del self.past_kv_cache_init_infer_envs[cache_env_id][old_key_to_evict]
 
                     # Now it's safe to write new data
-                    cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
+                    cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, cache_env_id)
 
                     # 4. Update both the main cache map and auxiliary list with new mapping
-                    self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
-                    self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
+                    self.past_kv_cache_init_infer_envs[cache_env_id][cache_key] = cache_index
+                    self.pool_idx_to_key_map_init_envs[cache_env_id][index_to_write] = cache_key
                 else:
                     # ==================== RECURRENT INFER FIX ====================
                     # 1. Get the physical index that will be overwritten
@@ -1771,8 +1919,18 @@ class WorldModel(nn.Module):
         Returns:
             - list: Sizes of the key-value caches for each environment.
         """
+        # The per-env cache structures (past_kv_cache_init_infer_envs, shared_pool_init_infer, ...)
+        # are sized by env_num; serving more envs than that would silently cross-contaminate caches.
+        # This does not apply in the reanalyze phase, where per-env cache lookups are bypassed
+        # entirely and ready_env_num counts MCTS roots (reanalyze_batch x unroll steps) instead.
+        if not self.reanalyze_phase:
+            assert ready_env_num <= self.env_num, \
+                f'ready_env_num ({ready_env_num}) exceeds env_num ({self.env_num})'
         for index in range(ready_env_num):
             self.total_query_count += 1
+            cache_env_id = index
+            if self.current_infer_env_ids is not None and index < len(self.current_infer_env_ids):
+                cache_env_id = int(self.current_infer_env_ids[index])
             state_single_env = latent_state[index]  # latent_state[i] is np.array
             cache_key = hash_state(state_single_env)
 
@@ -1782,7 +1940,7 @@ class WorldModel(nn.Module):
             else:
                 if self.use_new_cache_manager:
                     # NEW SYSTEM: Use KVCacheManager's hierarchical_get for unified lookup
-                    matched_value = self.kv_cache_manager.hierarchical_get(env_id=index, cache_key=cache_key)
+                    matched_value = self.kv_cache_manager.hierarchical_get(env_id=cache_env_id, cache_key=cache_key)
 
                     # Log cache miss (statistics are automatically handled by KVCacheManager)
                     if matched_value is None:
@@ -1790,9 +1948,9 @@ class WorldModel(nn.Module):
                 else:
                     # OLD SYSTEM: Use legacy cache dictionaries and pools
                     # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-                    cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
+                    cache_index = self.past_kv_cache_init_infer_envs[cache_env_id].get(cache_key)
                     if cache_index is not None:
-                        matched_value = self.shared_pool_init_infer[index][cache_index]
+                        matched_value = self.shared_pool_init_infer[cache_env_id][cache_index]
                     else:
                         matched_value = None
 
@@ -1844,7 +2002,7 @@ class WorldModel(nn.Module):
                     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, start_pos=start_pos_adjusted
                 )
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
-                self.keys_values_wm_size_list.append(1)
+                self.keys_values_wm_size_list.append(self.keys_values_wm_single_env.size)
 
         return self.keys_values_wm_size_list
 
@@ -1947,34 +2105,47 @@ class WorldModel(nn.Module):
                 )
 
         if self.config.use_priority:
-            # Calculate value_priority, similar to MuZero.
+            # Calculate value_priority following MuZero: average absolute TD error
+            # over all valid unroll steps (not just step 0).
+            # Bug-fix: the original implementation only used logits_value[:, 0, :] (step 0),
+            # giving near-zero variance in priority across samples during early Pong training
+            # and making PER degrade to uniform sampling even when use_priority=True.
             with torch.no_grad():
-                # 1. Get the predicted value logits for the first step of the sequence (t=0).
-                # The shape is (B, support_size).
-                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+                B, T, support_size = outputs.logits_value.shape
 
-                # 2. Convert the categorical prediction to a scalar value.
-                # The shape becomes (B, 1).
-                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+                # Reshape to [B*T, support_size], invert the categorical transform,
+                # then reshape back to [B, T].
+                all_value_logits = outputs.logits_value.reshape(B * T, support_size)
+                all_scalar_values = inverse_scalar_transform_handle(all_value_logits)  # [B*T, 1]
+                all_scalar_values = all_scalar_values.squeeze(-1).reshape(B, T)        # [B, T]
 
-                # 3. Get the target scalar value for the first step from the batch.
-                # The shape is (B, num_unroll_steps), so we take the first column.
-                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+                # Target values aligned to [B, T].
+                target_scalar_values = batch['scalar_target_value'][:, :T]             # [B, T]
 
-                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
-                # This is the priority. We use reduction='none' to get per-sample priorities.
-                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
+                # Per-step absolute TD error.
+                per_step_td = F.l1_loss(all_scalar_values, target_scalar_values, reduction='none')  # [B, T]
+
+                # Average over valid (non-padding) steps; clamp denominator to avoid div/0.
+                mask = batch['mask_padding']  # [B, T], True = valid
+                value_priority = (per_step_td * mask).sum(1) / mask.sum(1).clamp_min(1)  # [B]
         else:
             value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
-            if self.config.latent_recon_loss_weight > 0:
+            if self.config.latent_recon_loss_weight > 0 or self.config.perceptual_loss_weight > 0:
                 # Reconstruct observations from latent state representations
                 reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
                 # Calculate reconstruction loss and perceptual loss
-                latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images)  # NOTE: for stack=1
-                perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images)  # NOTE: for stack=1
+                target_images = batch['observations'].reshape(-1, 3, 64, 64)  # NOTE: for stack=1
+                if self.config.latent_recon_loss_weight > 0:
+                    latent_recon_loss = self.tokenizer.reconstruction_loss(target_images, reconstructed_images)
+                else:
+                    latent_recon_loss = self.latent_recon_loss
+                if self.config.perceptual_loss_weight > 0:
+                    perceptual_loss = self.tokenizer.perceptual_loss(target_images, reconstructed_images)
+                else:
+                    perceptual_loss = self.perceptual_loss
             else:
                 # TODO:
                 latent_recon_loss = self.latent_recon_loss
@@ -2118,6 +2289,16 @@ class WorldModel(nn.Module):
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
+        full_mask_count = batch['mask_padding'].sum()
+        if full_mask_count == 0:
+            raise ValueError("mask_padding is all zeros; cannot compute UniZero loss")
+        obs_mask_count = batch['mask_padding'][:, 1:].sum().clamp_min(1)
+
+        def _safe_masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+            selected_values = values[mask]
+            if selected_values.numel() == 0:
+                return values.new_tensor(0.)
+            return selected_values.mean()
 
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
@@ -2132,7 +2313,7 @@ class WorldModel(nn.Module):
             if loss_name == 'loss_obs':
                 seq_len = batch['actions'].shape[1] - 1
                 # Get the corresponding mask_padding
-                mask_padding = batch['mask_padding'][:, 1:seq_len]
+                mask_padding = batch['mask_padding'][:, 1:]
             else:
                 seq_len = batch['actions'].shape[1]
                 # Get the corresponding mask_padding
@@ -2143,27 +2324,48 @@ class WorldModel(nn.Module):
 
             # First step loss
             first_step_mask = mask_padding[:, 0]
-            first_step_losses[loss_name] = loss_tmp[:, 0][first_step_mask].mean()
+            first_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, 0], first_step_mask)
 
             # Middle step loss
             middle_timestep = seq_len // 2
             middle_step_mask = mask_padding[:, middle_timestep]
-            middle_step_losses[loss_name] = loss_tmp[:, middle_timestep][middle_step_mask].mean()
+            middle_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, middle_timestep], middle_step_mask)
 
             # Last step loss
             last_step_mask = mask_padding[:, -1]
-            last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
+            last_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, -1], last_step_mask)
 
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
         # Calculate overall discounted loss
-        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ batch['mask_padding'][:,1:].sum()
-        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
+        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ obs_mask_count
+        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+
+        # ==================== Per-sample losses for PER importance-sampling weights ====================
+        # The ``discounted_*`` losses above are batch-level scalars, so multiplying them by per-sample
+        # IS weights in the policy collapses to ``loss * mean(weights)`` and the weights have no effect.
+        # These [B] counterparts let the policy apply the weights per sample. Each sample's loss is the
+        # discounted sum over its unmasked timesteps, normalized by its own valid-step count.
+        per_sample_kwargs = {}
+        if not self.continuous_action_space:
+            num_steps = batch['actions'].shape[1]
+            mask_float = batch['mask_padding'].float()
+            per_sample_valid_count = mask_float.sum(dim=1).clamp_min(1)
+            per_sample_obs_valid_count = mask_float[:, 1:].sum(dim=1).clamp_min(1)
+            per_sample_kwargs = dict(
+                per_sample_loss_obs=(loss_obs.view(-1, num_steps - 1) * discounts[1:]).sum(dim=1) / per_sample_obs_valid_count,
+                per_sample_loss_rewards=(loss_rewards.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_value=(loss_value.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy=(loss_policy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_orig_policy=(orig_policy_loss.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy_entropy=(policy_entropy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+            )
+        # =================================================================================================
 
         # Add encoder output to return dictionary for external training loop access
         # Using .detach() because this tensor is only used for subsequent clip operations and should not affect gradient computation
@@ -2236,6 +2438,7 @@ class WorldModel(nn.Module):
                 logits_value=outputs.logits_value.detach(),
                 logits_reward=outputs.logits_rewards.detach(),
                 logits_policy=outputs.logits_policy.detach(),
+                **per_sample_kwargs,
             )
 
     
@@ -2484,10 +2687,11 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
+        self.current_infer_env_ids = None
         if self.use_new_cache_manager:
             # Use new KV cache manager's clear method
             self.kv_cache_manager.clear_all()
-            print(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
+            logging.debug(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
 
             # Optionally print stats before clearing
             if hasattr(self.kv_cache_manager, 'get_stats_summary'):
@@ -2500,7 +2704,7 @@ class WorldModel(nn.Module):
                 kv_cache_dict_env.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
-            print(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
+            logging.debug(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

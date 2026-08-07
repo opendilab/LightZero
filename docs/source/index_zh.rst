@@ -22,6 +22,7 @@ LightZero文档
 
     tutorials/installation/installation_and_quickstart_zh
     tutorials/algos/customize_algos_zh
+    tutorials/algos/async_pipeline_muzero_unizero_zh
     tutorials/envs/customize_envs_zh
     tutorials/config/config_zh
     tutorials/logs/logs_zh
