@@ -86,10 +86,23 @@ def train_unizero_segment(
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # Load pretrained model if specified
+    resume_train_iter, resume_envstep, resume_optimizer_state = 0, 0, None
     if model_path is not None:
         logging.info(f'Loading model from {model_path} begin...')
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-        logging.info(f'Loading model from {model_path} end!')
+        checkpoint = torch.load(model_path, map_location=cfg.policy.device)
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            # Learner checkpoint: {'model', 'target_model', 'optimizer_world_model', 'last_iter',
+            # 'last_step'}. UniZeroPolicy._load_state_dict_learn expects exactly this dict (it reads
+            # the 'model' and 'target_model' keys itself).
+            resume_train_iter = checkpoint.get('last_iter', 0)
+            resume_envstep = checkpoint.get('last_step', 0)
+            resume_optimizer_state = checkpoint.get('optimizer_world_model', None)
+            policy.learn_mode.load_state_dict(checkpoint)
+        else:
+            # Raw model weights file.
+            policy._learn_model.load_state_dict(checkpoint)
+        logging.info(f'Loading model from {model_path} end! '
+                     f'(resume_train_iter={resume_train_iter}, resume_envstep={resume_envstep})')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -103,6 +116,17 @@ def train_unizero_segment(
     evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
                           tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)
+
+    # When resuming from a learner checkpoint, restore the training counters and optimizer state so
+    # that schedules (encoder-clip annealing, eval cadence) and the envstep accounting continue
+    # instead of restarting from zero.
+    if resume_train_iter > 0:
+        # BaseLearner.train_iter is a read-only property backed by the CountVar `_last_iter`.
+        learner._last_iter.update(resume_train_iter)
+    if resume_envstep > 0:
+        collector._total_envstep_count = resume_envstep
+    if resume_optimizer_state is not None and hasattr(policy, '_optimizer_world_model'):
+        policy._optimizer_world_model.load_state_dict(resume_optimizer_state)
 
     # Learner's before_run hook
     learner.call_hook('before_run')

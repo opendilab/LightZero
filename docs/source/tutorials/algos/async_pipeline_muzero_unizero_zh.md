@@ -7,7 +7,7 @@
 - **同步管线**（`train_muzero_segment` / `train_unizero_segment`）：单进程串行执行「采集 → 训练 → 评估」，任一阶段运行时其余阶段空闲。
 - **异步管线**（`train_muzero_segment_async` / `train_unizero_segment_async`）：基于 Ray，将 collector / evaluator 放入独立 actor 进程，与 learner 重叠执行，提升 GPU 利用率与 wall-clock 吞吐。
 - **训练语义不变**：replay buffer、采样、reanalyze、优先级更新仍由 driver 单进程持有；async 只改变「谁在何时执行」，不改变数据流与更新规则。
-- **吞吐参考**（Atari Pong 实测）：async 约 37 envstep/s，sync 约 23 envstep/s（约 1.6×）。收益来自采集/评估与学习的流水线重叠，而非单次采集更快。
+- **吞吐参考**（Atari Pong，同一约 6.2 小时 wall-clock 窗口，2026-07-02，2 个 collector actor）：async 约 36.3 envstep/s（809.5k envsteps），sync 约 22.4 envstep/s（499.8k envsteps），约 1.6×。收益来自采集/评估与学习的流水线重叠，而非单次采集更快。
 
 支持的 policy 类型：`muzero`、`muzero_context`、`muzero_rnn_full_obs`、`efficientzero`、`sampled_efficientzero`、`sampled_muzero`、`gumbel_muzero`、`stochastic_muzero`、`unizero`、`sampled_unizero`。
 

@@ -235,7 +235,7 @@ python3 -u zoo/atari/config/atari_unizero_segment_config.py
 
 ### 实验性 MuZero 异步训练
 
-Atari MuZero segment 的异步 pipeline 目前基于 Ray 调度实现：collector actor 和 evaluator actor 异步运行，learner 与 replay buffer 仍保留在 driver 进程中，因此 MuZero 更新逻辑保持不变。以 Pong 上 500k 同步 MuZero 设置作为初步对比，baseline 达到 491k envsteps，速度为 22.1 envsteps/s，eval reward 为 -15.7；同一实验设置下 async 达到 939k envsteps，速度为 39.9 envsteps/s，eval reward 为 -14.3。该实验中端到端吞吐约提升 1.8x，replay ratio 基本可比；结果仍属于初步观察，并依赖具体硬件环境。
+Atari MuZero segment 的异步 pipeline 目前基于 Ray 调度实现：collector actor 和 evaluator actor 异步运行，learner 与 replay buffer 仍保留在 driver 进程中，因此 MuZero 更新逻辑保持不变。在 Pong 上同一约 6.2 小时 wall-clock 窗口的对照实验中（2026-07-02，2 个 collector actor）：sync baseline 采集 499.8k envsteps（约 22.4 envsteps/s），async 采集 809.5k envsteps（约 36.3 envsteps/s），端到端吞吐约提升 1.6x，replay ratio 基本可比；窗口末端两者 eval reward_mean 大致处于同一水平。该结果仍属于初步观察，并依赖具体硬件环境。
 
 ## 📚 文档
 

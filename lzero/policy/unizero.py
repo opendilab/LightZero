@@ -1465,7 +1465,8 @@ class UniZeroPolicy(MuZeroPolicy):
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
-            self._mcts_collect = MCTSPtree(mcts_collect_cfg)
+            # NOTE: a python-tree MCTS variant for UniZero is not implemented in this fork.
+            raise NotImplementedError('UniZero policy only supports mcts_ctree=True (C++ tree MCTS).')
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
@@ -1676,7 +1677,8 @@ class UniZeroPolicy(MuZeroPolicy):
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
-            self._mcts_eval = MCTSPtree(mcts_eval_cfg)
+            # NOTE: a python-tree MCTS variant for UniZero is not implemented in this fork.
+            raise NotImplementedError('UniZero policy only supports mcts_ctree=True (C++ tree MCTS).')
 
         self.evaluator_env_num = self._cfg.evaluator_env_num
 

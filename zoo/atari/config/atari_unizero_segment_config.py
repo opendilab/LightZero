@@ -55,6 +55,8 @@ def main(
         disable_adaptive_alpha=True,
         fixed_alpha=5e-3,
         disable_policy_label_smoothing=True,
+        resume_from=None,
+        max_env_step_override=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
 
@@ -83,6 +85,8 @@ def main(
         max_env_step = int(1e6)
     else:
         max_env_step = int(10e6)
+    if max_env_step_override is not None:
+        max_env_step = int(max_env_step_override)
 
     # Reanalyze settings
     buffer_reanalyze_freq = 1/5000000000
@@ -187,14 +191,15 @@ def main(
             monitor_norm_freq=10000,
 
             # Priority settings.
-            # Reverted from config's hard override of 1/1 to softer values:
-            #   alpha=1.0 = fully prioritised sampling; this concentrates the
-            #   gradient signal on a few high-TD-error transitions and causes
-            #   the policy to oscillate (reward_mean swings 13→3→11→7...).
-            #   beta=1.0 with no IS-correction amplifies the same instability.
-            # Softer values (policy defaults) give more uniform coverage and
-            # more stable training.
-            use_priority=True,
+            # Default OFF (uniform sampling): in the 2026-08-06 Pong A/B at matched train_iters,
+            # the run with PER effectively disabled (kimi-fix) learned consistently faster early
+            # than the run with PER active (allfix), e.g. -4.0 vs -9.0 at iter 20k and -3.7 vs
+            # -6.3 at iter 25k. With sparse-reward Pong, TD-error priorities over-sample rare
+            # scoring transitions and distort the training distribution.
+            # NOTE: keep model.world_model_cfg.use_priority=True so the [B] value_priority tensor
+            # is still computed and update_priority() stays shape-compatible; with use_priority
+            # False here, the buffer samples uniformly and priority write-backs are discarded.
+            use_priority=False,
             priority_prob_alpha=0.6,
             priority_prob_beta=0.4,
 
@@ -253,7 +258,7 @@ def main(
         try:
             print(f'Run directory: {os.path.abspath(run_dir)}')
             train_unizero_segment(
-                [main_config, create_config], seed=seed, model_path=None, max_env_step=max_env_step
+                [main_config, create_config], seed=seed, model_path=resume_from, max_env_step=max_env_step
             )
         except BaseException:
             traceback.print_exc(file=sys.stderr)
@@ -304,6 +309,14 @@ if __name__ == "__main__":
         help='Set policy label-smoothing epsilon to zero (default); value/reward smoothing is unchanged.'
     )
     parser.set_defaults(disable_adaptive_alpha=True, disable_policy_label_smoothing=True)
+    parser.add_argument(
+        '--resume-from', dest='resume_from', type=str, default=None,
+        help='Optional learner checkpoint path to resume weights/optimizer/train_iter/envstep from.'
+    )
+    parser.add_argument(
+        '--max-env-step', dest='max_env_step', type=int, default=None,
+        help='Override the default max env-step budget (e.g. for continuing a run past its cap).'
+    )
     args = parser.parse_args()
 
     main(
@@ -315,4 +328,6 @@ if __name__ == "__main__":
         disable_adaptive_alpha=args.disable_adaptive_alpha,
         fixed_alpha=args.fixed_alpha,
         disable_policy_label_smoothing=args.disable_policy_label_smoothing,
+        resume_from=args.resume_from,
+        max_env_step_override=args.max_env_step,
     )

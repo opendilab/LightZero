@@ -1921,8 +1921,11 @@ class WorldModel(nn.Module):
         """
         # The per-env cache structures (past_kv_cache_init_infer_envs, shared_pool_init_infer, ...)
         # are sized by env_num; serving more envs than that would silently cross-contaminate caches.
-        assert ready_env_num <= self.env_num, \
-            f'ready_env_num ({ready_env_num}) exceeds env_num ({self.env_num})'
+        # This does not apply in the reanalyze phase, where per-env cache lookups are bypassed
+        # entirely and ready_env_num counts MCTS roots (reanalyze_batch x unroll steps) instead.
+        if not self.reanalyze_phase:
+            assert ready_env_num <= self.env_num, \
+                f'ready_env_num ({ready_env_num}) exceeds env_num ({self.env_num})'
         for index in range(ready_env_num):
             self.total_query_count += 1
             cache_env_id = index

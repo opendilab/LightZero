@@ -7,7 +7,7 @@ This document describes the async segment training pipeline for the MuZero famil
 - **Sync pipeline** (`train_muzero_segment` / `train_unizero_segment`): a single process runs collect → train → evaluate sequentially; whenever one stage runs, the others idle.
 - **Async pipeline** (`train_muzero_segment_async` / `train_unizero_segment_async`): based on Ray, collector and evaluator run as separate actor processes and overlap with the learner, improving GPU utilization and wall-clock throughput.
 - **Training semantics are unchanged**: the replay buffer, sampling, reanalyze, and priority updates are still owned by the driver process. Async only changes *who runs what and when*, not the data flow or update rules.
-- **Throughput reference** (measured on Atari Pong): async ≈ 37 env steps/s vs sync ≈ 23 env steps/s (~1.6×). The gain comes from overlapping collection/evaluation with learning, not from faster collection itself.
+- **Throughput reference** (Atari Pong, same ~6.2 h wall-clock window, 2026-07-02, 2 collector actors): async ≈ 36.3 env steps/s (809.5k env steps) vs sync ≈ 22.4 env steps/s (499.8k env steps) — ~1.6×. The gain comes from overlapping collection/evaluation with learning, not from faster collection itself.
 
 Supported policy types: `muzero`, `muzero_context`, `muzero_rnn_full_obs`, `efficientzero`, `sampled_efficientzero`, `sampled_muzero`, `gumbel_muzero`, `stochastic_muzero`, `unizero`, `sampled_unizero`.
 
