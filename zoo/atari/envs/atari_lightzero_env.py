@@ -13,6 +13,18 @@ from easydict import EasyDict
 from zoo.atari.envs.atari_wrappers import wrap_lightzero
 
 
+def _prepare_reset_seed(base_seed: int, dynamic_seed: bool) -> int:
+    """Choose the ALE seed and synchronize randomness used by legacy wrappers.
+
+    ``NoopResetWrapper`` uses NumPy's process-local RNG rather than ALE's RNG.  Without
+    reseeding it, ``dynamic_seed=False`` still produces a different no-op count on every
+    evaluation, so the same checkpoint is not reproducible after a restart.
+    """
+    reset_seed = base_seed + 100 * np.random.randint(1, 1000) if dynamic_seed else base_seed
+    np.random.seed(reset_seed)
+    return int(reset_seed)
+
+
 @ENV_REGISTRY.register('atari_lightzero')
 class AtariEnvLightZero(BaseEnv):
     """
@@ -148,11 +160,9 @@ class AtariEnvLightZero(BaseEnv):
 
             self._init_flag = True
 
-        if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
-            np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
-        elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
+        if hasattr(self, '_seed'):
+            reset_seed = _prepare_reset_seed(self._seed, getattr(self, '_dynamic_seed', True))
+            self._env.seed(reset_seed)
 
         result = self._env.reset()
         if isinstance(result, tuple):

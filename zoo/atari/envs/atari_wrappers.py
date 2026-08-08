@@ -7,12 +7,30 @@ import gym  # For legacy API wrapper base class
 import gymnasium  # For creating environments
 import ale_py
 import numpy as np
+from ditk import logging
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
     ScaledFloatFrameWrapper, \
     ClipRewardWrapper, FrameStackWrapper, TimeLimitWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
 from easydict import EasyDict
 from gymnasium.wrappers import RecordVideo
+
+
+def _atari_make_kwargs(config: EasyDict) -> dict:
+    """Return base ALE kwargs compatible with LightZero's outer frame skip.
+
+    ``ALE/<game>-v5`` defaults to internal frame skip 4 and sticky actions.
+    LightZero repeats actions in ``MaxAndSkipWrapper`` below, so accepting the
+    v5 defaults would turn the historical four-frame control interval into a
+    sixteen-frame interval.  Keep action repeat owned by exactly one layer.
+    """
+    kwargs = {
+        'render_mode': 'human' if config.render_mode_human else 'rgb_array',
+        'full_action_space': config.full_action_space,
+    }
+    if str(config.env_id).startswith('ALE/'):
+        kwargs.update(frameskip=1, repeat_action_probability=0.0)
+    return kwargs
 
 
 def _strip_gymnasium_reset_info(observation):
@@ -128,11 +146,19 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     Return:
         - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
-    # Step 1: Create base environment using gymnasium
-    if config.render_mode_human:
-        env = gymnasium.make(config.env_id, render_mode='human', full_action_space=config.full_action_space)
-    else:
-        env = gymnasium.make(config.env_id, render_mode='rgb_array', full_action_space=config.full_action_space)
+    # Step 1: Create an unskipped deterministic base environment.  The outer
+    # MaxAndSkipWrapper below is the sole owner of action repeat/max-pooling.
+    env = gymnasium.make(config.env_id, **_atari_make_kwargs(config))
+    if str(config.env_id).startswith('ALE/'):
+        actual_kwargs = env.spec.kwargs
+        assert actual_kwargs.get('frameskip') == 1, actual_kwargs
+        assert actual_kwargs.get('repeat_action_probability') == 0.0, actual_kwargs
+        logging.info(
+            "LightZero Atari semantics: env=%s, base_frameskip=1, outer_frameskip=%s, "
+            "repeat_action_probability=0.0",
+            config.env_id,
+            config.frame_skip,
+        )
 
     # (Optional) Apply gymnasium native wrappers
     if hasattr(config, 'save_replay') and config.save_replay \

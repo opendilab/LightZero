@@ -548,7 +548,7 @@ namespace tree
         }
     }
 
-    int cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players)
+    int cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players, bool deterministic)
     {
         /*
         Overview:
@@ -589,8 +589,7 @@ namespace tree
         int action = 0;
         if (max_index_lst.size() > 0)
         {
-            int rand_index = rand() % max_index_lst.size();
-            action = max_index_lst[rand_index];
+            action = deterministic ? max_index_lst.front() : max_index_lst[rand() % max_index_lst.size()];
         }
         return action;
     }
@@ -752,7 +751,7 @@ namespace tree
         return ucb_value;
     }
 
-    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch)
+    void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &virtual_to_play_batch, bool deterministic)
     {
         /*
         Overview:
@@ -766,8 +765,10 @@ namespace tree
             - results: the search results.
             - virtual_to_play_batch: the batch of which player is playing on this node.
         */
-        // set seed
-        get_time_and_set_rand_seed();
+        // Collection preserves stochastic tie-breaking. Evaluation requests deterministic
+        // selection and must not depend on wall-clock microseconds.
+        if (!deterministic)
+            get_time_and_set_rand_seed();
 
         int last_action = -1;
         results.search_lens = std::vector<int>();
@@ -793,7 +794,7 @@ namespace tree
                 is_root = 0;
                 parent_q = mean_q;
 
-                int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players);
+                int action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players, deterministic);
                 if (players > 1)
                 {
                     assert(virtual_to_play_batch[i] == 1 || virtual_to_play_batch[i] == 2);
@@ -874,7 +875,10 @@ namespace tree
                 }
                 else
                 {
-                    action = cselect_child(node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init, discount_factor, mean_q, players);
+                    action = cselect_child(
+                        node, min_max_stats_lst->stats_lst[i], pb_c_base, pb_c_init,
+                        discount_factor, mean_q, players, false
+                    );
                 }
                 
                 if (players > 1)

@@ -57,6 +57,11 @@ def main(
         disable_policy_label_smoothing=True,
         resume_from=None,
         max_env_step_override=None,
+        use_priority=None,
+        stab_fix=False,
+        game_segment_length_override=None,
+        save_ckpt_after_iter_override=None,
+        legacy_resume_alpha=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
 
@@ -65,12 +70,19 @@ def main(
     # ==============================================================
     collector_env_num = 8
     num_segments = 8
-    evaluator_env_num = 3
+    evaluator_env_num = 8  # 3->8: reduce eval reward_mean noise for attribution (takes effect on next run restart)
 
     # game_segment_length=20 makes only 20-(num_unroll_steps+td_steps)=5 of the 20 positions in each
     # non-terminal segment eligible as sampling roots (valid_len in game_buffer._push_game_segment),
     # i.e. 75% of the collected transitions can never be trained on. 200 restores ~92.5% coverage.
-    game_segment_length = 200
+    game_segment_length = 200 if game_segment_length_override is None else int(game_segment_length_override)
+    save_ckpt_after_iter = (
+        50000 if save_ckpt_after_iter_override is None else int(save_ckpt_after_iter_override)
+    )
+    if save_ckpt_after_iter <= 0:
+        raise ValueError(f'save_ckpt_after_iter must be positive, got {save_ckpt_after_iter}')
+    if legacy_resume_alpha is not None and legacy_resume_alpha <= 0:
+        raise ValueError(f'legacy_resume_alpha must be positive, got {legacy_resume_alpha}')
     num_unroll_steps = 10
     infer_context_length = 4
 
@@ -144,6 +156,12 @@ def main(
                     use_normal_head=True,
                     optim_type='AdamW_mix_lr_wdecay',
                     use_new_cache_manager=use_new_cache_manager,
+                    # Policy-stability protections (500K crash chain: extreme target_policy ->
+                    # logits explosion -> x_token collapse). Off by default; --stab-fix enables.
+                    use_policy_logits_clip=stab_fix,
+                    policy_logits_clip_method='soft_tanh',
+                    policy_logits_clip_min=-10.0,
+                    policy_logits_clip_max=10.0,
                 ),
             ),
             # Learning settings
@@ -155,6 +173,9 @@ def main(
             num_unroll_steps=num_unroll_steps,
             num_segments=num_segments,
             game_segment_length=game_segment_length,
+            # Full learner checkpoints are ~530MB each; save every 50k train iters instead of
+            # the default 10k to bound disk usage. ckpt_best (on new best eval) is unaffected.
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=save_ckpt_after_iter))),
             # KV caches are cleared once per env per this many env steps. Was hardcoded to
             # game_segment_length, which wiped all MCTS kv caches after every single segment.
             kv_cache_clear_interval=2000,
@@ -165,6 +186,7 @@ def main(
             # Adaptive target entropy settings from the 2025 Pong run.
             use_adaptive_entropy_weight=not disable_adaptive_alpha,
             adaptive_entropy_alpha_lr=1e-4,
+            legacy_resume_adaptive_alpha=legacy_resume_alpha,
             target_entropy_start_ratio=0.98,
             target_entropy_end_ratio=0.7,
             target_entropy_decay_steps=100000,
@@ -187,8 +209,13 @@ def main(
             policy_ls_eps_end=0.0 if disable_policy_label_smoothing else 0.01,
             policy_ls_eps_decay_steps=50000,
             label_smoothing_eps=0.1,
-            use_continuous_label_smoothing=False,
+            use_continuous_label_smoothing=stab_fix,
+            continuous_ls_eps=0.05,
             monitor_norm_freq=10000,
+            # Always-on enhanced policy monitoring: without this flag the whitelisted
+            # policy_logits/* and target_policy_entropy/{mean,min,max,std} log keys print
+            # constant 0.0 (empty-record averaging), hiding real logits/entropy stats.
+            use_enhanced_policy_monitoring=True,
 
             # Priority settings.
             # Default ON. A 2026-08-06 Pong A/B suggested PER-off learned faster in the first
@@ -198,7 +225,7 @@ def main(
             # value_priority tensor is computed and update_priority() stays shape-compatible;
             # setting use_priority=False here switches the buffer to uniform sampling and
             # priority write-backs are then discarded.
-            use_priority=True,
+            use_priority=True if use_priority is None else use_priority,
             priority_prob_alpha=0.6,
             priority_prob_beta=0.4,
 
@@ -212,6 +239,9 @@ def main(
             evaluator_env_num=evaluator_env_num,
             eval_freq=int(5e3),
             replay_buffer_size=int(5e5),
+            # Policy checkpoints omit the ~25GB full Atari replay buffer. Refill a small diverse
+            # on-policy window before updating a mature model after preemption.
+            resume_buffer_min_transitions=10000,
         ),
     )
     atari_unizero_config = EasyDict(atari_unizero_config)
@@ -316,6 +346,33 @@ if __name__ == "__main__":
         '--max-env-step', dest='max_env_step', type=int, default=None,
         help='Override the default max env-step budget (e.g. for continuing a run past its cap).'
     )
+    priority_group = parser.add_mutually_exclusive_group()
+    priority_group.add_argument(
+        '--use-priority', dest='use_priority', action='store_true',
+        help='Force prioritized replay on (this is the default).'
+    )
+    priority_group.add_argument(
+        '--no-priority', dest='use_priority', action='store_false',
+        help='Disable prioritized replay (uniform sampling) for ablations.'
+    )
+    parser.set_defaults(use_priority=None)
+    parser.add_argument(
+        '--stab-fix', dest='stab_fix', action='store_true',
+        help='Enable policy-stability protections (soft_tanh policy-logits clip +-10 + '
+             'continuous label smoothing eps=0.05) from the 500K-crash fix bundle.'
+    )
+    parser.add_argument(
+        '--game-segment-length', dest='game_segment_length', type=int, default=None,
+        help='Override game_segment_length (default 200; the 2025-10 known-good Pong run used 20).'
+    )
+    parser.add_argument(
+        '--save-ckpt-after-iter', dest='save_ckpt_after_iter', type=int, default=None,
+        help='Override periodic learner-checkpoint interval; useful on preemptible clusters.'
+    )
+    parser.add_argument(
+        '--legacy-resume-alpha', dest='legacy_resume_alpha', type=float, default=None,
+        help='Adaptive alpha recorded externally for a legacy checkpoint without log_alpha.'
+    )
     args = parser.parse_args()
 
     main(
@@ -329,4 +386,9 @@ if __name__ == "__main__":
         disable_policy_label_smoothing=args.disable_policy_label_smoothing,
         resume_from=args.resume_from,
         max_env_step_override=args.max_env_step,
+        use_priority=args.use_priority,
+        stab_fix=args.stab_fix,
+        game_segment_length_override=args.game_segment_length,
+        save_ckpt_after_iter_override=args.save_ckpt_after_iter,
+        legacy_resume_alpha=args.legacy_resume_alpha,
     )
