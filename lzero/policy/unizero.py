@@ -25,6 +25,56 @@ from torch.nn.utils.convert_parameters import (parameters_to_vector,
 from .utils import configure_optimizers_nanogpt
 
 
+def representation_health_metrics(x: torch.Tensor, near_constant_threshold: float = 1e-3) -> Dict[str, float]:
+    """Measure representation diversity across samples/tokens, per feature.
+
+    The standard deviation of token L2 norms is not a collapse metric after
+    LayerNorm: every token is expected to have norm close to ``sqrt(embed_dim)``.
+    Collapse instead means that individual feature coordinates stop varying
+    across the batch/time population.
+    """
+    if x.ndim < 2 or x.shape[-1] == 0:
+        raise ValueError(f"Expected [..., feature_dim] tensor, got shape {tuple(x.shape)}")
+    flattened = x.detach().float().reshape(-1, x.shape[-1])
+    feature_std = flattened.std(dim=0, unbiased=False)
+    return {
+        'activation/x_token/feature_std_mean': feature_std.mean().item(),
+        'activation/x_token/feature_std_min': feature_std.min().item(),
+        'activation/x_token/near_constant_fraction': (feature_std < near_constant_threshold).float().mean().item(),
+    }
+
+
+def should_run_periodic_monitor(train_iter: int, frequency: int, last_check_iter: int) -> bool:
+    """Run once after policy construction/resume, then at configured iteration boundaries."""
+    return frequency > 0 and (last_check_iter < 0 or train_iter % frequency == 0)
+
+
+def replay_distribution_metrics(weights: torch.Tensor, value_priority: torch.Tensor) -> Dict[str, float]:
+    """Summarize PER importance weights and TD-error priorities without changing training.
+
+    The normalized effective sample size (ESS) distinguishes a genuinely diverse, well-corrected
+    prioritized batch from one whose gradient is dominated by a small number of samples.  Uniform
+    replay should produce unit weights and ``ess_fraction=1``.
+    """
+    weights_flat = weights.detach().float().reshape(-1)
+    priority_flat = value_priority.detach().float().reshape(-1)
+    if weights_flat.numel() == 0 or priority_flat.numel() == 0:
+        raise ValueError('Replay diagnostics require non-empty weights and value priorities')
+    weight_square_sum = weights_flat.square().sum().clamp_min(torch.finfo(weights_flat.dtype).tiny)
+    ess_fraction = weights_flat.sum().square() / (weights_flat.numel() * weight_square_sum)
+    return {
+        'replay/is_weight_mean': weights_flat.mean().item(),
+        'replay/is_weight_std': weights_flat.std(unbiased=False).item(),
+        'replay/is_weight_min': weights_flat.min().item(),
+        'replay/is_weight_max': weights_flat.max().item(),
+        'replay/is_weight_ess_fraction': ess_fraction.item(),
+        'replay/value_priority_mean': priority_flat.mean().item(),
+        'replay/value_priority_std': priority_flat.std(unbiased=False).item(),
+        'replay/value_priority_min': priority_flat.min().item(),
+        'replay/value_priority_max': priority_flat.max().item(),
+    }
+
+
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
     Efficiently scale all weights of a module using vectorized operations.
@@ -329,6 +379,9 @@ class UniZeroPolicy(MuZeroPolicy):
         use_adaptive_entropy_weight=False,
         # (float) Learning rate for adaptive alpha optimizer
         adaptive_entropy_alpha_lr=1e-3,
+        # (float or None) Explicit alpha for legacy checkpoints that did not persist log_alpha.
+        # Ignored whenever the checkpoint contains an exact log_alpha value.
+        legacy_resume_adaptive_alpha=None,
         # (float) Lower/upper bounds for adaptive entropy alpha. The lower bound must stay well below
         # typical Atari entropy weights so alpha can keep decaying when the target entropy anneals.
         adaptive_entropy_alpha_min=1e-4,
@@ -559,6 +612,10 @@ class UniZeroPolicy(MuZeroPolicy):
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.
         random_collect_episode_num=0,
+        # (int) Learner checkpoints do not persist the in-memory replay buffer. On resume, collect
+        # this many on-policy transitions before applying gradients to avoid a one-batch distribution shock.
+        # Zero preserves the historical one-batch threshold; large-buffer tasks can opt in explicitly.
+        resume_buffer_min_transitions=0,
 
         # ****** Explore by eps greedy ******
         eps=dict(
@@ -754,6 +811,10 @@ class UniZeroPolicy(MuZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+        # Sparse stability checks must not appear as zero in every intervening learner log.
+        # Cache the last real observation, and force a check on the first batch after resume.
+        self._latest_norm_log_dict = {}
+        self._last_norm_monitor_iter = -1
 
         if self._cfg.model.model_type == 'conv':
             # for image-input env
@@ -987,8 +1048,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== Integrate norm monitoring logic ====================
         norm_log_dict = {}
+        should_monitor_norms = should_run_periodic_monitor(
+            train_iter, self._cfg.monitor_norm_freq, self._last_norm_monitor_iter
+        )
         # Check if monitoring frequency is reached
-        if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
+        if should_monitor_norms:
             with torch.no_grad():
                 # 1. Monitor model parameter norms
                 param_norm_metrics = self._monitor_model_norms()
@@ -1006,6 +1070,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     norm_log_dict['norm/x_token/std'] = token_norms.std().item()
                     norm_log_dict['norm/x_token/max'] = token_norms.max().item()
                     norm_log_dict['norm/x_token/min'] = token_norms.min().item()
+                    norm_log_dict.update(representation_health_metrics(intermediate_x))
 
                 # 3. Monitor detailed statistics of logits (Value, Policy, Reward)
                 logits_value = losses.intermediate_losses.get('logits_value')
@@ -1062,13 +1127,23 @@ class UniZeroPolicy(MuZeroPolicy):
                     elif emb_norm_std > 5.0:
                         warnings_issued.append(f"⚠️ WARNING: Embedding norm std increasing! std={emb_norm_std:.2f} (threshold: 5.0)")
 
-                # Check 3: X token norm collapse
-                if 'norm/x_token/std' in norm_log_dict:
-                    x_token_std = norm_log_dict['norm/x_token/std']
-                    if x_token_std < 0.1:
-                        warnings_issued.append(f"⚠️ CRITICAL: X token norm collapse! std={x_token_std:.4f} (threshold: 0.1)")
-                    elif x_token_std < 0.5:
-                        warnings_issued.append(f"⚠️ WARNING: X token norm decreasing! std={x_token_std:.4f} (threshold: 0.5)")
+                # Check 3: representation collapse. Token-norm std is not used:
+                # LayerNorm intentionally makes all token L2 norms nearly equal.
+                if 'activation/x_token/feature_std_mean' in norm_log_dict:
+                    feature_std_mean = norm_log_dict['activation/x_token/feature_std_mean']
+                    near_constant_fraction = norm_log_dict['activation/x_token/near_constant_fraction']
+                    if feature_std_mean < 1e-3 or near_constant_fraction > 0.99:
+                        warnings_issued.append(
+                            "⚠️ CRITICAL: X token representation collapse! "
+                            f"feature_std_mean={feature_std_mean:.4g}, "
+                            f"near_constant_fraction={near_constant_fraction:.2%}"
+                        )
+                    elif feature_std_mean < 1e-2 or near_constant_fraction > 0.9:
+                        warnings_issued.append(
+                            "⚠️ WARNING: X token feature diversity is low! "
+                            f"feature_std_mean={feature_std_mean:.4g}, "
+                            f"near_constant_fraction={near_constant_fraction:.2%}"
+                        )
 
                 # Log warnings if any
                 if warnings_issued:
@@ -1083,6 +1158,7 @@ class UniZeroPolicy(MuZeroPolicy):
         value_priority_tensor = losses.intermediate_losses['value_priority']
         # Convert to numpy array for the replay buffer, adding a small epsilon.
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
+        replay_log_dict = replay_distribution_metrics(weights, value_priority_tensor)
 
         # ==================== START: PER importance-sampling weighting ====================
         # NOTE: losses.loss_total is a batch-level scalar, so ``(weights * losses.loss_total).mean()``
@@ -1241,7 +1317,7 @@ class UniZeroPolicy(MuZeroPolicy):
         if (train_iter + 1) % self.accumulation_steps == 0:
             # ==================== [NEW] Monitor gradient norms ====================
             # Monitor gradient norms before gradient clipping to diagnose gradient explosion/vanishing issues
-            if self._cfg.monitor_norm_freq > 0 and (train_iter == 0 or (train_iter % self._cfg.monitor_norm_freq == 0)):
+            if should_monitor_norms:
                 grad_norm_metrics = self._monitor_gradient_norms()
                 norm_log_dict.update(grad_norm_metrics)
             # =================================================================
@@ -1374,9 +1450,14 @@ class UniZeroPolicy(MuZeroPolicy):
             'collect/mcts_temperature': self._collect_mcts_temperature,
             'schedule/policy_label_eps': current_policy_label_eps,
         })
+        return_log_dict.update(replay_log_dict)
 
-        if norm_log_dict:
-            return_log_dict.update(norm_log_dict)
+        if should_monitor_norms:
+            norm_log_dict['stability/last_check_iter'] = float(train_iter)
+            self._latest_norm_log_dict = norm_log_dict.copy()
+            self._last_norm_monitor_iter = train_iter
+        if self._latest_norm_log_dict:
+            return_log_dict.update(self._latest_norm_log_dict)
 
         use_enhanced_policy_monitoring = self._cfg.use_enhanced_policy_monitoring
         if use_enhanced_policy_monitoring:
@@ -1673,6 +1754,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Create a configuration copy for eval MCTS and set specific simulation count
         mcts_eval_cfg = copy.deepcopy(self._cfg)
         mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
+        mcts_eval_cfg.deterministic = True
 
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(mcts_eval_cfg)
@@ -2051,6 +2133,17 @@ class UniZeroPolicy(MuZeroPolicy):
             'adaptive_target_entropy_ratio',
             'alpha_loss',
             'current_encoder_clip_value',
+
+            # ==================== Replay / PER Diagnostics ====================
+            'replay/is_weight_mean',
+            'replay/is_weight_std',
+            'replay/is_weight_min',
+            'replay/is_weight_max',
+            'replay/is_weight_ess_fraction',
+            'replay/value_priority_mean',
+            'replay/value_priority_std',
+            'replay/value_priority_min',
+            'replay/value_priority_max',
         ]
 
         # ==================== [NEW] Norm and Intermediate Tensor Monitoring Variables ====================
@@ -2074,6 +2167,9 @@ class UniZeroPolicy(MuZeroPolicy):
             'norm/x_token/std',
             'norm/x_token/max',
             'norm/x_token/min',
+            'activation/x_token/feature_std_mean',
+            'activation/x_token/feature_std_min',
+            'activation/x_token/near_constant_fraction',
 
             # Detailed logits statistics (Value)
             'logits/value/mean',
@@ -2129,6 +2225,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         stability_vars = [
             'stability/warning_count',  # Number of warnings issued in current check
+            'stability/last_check_iter',  # Iteration that produced the cached stability metrics
         ]
 
         return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
@@ -2148,6 +2245,7 @@ class UniZeroPolicy(MuZeroPolicy):
         }
         # ==================== START: Save Alpha Optimizer State ====================
         if self.use_adaptive_entropy_weight:
+            state_dict['log_alpha'] = self.log_alpha.detach().clone()
             state_dict['alpha_optimizer'] = self.alpha_optimizer.state_dict()
         # ===================== END: Save Alpha Optimizer State =====================
         return state_dict
@@ -2161,6 +2259,31 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
+        if 'optimizer_world_model' in state_dict:
+            self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+        if self.use_adaptive_entropy_weight:
+            if 'log_alpha' in state_dict:
+                with torch.no_grad():
+                    self.log_alpha.copy_(state_dict['log_alpha'].to(self.log_alpha.device))
+            else:
+                legacy_alpha = getattr(self._cfg, 'legacy_resume_adaptive_alpha', None)
+                if legacy_alpha is not None:
+                    legacy_alpha = float(legacy_alpha)
+                    if legacy_alpha <= 0:
+                        raise ValueError('legacy_resume_adaptive_alpha must be positive')
+                    with torch.no_grad():
+                        self.log_alpha.fill_(np.log(legacy_alpha))
+                    logging.warning('Restored explicit legacy adaptive alpha=%.6g.', legacy_alpha)
+                else:
+                    logging.warning(
+                        'Adaptive-entropy checkpoint has no log_alpha; keeping initialized alpha=%.6g. '
+                        'Set legacy_resume_adaptive_alpha to restore a value recorded in external logs.',
+                        self.log_alpha.exp().item(),
+                    )
+            if 'alpha_optimizer' in state_dict:
+                self.alpha_optimizer.load_state_dict(state_dict['alpha_optimizer'])
+            else:
+                logging.warning('Adaptive-entropy checkpoint has no alpha_optimizer state.')
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """

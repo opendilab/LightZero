@@ -37,6 +37,8 @@ class UniZeroMCTSCtree(object):
         # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
         env_type='not_board_games',
+        # Keep collection tie-breaking stochastic; policy eval overrides this to True.
+        deterministic=False,
     )
 
     @classmethod
@@ -125,12 +127,12 @@ class UniZeroMCTSCtree(object):
                 if self._cfg.env_type == 'not_board_games':
                     latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                         roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                        to_play_batch
+                        to_play_batch, self._cfg.deterministic
                     )
                 else:
                     latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                         roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                        copy.deepcopy(to_play_batch)
+                        copy.deepcopy(to_play_batch), self._cfg.deterministic
                     )
 
                 # obtain the latent state for leaf node

@@ -93,9 +93,9 @@ def batch_backpropagate_with_reuse(int current_latent_state_index, float discoun
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, to_play_batch, no_inference_lst, reuse_lst, creuse_value_lst)
 
 def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,
-                   ResultsWrapper results, list virtual_to_play_batch):
+                   ResultsWrapper results, list virtual_to_play_batch, bint deterministic=False):
     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
-                    virtual_to_play_batch)
+                    virtual_to_play_batch, deterministic)
 
     return results.cresults.latent_state_index_in_search_path, results.cresults.latent_state_index_in_batch, results.cresults.last_actions, results.cresults.virtual_to_play_batchs
 
