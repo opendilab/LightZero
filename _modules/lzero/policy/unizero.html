@@ -119,6 +119,56 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_optimizers_nanogpt</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">representation_health_metrics</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">near_constant_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Measure representation diversity across samples/tokens, per feature.</span>
+
+<span class="sd">    The standard deviation of token L2 norms is not a collapse metric after</span>
+<span class="sd">    LayerNorm: every token is expected to have norm close to ``sqrt(embed_dim)``.</span>
+<span class="sd">    Collapse instead means that individual feature coordinates stop varying</span>
+<span class="sd">    across the batch/time population.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="ow">or</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected [..., feature_dim] tensor, got shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">flattened</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">feature_std</span> <span class="o">=</span> <span class="n">flattened</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">unbiased</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;activation/x_token/feature_std_mean&#39;</span><span class="p">:</span> <span class="n">feature_std</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;activation/x_token/feature_std_min&#39;</span><span class="p">:</span> <span class="n">feature_std</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;activation/x_token/near_constant_fraction&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">feature_std</span> <span class="o">&lt;</span> <span class="n">near_constant_threshold</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">should_run_periodic_monitor</span><span class="p">(</span><span class="n">train_iter</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">frequency</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">last_check_iter</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run once after policy construction/resume, then at configured iteration boundaries.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">frequency</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">last_check_iter</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">train_iter</span> <span class="o">%</span> <span class="n">frequency</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">replay_distribution_metrics</span><span class="p">(</span><span class="n">weights</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">value_priority</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Summarize PER importance weights and TD-error priorities without changing training.</span>
+
+<span class="sd">    The normalized effective sample size (ESS) distinguishes a genuinely diverse, well-corrected</span>
+<span class="sd">    prioritized batch from one whose gradient is dominated by a small number of samples.  Uniform</span>
+<span class="sd">    replay should produce unit weights and ``ess_fraction=1``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">weights_flat</span> <span class="o">=</span> <span class="n">weights</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">priority_flat</span> <span class="o">=</span> <span class="n">value_priority</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">priority_flat</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Replay diagnostics require non-empty weights and value priorities&#39;</span><span class="p">)</span>
+    <span class="n">weight_square_sum</span> <span class="o">=</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">square</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">clamp_min</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">weights_flat</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">tiny</span><span class="p">)</span>
+    <span class="n">ess_fraction</span> <span class="o">=</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">square</span><span class="p">()</span> <span class="o">/</span> <span class="p">(</span><span class="n">weights_flat</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="n">weight_square_sum</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;replay/is_weight_mean&#39;</span><span class="p">:</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/is_weight_std&#39;</span><span class="p">:</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">unbiased</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/is_weight_min&#39;</span><span class="p">:</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/is_weight_max&#39;</span><span class="p">:</span> <span class="n">weights_flat</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/is_weight_ess_fraction&#39;</span><span class="p">:</span> <span class="n">ess_fraction</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/value_priority_mean&#39;</span><span class="p">:</span> <span class="n">priority_flat</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/value_priority_std&#39;</span><span class="p">:</span> <span class="n">priority_flat</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">unbiased</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/value_priority_min&#39;</span><span class="p">:</span> <span class="n">priority_flat</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;replay/value_priority_max&#39;</span><span class="p">:</span> <span class="n">priority_flat</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+    <span class="p">}</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">scale_module_weights_vectorized</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">scale_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Efficiently scale all weights of a module using vectorized operations.</span>
@@ -423,6 +473,9 @@
         <span class="n">use_adaptive_entropy_weight</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (float) Learning rate for adaptive alpha optimizer</span>
         <span class="n">adaptive_entropy_alpha_lr</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span>
+        <span class="c1"># (float or None) Explicit alpha for legacy checkpoints that did not persist log_alpha.</span>
+        <span class="c1"># Ignored whenever the checkpoint contains an exact log_alpha value.</span>
+        <span class="n">legacy_resume_adaptive_alpha</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="c1"># (float) Lower/upper bounds for adaptive entropy alpha. The lower bound must stay well below</span>
         <span class="c1"># typical Atari entropy weights so alpha can keep decaying when the target entropy anneals.</span>
         <span class="n">adaptive_entropy_alpha_min</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
@@ -653,6 +706,10 @@
         <span class="c1"># ****** Explore by random collect ******</span>
         <span class="c1"># (int) The number of episodes to collect data randomly before training.</span>
         <span class="n">random_collect_episode_num</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="c1"># (int) Learner checkpoints do not persist the in-memory replay buffer. On resume, collect</span>
+        <span class="c1"># this many on-policy transitions before applying gradients to avoid a one-batch distribution shock.</span>
+        <span class="c1"># Zero preserves the historical one-batch threshold; large-buffer tasks can opt in explicitly.</span>
+        <span class="n">resume_buffer_min_transitions</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
 
         <span class="c1"># ****** Explore by eps greedy ******</span>
         <span class="n">eps</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
@@ -848,6 +905,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span> <span class="o">=</span> <span class="mf">0.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span> <span class="o">=</span> <span class="mf">0.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="c1"># Sparse stability checks must not appear as zero in every intervening learner log.</span>
+        <span class="c1"># Cache the last real observation, and force a check on the first batch after resume.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_latest_norm_log_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_norm_monitor_iter</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
             <span class="c1"># for image-input env</span>
@@ -1081,8 +1142,11 @@
 
         <span class="c1"># ==================== Integrate norm monitoring logic ====================</span>
         <span class="n">norm_log_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">should_monitor_norms</span> <span class="o">=</span> <span class="n">should_run_periodic_monitor</span><span class="p">(</span>
+            <span class="n">train_iter</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">monitor_norm_freq</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_norm_monitor_iter</span>
+        <span class="p">)</span>
         <span class="c1"># Check if monitoring frequency is reached</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">monitor_norm_freq</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">monitor_norm_freq</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">should_monitor_norms</span><span class="p">:</span>
             <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
                 <span class="c1"># 1. Monitor model parameter norms</span>
                 <span class="n">param_norm_metrics</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_monitor_model_norms</span><span class="p">()</span>
@@ -1100,6 +1164,7 @@
                     <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;norm/x_token/std&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">token_norms</span><span class="o">.</span><span class="n">std</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
                     <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;norm/x_token/max&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">token_norms</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
                     <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;norm/x_token/min&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">token_norms</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                    <span class="n">norm_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">representation_health_metrics</span><span class="p">(</span><span class="n">intermediate_x</span><span class="p">))</span>
 
                 <span class="c1"># 3. Monitor detailed statistics of logits (Value, Policy, Reward)</span>
                 <span class="n">logits_value</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;logits_value&#39;</span><span class="p">)</span>
@@ -1156,13 +1221,23 @@
                     <span class="k">elif</span> <span class="n">emb_norm_std</span> <span class="o">&gt;</span> <span class="mf">5.0</span><span class="p">:</span>
                         <span class="n">warnings_issued</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️ WARNING: Embedding norm std increasing! std=</span><span class="si">{</span><span class="n">emb_norm_std</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> (threshold: 5.0)&quot;</span><span class="p">)</span>
 
-                <span class="c1"># Check 3: X token norm collapse</span>
-                <span class="k">if</span> <span class="s1">&#39;norm/x_token/std&#39;</span> <span class="ow">in</span> <span class="n">norm_log_dict</span><span class="p">:</span>
-                    <span class="n">x_token_std</span> <span class="o">=</span> <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;norm/x_token/std&#39;</span><span class="p">]</span>
-                    <span class="k">if</span> <span class="n">x_token_std</span> <span class="o">&lt;</span> <span class="mf">0.1</span><span class="p">:</span>
-                        <span class="n">warnings_issued</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️ CRITICAL: X token norm collapse! std=</span><span class="si">{</span><span class="n">x_token_std</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> (threshold: 0.1)&quot;</span><span class="p">)</span>
-                    <span class="k">elif</span> <span class="n">x_token_std</span> <span class="o">&lt;</span> <span class="mf">0.5</span><span class="p">:</span>
-                        <span class="n">warnings_issued</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️ WARNING: X token norm decreasing! std=</span><span class="si">{</span><span class="n">x_token_std</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> (threshold: 0.5)&quot;</span><span class="p">)</span>
+                <span class="c1"># Check 3: representation collapse. Token-norm std is not used:</span>
+                <span class="c1"># LayerNorm intentionally makes all token L2 norms nearly equal.</span>
+                <span class="k">if</span> <span class="s1">&#39;activation/x_token/feature_std_mean&#39;</span> <span class="ow">in</span> <span class="n">norm_log_dict</span><span class="p">:</span>
+                    <span class="n">feature_std_mean</span> <span class="o">=</span> <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;activation/x_token/feature_std_mean&#39;</span><span class="p">]</span>
+                    <span class="n">near_constant_fraction</span> <span class="o">=</span> <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;activation/x_token/near_constant_fraction&#39;</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">feature_std_mean</span> <span class="o">&lt;</span> <span class="mf">1e-3</span> <span class="ow">or</span> <span class="n">near_constant_fraction</span> <span class="o">&gt;</span> <span class="mf">0.99</span><span class="p">:</span>
+                        <span class="n">warnings_issued</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="s2">&quot;⚠️ CRITICAL: X token representation collapse! &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;feature_std_mean=</span><span class="si">{</span><span class="n">feature_std_mean</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">, &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;near_constant_fraction=</span><span class="si">{</span><span class="n">near_constant_fraction</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">feature_std_mean</span> <span class="o">&lt;</span> <span class="mf">1e-2</span> <span class="ow">or</span> <span class="n">near_constant_fraction</span> <span class="o">&gt;</span> <span class="mf">0.9</span><span class="p">:</span>
+                        <span class="n">warnings_issued</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="s2">&quot;⚠️ WARNING: X token feature diversity is low! &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;feature_std_mean=</span><span class="si">{</span><span class="n">feature_std_mean</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2">, &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;near_constant_fraction=</span><span class="si">{</span><span class="n">near_constant_fraction</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="p">)</span>
 
                 <span class="c1"># Log warnings if any</span>
                 <span class="k">if</span> <span class="n">warnings_issued</span><span class="p">:</span>
@@ -1177,6 +1252,7 @@
         <span class="n">value_priority_tensor</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;value_priority&#39;</span><span class="p">]</span>
         <span class="c1"># Convert to numpy array for the replay buffer, adding a small epsilon.</span>
         <span class="n">value_priority_np</span> <span class="o">=</span> <span class="n">value_priority_tensor</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="o">+</span> <span class="mf">1e-6</span>
+        <span class="n">replay_log_dict</span> <span class="o">=</span> <span class="n">replay_distribution_metrics</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">value_priority_tensor</span><span class="p">)</span>
 
         <span class="c1"># ==================== START: PER importance-sampling weighting ====================</span>
         <span class="c1"># NOTE: losses.loss_total is a batch-level scalar, so ``(weights * losses.loss_total).mean()``</span>
@@ -1335,7 +1411,7 @@
         <span class="k">if</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="c1"># ==================== [NEW] Monitor gradient norms ====================</span>
             <span class="c1"># Monitor gradient norms before gradient clipping to diagnose gradient explosion/vanishing issues</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">monitor_norm_freq</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">monitor_norm_freq</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">should_monitor_norms</span><span class="p">:</span>
                 <span class="n">grad_norm_metrics</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_monitor_gradient_norms</span><span class="p">()</span>
                 <span class="n">norm_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">grad_norm_metrics</span><span class="p">)</span>
             <span class="c1"># =================================================================</span>
@@ -1468,9 +1544,14 @@
             <span class="s1">&#39;collect/mcts_temperature&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span>
             <span class="s1">&#39;schedule/policy_label_eps&#39;</span><span class="p">:</span> <span class="n">current_policy_label_eps</span><span class="p">,</span>
         <span class="p">})</span>
+        <span class="n">return_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">replay_log_dict</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">norm_log_dict</span><span class="p">:</span>
-            <span class="n">return_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">norm_log_dict</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">should_monitor_norms</span><span class="p">:</span>
+            <span class="n">norm_log_dict</span><span class="p">[</span><span class="s1">&#39;stability/last_check_iter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">train_iter</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_latest_norm_log_dict</span> <span class="o">=</span> <span class="n">norm_log_dict</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_last_norm_monitor_iter</span> <span class="o">=</span> <span class="n">train_iter</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_latest_norm_log_dict</span><span class="p">:</span>
+            <span class="n">return_log_dict</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_latest_norm_log_dict</span><span class="p">)</span>
 
         <span class="n">use_enhanced_policy_monitoring</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_enhanced_policy_monitoring</span>
         <span class="k">if</span> <span class="n">use_enhanced_policy_monitoring</span><span class="p">:</span>
@@ -1767,6 +1848,7 @@
         <span class="c1"># Create a configuration copy for eval MCTS and set specific simulation count</span>
         <span class="n">mcts_eval_cfg</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
         <span class="n">mcts_eval_cfg</span><span class="o">.</span><span class="n">num_simulations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">eval_num_simulations</span>
+        <span class="n">mcts_eval_cfg</span><span class="o">.</span><span class="n">deterministic</span> <span class="o">=</span> <span class="kc">True</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="p">(</span><span class="n">mcts_eval_cfg</span><span class="p">)</span>
@@ -2145,6 +2227,17 @@
             <span class="s1">&#39;adaptive_target_entropy_ratio&#39;</span><span class="p">,</span>
             <span class="s1">&#39;alpha_loss&#39;</span><span class="p">,</span>
             <span class="s1">&#39;current_encoder_clip_value&#39;</span><span class="p">,</span>
+
+            <span class="c1"># ==================== Replay / PER Diagnostics ====================</span>
+            <span class="s1">&#39;replay/is_weight_mean&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/is_weight_std&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/is_weight_min&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/is_weight_max&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/is_weight_ess_fraction&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/value_priority_mean&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/value_priority_std&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/value_priority_min&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;replay/value_priority_max&#39;</span><span class="p">,</span>
         <span class="p">]</span>
 
         <span class="c1"># ==================== [NEW] Norm and Intermediate Tensor Monitoring Variables ====================</span>
@@ -2168,6 +2261,9 @@
             <span class="s1">&#39;norm/x_token/std&#39;</span><span class="p">,</span>
             <span class="s1">&#39;norm/x_token/max&#39;</span><span class="p">,</span>
             <span class="s1">&#39;norm/x_token/min&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;activation/x_token/feature_std_mean&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;activation/x_token/feature_std_min&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;activation/x_token/near_constant_fraction&#39;</span><span class="p">,</span>
 
             <span class="c1"># Detailed logits statistics (Value)</span>
             <span class="s1">&#39;logits/value/mean&#39;</span><span class="p">,</span>
@@ -2223,6 +2319,7 @@
 
         <span class="n">stability_vars</span> <span class="o">=</span> <span class="p">[</span>
             <span class="s1">&#39;stability/warning_count&#39;</span><span class="p">,</span>  <span class="c1"># Number of warnings issued in current check</span>
+            <span class="s1">&#39;stability/last_check_iter&#39;</span><span class="p">,</span>  <span class="c1"># Iteration that produced the cached stability metrics</span>
         <span class="p">]</span>
 
         <span class="k">return</span> <span class="n">base_vars</span> <span class="o">+</span> <span class="n">norm_vars</span><span class="o">+</span> <span class="n">head_clip_vars</span> <span class="o">+</span> <span class="n">enhanced_policy_vars</span> <span class="o">+</span> <span class="n">stability_vars</span></div>
@@ -2242,6 +2339,7 @@
         <span class="p">}</span>
         <span class="c1"># ==================== START: Save Alpha Optimizer State ====================</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_adaptive_entropy_weight</span><span class="p">:</span>
+            <span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;log_alpha&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
             <span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;alpha_optimizer&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha_optimizer</span><span class="o">.</span><span class="n">state_dict</span><span class="p">()</span>
         <span class="c1"># ===================== END: Save Alpha Optimizer State =====================</span>
         <span class="k">return</span> <span class="n">state_dict</span></div>
@@ -2254,7 +2352,32 @@
 <span class="sd">            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;model&#39;</span><span class="p">])</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;target_model&#39;</span><span class="p">])</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;target_model&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="s1">&#39;optimizer_world_model&#39;</span> <span class="ow">in</span> <span class="n">state_dict</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;optimizer_world_model&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_adaptive_entropy_weight</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;log_alpha&#39;</span> <span class="ow">in</span> <span class="n">state_dict</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;log_alpha&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">device</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">legacy_alpha</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;legacy_resume_adaptive_alpha&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">legacy_alpha</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">legacy_alpha</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">legacy_alpha</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">legacy_alpha</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;legacy_resume_adaptive_alpha must be positive&#39;</span><span class="p">)</span>
+                    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">fill_</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">legacy_alpha</span><span class="p">))</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Restored explicit legacy adaptive alpha=</span><span class="si">%.6g</span><span class="s1">.&#39;</span><span class="p">,</span> <span class="n">legacy_alpha</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s1">&#39;Adaptive-entropy checkpoint has no log_alpha; keeping initialized alpha=</span><span class="si">%.6g</span><span class="s1">. &#39;</span>
+                        <span class="s1">&#39;Set legacy_resume_adaptive_alpha to restore a value recorded in external logs.&#39;</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log_alpha</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+                    <span class="p">)</span>
+            <span class="k">if</span> <span class="s1">&#39;alpha_optimizer&#39;</span> <span class="ow">in</span> <span class="n">state_dict</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">alpha_optimizer</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;alpha_optimizer&#39;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Adaptive-entropy checkpoint has no alpha_optimizer state.&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="UniZeroPolicy.recompute_pos_emb_diff_and_clear_cache"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.recompute_pos_emb_diff_and_clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">recompute_pos_emb_diff_and_clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
