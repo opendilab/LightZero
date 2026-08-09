@@ -896,6 +896,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: Initialize Encoder-Clip Annealing Parameters ====================
         self.use_encoder_clip_annealing = self._cfg.use_encoder_clip_annealing
+        self._encoder_clip_apply_count = 0
         self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold  # TODO
         if self.use_encoder_clip_annealing:
             self.encoder_clip_anneal_type = self._cfg.encoder_clip_anneal_type
@@ -1337,12 +1338,19 @@ class UniZeroPolicy(MuZeroPolicy):
             # Bug-fix: previously this block was guarded by `self.use_encoder_clip_annealing`,
             # which made `latent_norm_clip_threshold` a dead config when annealing was disabled.
             # Now the clip fires whenever current_clip_value > 0, regardless of annealing mode.
-            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            encoder_clip_applied = False
+            encoder_clip_scale_factor = 1.0
+            encoder_clip_max_latent_norm = 0.0
+            if 'obs_embeddings' in losses.intermediate_losses:
                 obs_embeddings = losses.intermediate_losses['obs_embeddings']
                 if obs_embeddings is not None:
                     max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
-                    if max_latent_norm > current_clip_value:
+                    encoder_clip_max_latent_norm = max_latent_norm.item()
+                    if current_clip_value > 0 and max_latent_norm > current_clip_value:
                         scale_factor = current_clip_value / max_latent_norm.item()
+                        encoder_clip_applied = True
+                        encoder_clip_scale_factor = scale_factor
+                        self._encoder_clip_apply_count += 1
                         if train_iter % 1000 == 0:
                             clip_mode = "Annealing" if self.use_encoder_clip_annealing else "Fixed"
                             logging.info(f"[Encoder-Clip {clip_mode}] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
@@ -1584,6 +1592,12 @@ class UniZeroPolicy(MuZeroPolicy):
         if self.use_encoder_clip_annealing:
             return_log_dict['current_encoder_clip_value'] = current_clip_value
             return_log_dict['stability/current_encoder_clip_value'] = current_clip_value
+        return_log_dict['encoder_clip/enabled'] = float(current_clip_value > 0)
+        return_log_dict['encoder_clip/applied'] = float(encoder_clip_applied)
+        return_log_dict['encoder_clip/apply_count'] = self._encoder_clip_apply_count
+        return_log_dict['encoder_clip/scale_factor'] = encoder_clip_scale_factor
+        return_log_dict['encoder_clip/max_latent_norm'] = encoder_clip_max_latent_norm
+        return_log_dict['encoder_clip/threshold'] = current_clip_value
 
         if self.use_head_clip and self.head_clip_manager is not None:
             # Add head clip results to log (if any)

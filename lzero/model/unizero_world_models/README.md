@@ -4,7 +4,7 @@ This section provides a detailed explanation of the position encoding strategies
 
 > **Configuration Options:**
 > - When `self.config.rotary_emb = False`, **Absolute Position Encoding** (based on `nn.Embedding`) is used.
-> - When `self.config.rotary_emb = True`, **Relative Position Encoding** (based on ROPE) is used.
+> - When `self.config.rotary_emb = True`, **Rotary Position Encoding** (RoPE) is used.
 
 ---
 
@@ -22,29 +22,29 @@ When the configuration parameter `self.config.rotary_emb` is set to **False**, t
 - **kv_cache Management:**  
   Due to the limitation of context length (`context_length`), the model retains only the most recent `<context_length>` steps when caching key-value pairs (kv_cache) to ensure computational efficiency and manageable memory consumption.
 
-#### 1.3 Position Embedding Correction
+#### 1.3 Advancing a Full KV Window
 
-When reusing the kv_cache, directly utilizing historical position vectors may lead to duplicated or erroneous indices, causing confusion in the model's interpretation of sequence positions. To address this problem, a position embedding correction mechanism is introduced:
+A learned absolute-position window cannot be shifted exactly by adding projected
+position differences to cached keys and values. A cached key/value is computed
+from a normalized, contextual hidden state, so it is not a linear function of
+the position embedding alone. Repeated algebraic correction is therefore only
+an approximation and can accumulate error.
 
-- **Problem Description:**  
-  Suppose that during inference, the total number of steps is computed as `5 * 2 = 10`, yielding an initial kv_cache with position indices:  
-  `0, 1, 2, 3, 4, 5, 6, 7, 8, 9`  
-  
-  When new data arrives, removing the first 2 steps from the kv_cache leaves:  
-  `2, 3, 4, 5, 6, 7, 8, 9`  
-  
-  If these indices are concatenated directly, it might cause duplicate or incorrect indices, for example:  
-  `2, 3, 4, 5, 6, 7, 8, 9, 8, 9`
+For exact learned-absolute-position inference, enable
+`rebuild_kv_window_from_tokens`. UniZero then retains the bounded raw embedded
+observation/action tokens alongside each cache entry. When the window advances,
+it keeps the newest tokens, assigns them positions starting at zero, and runs
+them through the Transformer again to rebuild every layer's keys and values.
+The raw-token and KV stores share the same eviction and reset lifecycle.
 
-- **Correction Plan:**  
-  To prevent the above issue, the model resets the position indices in the kv_cache to a contiguous sequence, such as:  
-  `0, 1, 2, 3, 4, 5, 6, 7`
-
-This mechanism effectively simulates the behavior of relative position encoding, ensuring that errors do not accumulate during kv_cache reuse.
+`exact_kv_window_reset` is a diagnostic alternative that rebuilds only from the
+latest latent observation. It avoids invalid K/V algebra, but intentionally
+discards older context. The legacy position-difference path remains available
+for checkpoint comparisons and should not be treated as exact.
 
 ---
 
-### 2. Relative Position Encoding (Based on ROPE)
+### 2. Rotary Position Encoding (RoPE)
 
 When the configuration parameter `self.config.rotary_emb` is set to **True**, the model adopts ROPE (Rotary Position Embedding) for position encoding. The main features and implementation process of ROPE are as follows:
 
@@ -75,7 +75,108 @@ When the configuration parameter `self.config.rotary_emb` is set to **True**, th
 
 
 
-#### 3 Performance and Applications
+### 3. Choosing a Mode
 
-  In environments with shorter dependency relationships (such as Pong or DMC Cartpole-Swingup), the performance of absolute position encoding and ROPE is similar.  
-  However, in scenarios that involve longer dependencies, ROPE demonstrates enhanced flexibility and scalability, making it particularly suitable for managing long-range dependency issues in more complex environments.
+Learned absolute positions and RoPE have different checkpoint parameters and
+must be selected before training. RoPE keys retain their original rotations
+when old tokens are trimmed, so they do not require learned-absolute K/V
+rebasing. Compare the modes empirically for a task; dependency length alone is
+not sufficient to predict performance. The current multi-task world model does
+not propagate per-root episode positions through its cache API and therefore
+rejects RoPE rather than silently assigning incorrect positions.
+
+### 4. Replay Reanalysis and KV Context
+
+UniZero replay reanalysis is not equivalent to MuZero reanalysis. A MuZero
+recurrent state is self-contained, whereas a UniZero root also depends on its
+Transformer KV prefix. Before each sampled root, the buffer now recovers the
+available replay observation/action prefix, encodes it with the matching target
+tokenizer, and applies the same bounded raw-token rolling rule used online. The
+resulting prefix forward supplies both the root KV cache and its contextual
+policy prior, so the root prior and its first recurrent edge describe the same
+history. Root caches are stored in isolated per-root init slots because equal
+current latents can have different histories.
+
+Both ordinary and sampled C++ replay searches are split into chunks no wider
+than the online environment batch. This keeps each tree within the recurrent
+cache capacity and restores KV hits among descendants created during the same
+search. Episode positions and H+1 roots preserve their original order across
+chunks. Current multi-task configs without task-token conditioning select the
+task-specific tokenizer and prediction heads. Add/concat/register task-token
+context reconstruction is rejected explicitly until its exact raw-token
+semantics are implemented. Reanalysis remains configurable and default-off in
+the Atari experiments because correctness does not by itself establish a
+performance benefit.
+
+### 5. Context-aligned TD Bootstrap Values
+
+`bootstrap_value_context` (CLI: `--bootstrap-value-context`) evaluates TD
+bootstrap roots from the same replay prefix and rolling window available to
+online planning. Without it, the first bootstrap root has no preceding history
+while later roots can see a longer training-only sequence, making value targets
+depend on state information unavailable to the online planner.
+
+The contextual path obtains root latents directly from the target tokenizer and
+executes only the required context Transformer. A full legacy training-sequence
+forward is retained for the first batch and every 1000th batch to log
+legacy/contextual mean, standard deviation, delta RMS/max, and context lengths;
+the other 999 batches skip that unused forward. This optimization changes
+neither root latents nor contextual target values. Task-specific tokenizers and
+value heads are selected when multi-task mode does not use extra task tokens.
+
+### 6. Open-loop Latent Diagnostics
+
+`open_loop_diagnostic_freq > 0` enables a detached diagnostic at the requested
+learner interval. All three paths run in evaluation mode so dropout cannot
+contaminate their comparison:
+
+- full teacher forcing uses the complete training sequence;
+- rolling teacher forcing uses the online KV-window rule but feeds real later
+  observation embeddings, isolating window truncation and cache semantics;
+- open-loop rolling feeds each predicted latent back, matching MCTS exposure.
+
+`rolling_context_ratio` is rolling-teacher MSE divided by full-teacher MSE.
+`open_loop_exposure_ratio` is open-loop MSE divided by rolling-teacher MSE, and
+`open_loop_total_ratio` is open-loop MSE divided by full-teacher MSE. These are
+logging-only measurements and never contribute gradients or change targets.
+When `open_loop_prefix_transitions` is nonzero, all three diagnostic paths use
+that same teacher prefix and post-prefix target slice, so the logged exposure
+metrics describe the mechanism trained by the optional loss below.
+
+### 7. Optional Open-loop Consistency Loss
+
+`open_loop_consistency_loss_weight > 0` adds a short differentiable rollout
+that feeds each predicted latent back into the world model and matches it to
+the target encoder's later observation embeddings. This directly trains the
+distribution used by recurrent MCTS instead of only the teacher-forced path.
+The rollout uses evaluation mode (while retaining gradients), raw-token window
+rebuilding, and a configurable sample count and horizon. Its loss is an
+auxiliary batch scalar and is not rescaled by prioritized-replay importance
+weights.
+
+`open_loop_prefix_transitions` optionally prepends real replay transitions
+before the differentiable rollout. For example, a prefix of three builds
+`[o0,a0,o1,a1,o2,a2,o3]`, the seven-token steady history retained by a
+10-token inference cache before its next action. Supervised targets still
+start after the prefix. This isolates history-conditioned exposure from simply
+increasing rollout horizon; its default is zero.
+
+The default weight is zero, so existing training is unchanged. This option is
+currently supported only for the single-task, discrete-action, learned
+absolute-position world model with raw-token KV-window rebuilding. Enable it
+only after the diagnostic ratios show that autoregressive exposure, rather
+than rolling-window semantics, is the dominant error source.
+
+### 8. Optional MuZero-style Recurrent Loss
+
+`open_loop_recurrent_loss_weight > 0` extends the same predicted-latent rollout
+with the supervision used by MuZero's recurrent learner: latent and reward are
+trained after each action, then policy and value are trained after feeding the
+predicted observation back as the next state. Component losses use the normal
+UniZero weights (latent 10, reward 1, value 0.5, policy 1); the configured
+recurrent weight scales their combined auxiliary loss. Batch size and horizon
+reuse the open-loop consistency settings, as does the optional teacher prefix.
+
+This option is mutually exclusive with latent-only open-loop consistency,
+which it already contains. It has the same support restrictions and defaults
+to zero, so existing configs are unchanged.
