@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 
 import numpy as np
@@ -7,8 +8,8 @@ from ding.utils import BUFFER_REGISTRY
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledUniZeroMCTSCtree as MCTSCtree
 # from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
-from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
-from .game_buffer_unizero import UniZeroGameBuffer
+from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, inverse_scalar_transform
+from .game_buffer_unizero import UniZeroGameBuffer, _world_model_reanalysis_phase
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
@@ -418,6 +419,12 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # for board games
             action_mask_segment, to_play_segment = [], []
             timestep_segment = []
+            history_observation_segment, history_action_segment = [], []
+            world_model_cfg = getattr(self._cfg.model, 'world_model_cfg', None)
+            context_length = int(getattr(world_model_cfg, 'context_length', 2))
+            max_history_transitions = (
+                max(context_length // 2, 0) if self._use_contextual_reanalysis() else 0
+            )
 
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
                 game_segment_len = len(game_segment)
@@ -431,6 +438,21 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 root_sampled_actions.append(game_segment.root_sampled_actions)
 
                 root_values.append(game_segment.root_value_segment)
+
+                if max_history_transitions > 0:
+                    history_start = max(0, state_index - max_history_transitions)
+                    history_len = state_index - history_start
+                    history_game_obs = game_segment.get_unroll_obs(history_start, history_len)
+                    history_observation_segment.append([
+                        history_game_obs[offset:offset + self._cfg.model.frame_stack_num]
+                        for offset in range(history_len)
+                    ])
+                    history_action_segment.append(
+                        game_segment.action_segment[history_start:state_index].tolist()
+                    )
+                else:
+                    history_observation_segment.append([])
+                    history_action_segment.append([])
 
                 # prepare the corresponding observations
                 game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
@@ -448,7 +470,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         policy_re_context = [
             policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_sampled_actions, root_values, game_segment_lens,
-            action_mask_segment, to_play_segment, timestep_segment
+            action_mask_segment, to_play_segment, timestep_segment,
+            history_observation_segment, history_action_segment,
         ]
         return policy_re_context
 
@@ -467,9 +490,23 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_sampled_actions, root_values, game_segment_lens, action_mask_segment, \
-            to_play_segment, timestep_segment = policy_re_context  # noqa
+            to_play_segment, timestep_segment, *history_context = policy_re_context  # noqa
+        if history_context:
+            history_observation_segment, history_action_segment = history_context
+        else:
+            history_observation_segment = [[] for _ in pos_in_game_segment_list]
+            history_action_segment = [[] for _ in pos_in_game_segment_list]
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
+
+        root_timesteps, sequence_start_timesteps = self._preprocess_reanalyze_timesteps(
+            timestep_segment, pos_in_game_segment_list
+        )
+        if len(root_timesteps) != transition_batch_size:
+            raise RuntimeError(
+                'UniZero reanalysis timestep expansion must match the number of MCTS roots: '
+                f'{len(root_timesteps)} != {transition_batch_size}.'
+            )
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(
             game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
@@ -487,10 +524,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         else:
             legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
-        # NOTE: TODO
-        model.world_model.reanalyze_phase = True
-
-        with torch.no_grad():
+        with _world_model_reanalysis_phase(model.world_model), torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
             network_output = []
             batch_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
@@ -503,9 +537,11 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             if self.task_id is not None:
                 m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
             else:
-                m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
-
-            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+                m_output = model.initial_inference(
+                    batch_obs,
+                    batch_action[:self.reanalyze_num],
+                    start_pos=sequence_start_timesteps,
+                )
             # =======================================================================
 
             # if not in training, obtain the scalars of the value/reward
@@ -520,6 +556,22 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             network_output.append(m_output)
 
             _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
+            root_token_contexts = None
+            if (
+                self._use_contextual_reanalysis()
+                and hasattr(model.world_model, 'build_reanalysis_root_token_contexts')
+            ):
+                history_latent_segment = self._encode_reanalysis_history_observations(
+                    model, history_observation_segment
+                )
+                root_token_contexts = model.world_model.build_reanalysis_root_token_contexts(
+                    latent_state_roots=latent_state_roots,
+                    batch_actions=batch_action[:self.reanalyze_num],
+                    roots_per_sequence=self._cfg.num_unroll_steps + 1,
+                    history_latent_segment=history_latent_segment,
+                    history_action_segment=history_action_segment,
+                    task_id=self.task_id,
+                )
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             noises = [
@@ -527,18 +579,21 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
             ]
             if self._cfg.mcts_ctree:
-                # cpp mcts_tree
-                # roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots = MCTSCtree.roots(
-                    transition_batch_size, legal_actions, self.action_space_size,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                (
+                    roots_distributions,
+                    reanalyzed_root_values,
+                    reanalyzed_roots_sampled_actions,
+                ) = self._search_sampled_reanalyzed_roots_in_chunks(
+                    model=model,
+                    latent_state_roots=latent_state_roots,
+                    legal_actions=legal_actions,
+                    noises=noises,
+                    reward_pool=reward_pool,
+                    policy_logits_pool=policy_logits_pool,
+                    to_play=to_play,
+                    root_timesteps=root_timesteps,
+                    root_token_contexts=root_token_contexts,
                 )
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                # do MCTS for a new policy with the recent target model
-                if self.task_id is not None:
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
-                else:
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
@@ -548,17 +603,17 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
                 else:
                     MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                roots_distributions = roots.get_distributions()
+                reanalyzed_root_values = roots.get_values()
+                reanalyzed_roots_sampled_actions = roots.get_sampled_actions()
 
             roots_legal_actions_list = legal_actions
-            roots_distributions = roots.get_distributions()
-            reanalyzed_root_values = roots.get_values()
 
             # ==============================================================
             # fix reanalyze in suz:
             # use the latest root_sampled_actions after the reanalyze process,
             # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
             # ==============================================================
-            reanalyzed_roots_sampled_actions = roots.get_sampled_actions()
             try:
                 reanalyzed_root_sampled_actions = np.array([action.value for action in reanalyzed_roots_sampled_actions])
             except Exception:
@@ -621,11 +676,90 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         batch_target_policies_re = np.array(batch_target_policies_re)
 
-        # NOTE: TODO
-        model.world_model.reanalyze_phase = False
-        
         return batch_target_policies_re, root_sampled_actions
 
+    def _search_sampled_reanalyzed_roots_in_chunks(
+            self, model, latent_state_roots, legal_actions, noises, reward_pool,
+            policy_logits_pool, to_play, root_timesteps, root_token_contexts=None
+    ):
+        """Search sampled-UniZero replay roots without exceeding the recurrent KV pool."""
+        root_count = len(legal_actions)
+        if not (
+            len(noises) == len(reward_pool) == len(policy_logits_pool)
+            == len(to_play) == len(root_timesteps) == root_count
+        ):
+            raise ValueError('All sampled replay-reanalysis root inputs must have the same length.')
+        if root_token_contexts is not None and len(root_token_contexts) != root_count:
+            raise ValueError(
+                'Sampled replay-reanalysis root token contexts must align with MCTS roots: '
+                f'{len(root_token_contexts)} != {root_count}.'
+            )
+
+        distributions = []
+        values = []
+        sampled_actions = []
+        seed_count_before = getattr(model.world_model, 'reanalysis_root_seed_count', 0)
+        seed_hit_before = getattr(model.world_model, 'reanalysis_root_seed_hit_count', 0)
+        for start, end in self._iter_reanalyzed_root_slices(model, root_count):
+            chunk_policy_logits = policy_logits_pool[start:end]
+            if root_token_contexts is not None:
+                contextual_policy_logits = model.world_model.seed_reanalysis_root_caches(
+                    latent_state_roots[start:end], root_token_contexts[start:end],
+                    **({} if self.task_id is None else {'task_id': self.task_id}),
+                )
+                if contextual_policy_logits is not None:
+                    chunk_policy_logits = contextual_policy_logits
+            roots = MCTSCtree.roots(
+                end - start,
+                legal_actions[start:end],
+                self.action_space_size,
+                self._cfg.model.num_of_sampled_actions,
+                self._cfg.model.continuous_action_space,
+            )
+            roots.prepare(
+                self._cfg.root_noise_weight,
+                noises[start:end],
+                reward_pool[start:end],
+                chunk_policy_logits,
+                to_play[start:end],
+            )
+            if self.task_id is not None:
+                MCTSCtree(self._cfg).search(
+                    roots,
+                    model,
+                    latent_state_roots[start:end],
+                    to_play[start:end],
+                    root_timesteps[start:end],
+                    task_id=self.task_id,
+                )
+            else:
+                MCTSCtree(self._cfg).search(
+                    roots,
+                    model,
+                    latent_state_roots[start:end],
+                    to_play[start:end],
+                    root_timesteps[start:end],
+                )
+            distributions.extend(roots.get_distributions())
+            values.extend(roots.get_values())
+            sampled_actions.extend(roots.get_sampled_actions())
+
+        if root_token_contexts is not None and hasattr(model.world_model, 'reanalysis_root_seed_count'):
+            context_lengths = [int(context.size(0)) for context in root_token_contexts]
+            seeded = model.world_model.reanalysis_root_seed_count - seed_count_before
+            seed_hits = model.world_model.reanalysis_root_seed_hit_count - seed_hit_before
+            logging.info(
+                'Sampled UniZero reanalysis root-context diagnostics: roots=%d, seeded=%d, '
+                'first_lookup_hits=%d, context_tokens[min/mean/max]=%d/%.2f/%d',
+                root_count,
+                seeded,
+                seed_hits,
+                min(context_lengths),
+                float(np.mean(context_lengths)),
+                max(context_lengths),
+            )
+
+        return distributions, values, sampled_actions
 
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
         Any, Any]:
@@ -640,7 +774,12 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
-            to_play_segment = reward_value_context  # noqa
+            to_play_segment, *history_context = reward_value_context  # noqa
+        if history_context:
+            history_observation_segment, history_action_segment = history_context
+        else:
+            history_observation_segment = [[] for _ in pos_in_game_segment_list]
+            history_action_segment = [[] for _ in pos_in_game_segment_list]
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -663,36 +802,61 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
-            network_output = []
             batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
-
-            # =============== NOTE: The key difference with MuZero =================
-            # calculate the target value
-            # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            if self.task_id is not None:
-                # m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep, task_id=self.task_id)
-
-                m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
-            else:
-                m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
-            # ======================================================================
-
-            # if not in training, obtain the scalars of the value/reward
-            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                [
-                    m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self.value_support),
-                    m_output.policy_logits
-                ]
-            )
-            
-            network_output.append(m_output)
 
             if self._cfg.use_root_value:
                 value_list = np.array(root_values)
             else:
-                # use the predicted values
-                value_list = concat_output_value(network_output)
+                use_contextual_bootstrap = getattr(
+                    self._cfg, 'bootstrap_value_context', False
+                )
+                diagnostic_due = (
+                    self._bootstrap_value_context_diagnostic_due()
+                    if use_contextual_bootstrap else False
+                )
+                if use_contextual_bootstrap and not diagnostic_due:
+                    latent_state_roots = self._encode_bootstrap_root_latents(
+                        model, batch_obs
+                    )
+                    legacy_value_list = None
+                else:
+                    if self.task_id is not None:
+                        m_output = model.initial_inference(
+                            batch_obs, batch_action, task_id=self.task_id
+                        )
+                    else:
+                        m_output = model.initial_inference(
+                            batch_obs, batch_action, start_pos=batch_timestep
+                        )
+                    latent_state_roots = m_output.latent_state
+                    legacy_value_list = to_detach_cpu_numpy([
+                        inverse_scalar_transform(m_output.value, self.value_support)
+                    ])[0]
+
+                if use_contextual_bootstrap:
+                    history_latent_segment = self._encode_reanalysis_history_observations(
+                        model, history_observation_segment
+                    )
+                    root_token_contexts = model.world_model.build_reanalysis_root_token_contexts(
+                        latent_state_roots=latent_state_roots,
+                        batch_actions=batch_action,
+                        roots_per_sequence=self._cfg.num_unroll_steps + 1,
+                        history_latent_segment=history_latent_segment,
+                        history_action_segment=history_action_segment,
+                        task_id=self.task_id,
+                    )
+                    contextual_value_logits = model.world_model.evaluate_root_token_context_values(
+                        root_token_contexts, task_id=self.task_id
+                    )
+                    value_list = to_detach_cpu_numpy([
+                        inverse_scalar_transform(contextual_value_logits, self.value_support)
+                    ])[0]
+                    if diagnostic_due:
+                        self._log_bootstrap_value_context_diagnostics(
+                            legacy_value_list, value_list, value_mask, root_token_contexts
+                        )
+                else:
+                    value_list = legacy_value_list
 
             # get last state value
             if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:

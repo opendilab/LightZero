@@ -153,8 +153,19 @@ def apply_per_sample_is_weights(weights, losses, per_sample_policy_loss, scalar_
     auxiliary_loss = (
         losses.latent_recon_loss_weight * losses.intermediate_losses['latent_recon_loss']
         + losses.perceptual_loss_weight * losses.intermediate_losses['perceptual_loss']
+        + getattr(losses, 'open_loop_consistency_loss_weight', 0.)
+        * losses.intermediate_losses.get('open_loop_consistency_loss', 0.)
+        + getattr(losses, 'open_loop_recurrent_loss_weight', 0.)
+        * losses.intermediate_losses.get('open_loop_recurrent_loss', 0.)
     )
     return (weights.reshape(-1) * per_sample_total_loss).mean() + auxiliary_loss
+
+
+def apply_open_loop_recurrent_entropy_weight(
+        recurrent_loss, fixed_policy_loss, policy_ce, policy_entropy, entropy_weight
+):
+    """Replace only the policy-entropy term inside an open-loop recurrent loss."""
+    return recurrent_loss - fixed_policy_loss + policy_ce - entropy_weight * policy_entropy
 
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
@@ -492,6 +503,9 @@ class UniZeroPolicy(MuZeroPolicy):
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
+        # (bool) Whether replay-policy reanalysis should seed each MCTS root from the same
+        # short observation/action context used online. Opt-in to preserve legacy targets.
+        contextual_reanalysis=False,
         # (bool) Whether to call torch.cuda.empty_cache() when resetting inference caches after each train epoch.
         empty_cuda_cache_on_cache_reset=True,
         # (int) The transition number of one ``GameSegment``.
@@ -1181,6 +1195,14 @@ class UniZeroPolicy(MuZeroPolicy):
         value_loss = self.intermediate_losses['loss_value']
         latent_recon_loss = self.intermediate_losses['latent_recon_loss']
         perceptual_loss = self.intermediate_losses['perceptual_loss']
+        open_loop_consistency_loss = self.intermediate_losses['open_loop_consistency_loss']
+        open_loop_recurrent_loss = self.intermediate_losses['open_loop_recurrent_loss']
+        open_loop_recurrent_latent_loss = self.intermediate_losses['open_loop_recurrent_latent_loss']
+        open_loop_recurrent_reward_loss = self.intermediate_losses['open_loop_recurrent_reward_loss']
+        open_loop_recurrent_value_loss = self.intermediate_losses['open_loop_recurrent_value_loss']
+        open_loop_recurrent_policy_loss = self.intermediate_losses['open_loop_recurrent_policy_loss']
+        open_loop_recurrent_policy_ce = self.intermediate_losses['open_loop_recurrent_policy_ce']
+        open_loop_recurrent_policy_entropy = self.intermediate_losses['open_loop_recurrent_policy_entropy']
         orig_policy_loss = self.intermediate_losses['orig_policy_loss']
         policy_entropy = self.intermediate_losses['policy_entropy']
         first_step_losses = self.intermediate_losses['first_step_losses']
@@ -1240,6 +1262,30 @@ class UniZeroPolicy(MuZeroPolicy):
             # Use current updated alpha (with gradient flow truncated)
             current_alpha = self.log_alpha.exp().detach()
 
+            # Keep the optional recurrent policy objective on the same entropy coefficient as
+            # the main policy objective. The world model initially computes it with the fixed
+            # coefficient so non-adaptive training remains unchanged.
+            open_loop_recurrent_loss = apply_open_loop_recurrent_entropy_weight(
+                open_loop_recurrent_loss,
+                open_loop_recurrent_policy_loss,
+                open_loop_recurrent_policy_ce,
+                open_loop_recurrent_policy_entropy,
+                current_alpha,
+            )
+            open_loop_recurrent_policy_loss = (
+                open_loop_recurrent_policy_ce
+                - current_alpha * open_loop_recurrent_policy_entropy
+            )
+            # ``apply_per_sample_is_weights`` reads auxiliary losses from this container.
+            losses.intermediate_losses['open_loop_recurrent_loss'] = open_loop_recurrent_loss
+            losses.intermediate_losses['open_loop_recurrent_policy_loss'] = (
+                open_loop_recurrent_policy_loss
+            )
+            self.intermediate_losses['open_loop_recurrent_loss'] = open_loop_recurrent_loss
+            self.intermediate_losses['open_loop_recurrent_policy_loss'] = (
+                open_loop_recurrent_policy_loss
+            )
+
             # Recalculate weighted policy loss and total loss
             # Note: policy_entropy here is already an average value of a batch
             weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
@@ -1250,7 +1296,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 losses.policy_loss_weight * weighted_policy_loss +
                 losses.obs_loss_weight * obs_loss +
                 losses.latent_recon_loss_weight * latent_recon_loss +
-                losses.perceptual_loss_weight * perceptual_loss
+                losses.perceptual_loss_weight * perceptual_loss +
+                losses.open_loop_consistency_loss_weight * open_loop_consistency_loss +
+                losses.open_loop_recurrent_loss_weight * open_loop_recurrent_loss
             )
             # Per-sample counterpart of ``weighted_policy_loss`` for correct IS weighting.
             per_sample_orig_policy_loss = losses.intermediate_losses.get('per_sample_loss_orig_policy', None)
@@ -1389,6 +1437,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'obs_loss': obs_loss.item(),
             'latent_recon_loss': latent_recon_loss.item(),
             'perceptual_loss': perceptual_loss.item(),
+            'open_loop_consistency_loss': open_loop_consistency_loss.item(),
+            'open_loop_recurrent_loss': open_loop_recurrent_loss.item(),
+            'open_loop_recurrent_latent_loss': open_loop_recurrent_latent_loss.item(),
+            'open_loop_recurrent_reward_loss': open_loop_recurrent_reward_loss.item(),
+            'open_loop_recurrent_value_loss': open_loop_recurrent_value_loss.item(),
+            'open_loop_recurrent_policy_loss': open_loop_recurrent_policy_loss.item(),
             'policy_loss': policy_loss.item(),
             'orig_policy_loss': orig_policy_loss.item(),
             'policy_entropy': policy_entropy.item(),
@@ -1426,6 +1480,27 @@ class UniZeroPolicy(MuZeroPolicy):
 
             "current_policy_label_eps":current_policy_label_eps,
         }
+        for metric_name in (
+            'open_loop_latent_mse_mean',
+            'open_loop_latent_mse_first',
+            'open_loop_latent_mse_middle',
+            'open_loop_latent_mse_last',
+            'rolling_teacher_latent_mse_mean',
+            'rolling_teacher_latent_mse_first',
+            'rolling_teacher_latent_mse_middle',
+            'rolling_teacher_latent_mse_last',
+            'teacher_forced_latent_mse_mean',
+            'teacher_forced_latent_mse_first',
+            'rolling_context_ratio',
+            'open_loop_exposure_ratio',
+            'open_loop_total_ratio',
+        ):
+            metric_value = losses.intermediate_losses.get(metric_name)
+            if metric_value is not None:
+                return_log_dict[f'analysis/{metric_name}'] = (
+                    metric_value.item() if isinstance(metric_value, torch.Tensor)
+                    else float(metric_value)
+                )
         return_log_dict.update({
             'loss/weighted_total': weighted_total_loss.item(),
             'loss/obs': obs_loss.item(),
@@ -1935,6 +2010,8 @@ class UniZeroPolicy(MuZeroPolicy):
                         if eid < len(world_model.past_kv_cache_init_infer_envs):
                             world_model.past_kv_cache_init_infer_envs[eid].clear()
                             logging.info(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                    if hasattr(world_model, 'past_token_context_init_infer_envs') and eid < world_model.env_num:
+                        world_model.past_token_context_init_infer_envs[eid].clear()
                     # =============================================================================
 
         # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
@@ -2024,14 +2101,20 @@ class UniZeroPolicy(MuZeroPolicy):
                         if eid < len(world_model.past_kv_cache_init_infer_envs):
                             world_model.past_kv_cache_init_infer_envs[eid].clear()
                             logging.info(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                    if hasattr(world_model, 'past_token_context_init_infer_envs') and eid < world_model.env_num:
+                        world_model.past_token_context_init_infer_envs[eid].clear()
                     # =============================================================================
 
-                # The recurrent cache is global.
-                # ==================== Phase 1.5: Use unified clear_caches() method ====================
-                # This automatically handles both old and new cache systems
-                world_model.clear_caches()
-                # ======================================================================================
-
+                # The recurrent cache is only scratch space for the current MCTS
+                # search and is safe to clear globally. Do not call clear_caches()
+                # here: that also drops root histories for every still-running
+                # evaluator env whenever just one asynchronous episode ends.
+                if hasattr(world_model, 'use_new_cache_manager') and world_model.use_new_cache_manager:
+                    world_model.kv_cache_manager.clear_recur_cache()
+                else:
+                    world_model.past_kv_cache_recurrent_infer.clear()
+                if hasattr(world_model, 'past_token_context_recurrent_infer'):
+                    world_model.past_token_context_recurrent_infer.clear()
                 world_model.keys_values_wm_list.clear()
                 if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                     torch.cuda.empty_cache()
@@ -2095,6 +2178,21 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/last_step_loss_rewards',
             'analysis/last_step_loss_obs',
 
+            # ==================== Open-loop / KV-window Diagnostics ====================
+            'analysis/open_loop_latent_mse_mean',
+            'analysis/open_loop_latent_mse_first',
+            'analysis/open_loop_latent_mse_middle',
+            'analysis/open_loop_latent_mse_last',
+            'analysis/rolling_teacher_latent_mse_mean',
+            'analysis/rolling_teacher_latent_mse_first',
+            'analysis/rolling_teacher_latent_mse_middle',
+            'analysis/rolling_teacher_latent_mse_last',
+            'analysis/teacher_forced_latent_mse_mean',
+            'analysis/teacher_forced_latent_mse_first',
+            'analysis/rolling_context_ratio',
+            'analysis/open_loop_exposure_ratio',
+            'analysis/open_loop_total_ratio',
+
             # ==================== System Metrics ====================
             'Current_GPU',
             'Max_GPU',
@@ -2110,6 +2208,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'policy_entropy',
             'latent_recon_loss',
             'perceptual_loss',
+            'open_loop_consistency_loss',
+            'open_loop_recurrent_loss',
+            'open_loop_recurrent_latent_loss',
+            'open_loop_recurrent_reward_loss',
+            'open_loop_recurrent_value_loss',
+            'open_loop_recurrent_policy_loss',
             'target_policy_entropy',
             'reward_loss',
             'value_loss',
@@ -2297,9 +2401,19 @@ class UniZeroPolicy(MuZeroPolicy):
                 models.append(model)
 
         for model in models:
-            if not self._cfg.model.world_model_cfg.rotary_emb:
-                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
-                model.world_model.precompute_pos_emb_diff_kv()
-            model.world_model.clear_caches()
+            world_model = model.world_model
+            # Position-difference tensors are consumed only by the legacy
+            # approximate K/V rebase path.  Exact reset and raw-token rebuild
+            # discard/rebuild the window instead, so recomputing these tensors
+            # after every learning epoch is pure overhead.
+            if (
+                not self._cfg.model.world_model_cfg.rotary_emb
+                and not world_model.exact_kv_window_reset
+                and not world_model.rebuild_kv_window_from_tokens
+            ):
+                world_model.precompute_pos_emb_diff_kv()
+            # All inference caches contain projections made with the old model
+            # weights and must still be invalidated after learning.
+            world_model.clear_caches()
         if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
             torch.cuda.empty_cache()

@@ -13,16 +13,26 @@ from easydict import EasyDict
 from zoo.atari.envs.atari_wrappers import wrap_lightzero
 
 
-def _prepare_reset_seed(base_seed: int, dynamic_seed: bool) -> int:
-    """Choose the ALE seed and synchronize randomness used by legacy wrappers.
+def _prepare_reset_seed(base_seed: int, dynamic_seed: bool, rng=None) -> int:
+    """Choose an ALE seed without mutating NumPy's process-global RNG.
 
-    ``NoopResetWrapper`` uses NumPy's process-local RNG rather than ALE's RNG.  Without
-    reseeding it, ``dynamic_seed=False`` still produces a different no-op count on every
-    evaluation, so the same checkpoint is not reproducible after a restart.
+    ``AtariEnvLightZero`` owns a per-environment ``RandomState`` for dynamic seed generation.
+    The legacy ``NoopResetWrapper`` is seeded only inside ``_reset_with_numpy_seed`` so a base
+    environment manager cannot accidentally perturb replay sampling in the main process.
     """
-    reset_seed = base_seed + 100 * np.random.randint(1, 1000) if dynamic_seed else base_seed
-    np.random.seed(reset_seed)
+    random_source = np.random if rng is None else rng
+    reset_seed = base_seed + 100 * random_source.randint(1, 1000) if dynamic_seed else base_seed
     return int(reset_seed)
+
+
+def _reset_with_numpy_seed(env, reset_seed: int):
+    """Run legacy reset-time NumPy sampling reproducibly and restore caller RNG state."""
+    process_rng_state = np.random.get_state()
+    try:
+        np.random.seed(reset_seed)
+        return env.reset()
+    finally:
+        np.random.set_state(process_rng_state)
 
 
 @ENV_REGISTRY.register('atari_lightzero')
@@ -110,11 +120,19 @@ class AtariEnvLightZero(BaseEnv):
         Arguments:
             - cfg (:obj:`EasyDict`): The configuration dictionary.
         """
-        self.cfg = cfg
+        # Direct users and older tests often pass a partial environment config,
+        # while DI-engine's compiled path supplies every default explicitly.
+        # Normalize both paths once so wrappers and space construction observe
+        # the same fields. ``obs_shape`` is the historical alias.
+        normalized_cfg = self.default_config()
+        normalized_cfg.update(cfg)
+        if 'obs_shape' in cfg and 'observation_shape' not in cfg:
+            normalized_cfg.observation_shape = tuple(cfg.obs_shape)
+        self.cfg = normalized_cfg
         self._init_flag = False
-        self.channel_last = cfg.channel_last
-        self.clip_rewards = cfg.clip_rewards
-        self.episode_life = cfg.episode_life
+        self.channel_last = self.cfg.channel_last
+        self.clip_rewards = self.cfg.clip_rewards
+        self.episode_life = self.cfg.episode_life
         self._timestep = 0
 
     def reset(self) -> dict:
@@ -161,10 +179,15 @@ class AtariEnvLightZero(BaseEnv):
             self._init_flag = True
 
         if hasattr(self, '_seed'):
-            reset_seed = _prepare_reset_seed(self._seed, getattr(self, '_dynamic_seed', True))
+            reset_seed = _prepare_reset_seed(
+                self._seed,
+                getattr(self, '_dynamic_seed', True),
+                rng=self._seed_rng,
+            )
             self._env.seed(reset_seed)
-
-        result = self._env.reset()
+            result = _reset_with_numpy_seed(self._env, reset_seed)
+        else:
+            result = self._env.reset()
         if isinstance(result, tuple):
             obs, info = result
         else:
@@ -240,7 +263,7 @@ class AtariEnvLightZero(BaseEnv):
         """
         self._seed = seed
         self._dynamic_seed = dynamic_seed
-        np.random.seed(self._seed)
+        self._seed_rng = np.random.RandomState(self._seed)
 
     @property
     def observation_space(self) -> gym.spaces.Space:
