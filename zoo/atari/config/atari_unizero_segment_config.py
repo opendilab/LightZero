@@ -46,6 +46,24 @@ def _safe_run_name(value):
     return value
 
 
+def _prepare_run_directory(run_dir, resume_from=None, resume_in_place=False):
+    """Create a run directory, or explicitly reopen it for checkpoint recovery."""
+    if resume_in_place and resume_from is None:
+        raise ValueError('resume_in_place requires resume_from')
+    if os.path.exists(run_dir):
+        if not resume_in_place:
+            raise FileExistsError(f'Run directory already exists: {os.path.abspath(run_dir)}')
+        if not os.path.isdir(run_dir):
+            raise NotADirectoryError(f'Run path is not a directory: {os.path.abspath(run_dir)}')
+        return
+    os.makedirs(run_dir)
+
+
+def _encoder_clip_settings(disable_encoder_clip):
+    """Return the two switches that jointly own encoder latent-norm projection."""
+    return (not disable_encoder_clip, 0.0 if disable_encoder_clip else 10.0)
+
+
 def main(
         env_id,
         seed,
@@ -55,15 +73,34 @@ def main(
         disable_adaptive_alpha=True,
         fixed_alpha=5e-3,
         disable_policy_label_smoothing=True,
+        disable_encoder_clip=False,
         resume_from=None,
+        resume_in_place=False,
         max_env_step_override=None,
         use_priority=None,
         stab_fix=False,
         game_segment_length_override=None,
+        infer_context_length_override=None,
+        exact_kv_window_reset=False,
+        rebuild_kv_window_from_tokens=False,
+        contextual_reanalysis=False,
+        bootstrap_value_context=False,
+        resume_buffer_min_transitions_override=None,
+        buffer_reanalyze_freq_override=None,
         save_ckpt_after_iter_override=None,
+        periodic_ckpt_keep_last_override=None,
+        open_loop_diagnostic_freq_override=None,
+        open_loop_consistency_weight_override=None,
+        open_loop_recurrent_weight_override=None,
+        open_loop_consistency_batch_size_override=None,
+        open_loop_consistency_horizon_override=None,
+        open_loop_prefix_transitions_override=None,
         legacy_resume_alpha=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
+    use_encoder_clip_annealing, latent_norm_clip_threshold = _encoder_clip_settings(
+        disable_encoder_clip
+    )
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
@@ -81,10 +118,74 @@ def main(
     )
     if save_ckpt_after_iter <= 0:
         raise ValueError(f'save_ckpt_after_iter must be positive, got {save_ckpt_after_iter}')
+    periodic_ckpt_keep_last = (
+        0 if periodic_ckpt_keep_last_override is None else int(periodic_ckpt_keep_last_override)
+    )
+    if periodic_ckpt_keep_last < 0:
+        raise ValueError(
+            f'periodic_ckpt_keep_last must be non-negative, got {periodic_ckpt_keep_last}'
+        )
+    resume_buffer_min_transitions = (
+        10000 if resume_buffer_min_transitions_override is None
+        else int(resume_buffer_min_transitions_override)
+    )
+    if resume_buffer_min_transitions < 0:
+        raise ValueError(
+            'resume_buffer_min_transitions must be non-negative, got '
+            f'{resume_buffer_min_transitions}'
+        )
+    open_loop_diagnostic_freq = (
+        0 if open_loop_diagnostic_freq_override is None
+        else int(open_loop_diagnostic_freq_override)
+    )
+    if open_loop_diagnostic_freq < 0:
+        raise ValueError(
+            f'open_loop_diagnostic_freq must be non-negative, got {open_loop_diagnostic_freq}'
+        )
+    open_loop_consistency_weight = (
+        0. if open_loop_consistency_weight_override is None
+        else float(open_loop_consistency_weight_override)
+    )
+    open_loop_recurrent_weight = (
+        0. if open_loop_recurrent_weight_override is None
+        else float(open_loop_recurrent_weight_override)
+    )
+    open_loop_consistency_batch_size = (
+        collector_env_num if open_loop_consistency_batch_size_override is None
+        else int(open_loop_consistency_batch_size_override)
+    )
+    open_loop_consistency_horizon = (
+        4 if open_loop_consistency_horizon_override is None
+        else int(open_loop_consistency_horizon_override)
+    )
+    open_loop_prefix_transitions = (
+        0 if open_loop_prefix_transitions_override is None
+        else int(open_loop_prefix_transitions_override)
+    )
+    if open_loop_consistency_weight < 0:
+        raise ValueError(
+            f'open_loop_consistency_weight must be non-negative, got {open_loop_consistency_weight}'
+        )
+    if open_loop_recurrent_weight < 0:
+        raise ValueError(
+            f'open_loop_recurrent_weight must be non-negative, got {open_loop_recurrent_weight}'
+        )
+    if open_loop_consistency_weight > 0 and open_loop_recurrent_weight > 0:
+        raise ValueError(
+            'open_loop_consistency_weight and open_loop_recurrent_weight are mutually exclusive'
+        )
+    if open_loop_consistency_batch_size <= 0:
+        raise ValueError('open_loop_consistency_batch_size must be positive')
+    if open_loop_consistency_horizon <= 0:
+        raise ValueError('open_loop_consistency_horizon must be positive')
+    if open_loop_prefix_transitions < 0:
+        raise ValueError('open_loop_prefix_transitions must be non-negative')
     if legacy_resume_alpha is not None and legacy_resume_alpha <= 0:
         raise ValueError(f'legacy_resume_alpha must be positive, got {legacy_resume_alpha}')
     num_unroll_steps = 10
-    infer_context_length = 4
+    infer_context_length = 4 if infer_context_length_override is None else int(infer_context_length_override)
+    if infer_context_length < 1:
+        raise ValueError(f'infer_context_length must be positive, got {infer_context_length}')
 
     num_simulations = 50
     batch_size = 256
@@ -101,7 +202,15 @@ def main(
         max_env_step = int(max_env_step_override)
 
     # Reanalyze settings
-    buffer_reanalyze_freq = 1/5000000000
+    buffer_reanalyze_freq = (
+        1 / 5000000000
+        if buffer_reanalyze_freq_override is None
+        else float(buffer_reanalyze_freq_override)
+    )
+    if buffer_reanalyze_freq <= 0:
+        raise ValueError(
+            f'buffer_reanalyze_freq must be positive, got {buffer_reanalyze_freq}'
+        )
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
     # ==============================================================
@@ -156,6 +265,15 @@ def main(
                     use_normal_head=True,
                     optim_type='AdamW_mix_lr_wdecay',
                     use_new_cache_manager=use_new_cache_manager,
+                    exact_kv_window_reset=exact_kv_window_reset,
+                    rebuild_kv_window_from_tokens=rebuild_kv_window_from_tokens,
+                    open_loop_diagnostic_freq=open_loop_diagnostic_freq,
+                    open_loop_diagnostic_batch_size=collector_env_num,
+                    open_loop_consistency_loss_weight=open_loop_consistency_weight,
+                    open_loop_recurrent_loss_weight=open_loop_recurrent_weight,
+                    open_loop_consistency_batch_size=open_loop_consistency_batch_size,
+                    open_loop_consistency_horizon=open_loop_consistency_horizon,
+                    open_loop_prefix_transitions=open_loop_prefix_transitions,
                     # Policy-stability protections (500K crash chain: extreme target_policy ->
                     # logits explosion -> x_token collapse). Off by default; --stab-fix enables.
                     use_policy_logits_clip=stab_fix,
@@ -173,9 +291,12 @@ def main(
             num_unroll_steps=num_unroll_steps,
             num_segments=num_segments,
             game_segment_length=game_segment_length,
+            contextual_reanalysis=contextual_reanalysis,
+            bootstrap_value_context=bootstrap_value_context,
             # Full learner checkpoints are ~530MB each; save every 50k train iters instead of
             # the default 10k to bound disk usage. ckpt_best (on new best eval) is unaffected.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=save_ckpt_after_iter))),
+            periodic_ckpt_keep_last=periodic_ckpt_keep_last,
             # KV caches are cleared once per env per this many env steps. Was hardcoded to
             # game_segment_length, which wiped all MCTS kv caches after every single segment.
             kv_cache_clear_interval=2000,
@@ -197,12 +318,13 @@ def main(
             # With use_encoder_clip_annealing=False the clip code was unreachable
             # (bug fixed in unizero.py); keeping annealing=True mirrors the known-good
             # baseline and gradually tightens the clip as the model stabilises.
-            use_encoder_clip_annealing=True,
+            use_encoder_clip_annealing=use_encoder_clip_annealing,
             encoder_clip_anneal_type='cosine',
             encoder_clip_start_value=30.0,
             encoder_clip_end_value=10.0,
             encoder_clip_anneal_steps=100000,
-            latent_norm_clip_threshold=10.0,  # fallback fixed threshold once annealing completes
+            # A non-positive fixed threshold disables the projection when annealing is off.
+            latent_norm_clip_threshold=latent_norm_clip_threshold,
 
             # Policy smoothing decays 0.05->0.01; value/reward use 0.1.
             policy_ls_eps_start=0.0 if disable_policy_label_smoothing else 0.05,
@@ -221,16 +343,19 @@ def main(
             # Default ON. A 2026-08-06 Pong A/B suggested PER-off learned faster in the first
             # ~25k train iters, but the advantage did not reproduce at later iterations (PER-on
             # matched or exceeded PER-off by iter 35k-40k), so PER remains enabled by default.
-            # NOTE: model.world_model_cfg.use_priority=True is kept in sync so the [B]
-            # value_priority tensor is computed and update_priority() stays shape-compatible;
-            # setting use_priority=False here switches the buffer to uniform sampling and
-            # priority write-backs are then discarded.
+            # NOTE: model.world_model_cfg.use_priority intentionally remains True so the model
+            # always returns a shape-[B] value_priority diagnostic. Setting policy.use_priority
+            # False here still gives uniform replay/IS weights; the buffer discards priority
+            # write-backs. This is deliberate model-vs-buffer asymmetry, not a synchronized flag.
             use_priority=True if use_priority is None else use_priority,
             priority_prob_alpha=0.6,
             priority_prob_beta=0.4,
 
             # Reanalyze settings
             buffer_reanalyze_freq=buffer_reanalyze_freq,
+            # A refresh expands each sequence into H+1 roots. Keep every MCTS group within the
+            # same recurrent-KV capacity used by the online collector (8 envs x 50 simulations).
+            reanalyze_search_chunk_size=collector_env_num,
             reanalyze_batch_size=reanalyze_batch_size,
             reanalyze_partition=reanalyze_partition,
 
@@ -241,7 +366,7 @@ def main(
             replay_buffer_size=int(5e5),
             # Policy checkpoints omit the ~25GB full Atari replay buffer. Refill a small diverse
             # on-policy window before updating a mature model after preemption.
-            resume_buffer_min_transitions=10000,
+            resume_buffer_min_transitions=resume_buffer_min_transitions,
         ),
     )
     atari_unizero_config = EasyDict(atari_unizero_config)
@@ -272,9 +397,7 @@ def main(
     # LightZero internally prefixes exp_name with "./", so keep it relative to
     # the current working directory even when an absolute output root is given.
     run_dir = os.path.relpath(os.path.abspath(os.path.join(output_root, run_name)), os.getcwd())
-    if os.path.exists(run_dir):
-        raise FileExistsError(f'Run directory already exists: {os.path.abspath(run_dir)}')
-    os.makedirs(run_dir)
+    _prepare_run_directory(run_dir, resume_from=resume_from, resume_in_place=resume_in_place)
     main_config.exp_name = run_dir
     with open(os.path.join(run_dir, 'pid'), 'w', encoding='utf-8') as file:
         file.write(f'{os.getpid()}\n')
@@ -328,6 +451,10 @@ if __name__ == "__main__":
         '--fixed-alpha', type=float, default=5e-3,
         help='Fixed policy entropy coefficient used when adaptive alpha is disabled.'
     )
+    parser.add_argument(
+        '--disable-encoder-clip', action='store_true',
+        help='Disable encoder latent-norm projection while retaining global gradient clipping.'
+    )
     policy_smoothing_group = parser.add_mutually_exclusive_group()
     policy_smoothing_group.add_argument(
         '--enable-policy-label-smoothing', dest='disable_policy_label_smoothing', action='store_false',
@@ -343,8 +470,19 @@ if __name__ == "__main__":
         help='Optional learner checkpoint path to resume weights/optimizer/train_iter/envstep from.'
     )
     parser.add_argument(
+        '--resume-in-place', action='store_true',
+        help='Reopen an existing run directory when resuming from a checkpoint. This is intended '
+             'for infrastructure-level automatic restarts.'
+    )
+    parser.add_argument(
         '--max-env-step', dest='max_env_step', type=int, default=None,
         help='Override the default max env-step budget (e.g. for continuing a run past its cap).'
+    )
+    parser.add_argument(
+        '--resume-buffer-min-transitions', dest='resume_buffer_min_transitions',
+        type=int, default=None,
+        help='Collect at least this many replay transitions before updating a resumed mature '
+             'checkpoint; default 10000. Fresh runs still use the normal one-batch warmup.'
     )
     priority_group = parser.add_mutually_exclusive_group()
     priority_group.add_argument(
@@ -366,8 +504,74 @@ if __name__ == "__main__":
         help='Override game_segment_length (default 200; the 2025-10 known-good Pong run used 20).'
     )
     parser.add_argument(
+        '--infer-context-length', dest='infer_context_length', type=int, default=None,
+        help='Override the number of observation/action blocks retained by online KV inference (default 4).'
+    )
+    kv_window_group = parser.add_mutually_exclusive_group()
+    kv_window_group.add_argument(
+        '--exact-kv-window-reset', action='store_true',
+        help='Hard-reset online KV context to its latest latent observation instead of applying an '
+             'inexact algebraic positional shift (diagnostic mode).'
+    )
+    parser.add_argument(
+        '--bootstrap-value-context', action='store_true',
+        help='Compute TD bootstrap values from the same exact rolling replay history available '
+             'to online UniZero planning instead of the longer training-only sequence context.'
+    )
+    parser.add_argument(
+        '--contextual-reanalysis', action='store_true',
+        help='Opt in to rebuilding replay MCTS root priors and KV caches from the same short '
+             'observation/action history used by online planning. Legacy reanalysis remains the default.'
+    )
+    kv_window_group.add_argument(
+        '--rebuild-kv-window-from-tokens', action='store_true',
+        help=(
+            'Exactly rebuild a full learned-absolute-position KV window from retained raw '
+            'observation/action embeddings whenever the window advances.'
+        ),
+    )
+    parser.add_argument(
+        '--buffer-reanalyze-freq', type=float, default=None,
+        help='Override periodic replay-buffer policy-target reanalysis frequency '
+             '(e.g. 0.02 means once every 50 collect/train epochs).'
+    )
+    parser.add_argument(
         '--save-ckpt-after-iter', dest='save_ckpt_after_iter', type=int, default=None,
         help='Override periodic learner-checkpoint interval; useful on preemptible clusters.'
+    )
+    parser.add_argument(
+        '--periodic-ckpt-keep-last', dest='periodic_ckpt_keep_last', type=int, default=None,
+        help='Keep iteration_0 plus this many newest periodic learner checkpoints; '
+             '0/default disables pruning and never affects ckpt_best.'
+    )
+    parser.add_argument(
+        '--open-loop-diagnostic-freq', dest='open_loop_diagnostic_freq', type=int, default=None,
+        help='Measure detached MCTS-style autoregressive latent rollout error every N learner '
+             'iterations; 0/default disables the diagnostic.'
+    )
+    parser.add_argument(
+        '--open-loop-consistency-weight', dest='open_loop_consistency_weight', type=float, default=None,
+        help='Weight for the short differentiable MCTS-style latent rollout consistency loss; '
+             '0/default disables it.'
+    )
+    parser.add_argument(
+        '--open-loop-recurrent-weight', dest='open_loop_recurrent_weight', type=float, default=None,
+        help='Weight for MuZero-style latent/reward/value/policy supervision on recursively '
+             'predicted states; 0/default disables it and it is mutually exclusive with '
+             '--open-loop-consistency-weight.'
+    )
+    parser.add_argument(
+        '--open-loop-consistency-batch-size', dest='open_loop_consistency_batch_size', type=int, default=None,
+        help='Number of replay samples used by the optional open-loop consistency loss.'
+    )
+    parser.add_argument(
+        '--open-loop-consistency-horizon', dest='open_loop_consistency_horizon', type=int, default=None,
+        help='Number of predicted-latent transitions in the optional consistency rollout.'
+    )
+    parser.add_argument(
+        '--open-loop-prefix-transitions', dest='open_loop_prefix_transitions', type=int, default=None,
+        help='Number of real replay transitions used as a teacher prefix before the optional '
+             'open-loop rollout; 0/default starts from a single root observation.'
     )
     parser.add_argument(
         '--legacy-resume-alpha', dest='legacy_resume_alpha', type=float, default=None,
@@ -384,11 +588,27 @@ if __name__ == "__main__":
         disable_adaptive_alpha=args.disable_adaptive_alpha,
         fixed_alpha=args.fixed_alpha,
         disable_policy_label_smoothing=args.disable_policy_label_smoothing,
+        disable_encoder_clip=args.disable_encoder_clip,
         resume_from=args.resume_from,
+        resume_in_place=args.resume_in_place,
         max_env_step_override=args.max_env_step,
         use_priority=args.use_priority,
         stab_fix=args.stab_fix,
         game_segment_length_override=args.game_segment_length,
+        infer_context_length_override=args.infer_context_length,
+        exact_kv_window_reset=args.exact_kv_window_reset,
+        rebuild_kv_window_from_tokens=args.rebuild_kv_window_from_tokens,
+        contextual_reanalysis=args.contextual_reanalysis,
+        bootstrap_value_context=args.bootstrap_value_context,
+        resume_buffer_min_transitions_override=args.resume_buffer_min_transitions,
+        buffer_reanalyze_freq_override=args.buffer_reanalyze_freq,
         save_ckpt_after_iter_override=args.save_ckpt_after_iter,
+        periodic_ckpt_keep_last_override=args.periodic_ckpt_keep_last,
+        open_loop_diagnostic_freq_override=args.open_loop_diagnostic_freq,
+        open_loop_consistency_weight_override=args.open_loop_consistency_weight,
+        open_loop_recurrent_weight_override=args.open_loop_recurrent_weight,
+        open_loop_consistency_batch_size_override=args.open_loop_consistency_batch_size,
+        open_loop_consistency_horizon_override=args.open_loop_consistency_horizon,
+        open_loop_prefix_transitions_override=args.open_loop_prefix_transitions,
         legacy_resume_alpha=args.legacy_resume_alpha,
     )
