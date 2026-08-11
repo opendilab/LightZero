@@ -59,9 +59,85 @@ def _prepare_run_directory(run_dir, resume_from=None, resume_in_place=False):
     os.makedirs(run_dir)
 
 
-def _encoder_clip_settings(disable_encoder_clip):
-    """Return the two switches that jointly own encoder latent-norm projection."""
-    return (not disable_encoder_clip, 0.0 if disable_encoder_clip else 10.0)
+def _experimental_config_overrides(
+        infer_context_length=None,
+        bootstrap_value_context=False,
+        open_loop_consistency_weight=None,
+        open_loop_recurrent_weight=None,
+        open_loop_consistency_batch_size=None,
+        open_loop_consistency_horizon=None,
+        open_loop_prefix_transitions=None,
+        encoder_clip_enabled=None,
+):
+    """Build only explicitly requested UniZero experimental config overrides.
+
+    The stable disabled defaults live in ``UniZeroPolicy.config``.  Keeping this helper sparse
+    prevents Atari launch configs from copying policy defaults and makes every behavioral change
+    visible at the command line.
+    """
+    policy_overrides = {}
+    world_model_overrides = {}
+
+    if infer_context_length is not None:
+        infer_context_length = int(infer_context_length)
+        if infer_context_length < 1:
+            raise ValueError(
+                f'infer_context_length must be positive, got {infer_context_length}'
+            )
+        world_model_overrides['context_length'] = 2 * infer_context_length
+
+    if bootstrap_value_context:
+        policy_overrides['bootstrap_value_context'] = True
+
+    consistency_weight = (
+        0. if open_loop_consistency_weight is None
+        else float(open_loop_consistency_weight)
+    )
+    recurrent_weight = (
+        0. if open_loop_recurrent_weight is None
+        else float(open_loop_recurrent_weight)
+    )
+    if consistency_weight < 0:
+        raise ValueError(
+            f'open_loop_consistency_weight must be non-negative, got {consistency_weight}'
+        )
+    if recurrent_weight < 0:
+        raise ValueError(
+            f'open_loop_recurrent_weight must be non-negative, got {recurrent_weight}'
+        )
+    if consistency_weight > 0 and recurrent_weight > 0:
+        raise ValueError(
+            'open_loop_consistency_weight and open_loop_recurrent_weight are mutually exclusive'
+        )
+    if open_loop_consistency_weight is not None:
+        world_model_overrides['open_loop_consistency_loss_weight'] = consistency_weight
+    if open_loop_recurrent_weight is not None:
+        world_model_overrides['open_loop_recurrent_loss_weight'] = recurrent_weight
+
+    if open_loop_consistency_batch_size is not None:
+        batch_size = int(open_loop_consistency_batch_size)
+        if batch_size <= 0:
+            raise ValueError('open_loop_consistency_batch_size must be positive')
+        world_model_overrides['open_loop_consistency_batch_size'] = batch_size
+    if open_loop_consistency_horizon is not None:
+        horizon = int(open_loop_consistency_horizon)
+        if horizon <= 0:
+            raise ValueError('open_loop_consistency_horizon must be positive')
+        world_model_overrides['open_loop_consistency_horizon'] = horizon
+    if open_loop_prefix_transitions is not None:
+        prefix_transitions = int(open_loop_prefix_transitions)
+        if prefix_transitions < 0:
+            raise ValueError('open_loop_prefix_transitions must be non-negative')
+        world_model_overrides['open_loop_prefix_transitions'] = prefix_transitions
+
+    if encoder_clip_enabled is not None:
+        encoder_clip_enabled = bool(encoder_clip_enabled)
+        policy_overrides.update(
+            use_encoder_clip_annealing=encoder_clip_enabled,
+            latent_norm_clip_threshold=10.0 if encoder_clip_enabled else 0.0,
+        )
+
+    return policy_overrides, world_model_overrides
 
 
 def main(
@@ -70,10 +146,12 @@ def main(
         output_root='data_unizero',
         run_name=None,
         use_new_cache_manager=False,
+        evaluator_env_num_override=None,
+        collect_num_simulations_override=None,
         disable_adaptive_alpha=True,
         fixed_alpha=5e-3,
         disable_policy_label_smoothing=True,
-        disable_encoder_clip=False,
+        encoder_clip_enabled=None,
         resume_from=None,
         resume_in_place=False,
         max_env_step_override=None,
@@ -98,16 +176,25 @@ def main(
         legacy_resume_alpha=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
-    use_encoder_clip_annealing, latent_norm_clip_threshold = _encoder_clip_settings(
-        disable_encoder_clip
-    )
-
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
     num_segments = 8
-    evaluator_env_num = 8  # 3->8: reduce eval reward_mean noise for attribution (takes effect on next run restart)
+    evaluator_env_num = (
+        3 if evaluator_env_num_override is None else int(evaluator_env_num_override)
+    )
+    if evaluator_env_num <= 0:
+        raise ValueError(f'evaluator_env_num must be positive, got {evaluator_env_num}')
+    collect_num_simulations = (
+        None
+        if collect_num_simulations_override is None
+        else int(collect_num_simulations_override)
+    )
+    if collect_num_simulations is not None and collect_num_simulations <= 0:
+        raise ValueError(
+            f'collect_num_simulations must be positive, got {collect_num_simulations}'
+        )
 
     # game_segment_length=20 makes only 20-(num_unroll_steps+td_steps)=5 of the 20 positions in each
     # non-terminal segment eligible as sampling roots (valid_len in game_buffer._push_game_segment),
@@ -142,50 +229,22 @@ def main(
         raise ValueError(
             f'open_loop_diagnostic_freq must be non-negative, got {open_loop_diagnostic_freq}'
         )
-    open_loop_consistency_weight = (
-        0. if open_loop_consistency_weight_override is None
-        else float(open_loop_consistency_weight_override)
-    )
-    open_loop_recurrent_weight = (
-        0. if open_loop_recurrent_weight_override is None
-        else float(open_loop_recurrent_weight_override)
-    )
-    open_loop_consistency_batch_size = (
-        collector_env_num if open_loop_consistency_batch_size_override is None
-        else int(open_loop_consistency_batch_size_override)
-    )
-    open_loop_consistency_horizon = (
-        4 if open_loop_consistency_horizon_override is None
-        else int(open_loop_consistency_horizon_override)
-    )
-    open_loop_prefix_transitions = (
-        0 if open_loop_prefix_transitions_override is None
-        else int(open_loop_prefix_transitions_override)
-    )
-    if open_loop_consistency_weight < 0:
-        raise ValueError(
-            f'open_loop_consistency_weight must be non-negative, got {open_loop_consistency_weight}'
-        )
-    if open_loop_recurrent_weight < 0:
-        raise ValueError(
-            f'open_loop_recurrent_weight must be non-negative, got {open_loop_recurrent_weight}'
-        )
-    if open_loop_consistency_weight > 0 and open_loop_recurrent_weight > 0:
-        raise ValueError(
-            'open_loop_consistency_weight and open_loop_recurrent_weight are mutually exclusive'
-        )
-    if open_loop_consistency_batch_size <= 0:
-        raise ValueError('open_loop_consistency_batch_size must be positive')
-    if open_loop_consistency_horizon <= 0:
-        raise ValueError('open_loop_consistency_horizon must be positive')
-    if open_loop_prefix_transitions < 0:
-        raise ValueError('open_loop_prefix_transitions must be non-negative')
     if legacy_resume_alpha is not None and legacy_resume_alpha <= 0:
         raise ValueError(f'legacy_resume_alpha must be positive, got {legacy_resume_alpha}')
     num_unroll_steps = 10
-    infer_context_length = 4 if infer_context_length_override is None else int(infer_context_length_override)
-    if infer_context_length < 1:
-        raise ValueError(f'infer_context_length must be positive, got {infer_context_length}')
+
+    policy_experiment_overrides, world_model_experiment_overrides = (
+        _experimental_config_overrides(
+            infer_context_length=infer_context_length_override,
+            bootstrap_value_context=bootstrap_value_context,
+            open_loop_consistency_weight=open_loop_consistency_weight_override,
+            open_loop_recurrent_weight=open_loop_recurrent_weight_override,
+            open_loop_consistency_batch_size=open_loop_consistency_batch_size_override,
+            open_loop_consistency_horizon=open_loop_consistency_horizon_override,
+            open_loop_prefix_transitions=open_loop_prefix_transitions_override,
+            encoder_clip_enabled=encoder_clip_enabled,
+        )
+    )
 
     num_simulations = 50
     batch_size = 256
@@ -251,7 +310,6 @@ def main(
                     policy_entropy_weight=fixed_alpha,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
-                    context_length=2 * infer_context_length,
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=8,
@@ -269,11 +327,6 @@ def main(
                     rebuild_kv_window_from_tokens=rebuild_kv_window_from_tokens,
                     open_loop_diagnostic_freq=open_loop_diagnostic_freq,
                     open_loop_diagnostic_batch_size=collector_env_num,
-                    open_loop_consistency_loss_weight=open_loop_consistency_weight,
-                    open_loop_recurrent_loss_weight=open_loop_recurrent_weight,
-                    open_loop_consistency_batch_size=open_loop_consistency_batch_size,
-                    open_loop_consistency_horizon=open_loop_consistency_horizon,
-                    open_loop_prefix_transitions=open_loop_prefix_transitions,
                     # Policy-stability protections (500K crash chain: extreme target_policy ->
                     # logits explosion -> x_token collapse). Off by default; --stab-fix enables.
                     use_policy_logits_clip=stab_fix,
@@ -292,7 +345,6 @@ def main(
             num_segments=num_segments,
             game_segment_length=game_segment_length,
             contextual_reanalysis=contextual_reanalysis,
-            bootstrap_value_context=bootstrap_value_context,
             # Full learner checkpoints are ~530MB each; save every 50k train iters instead of
             # the default 10k to bound disk usage. ckpt_best (on new best eval) is unaffected.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=save_ckpt_after_iter))),
@@ -311,20 +363,6 @@ def main(
             target_entropy_start_ratio=0.98,
             target_entropy_end_ratio=0.7,
             target_entropy_decay_steps=100000,
-
-            # Encoder latent norm clipping — matches the 2025-10-10 Pong run that
-            # converged to reward_mean=20 at ~200k env steps.
-            # The successful run used encoder-clip 30→10 over 100k steps (cosine).
-            # With use_encoder_clip_annealing=False the clip code was unreachable
-            # (bug fixed in unizero.py); keeping annealing=True mirrors the known-good
-            # baseline and gradually tightens the clip as the model stabilises.
-            use_encoder_clip_annealing=use_encoder_clip_annealing,
-            encoder_clip_anneal_type='cosine',
-            encoder_clip_start_value=30.0,
-            encoder_clip_end_value=10.0,
-            encoder_clip_anneal_steps=100000,
-            # A non-positive fixed threshold disables the projection when annealing is off.
-            latent_norm_clip_threshold=latent_norm_clip_threshold,
 
             # Policy smoothing decays 0.05->0.01; value/reward use 0.1.
             policy_ls_eps_start=0.0 if disable_policy_label_smoothing else 0.05,
@@ -369,6 +407,12 @@ def main(
             resume_buffer_min_transitions=resume_buffer_min_transitions,
         ),
     )
+    atari_unizero_config['policy'].update(policy_experiment_overrides)
+    atari_unizero_config['policy']['model']['world_model_cfg'].update(
+        world_model_experiment_overrides
+    )
+    if collect_num_simulations is not None:
+        atari_unizero_config['policy']['collect_num_simulations'] = collect_num_simulations
     atari_unizero_config = EasyDict(atari_unizero_config)
     main_config = atari_unizero_config
 
@@ -451,9 +495,14 @@ if __name__ == "__main__":
         '--fixed-alpha', type=float, default=5e-3,
         help='Fixed policy entropy coefficient used when adaptive alpha is disabled.'
     )
-    parser.add_argument(
-        '--disable-encoder-clip', action='store_true',
-        help='Disable encoder latent-norm projection while retaining global gradient clipping.'
+    encoder_clip_group = parser.add_mutually_exclusive_group()
+    encoder_clip_group.add_argument(
+        '--enable-encoder-clip', dest='encoder_clip_enabled', action='store_true',
+        help='Opt in to the encoder latent-norm projection with the policy default 30->10 schedule.'
+    )
+    encoder_clip_group.add_argument(
+        '--disable-encoder-clip', dest='encoder_clip_enabled', action='store_false',
+        help='Explicitly disable encoder latent-norm projection (also the policy default).'
     )
     policy_smoothing_group = parser.add_mutually_exclusive_group()
     policy_smoothing_group.add_argument(
@@ -464,7 +513,11 @@ if __name__ == "__main__":
         '--disable-policy-label-smoothing', dest='disable_policy_label_smoothing', action='store_true',
         help='Set policy label-smoothing epsilon to zero (default); value/reward smoothing is unchanged.'
     )
-    parser.set_defaults(disable_adaptive_alpha=True, disable_policy_label_smoothing=True)
+    parser.set_defaults(
+        disable_adaptive_alpha=True,
+        disable_policy_label_smoothing=True,
+        encoder_clip_enabled=None,
+    )
     parser.add_argument(
         '--resume-from', dest='resume_from', type=str, default=None,
         help='Optional learner checkpoint path to resume weights/optimizer/train_iter/envstep from.'
@@ -477,6 +530,14 @@ if __name__ == "__main__":
     parser.add_argument(
         '--max-env-step', dest='max_env_step', type=int, default=None,
         help='Override the default max env-step budget (e.g. for continuing a run past its cap).'
+    )
+    parser.add_argument(
+        '--evaluator-env-num', dest='evaluator_env_num', type=int, default=None,
+        help='Number of deterministic evaluation environments/episodes (default 3).'
+    )
+    parser.add_argument(
+        '--collect-num-simulations', dest='collect_num_simulations', type=int, default=None,
+        help='Override MCTS simulations per action during collection (policy default 25).'
     )
     parser.add_argument(
         '--resume-buffer-min-transitions', dest='resume_buffer_min_transitions',
@@ -585,10 +646,12 @@ if __name__ == "__main__":
         output_root=args.output_root,
         run_name=args.run_name,
         use_new_cache_manager=args.use_new_cache_manager,
+        evaluator_env_num_override=args.evaluator_env_num,
+        collect_num_simulations_override=args.collect_num_simulations,
         disable_adaptive_alpha=args.disable_adaptive_alpha,
         fixed_alpha=args.fixed_alpha,
         disable_policy_label_smoothing=args.disable_policy_label_smoothing,
-        disable_encoder_clip=args.disable_encoder_clip,
+        encoder_clip_enabled=args.encoder_clip_enabled,
         resume_from=args.resume_from,
         resume_in_place=args.resume_in_place,
         max_env_step_override=args.max_env_step,

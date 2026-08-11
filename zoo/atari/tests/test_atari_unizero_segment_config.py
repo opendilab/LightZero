@@ -1,5 +1,6 @@
 import pytest
 
+from lzero.policy.unizero import UniZeroPolicy
 from zoo.atari.config import atari_unizero_segment_config
 
 
@@ -22,6 +23,83 @@ def test_prepare_run_directory_preserves_default_collision_protection(tmp_path):
         atari_unizero_segment_config._prepare_run_directory(str(run_dir))
 
 
-def test_disable_encoder_clip_turns_off_both_projection_owners():
-    assert atari_unizero_segment_config._encoder_clip_settings(False) == (True, 10.0)
-    assert atari_unizero_segment_config._encoder_clip_settings(True) == (False, 0.0)
+def test_unizero_policy_defaults_disable_experimental_training_features():
+    config = UniZeroPolicy.config
+    world_model_config = config['model']['world_model_cfg']
+
+    assert world_model_config['context_length'] == 2 * 4
+    assert config['bootstrap_value_context'] is False
+    assert world_model_config['open_loop_consistency_loss_weight'] == 0.
+    assert world_model_config['open_loop_recurrent_loss_weight'] == 0.
+    assert world_model_config['open_loop_prefix_transitions'] == 0
+    assert config['use_encoder_clip_annealing'] is False
+    assert config['latent_norm_clip_threshold'] == 0.
+
+
+def test_encoder_clip_diagnostics_are_registered_for_tensorboard():
+    monitor_vars = set(UniZeroPolicy._monitor_vars_learn(None))
+    assert {
+        'encoder_clip/enabled',
+        'encoder_clip/applied',
+        'encoder_clip/apply_count',
+        'encoder_clip/scale_factor',
+        'encoder_clip/max_latent_norm',
+        'encoder_clip/threshold',
+    } <= monitor_vars
+
+
+def test_atari_experimental_overrides_are_sparse_and_explicit():
+    policy_overrides, world_model_overrides = (
+        atari_unizero_segment_config._experimental_config_overrides()
+    )
+    assert policy_overrides == {}
+    assert world_model_overrides == {}
+
+    policy_overrides, world_model_overrides = (
+        atari_unizero_segment_config._experimental_config_overrides(
+            infer_context_length=5,
+            bootstrap_value_context=True,
+            open_loop_consistency_weight=1.,
+            open_loop_consistency_batch_size=8,
+            open_loop_consistency_horizon=4,
+            open_loop_prefix_transitions=3,
+            encoder_clip_enabled=True,
+        )
+    )
+    assert policy_overrides == {
+        'bootstrap_value_context': True,
+        'use_encoder_clip_annealing': True,
+        'latent_norm_clip_threshold': 10.0,
+    }
+    assert world_model_overrides == {
+        'context_length': 10,
+        'open_loop_consistency_loss_weight': 1.,
+        'open_loop_consistency_batch_size': 8,
+        'open_loop_consistency_horizon': 4,
+        'open_loop_prefix_transitions': 3,
+    }
+
+
+def test_explicit_encoder_clip_disable_sets_both_projection_owners():
+    policy_overrides, _ = atari_unizero_segment_config._experimental_config_overrides(
+        encoder_clip_enabled=False
+    )
+    assert policy_overrides == {
+        'use_encoder_clip_annealing': False,
+        'latent_norm_clip_threshold': 0.0,
+    }
+
+
+@pytest.mark.parametrize(
+    ('kwargs', 'message'),
+    [
+        ({'infer_context_length': 0}, 'infer_context_length must be positive'),
+        ({'open_loop_consistency_weight': -1.}, 'must be non-negative'),
+        ({'open_loop_consistency_batch_size': 0}, 'batch_size must be positive'),
+        ({'open_loop_consistency_horizon': 0}, 'horizon must be positive'),
+        ({'open_loop_prefix_transitions': -1}, 'must be non-negative'),
+    ],
+)
+def test_experimental_override_validation(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        atari_unizero_segment_config._experimental_config_overrides(**kwargs)

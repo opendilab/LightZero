@@ -270,7 +270,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 max_blocks=10,
                 # (int) The maximum number of tokens, calculated as tokens per block multiplied by max blocks.
                 max_tokens=2 * 10,
-                # (int) The context length, usually calculated as twice the number of some base unit.
+                # (int) Online inference context length in tokens.  The default retains four
+                # observation/action blocks; longer contexts (for example ctx5=10 tokens) are
+                # experimental and must be enabled explicitly by an environment config.
                 context_length=2 * 4,
                 # (bool) Whether to use GRU gating mechanism.
                 gru_gating=False,
@@ -310,6 +312,14 @@ class UniZeroPolicy(MuZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
+                # (float) Optional differentiable open-loop consistency objective.  Keep all
+                # open-loop training objectives disabled by default; experiments opt in by
+                # supplying a positive weight.
+                open_loop_consistency_loss_weight=0.,
+                open_loop_recurrent_loss_weight=0.,
+                # (int) Number of real replay transitions prepended before an optional open-loop
+                # rollout.  Zero is the non-experimental single-root behavior.
+                open_loop_prefix_transitions=0,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=5e-3,
                 # (str) The normalization type for the final layer in both the head and the encoder.
@@ -405,8 +415,9 @@ class UniZeroPolicy(MuZeroPolicy):
         target_entropy_decay_steps=500000,
 
         # ==================== START: Encoder-Clip Annealing Config ====================
-        # (bool) Whether to enable annealing for encoder-clip values.
-        use_encoder_clip_annealing=True,
+        # Encoder latent-norm projection is experimental and disabled by default.  Enabling
+        # annealing or setting a positive fixed threshold must be an explicit experiment choice.
+        use_encoder_clip_annealing=False,
         # (str) Annealing type. Options: 'linear' or 'cosine'.
         encoder_clip_anneal_type='cosine',
         # (float) Starting clip value for annealing (looser in early training).
@@ -415,8 +426,9 @@ class UniZeroPolicy(MuZeroPolicy):
         encoder_clip_end_value=10.0,
         # (int) Training iteration steps required to complete annealing from start to end value.
         encoder_clip_anneal_steps=100000,  # e.g., reach final value after 100k iterations
-        # (float) Fixed latent norm clip threshold (used when encoder_clip_annealing is disabled)
-        latent_norm_clip_threshold=20.0,
+        # (float) Fixed latent norm clip threshold (used when encoder_clip_annealing is disabled).
+        # A non-positive value disables the projection.
+        latent_norm_clip_threshold=0.0,
         # ===================== END: Encoder-Clip Annealing Config =====================
 
         # ==================== START: Head-Clip Annealing Config ====================
@@ -506,6 +518,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether replay-policy reanalysis should seed each MCTS root from the same
         # short observation/action context used online. Opt-in to preserve legacy targets.
         contextual_reanalysis=False,
+        # (bool) Whether TD bootstrap values should be evaluated from the exact rolling replay
+        # history.  This changes target semantics and is therefore opt-in.
+        bootstrap_value_context=False,
         # (bool) Whether to call torch.cuda.empty_cache() when resetting inference caches after each train epoch.
         empty_cuda_cache_on_cache_reset=True,
         # (int) The transition number of one ``GameSegment``.
@@ -2251,6 +2266,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'adaptive_target_entropy_ratio',
             'alpha_loss',
             'current_encoder_clip_value',
+            'encoder_clip/enabled',
+            'encoder_clip/applied',
+            'encoder_clip/apply_count',
+            'encoder_clip/scale_factor',
+            'encoder_clip/max_latent_norm',
+            'encoder_clip/threshold',
 
             # ==================== Replay / PER Diagnostics ====================
             'replay/is_weight_mean',
