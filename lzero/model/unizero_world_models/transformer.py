@@ -706,6 +706,66 @@ class SelfAttention(nn.Module):
         causal_mask = torch.tril(torch.ones(mask_size, mask_size))
         self.register_buffer('mask', causal_mask)
 
+    def _project_qkv(self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor]):
+        """Project attention inputs and apply the configured positional rotation."""
+        batch_size, sequence_length, embed_dim = x.shape
+        head_size = embed_dim // self.num_heads
+        output_shape = (batch_size, sequence_length, self.num_heads, head_size)
+        query = self.query(x).view(output_shape).transpose(1, 2)
+        key = self.key(x).view(output_shape).transpose(1, 2)
+        value = self.value(x).view(output_shape).transpose(1, 2)
+        if bool(getattr(self.config, 'rotary_emb', False)):
+            if freqs_cis is None:
+                raise ValueError('RoPE is enabled but no frequency tensor was supplied.')
+            query, key = apply_rotary_emb(query, key, freqs_cis)
+        return query, key, value
+
+    def _build_attention_mask(
+            self,
+            batch_size: int,
+            query_length: int,
+            current_length: int,
+            past_length: int,
+            device: torch.device,
+            valid_context_lengths: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        """Build the causal mask, excluding left-padded cache entries when present."""
+        required_size = max(past_length + query_length, current_length)
+        if required_size <= self.mask.size(0):
+            mask = self.mask[
+                past_length:past_length + query_length, :current_length
+            ]
+        else:
+            # H+1 bootstrap targets can exceed the checkpointed H-block mask by
+            # one observation group.  Extend only for that rare forward pass.
+            extended_mask = torch.tril(torch.ones(
+                required_size,
+                required_size,
+                device=device,
+                dtype=self.mask.dtype,
+            ))
+            mask = extended_mask[
+                past_length:past_length + query_length, :current_length
+            ]
+
+        if valid_context_lengths is None:
+            return mask
+        valid_lengths = torch.as_tensor(
+            valid_context_lengths, device=device, dtype=torch.long
+        ).reshape(-1)
+        if valid_lengths.numel() != batch_size:
+            raise ValueError(
+                f'valid_context_lengths has {valid_lengths.numel()} entries '
+                f'for batch size {batch_size}.'
+            )
+        # The world model owns these lengths.  Clamping avoids a per-layer
+        # device synchronization solely for range validation.
+        left_padding = past_length - valid_lengths.clamp(0, past_length)
+        key_positions = torch.arange(current_length, device=device)
+        valid_keys = key_positions.unsqueeze(0) >= left_padding.unsqueeze(1)
+        mask = mask.bool().unsqueeze(0) & valid_keys.unsqueeze(1)
+        return mask.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
+
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None,
                 freqs_cis: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -719,21 +779,13 @@ class SelfAttention(nn.Module):
         Returns:
             - torch.Tensor: Output tensor of shape (B, T, C).
         """
-        B, T, C = x.size()
-        head_size = C // self.num_heads
+        B, T, _ = x.size()
         
         past_len = 0
         if kv_cache is not None:
             past_len = kv_cache.shape[2]
 
-        q = self.query(x).view(B, T, self.num_heads, head_size).transpose(1, 2)
-        k = self.key(x).view(B, T, self.num_heads, head_size).transpose(1, 2)
-        v = self.value(x).view(B, T, self.num_heads, head_size).transpose(1, 2)
-
-        if bool(getattr(self.config, "rotary_emb", False)):
-            if freqs_cis is None:
-                raise ValueError("RoPE is enabled but no frequency tensor was supplied.")
-            q, k = apply_rotary_emb(q, k, freqs_cis)
+        q, k, v = self._project_qkv(x, freqs_cis)
 
         if kv_cache is not None:
             kv_cache.update(k, v)
@@ -742,39 +794,9 @@ class SelfAttention(nn.Module):
         current_len = k.size(2)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
-        # Construct the attention mask. Training bootstrap targets contain H+1
-        # observations but only H actions, so their final partial block can be
-        # one observation-token group longer than config.max_tokens. Build that
-        # rare extension dynamically to keep the registered mask (and therefore
-        # old checkpoint state) unchanged.
-        required_mask_size = max(past_len + T, current_len)
-        if required_mask_size <= self.mask.size(0):
-            mask = self.mask[past_len:past_len + T, :current_len]
-        else:
-            extended_mask = torch.tril(
-                torch.ones(required_mask_size, required_mask_size, device=att.device, dtype=self.mask.dtype)
-            )
-            mask = extended_mask[past_len:past_len + T, :current_len]
-
-        if valid_context_lengths is not None:
-            # Variable-length caches are left-padded before batching. Exclude
-            # that padding while keeping newly appended keys visible under the
-            # causal mask.
-            valid_context_lengths = torch.as_tensor(
-                valid_context_lengths, device=att.device, dtype=torch.long
-            ).reshape(-1)
-            if valid_context_lengths.numel() != B:
-                raise ValueError(
-                    f"valid_context_lengths has {valid_context_lengths.numel()} entries for batch size {B}."
-                )
-            # These lengths are maintained internally by the world model. Avoid
-            # a per-layer GPU-to-CPU synchronization just to validate their range.
-            valid_context_lengths = valid_context_lengths.clamp(0, past_len)
-            left_padding = past_len - valid_context_lengths
-            key_positions = torch.arange(current_len, device=att.device)
-            valid_keys = key_positions.unsqueeze(0) >= left_padding.unsqueeze(1)
-            mask = mask.bool().unsqueeze(0) & valid_keys.unsqueeze(1)
-            mask = mask.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
+        mask = self._build_attention_mask(
+            B, T, current_len, past_len, att.device, valid_context_lengths
+        )
 
         # Adjust mask for register tokens if they are in use
         if self.use_register_token and self.register_token_num > 0:
@@ -818,21 +840,13 @@ class SelfAttention(nn.Module):
         Returns:
             - torch.Tensor: Attention map of shape (B, num_heads, T, L + T).
         """
-        B, T, C = x.size()
-        head_size = C // self.num_heads
+        B, T, _ = x.size()
 
         past_len = 0
         if kv_cache is not None:
             past_len = kv_cache.shape[2]
 
-        q = self.query(x).view(B, T, self.num_heads, head_size).transpose(1, 2)
-        k = self.key(x).view(B, T, self.num_heads, head_size).transpose(1, 2)
-        v = self.value(x).view(B, T, self.num_heads, head_size).transpose(1, 2)
-
-        if bool(getattr(self.config, "rotary_emb", False)):
-            if freqs_cis is None:
-                raise ValueError("RoPE is enabled but no frequency tensor was supplied.")
-            q, k = apply_rotary_emb(q, k, freqs_cis)
+        q, k, v = self._project_qkv(x, freqs_cis)
 
         if kv_cache is not None:
             kv_cache.update(k, v)
@@ -841,28 +855,9 @@ class SelfAttention(nn.Module):
         current_len = k.size(2)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
-        required_mask_size = max(past_len + T, current_len)
-        if required_mask_size <= self.mask.size(0):
-            mask = self.mask[past_len:past_len + T, :current_len]
-        else:
-            extended_mask = torch.tril(
-                torch.ones(required_mask_size, required_mask_size, device=att.device, dtype=self.mask.dtype)
-            )
-            mask = extended_mask[past_len:past_len + T, :current_len]
-        if valid_context_lengths is not None:
-            valid_context_lengths = torch.as_tensor(
-                valid_context_lengths, device=att.device, dtype=torch.long
-            ).reshape(-1)
-            if valid_context_lengths.numel() != B:
-                raise ValueError(
-                    f"valid_context_lengths has {valid_context_lengths.numel()} entries for batch size {B}."
-                )
-            valid_context_lengths = valid_context_lengths.clamp(0, past_len)
-            left_padding = past_len - valid_context_lengths
-            key_positions = torch.arange(current_len, device=att.device)
-            valid_keys = key_positions.unsqueeze(0) >= left_padding.unsqueeze(1)
-            mask = mask.bool().unsqueeze(0) & valid_keys.unsqueeze(1)
-            mask = mask.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
+        mask = self._build_attention_mask(
+            B, T, current_len, past_len, att.device, valid_context_lengths
+        )
 
         att = att.masked_fill(mask == 0, float('-inf'))
         att = F.softmax(att, dim=-1)

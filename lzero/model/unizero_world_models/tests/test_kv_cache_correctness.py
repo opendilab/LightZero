@@ -22,7 +22,8 @@ import torch
 from easydict import EasyDict
 
 from lzero.model.unizero_world_models.transformer import Transformer, TransformerConfig
-from lzero.model.unizero_world_models.utils import hash_state
+from lzero.model.unizero_world_models.utils import WorldModelOutput, hash_state
+from lzero.model.unizero_world_models.world_model import WorldModel
 from .test_per_sample_is_weights import _build_world_model
 
 
@@ -38,6 +39,21 @@ def _build_tiny_transformer() -> Transformer:
 
 @pytest.mark.unittest
 class TestKVCacheCorrectness:
+
+    def test_mixed_root_output_merge_preserves_batch_order(self):
+        """Split first/continuing roots must be restored to their caller-visible order."""
+        def output(values):
+            tensor = torch.tensor(values, dtype=torch.float32).reshape(-1, 1)
+            return WorldModelOutput(tensor, tensor, tensor, None, tensor, tensor)
+
+        merged = WorldModel._merge_world_model_outputs(
+            [([0, 2], output([1, 3])), ([1], output([2]))],
+            batch_size=3,
+        )
+
+        assert merged.output_sequence[:, 0].tolist() == [1, 2, 3]
+        assert merged.logits_policy[:, 0].tolist() == [1, 2, 3]
+        assert merged.logits_ends is None
 
     def test_transformer_cache_concat_equivalence(self):
         torch.manual_seed(0)

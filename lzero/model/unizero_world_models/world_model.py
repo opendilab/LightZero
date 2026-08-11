@@ -15,7 +15,10 @@ from lzero.model.utils import (calculate_dormant_ratio,
 from torch.distributions import (Categorical, Independent, Normal,
                                  TanhTransform, TransformedDistribution)
 
+from .cache_window import CacheWindowMixin
 from .kv_caching import KeysValues
+from .open_loop import OpenLoopWorldModelMixin
+from .reanalysis_context import ReanalysisContextMixin
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
@@ -25,7 +28,12 @@ from .utils import (LossWithIntermediateLosses, WorldModelOutput, hash_state,
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-class WorldModel(nn.Module):
+class WorldModel(
+        CacheWindowMixin,
+        OpenLoopWorldModelMixin,
+        ReanalysisContextMixin,
+        nn.Module,
+):
     """
     Overview:
         The WorldModel class is responsible for the scalable latent world model of UniZero (https://arxiv.org/abs/2406.10667),
@@ -1444,6 +1452,82 @@ class WorldModel(nn.Module):
 
         return outputs_wm, self.latent_state
 
+    @staticmethod
+    def _slice_batch(value, indices: List[int]):
+        """Select batch entries from tensors, arrays, or Python sequences."""
+        if value is None:
+            return None
+        if isinstance(value, (torch.Tensor, np.ndarray)):
+            return value[indices]
+        return [value[index] for index in indices]
+
+    @staticmethod
+    def _start_pos_value(value, index: int) -> int:
+        """Read one scalar position from scalar or batched input."""
+        if isinstance(value, (int, float)):
+            return int(value)
+        item = value[index]
+        return int(item.item()) if hasattr(item, 'item') else int(item)
+
+    @staticmethod
+    def _merge_output_tensor(
+            chunks: List[Tuple[List[int], WorldModelOutput]],
+            attr: str,
+            batch_size: int,
+    ) -> Optional[torch.Tensor]:
+        """Restore original batch order after mixed root handling."""
+        sample_tensor = getattr(chunks[0][1], attr)
+        if sample_tensor is None:
+            return None
+        for _, output in chunks[1:]:
+            source_tensor = getattr(output, attr)
+            if source_tensor is None:
+                return None
+            if source_tensor.shape[1:] != sample_tensor.shape[1:]:
+                if attr in {'output_sequence', 'logits_policy', 'logits_value'}:
+                    raise RuntimeError(
+                        f'Cannot merge mixed UniZero root batch: {attr} has incompatible shapes '
+                        f'{sample_tensor.shape[1:]} and {source_tensor.shape[1:]}.'
+                    )
+                logging.debug(
+                    'Skipping mixed root batch merge for auxiliary %s: '
+                    'incompatible shapes %s and %s.',
+                    attr,
+                    sample_tensor.shape[1:],
+                    source_tensor.shape[1:],
+                )
+                return None
+        merged = torch.empty(
+            (batch_size, *sample_tensor.shape[1:]),
+            dtype=sample_tensor.dtype,
+            device=sample_tensor.device,
+        )
+        for indices, output in chunks:
+            source_tensor = getattr(output, attr)
+            for local_index, batch_index in enumerate(indices):
+                merged[batch_index].copy_(source_tensor[local_index])
+        return merged
+
+    @classmethod
+    def _merge_world_model_outputs(
+            cls,
+            chunks: List[Tuple[List[int], WorldModelOutput]],
+            batch_size: int,
+    ) -> WorldModelOutput:
+        return WorldModelOutput(
+            **{
+                attr: cls._merge_output_tensor(chunks, attr, batch_size)
+                for attr in (
+                    'output_sequence',
+                    'logits_observations',
+                    'logits_rewards',
+                    'logits_ends',
+                    'logits_policy',
+                    'logits_value',
+                )
+            }
+        )
+
     #@profile
     @torch.no_grad()
     def wm_forward_for_initial_infererence(
@@ -1465,66 +1549,6 @@ class WorldModel(nn.Module):
             - torch.FloatTensor: The outputs from the world model.
         """
         n, num_observations_tokens, _ = last_obs_embeddings.shape
-
-        def _slice_batch(value, indices: List[int]):
-            if value is None:
-                return None
-            if isinstance(value, torch.Tensor):
-                return value[indices]
-            if isinstance(value, np.ndarray):
-                return value[indices]
-            return [value[i] for i in indices]
-
-        def _start_pos_value(value, index: int) -> int:
-            if isinstance(value, (int, float)):
-                return int(value)
-            item = value[index]
-            if hasattr(item, "item"):
-                return int(item.item())
-            return int(item)
-
-        def _merge_world_model_outputs(chunks: List[Tuple[List[int], WorldModelOutput]],
-                                       batch_size: int) -> WorldModelOutput:
-            sample_output = chunks[0][1]
-
-            def _merge_tensor(attr: str):
-                sample_tensor = getattr(sample_output, attr)
-                if sample_tensor is None:
-                    return None
-                for _, output in chunks[1:]:
-                    source_tensor = getattr(output, attr)
-                    if source_tensor is None:
-                        return None
-                    if source_tensor.shape[1:] != sample_tensor.shape[1:]:
-                        if attr in {"output_sequence", "logits_policy", "logits_value"}:
-                            raise RuntimeError(
-                                f"Cannot merge mixed UniZero root batch: {attr} has incompatible shapes "
-                                f"{sample_tensor.shape[1:]} and {source_tensor.shape[1:]}."
-                            )
-                        logging.debug(
-                            f"Skipping mixed root batch merge for auxiliary {attr}: "
-                            f"incompatible shapes {sample_tensor.shape[1:]} and {source_tensor.shape[1:]}."
-                        )
-                        return None
-                merged = torch.empty(
-                    (batch_size, *sample_tensor.shape[1:]),
-                    dtype=sample_tensor.dtype,
-                    device=sample_tensor.device,
-                )
-                for indices, output in chunks:
-                    source_tensor = getattr(output, attr)
-                    for local_idx, batch_idx in enumerate(indices):
-                        merged[batch_idx].copy_(source_tensor[local_idx])
-                return merged
-
-            return WorldModelOutput(
-                output_sequence=_merge_tensor("output_sequence"),
-                logits_observations=_merge_tensor("logits_observations"),
-                logits_rewards=_merge_tensor("logits_rewards"),
-                logits_ends=_merge_tensor("logits_ends"),
-                logits_policy=_merge_tensor("logits_policy"),
-                logits_value=_merge_tensor("logits_value"),
-            )
 
         if current_obs_embeddings is not None:
             ready_env_num = current_obs_embeddings.shape[0]
@@ -1559,26 +1583,26 @@ class WorldModel(nn.Module):
                             chunks.append((
                                 first_indices,
                                 self.wm_forward_for_initial_infererence(
-                                    _slice_batch(last_obs_embeddings, first_indices),
-                                    _slice_batch(batch_action, first_indices),
-                                    _slice_batch(current_obs_embeddings, first_indices),
-                                    _slice_batch(start_pos, first_indices),
-                                    _slice_batch(ready_env_id, first_indices),
+                                    self._slice_batch(last_obs_embeddings, first_indices),
+                                    self._slice_batch(batch_action, first_indices),
+                                    self._slice_batch(current_obs_embeddings, first_indices),
+                                    self._slice_batch(start_pos, first_indices),
+                                    self._slice_batch(ready_env_id, first_indices),
                                 )
                             ))
                         if continuing_indices:
                             chunks.append((
                                 continuing_indices,
                                 self.wm_forward_for_initial_infererence(
-                                    _slice_batch(last_obs_embeddings, continuing_indices),
-                                    _slice_batch(batch_action, continuing_indices),
-                                    _slice_batch(current_obs_embeddings, continuing_indices),
-                                    _slice_batch(start_pos, continuing_indices),
-                                    _slice_batch(ready_env_id, continuing_indices),
+                                    self._slice_batch(last_obs_embeddings, continuing_indices),
+                                    self._slice_batch(batch_action, continuing_indices),
+                                    self._slice_batch(current_obs_embeddings, continuing_indices),
+                                    self._slice_batch(start_pos, continuing_indices),
+                                    self._slice_batch(ready_env_id, continuing_indices),
                                 )
                             ))
                         self.current_infer_env_ids = ready_env_id
-                        return _merge_world_model_outputs(chunks, ready_env_num)
+                        return self._merge_world_model_outputs(chunks, ready_env_num)
                 if first_step_flag:
                     # ------------------------- First Step of an Episode -------------------------
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
@@ -1656,7 +1680,8 @@ class WorldModel(nn.Module):
                             # If using RoPE positional encoding, then at reset, the pos_embed should use the absolute position start_pos[i].
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True, start_pos=_start_pos_value(start_pos, i))
+                                                      is_init_infer=True,
+                                                      start_pos=self._start_pos_value(start_pos, i))
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(self.keys_values_wm_single_env.size)
                             if self.rebuild_kv_window_from_tokens:
@@ -1801,7 +1826,7 @@ class WorldModel(nn.Module):
     #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    search_depth=[], start_pos: int = 0):
+                                    search_depth=None, start_pos: int = 0):
         """
         Perform recurrent inference based on the state-action history.
 
@@ -1813,6 +1838,7 @@ class WorldModel(nn.Module):
             - tuple: A tuple containing output sequence, updated latent state, reward, logits policy, and logits value.
         """
         latest_state, action = state_action_history[-1]
+        search_depth = [] if search_depth is None else search_depth
         ready_env_num = latest_state.shape[0]
 
         self.keys_values_wm_list = []
@@ -1920,528 +1946,26 @@ class WorldModel(nn.Module):
             for index, history in enumerate(self.keys_values_wm_token_context_list)
         ]
 
-    @torch.no_grad()
-    def compute_open_loop_latent_diagnostics(
-            self, obs_embeddings: torch.Tensor, target_obs_embeddings: torch.Tensor,
-            actions: torch.Tensor, mask_padding: torch.Tensor
-    ) -> Dict[str, float]:
-        """Measure teacher-forcing exposure bias with an MCTS-style latent rollout.
-
-        Training predicts each next latent while later tokens still contain encoder outputs from
-        real observations. MCTS instead feeds every predicted latent back into the transformer.
-        This diagnostic runs that open loop with the same exact raw-token rolling-window rule and
-        compares it with the target encoder. It is detached and never contributes to the loss.
-        """
-        if not self.rebuild_kv_window_from_tokens:
-            raise RuntimeError(
-                'Open-loop latent diagnostics currently require rebuild_kv_window_from_tokens=True.'
-            )
-        if self.context_length < 4:
-            raise RuntimeError(
-                'Open-loop rolling diagnostics require context_length >= 4 so an odd-token '
-                'observation-aligned prefix can be retained at a window boundary.'
-            )
-        if self.config.rotary_emb:
-            raise RuntimeError('Open-loop raw-token diagnostics do not support rotary embeddings.')
-        if self.continuous_action_space or self.num_observations_tokens != 1:
-            raise NotImplementedError(
-                'Open-loop latent diagnostics currently support discrete, one-observation-token models.'
-            )
-
-        batch_size = min(int(actions.size(0)), self.open_loop_diagnostic_batch_size)
-        obs_sequence = obs_embeddings.contiguous().view(
-            actions.size(0), -1, self.num_observations_tokens, self.embed_dim
-        )[:batch_size]
-        target_sequence = target_obs_embeddings.contiguous().view(
-            actions.size(0), -1, self.num_observations_tokens, self.embed_dim
-        )[:batch_size]
-        raw_prefix, rollout_start = self._build_open_loop_prefix_context(
-            obs_sequence, actions, batch_size
+    def _log_kv_padding_diagnostics(self) -> None:
+        """Log single-task cache padding and exact-reset counters."""
+        logging.info(
+            'KV-cache padding diagnostics: unequal_batches=%d/%d (%.4f), '
+            'padded_samples=%d/%d (%.4f), padding_tokens=%d, max_padding=%d, '
+            'root_hits=%d/%d (%.4f), exact_reset_batches=%d, exact_reset_samples=%d',
+            self.kv_padding_unequal_batches,
+            self.kv_padding_total_batches,
+            self.kv_padding_unequal_batches / self.kv_padding_total_batches,
+            self.kv_padding_padded_samples,
+            self.kv_padding_total_samples,
+            self.kv_padding_padded_samples / self.kv_padding_total_samples,
+            self.kv_padding_token_count,
+            self.kv_padding_max_tokens,
+            self.root_hit_cnt,
+            self.root_total_query_cnt,
+            self.root_hit_cnt / max(self.root_total_query_cnt, 1),
+            self.exact_kv_reset_batches,
+            self.exact_kv_reset_samples,
         )
-        transition_count = min(
-            int(actions.size(1) - rollout_start),
-            int(obs_sequence.size(1) - 1 - rollout_start),
-            int(target_sequence.size(1) - 1 - rollout_start),
-            int(mask_padding.size(1) - 1 - rollout_start),
-        )
-        if transition_count <= 0:
-            return {
-                'open_loop_latent_mse_mean': 0.0,
-                'open_loop_latent_mse_first': 0.0,
-                'open_loop_latent_mse_middle': 0.0,
-                'open_loop_latent_mse_last': 0.0,
-                'rolling_teacher_latent_mse_mean': 0.0,
-                'rolling_teacher_latent_mse_first': 0.0,
-                'rolling_teacher_latent_mse_middle': 0.0,
-                'rolling_teacher_latent_mse_last': 0.0,
-                'teacher_forced_latent_mse_mean': 0.0,
-                'teacher_forced_latent_mse_first': 0.0,
-                'rolling_context_ratio': 0.0,
-                'open_loop_exposure_ratio': 0.0,
-                'open_loop_total_ratio': 0.0,
-            }
-
-        rollout_end = rollout_start + transition_count
-        action_sequence = actions[:batch_size, rollout_start:rollout_end]
-        valid_mask = mask_padding[
-            :batch_size, rollout_start + 1:rollout_end + 1
-        ].bool()
-        target_sequence = target_sequence[
-            :, rollout_start + 1:rollout_end + 1
-        ]
-
-        was_training = self.training
-        self.eval()
-        try:
-            # Recompute the teacher-forced baseline in the same eval-mode/no-dropout regime as
-            # the open-loop rollout.  Reusing the learner's training-mode outputs would fold
-            # independent dropout noise into the exposure-bias ratio, including at horizon one.
-            teacher_outputs = self.forward(
-                {
-                    'obs_embeddings_and_act_tokens': (
-                        obs_sequence[:, :rollout_end + 1],
-                        actions[:batch_size, :rollout_end].unsqueeze(-1),
-                    )
-                },
-                start_pos=[0] * batch_size,
-            )
-            teacher_predictions = teacher_outputs.logits_observations[
-                :, rollout_start:rollout_end
-            ].view(
-                batch_size, transition_count, self.num_observations_tokens, self.embed_dim
-            )
-
-            open_loop_cache = self.transformer.generate_empty_keys_values(
-                n=batch_size, max_tokens=self.context_length
-            )
-            rolling_teacher_cache = self.transformer.generate_empty_keys_values(
-                n=batch_size, max_tokens=self.context_length
-            )
-            open_loop_raw_context = raw_prefix.detach()
-            rolling_teacher_raw_context = raw_prefix.detach()
-            self.forward(
-                {'obs_embeddings': open_loop_raw_context},
-                past_keys_values=open_loop_cache,
-                is_init_infer=True,
-                start_pos=0,
-            )
-            self.forward(
-                {'obs_embeddings': rolling_teacher_raw_context},
-                past_keys_values=rolling_teacher_cache,
-                is_init_infer=True,
-                start_pos=0,
-            )
-
-            open_loop_predictions = []
-            rolling_teacher_predictions = []
-            keep_tokens = self.context_length - 3
-
-            def rebuild_if_full(cache, raw_context):
-                if cache.size < self.context_length - 1:
-                    return cache, raw_context
-                raw_context = raw_context[:, -keep_tokens:]
-                cache = self.transformer.generate_empty_keys_values(
-                    n=batch_size, max_tokens=self.context_length
-                )
-                positioned_context = raw_context + self._lookup_position_embeddings(
-                    torch.arange(raw_context.size(1), device=self.device)
-                )
-                self.transformer(positioned_context, past_keys_values=cache)
-                return cache, raw_context
-
-            for step in range(transition_count):
-                action_tokens = action_sequence[:, step].reshape(batch_size, 1)
-                open_loop_action_output = self.forward(
-                    {'act_tokens': action_tokens},
-                    past_keys_values=open_loop_cache,
-                    is_init_infer=True,
-                    start_pos=0,
-                )
-                rolling_teacher_action_output = self.forward(
-                    {'act_tokens': action_tokens},
-                    past_keys_values=rolling_teacher_cache,
-                    is_init_infer=True,
-                    start_pos=0,
-                )
-                predicted_observation = open_loop_action_output.logits_observations
-                true_next_observation = obs_sequence[:, rollout_start + step + 1]
-                open_loop_predictions.append(predicted_observation)
-                rolling_teacher_predictions.append(
-                    rolling_teacher_action_output.logits_observations
-                )
-
-                embedded_action = self.act_embedding_table(action_tokens)
-                open_loop_raw_context = torch.cat(
-                    (
-                        open_loop_raw_context,
-                        embedded_action.detach(),
-                        predicted_observation.detach(),
-                    ),
-                    dim=1,
-                )
-                rolling_teacher_raw_context = torch.cat(
-                    (
-                        rolling_teacher_raw_context,
-                        embedded_action.detach(),
-                        true_next_observation.detach(),
-                    ),
-                    dim=1,
-                )
-                self.forward(
-                    {'obs_embeddings': predicted_observation},
-                    past_keys_values=open_loop_cache,
-                    is_init_infer=True,
-                    start_pos=0,
-                )
-                self.forward(
-                    {'obs_embeddings': true_next_observation},
-                    past_keys_values=rolling_teacher_cache,
-                    is_init_infer=True,
-                    start_pos=0,
-                )
-                open_loop_cache, open_loop_raw_context = rebuild_if_full(
-                    open_loop_cache, open_loop_raw_context
-                )
-                rolling_teacher_cache, rolling_teacher_raw_context = rebuild_if_full(
-                    rolling_teacher_cache, rolling_teacher_raw_context
-                )
-        finally:
-            self.train(was_training)
-
-        open_loop_predictions = torch.stack(open_loop_predictions, dim=1)
-        rolling_teacher_predictions = torch.stack(rolling_teacher_predictions, dim=1)
-        open_loop_per_sample = F.mse_loss(
-            open_loop_predictions, target_sequence, reduction='none'
-        ).mean(dim=(-1, -2))
-        rolling_teacher_per_sample = F.mse_loss(
-            rolling_teacher_predictions, target_sequence, reduction='none'
-        ).mean(dim=(-1, -2))
-        teacher_per_sample = F.mse_loss(
-            teacher_predictions, target_sequence, reduction='none'
-        ).mean(dim=(-1, -2))
-
-        def masked_horizon_mean(errors: torch.Tensor, horizon: int) -> torch.Tensor:
-            horizon_mask = valid_mask[:, horizon]
-            if not horizon_mask.any():
-                return errors.new_tensor(0.)
-            return errors[horizon_mask, horizon].mean()
-
-        valid_count = valid_mask.sum().clamp_min(1)
-        open_loop_mean = (open_loop_per_sample * valid_mask).sum() / valid_count
-        rolling_teacher_mean = (rolling_teacher_per_sample * valid_mask).sum() / valid_count
-        teacher_mean = (teacher_per_sample * valid_mask).sum() / valid_count
-        valid_horizons = valid_mask.any(dim=0).nonzero(as_tuple=False).flatten()
-        last_horizon = int(valid_horizons[-1].item()) if valid_horizons.numel() else 0
-        middle_horizon = last_horizon // 2
-        return {
-            'open_loop_latent_mse_mean': float(open_loop_mean.item()),
-            'open_loop_latent_mse_first': float(masked_horizon_mean(open_loop_per_sample, 0).item()),
-            'open_loop_latent_mse_middle': float(
-                masked_horizon_mean(open_loop_per_sample, middle_horizon).item()
-            ),
-            'open_loop_latent_mse_last': float(
-                masked_horizon_mean(open_loop_per_sample, last_horizon).item()
-            ),
-            'rolling_teacher_latent_mse_mean': float(rolling_teacher_mean.item()),
-            'rolling_teacher_latent_mse_first': float(
-                masked_horizon_mean(rolling_teacher_per_sample, 0).item()
-            ),
-            'rolling_teacher_latent_mse_middle': float(
-                masked_horizon_mean(rolling_teacher_per_sample, middle_horizon).item()
-            ),
-            'rolling_teacher_latent_mse_last': float(
-                masked_horizon_mean(rolling_teacher_per_sample, last_horizon).item()
-            ),
-            'teacher_forced_latent_mse_mean': float(teacher_mean.item()),
-            'teacher_forced_latent_mse_first': float(
-                masked_horizon_mean(teacher_per_sample, 0).item()
-            ),
-            'rolling_context_ratio': float(
-                (rolling_teacher_mean / teacher_mean.clamp_min(1e-12)).item()
-            ),
-            'open_loop_exposure_ratio': float(
-                (open_loop_mean / rolling_teacher_mean.clamp_min(1e-12)).item()
-            ),
-            'open_loop_total_ratio': float(
-                (open_loop_mean / teacher_mean.clamp_min(1e-12)).item()
-            ),
-        }
-
-    def _build_open_loop_prefix_context(
-            self, obs_sequence: torch.Tensor, actions: torch.Tensor, batch_size: int
-    ) -> Tuple[torch.Tensor, int]:
-        """Build an observation-aligned teacher prefix for an open-loop rollout.
-
-        Online UniZero normally enters MCTS with a rolling history, while the original auxiliary
-        always started from a single observation.  A prefix of ``p`` transitions constructs
-        ``[o0, a0, ..., a{p-1}, op]`` and then retains the same observation-aligned raw-token
-        window used by inference.  The prefix is context only; supervised rollout targets begin
-        at action ``p``.
-        """
-        prefix_transitions = min(
-            self.open_loop_prefix_transitions,
-            int(actions.size(1)),
-            max(0, int(obs_sequence.size(1) - 1)),
-        )
-        context_parts = [obs_sequence[:batch_size, 0]]
-        for prefix_step in range(prefix_transitions):
-            action_tokens = actions[:batch_size, prefix_step].reshape(batch_size, 1)
-            context_parts.extend((
-                self.act_embedding_table(action_tokens),
-                obs_sequence[:batch_size, prefix_step + 1],
-            ))
-        raw_context = torch.cat(context_parts, dim=1)
-        keep_tokens = self.context_length - 3
-        if raw_context.size(1) > keep_tokens:
-            raw_context = raw_context[:, -keep_tokens:]
-        return raw_context, prefix_transitions
-
-    def compute_open_loop_consistency_loss(
-            self, obs_embeddings: torch.Tensor, target_obs_embeddings: torch.Tensor,
-            actions: torch.Tensor, mask_padding: torch.Tensor
-    ) -> torch.Tensor:
-        """Train on a short MCTS-style predicted-latent rollout without mutable KV caches.
-
-        The main UniZero learner is fully teacher-forced.  This optional auxiliary path starts
-        from one real root and recursively feeds each predicted observation latent into the next
-        transition, matching MuZero/MCTS exposure.  It rebuilds the short raw sequence on each
-        step instead of mutating inference caches, preserving the complete autograd graph.
-        """
-        if not self.rebuild_kv_window_from_tokens:
-            raise RuntimeError(
-                'Open-loop consistency currently requires rebuild_kv_window_from_tokens=True.'
-            )
-        if self.context_length < 4:
-            raise RuntimeError('Open-loop consistency requires context_length >= 4.')
-        if self.config.rotary_emb:
-            raise RuntimeError('Open-loop consistency does not currently support rotary embeddings.')
-        if self.continuous_action_space or self.num_observations_tokens != 1:
-            raise NotImplementedError(
-                'Open-loop consistency currently supports discrete, one-observation-token models.'
-            )
-
-        batch_size = min(int(actions.size(0)), self.open_loop_consistency_batch_size)
-        obs_sequence = obs_embeddings.contiguous().view(
-            actions.size(0), -1, self.num_observations_tokens, self.embed_dim
-        )[:batch_size]
-        target_sequence = target_obs_embeddings.contiguous().view(
-            actions.size(0), -1, self.num_observations_tokens, self.embed_dim
-        )[:batch_size]
-        raw_context, rollout_start = self._build_open_loop_prefix_context(
-            obs_sequence, actions, batch_size
-        )
-        transition_count = min(
-            self.open_loop_consistency_horizon,
-            int(actions.size(1) - rollout_start),
-            int(obs_sequence.size(1) - 1 - rollout_start),
-            int(target_sequence.size(1) - 1 - rollout_start),
-            int(mask_padding.size(1) - 1 - rollout_start),
-        )
-        if transition_count <= 0:
-            return obs_embeddings.sum() * 0.
-
-        rollout_end = rollout_start + transition_count
-        action_sequence = actions[:batch_size, rollout_start:rollout_end]
-        target_sequence = target_sequence[:, rollout_start + 1:rollout_end + 1].detach()
-        valid_mask = mask_padding[:batch_size, rollout_start + 1:rollout_end + 1].bool()
-        keep_tokens = self.context_length - 3
-        predictions = []
-
-        # This auxiliary loss targets evaluation/MCTS dynamics, so disable dropout while retaining
-        # gradients.  The already-computed main learner graph keeps its original training-mode mask.
-        was_training = self.training
-        self.eval()
-        try:
-            for step in range(transition_count):
-                action_tokens = action_sequence[:, step].reshape(batch_size, 1)
-                embedded_action = self.act_embedding_table(action_tokens)
-                raw_context = torch.cat((raw_context, embedded_action), dim=1)
-                positioned_context = raw_context + self._lookup_position_embeddings(
-                    torch.arange(raw_context.size(1), device=self.device)
-                )
-                hidden = self.transformer(positioned_context)
-                predicted_observation = self.head_observations(
-                    hidden, num_steps=raw_context.size(1), prev_steps=0
-                )[:, -1:].contiguous()
-                predictions.append(predicted_observation)
-                raw_context = torch.cat((raw_context, predicted_observation), dim=1)
-                if raw_context.size(1) >= self.context_length - 1:
-                    raw_context = raw_context[:, -keep_tokens:]
-        finally:
-            self.train(was_training)
-
-        predictions = torch.stack(predictions, dim=1)
-        per_transition_loss = F.mse_loss(
-            predictions, target_sequence, reduction='none'
-        ).mean(dim=(-1, -2))
-        valid_count = valid_mask.sum().clamp_min(1)
-        return (per_transition_loss * valid_mask).sum() / valid_count
-
-    def compute_open_loop_recurrent_loss(
-            self, obs_embeddings: torch.Tensor, target_obs_embeddings: torch.Tensor,
-            actions: torch.Tensor, mask_padding: torch.Tensor,
-            labels_rewards: torch.Tensor, labels_policy: torch.Tensor,
-            labels_value: torch.Tensor
-    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """Mirror MuZero's learner exposure on a short differentiable rollout.
-
-        Unlike latent-only consistency, this objective also trains reward after each action and
-        policy/value after each recursively predicted observation.  The raw sequence is recomputed
-        at every half-step, which matches recurrent inference while preserving the full autograd
-        graph and avoiding mutable KV caches.
-        """
-        if not self.rebuild_kv_window_from_tokens:
-            raise RuntimeError(
-                'Open-loop recurrent training currently requires rebuild_kv_window_from_tokens=True.'
-            )
-        if self.context_length < 4:
-            raise RuntimeError('Open-loop recurrent training requires context_length >= 4.')
-        if self.config.rotary_emb:
-            raise RuntimeError('Open-loop recurrent training does not currently support rotary embeddings.')
-        if self.continuous_action_space or self.num_observations_tokens != 1:
-            raise NotImplementedError(
-                'Open-loop recurrent training currently supports discrete, one-observation-token models.'
-            )
-
-        batch_size = min(int(actions.size(0)), self.open_loop_consistency_batch_size)
-        obs_sequence = obs_embeddings.contiguous().view(
-            actions.size(0), -1, self.num_observations_tokens, self.embed_dim
-        )[:batch_size]
-        target_obs_sequence = target_obs_embeddings.contiguous().view(
-            actions.size(0), -1, self.num_observations_tokens, self.embed_dim
-        )[:batch_size]
-        raw_context, rollout_start = self._build_open_loop_prefix_context(
-            obs_sequence, actions, batch_size
-        )
-        transition_count = min(
-            self.open_loop_consistency_horizon,
-            int(actions.size(1) - rollout_start),
-            int(obs_sequence.size(1) - 1 - rollout_start),
-            int(target_obs_sequence.size(1) - 1 - rollout_start),
-            int(mask_padding.size(1) - 1 - rollout_start),
-        )
-        zero = obs_embeddings.sum() * 0.
-        if transition_count <= 0:
-            components = {
-                name: zero
-                for name in ('latent', 'reward', 'value', 'policy', 'policy_ce', 'policy_entropy')
-            }
-            return zero, components
-
-        rollout_end = rollout_start + transition_count
-        action_sequence = actions[:batch_size, rollout_start:rollout_end]
-        target_observations = target_obs_sequence[
-            :batch_size, rollout_start + 1:rollout_end + 1
-        ].detach()
-        reward_targets = labels_rewards.view(actions.size(0), actions.size(1), -1)[
-            :batch_size, rollout_start:rollout_end
-        ].detach()
-        policy_targets = labels_policy.view(actions.size(0), actions.size(1), -1)[
-            :batch_size, rollout_start + 1:rollout_end + 1
-        ].detach()
-        value_targets = labels_value.view(actions.size(0), actions.size(1), -1)[
-            :batch_size, rollout_start + 1:rollout_end + 1
-        ].detach()
-        # A transition reward belongs to the current valid state/action, whereas the latent,
-        # value and policy targets belong to the resulting next state.  These masks differ at
-        # an episode boundary: the terminal transition reward is still a real training target
-        # even when there is no valid next-state target.  Using only the shifted state mask here
-        # silently discarded that final reward and did not match MuZero's recurrent unroll.
-        transition_valid_mask = mask_padding[
-            :batch_size, rollout_start:rollout_end
-        ].bool()
-        state_valid_mask = mask_padding[
-            :batch_size, rollout_start + 1:rollout_end + 1
-        ].bool()
-
-        keep_tokens = self.context_length - 3
-        predicted_observations, reward_logits, policy_logits, value_logits = [], [], [], []
-
-        was_training = self.training
-        self.eval()
-        try:
-            for step in range(transition_count):
-                action_tokens = action_sequence[:, step].reshape(batch_size, 1)
-                raw_context = torch.cat((raw_context, self.act_embedding_table(action_tokens)), dim=1)
-                positioned_context = raw_context + self._lookup_position_embeddings(
-                    torch.arange(raw_context.size(1), device=self.device)
-                )
-                action_hidden = self.transformer(positioned_context)
-                predicted_observation = self.head_observations(
-                    action_hidden, num_steps=raw_context.size(1), prev_steps=0
-                )[:, -1:].contiguous()
-                predicted_observations.append(predicted_observation)
-                reward_logits.append(self.head_rewards(
-                    action_hidden, num_steps=raw_context.size(1), prev_steps=0
-                )[:, -1])
-
-                raw_context = torch.cat((raw_context, predicted_observation), dim=1)
-                positioned_context = raw_context + self._lookup_position_embeddings(
-                    torch.arange(raw_context.size(1), device=self.device)
-                )
-                state_hidden = self.transformer(positioned_context)
-                next_policy_logits = self.head_policy(
-                    state_hidden, num_steps=raw_context.size(1), prev_steps=0
-                )[:, -1]
-                if self.use_policy_logits_clip:
-                    next_policy_logits = self._apply_policy_logits_control(next_policy_logits)
-                policy_logits.append(next_policy_logits)
-                value_logits.append(self.head_value(
-                    state_hidden, num_steps=raw_context.size(1), prev_steps=0
-                )[:, -1])
-
-                if raw_context.size(1) >= self.context_length - 1:
-                    raw_context = raw_context[:, -keep_tokens:]
-        finally:
-            self.train(was_training)
-
-        predicted_observations = torch.stack(predicted_observations, dim=1)
-        reward_logits = torch.stack(reward_logits, dim=1)
-        policy_logits = torch.stack(policy_logits, dim=1)
-        value_logits = torch.stack(value_logits, dim=1)
-
-        latent_loss = F.mse_loss(
-            predicted_observations, target_observations, reduction='none'
-        ).mean(dim=(-1, -2))
-        reward_loss = -(F.log_softmax(reward_logits, dim=-1) * reward_targets).sum(dim=-1)
-        value_loss = -(F.log_softmax(value_logits, dim=-1) * value_targets).sum(dim=-1)
-        policy_logits_for_loss = policy_logits
-        if self.use_policy_loss_temperature and self.policy_loss_temperature != 1.0:
-            policy_logits_for_loss = policy_logits_for_loss / self.policy_loss_temperature
-        policy_ce = -(F.log_softmax(policy_logits_for_loss, dim=-1) * policy_targets).sum(dim=-1)
-        policy_probs = F.softmax(policy_logits_for_loss, dim=-1)
-        policy_entropy = -(policy_probs * F.log_softmax(policy_logits_for_loss, dim=-1)).sum(dim=-1)
-        transition_mask = transition_valid_mask.to(latent_loss.dtype)
-        state_mask = state_valid_mask.to(latent_loss.dtype)
-        reward_discounts = self.gamma ** torch.arange(
-            transition_count, device=transition_mask.device, dtype=latent_loss.dtype
-        )
-        state_discounts = self.gamma ** torch.arange(
-            1, transition_count + 1, device=state_mask.device, dtype=latent_loss.dtype
-        )
-
-        def masked_discounted_mean(
-                values: torch.Tensor, mask: torch.Tensor, discounts: torch.Tensor
-        ) -> torch.Tensor:
-            return (values * mask * discounts).sum() / mask.sum().clamp_min(1)
-
-        policy_ce_mean = masked_discounted_mean(policy_ce, state_mask, state_discounts)
-        policy_entropy_mean = masked_discounted_mean(policy_entropy, state_mask, state_discounts)
-        components = {
-            'latent': masked_discounted_mean(latent_loss, state_mask, state_discounts),
-            'reward': masked_discounted_mean(reward_loss, transition_mask, reward_discounts),
-            'value': masked_discounted_mean(value_loss, state_mask, state_discounts),
-            'policy': policy_ce_mean - self.policy_entropy_weight * policy_entropy_mean,
-            'policy_ce': policy_ce_mean,
-            'policy_entropy': policy_entropy_mean,
-        }
-        total = (
-            10. * components['latent']
-            + components['reward']
-            + 0.5 * components['value']
-            + components['policy']
-        )
-        return total, components
 
     #@profile
     def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
@@ -2468,24 +1992,7 @@ class WorldModel(nn.Module):
             self.kv_padding_token_count += sum(padding_sizes)
             self.kv_padding_max_tokens = max(self.kv_padding_max_tokens, max(padding_sizes))
         if self.kv_padding_total_batches % 50000 == 0:
-            logging.info(
-                "KV-cache padding diagnostics: unequal_batches=%d/%d (%.4f), "
-                "padded_samples=%d/%d (%.4f), padding_tokens=%d, max_padding=%d, "
-                "root_hits=%d/%d (%.4f), exact_reset_batches=%d, exact_reset_samples=%d",
-                self.kv_padding_unequal_batches,
-                self.kv_padding_total_batches,
-                self.kv_padding_unequal_batches / self.kv_padding_total_batches,
-                self.kv_padding_padded_samples,
-                self.kv_padding_total_samples,
-                self.kv_padding_padded_samples / self.kv_padding_total_samples,
-                self.kv_padding_token_count,
-                self.kv_padding_max_tokens,
-                self.root_hit_cnt,
-                self.root_total_query_cnt,
-                self.root_hit_cnt / max(self.root_total_query_cnt, 1),
-                self.exact_kv_reset_batches,
-                self.exact_kv_reset_samples,
-            )
+            self._log_kv_padding_diagnostics()
 
         # Iterate over each layer of the transformer
         for layer in range(self.num_layers):
@@ -2525,7 +2032,8 @@ class WorldModel(nn.Module):
 
     #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             search_depth=[], valid_context_lengths=None, env_ids: Optional[List[int]] = None):
+                             search_depth=None, valid_context_lengths=None,
+                             env_ids: Optional[List[int]] = None):
         """
         Update the cache context with the given latent state.
 
@@ -2557,57 +2065,17 @@ class WorldModel(nn.Module):
                 for i in range(latent_state.size(0))
             ]
 
-        # Rebuild every overflowing sample in one batched transformer call.  A
-        # per-sample loop is numerically equivalent but turns an 8-env/MCTS
-        # batch into eight serial GPU launches at every window boundary.
-        exact_reset_indices = []
         exact_reset_batch = None
-        retained_token_contexts = {}
         if self.exact_kv_window_reset or self.rebuild_kv_window_from_tokens:
-            exact_reset_indices = [
-                i for i, size in enumerate(effective_sizes)
-                if size >= self.context_length - 1
-            ]
-            if exact_reset_indices:
-                self.exact_kv_reset_batches += 1
-                self.exact_kv_reset_samples += len(exact_reset_indices)
-                exact_reset_batch = self.transformer.generate_empty_keys_values(
-                    n=len(exact_reset_indices), max_tokens=self.context_length
-                )
-                if self.rebuild_kv_window_from_tokens:
-                    if len(self.keys_values_wm_token_context_list) != latent_state.size(0):
-                        raise RuntimeError(
-                            'Raw token contexts are missing for an overflowing KV-cache batch.'
-                        )
-                    keep_tokens = self.context_length - 3
-                    for sample_index in exact_reset_indices:
-                        history = self.keys_values_wm_token_context_list[sample_index]
-                        if history.size(0) < keep_tokens:
-                            raise RuntimeError(
-                                f'KV cache reports {effective_sizes[sample_index]} tokens but raw history '
-                                f'contains only {history.size(0)}; cannot rebuild exactly.'
-                            )
-                        retained_token_contexts[sample_index] = history[-keep_tokens:]
-                    reset_sequences = torch.stack([
-                        retained_token_contexts[index] for index in exact_reset_indices
-                    ])
-                else:
-                    reset_sequences = latent_state[exact_reset_indices]
-                reset_start_pos = 0
-                if not self.config.rotary_emb:
-                    reset_sequences = reset_sequences + self._lookup_position_embeddings(
-                        torch.arange(reset_sequences.size(1), device=self.device)
-                    )
-                    reset_start_pos = None
-                # Only the transformer's K/V side effect is needed.  Running
-                # observation/reward/policy/value heads here would discard all
-                # four outputs and materially inflate search-time cost.
-                self.transformer(
-                    reset_sequences,
-                    past_keys_values=exact_reset_batch,
-                    start_pos=reset_start_pos,
-                )
-        exact_reset_offsets = {sample_index: offset for offset, sample_index in enumerate(exact_reset_indices)}
+            exact_reset_batch = self._prepare_exact_cache_resets(
+                latent_state, effective_sizes
+            )
+        exact_reset_offsets = (
+            exact_reset_batch.offsets if exact_reset_batch is not None else {}
+        )
+        retained_token_contexts = (
+            exact_reset_batch.retained_contexts if exact_reset_batch is not None else {}
+        )
 
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
@@ -2618,25 +2086,12 @@ class WorldModel(nn.Module):
             effective_size = effective_sizes[i]
 
             if i in exact_reset_offsets:
-                # Rebuild either the retained raw rolling window (exact absolute
-                # position semantics) or the diagnostic latest-observation-only
-                # hard reset. Both avoid the invalid algebraic K/V shift below.
-                self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
-                    n=1, max_tokens=context_length
+                # Rebuild the exact retained raw window (or the configured
+                # latest-observation hard reset) instead of algebraically
+                # shifting contextual K/V projections.
+                self.keys_values_wm_single_env = self._copy_exact_cache_reset(
+                    exact_reset_batch, i
                 )
-                batch_offset = exact_reset_offsets[i]
-                for source_layer, destination_layer in zip(
-                    exact_reset_batch._keys_values,
-                    self.keys_values_wm_single_env._keys_values,
-                ):
-                    destination_layer._k_cache._cache.copy_(
-                        source_layer._k_cache._cache[batch_offset:batch_offset + 1]
-                    )
-                    destination_layer._v_cache._cache.copy_(
-                        source_layer._v_cache._cache[batch_offset:batch_offset + 1]
-                    )
-                    destination_layer._k_cache._size = source_layer._k_cache._size
-                    destination_layer._v_cache._size = source_layer._v_cache._size
             elif not is_init_infer:
                 # ============ Internal Node ============
                 # Retrieve KV from global KV cache self.keys_values_wm to single environment KV cache self.keys_values_wm_single_env, ensuring correct positional encoding
@@ -2836,262 +2291,6 @@ class WorldModel(nn.Module):
                         valid_keys = self.kv_cache_manager.recur_pool._key_to_index
                         for stale_key in self.past_token_context_recurrent_infer.keys() - valid_keys.keys():
                             del self.past_token_context_recurrent_infer[stale_key]
-
-    def build_reanalysis_root_token_contexts(
-            self,
-            latent_state_roots,
-            batch_actions,
-            roots_per_sequence: int,
-            history_latent_segment=None,
-            history_action_segment=None,
-            task_id=None,
-    ):
-        """Build the exact online-style raw-token window for every replay root.
-
-        Replay target inference evaluates an entire H+1 observation sequence at
-        once, but MCTS later receives the raw observation embeddings as roots.
-        Without explicitly carrying these contexts across that boundary, the
-        first recurrent edge of every replay tree starts from a one-token cache.
-        """
-        if task_id is not None and getattr(self, 'task_embed_option', None) not in (None, 'none'):
-            raise NotImplementedError(
-                'Replay-root raw-token contexts do not yet support task_embed_option='
-                f'{self.task_embed_option!r}; use no task-token conditioning or disable '
-                'contextual reanalysis/bootstrap targets.'
-            )
-        roots = torch.as_tensor(latent_state_roots, device=self.device)
-        if roots_per_sequence <= 0 or roots.size(0) % roots_per_sequence != 0:
-            raise ValueError(
-                'Reanalysis roots must form complete fixed-length sequences: '
-                f'root_count={roots.size(0)}, roots_per_sequence={roots_per_sequence}.'
-            )
-        sequence_count = roots.size(0) // roots_per_sequence
-        actions = torch.as_tensor(batch_actions, device=self.device)
-        if actions.ndim < 2 or actions.size(0) != sequence_count:
-            raise ValueError(
-                'Reanalysis actions must align with root sequences: '
-                f'action_shape={tuple(actions.shape)}, sequence_count={sequence_count}.'
-            )
-        if actions.size(1) < roots_per_sequence - 1:
-            raise ValueError(
-                'Each replay sequence needs one action between adjacent roots: '
-                f'{actions.size(1)} < {roots_per_sequence - 1}.'
-            )
-
-        history_latent_segment = history_latent_segment or [[] for _ in range(sequence_count)]
-        history_action_segment = history_action_segment or [[] for _ in range(sequence_count)]
-        if not (
-            len(history_latent_segment) == len(history_action_segment) == sequence_count
-        ):
-            raise ValueError('Replay history observations/actions must align with root sequences.')
-
-        root_contexts = []
-        keep_tokens = self.context_length - 3
-        if keep_tokens <= 0:
-            raise ValueError(
-                f'UniZero recurrent context_length must reserve at least one raw token, got {self.context_length}.'
-            )
-
-        def _normalize_action(action):
-            action_tensor = torch.as_tensor(action, device=self.device)
-            if self.continuous_action_space:
-                return action_tensor.to(dtype=roots.dtype).reshape(-1)
-            return int(action_tensor.reshape(-1)[0].item())
-
-        def _embed_action(action):
-            if self.continuous_action_space:
-                action_tensor = torch.as_tensor(
-                    action, device=self.device, dtype=roots.dtype
-                ).reshape(1, -1)
-                action_embedding = self.act_embedding_table
-                if isinstance(action_embedding, nn.ModuleList):
-                    if task_id is None:
-                        raise ValueError(
-                            'Continuous multi-task action embeddings require an explicit task_id.'
-                        )
-                    action_embedding = action_embedding[task_id]
-            else:
-                action_tensor = torch.as_tensor([action], device=self.device).long()
-                action_embedding = self.act_embedding_table
-            return action_embedding(action_tensor).reshape(-1, self.embed_dim)
-
-        for sequence_index in range(sequence_count):
-            prefix_latents = history_latent_segment[sequence_index]
-            prefix_actions = history_action_segment[sequence_index]
-            if len(prefix_latents) != len(prefix_actions):
-                raise ValueError(
-                    'Every historical observation must have its outgoing replay action: '
-                    f'{len(prefix_latents)} != {len(prefix_actions)}.'
-                )
-
-            observation_history = [
-                torch.as_tensor(latent, device=self.device).reshape(-1, self.embed_dim)
-                for latent in prefix_latents
-            ]
-            action_history = [_normalize_action(action) for action in prefix_actions]
-
-            for root_offset in range(roots_per_sequence):
-                current_root = roots[
-                    sequence_index * roots_per_sequence + root_offset
-                ].reshape(-1, self.embed_dim)
-                token_parts = []
-                for observation, action in zip(observation_history, action_history):
-                    token_parts.append(observation)
-                    token_parts.append(_embed_action(action))
-                token_parts.append(current_root)
-                raw_context = torch.cat(token_parts, dim=0).detach()
-                if raw_context.size(0) >= self.context_length - 1:
-                    raw_context = raw_context[-keep_tokens:]
-                root_contexts.append(raw_context)
-
-                if root_offset < roots_per_sequence - 1:
-                    observation_history.append(current_root)
-                    action_history.append(_normalize_action(actions[sequence_index, root_offset]))
-
-        return root_contexts
-
-    def _context_prediction_head(self, name, task_id=None):
-        """Select the prediction head matching a contextual replay-root task."""
-        multi_task_head = getattr(self, f'{name}_multi_task', None)
-        if task_id is not None and multi_task_head is not None and not (
-                getattr(self, 'use_moe_head', False) or getattr(self, 'use_softmoe_head', False)
-        ):
-            head_index = 0 if getattr(self, 'share_head', False) else int(task_id)
-            return multi_task_head[head_index]
-        return getattr(self, name)
-
-    @torch.no_grad()
-    def seed_reanalysis_root_caches(
-            self, latent_state_roots, root_token_contexts, task_id=None
-    ):
-        """Materialize replay-root K/V entries and return matching root policy logits.
-
-        The root prior and the recurrent K/V state must describe the same history.  Returning
-        the policy logits from this exact prefix forward prevents reanalysis from combining a
-        prior produced by the sampled-unroll context with a recurrent search seeded from the
-        replay history context.
-        """
-        if len(latent_state_roots) != len(root_token_contexts):
-            raise ValueError(
-                'Replay root states and token contexts must have equal lengths: '
-                f'{len(latent_state_roots)} != {len(root_token_contexts)}.'
-            )
-        if not root_token_contexts:
-            return []
-        if not self.reanalyze_phase:
-            raise RuntimeError('Replay-root caches may only be seeded during reanalysis.')
-
-        root_states = torch.as_tensor(latent_state_roots, device=self.device)
-        length_groups = {}
-        for index, context in enumerate(root_token_contexts):
-            context = torch.as_tensor(context, device=self.device).reshape(-1, self.embed_dim)
-            if context.size(0) <= 0 or context.size(0) > self.context_length - 2:
-                raise ValueError(
-                    'A seeded replay-root context must leave room for action and next observation: '
-                    f'length={context.size(0)}, context_length={self.context_length}.'
-                )
-            length_groups.setdefault(context.size(0), []).append((index, context))
-
-        root_policy_logits = [None] * len(root_token_contexts)
-        for context_length, entries in length_groups.items():
-            indices = [index for index, _ in entries]
-            raw_context_batch = torch.stack([context for _, context in entries])
-            positioned_context = raw_context_batch
-            transformer_start_pos = 0
-            if not self.config.rotary_emb:
-                positioned_context = positioned_context + self._lookup_position_embeddings(
-                    torch.arange(context_length, device=self.device)
-                )
-                transformer_start_pos = None
-
-            seeded_cache = self.transformer.generate_empty_keys_values(
-                n=len(indices), max_tokens=self.context_length
-            )
-            hidden = self.transformer(
-                positioned_context,
-                past_keys_values=seeded_cache,
-                start_pos=transformer_start_pos,
-                task_id=0 if task_id is None else int(task_id),
-            )
-            contextual_policy_logits = self._context_prediction_head(
-                'head_policy', task_id
-            )(
-                hidden, num_steps=context_length, prev_steps=0
-            )[:, -1]
-            if self.use_policy_logits_clip:
-                contextual_policy_logits = self._apply_policy_logits_control(
-                    contextual_policy_logits
-                )
-            contextual_policy_logits = contextual_policy_logits.detach().cpu().numpy()
-            for local_index, root_index in enumerate(indices):
-                root_policy_logits[root_index] = contextual_policy_logits[local_index].tolist()
-
-            # Replay roots are independent environments within this chunk.  Store
-            # them in the per-env init pools, not the global recurrent map: two
-            # roots may have the same current frame/latent but different histories.
-            self.keys_values_wm = seeded_cache
-            self.keys_values_wm_size_list_current = [context_length] * len(indices)
-            self.keys_values_wm_token_context_list = [
-                root_token_contexts[index].detach().clone() for index in indices
-            ]
-            self.update_cache_context(
-                root_states[indices],
-                is_init_infer=True,
-                valid_context_lengths=[context_length] * len(indices),
-                env_ids=indices,
-            )
-            for index in indices:
-                cache_key = hash_state(root_states[index].reshape(-1).detach().cpu().numpy())
-                self._reanalysis_seeded_root_keys.add((index, cache_key))
-                self.reanalysis_root_seed_count += 1
-
-        return root_policy_logits
-
-    @torch.no_grad()
-    def evaluate_root_token_context_values(self, root_token_contexts, task_id=None):
-        """Evaluate root values from exact online-style raw-token contexts.
-
-        Training normally forwards a whole H-step sequence with up to ``max_tokens`` tokens,
-        whereas online planning rolls a shorter ``context_length`` window.  TD bootstrap values
-        must use the latter state semantics to avoid teaching the learner from an unavailable
-        history (and, for the first root, from no history at all).
-        """
-        if not root_token_contexts:
-            return torch.empty((0, self.support_size), device=self.device)
-
-        root_value_logits = [None] * len(root_token_contexts)
-        length_groups = {}
-        for index, context in enumerate(root_token_contexts):
-            context = torch.as_tensor(context, device=self.device).reshape(-1, self.embed_dim)
-            if context.size(0) <= 0 or context.size(0) > self.context_length - 2:
-                raise ValueError(
-                    'A bootstrap root context must leave room for action and next observation: '
-                    f'length={context.size(0)}, context_length={self.context_length}.'
-                )
-            length_groups.setdefault(context.size(0), []).append((index, context))
-
-        for context_length, entries in length_groups.items():
-            raw_context_batch = torch.stack([context for _, context in entries])
-            transformer_start_pos = 0
-            if not self.config.rotary_emb:
-                raw_context_batch = raw_context_batch + self._lookup_position_embeddings(
-                    torch.arange(context_length, device=self.device)
-                )
-                transformer_start_pos = None
-            hidden = self.transformer(
-                raw_context_batch,
-                start_pos=transformer_start_pos,
-                task_id=0 if task_id is None else int(task_id),
-            )
-            contextual_values = self._context_prediction_head(
-                'head_value', task_id
-            )(
-                hidden, num_steps=context_length, prev_steps=0
-            )[:, -1]
-            for local_index, (root_index, _) in enumerate(entries):
-                root_value_logits[root_index] = contextual_values[local_index]
-
-        return torch.stack(root_value_logits)
 
     #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,

@@ -1187,14 +1187,14 @@ class WorldModelMT(WorldModel):
     #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    latent_state_index_in_search_path=[], task_id = 0):
+                                    latent_state_index_in_search_path=None, task_id=0):
         """
         Perform recurrent inference based on the state-action history.
 
         Arguments:
             - state_action_history (:obj:`list`): List containing tuples of state and action history.
             - simulation_index (:obj:`int`, optional): Index of the current simulation. Defaults to 0.
-            - latent_state_index_in_search_path (:obj:`list`, optional): List containing indices of latent states in the search path. Defaults to [].
+            - latent_state_index_in_search_path (:obj:`list`, optional): Indices of latent states in the search path.
         Returns:
             - tuple: A tuple containing output sequence, updated latent state, reward, logits policy, and logits value.
         """
@@ -1283,86 +1283,28 @@ class WorldModelMT(WorldModel):
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
-    def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
-        """
-        Adjusts the key-value cache for each environment to ensure they all have the same size.
-
-        In a multi-environment setting, the key-value cache (kv_cache) for each environment is stored separately.
-        During recurrent inference, the kv_cache sizes may vary across environments. This method pads each kv_cache
-        to match the largest size found among them, facilitating batch processing in the transformer forward pass.
-
-        Arguments:
-            - is_init_infer (:obj:`bool`): Indicates if this is an initial inference. Default is True.
-        Returns:
-            - list: Updated sizes of the key-value caches.
-        """
-        # Find the maximum size among all key-value caches
-        max_size = max(self.keys_values_wm_size_list)
-        padding_sizes = [max_size - size for size in self.keys_values_wm_size_list]
-        self.kv_padding_total_batches += 1
-        self.kv_padding_total_samples += len(padding_sizes)
-        if any(padding_sizes):
-            self.kv_padding_unequal_batches += 1
-            self.kv_padding_padded_samples += sum(size > 0 for size in padding_sizes)
-            self.kv_padding_token_count += sum(padding_sizes)
-            self.kv_padding_max_tokens = max(self.kv_padding_max_tokens, max(padding_sizes))
-        if self.kv_padding_total_batches % 50000 == 0:
-            logging.info(
-                "KV-cache padding diagnostics: unequal_batches=%d/%d (%.4f), "
-                "padded_samples=%d/%d (%.4f), padding_tokens=%d, max_padding=%d, "
-                "root_hits=%d/%d (%.4f)",
-                self.kv_padding_unequal_batches,
-                self.kv_padding_total_batches,
-                self.kv_padding_unequal_batches / self.kv_padding_total_batches,
-                self.kv_padding_padded_samples,
-                self.kv_padding_total_samples,
-                self.kv_padding_padded_samples / self.kv_padding_total_samples,
-                self.kv_padding_token_count,
-                self.kv_padding_max_tokens,
-                self.root_hit_cnt,
-                self.root_total_query_cnt,
-                self.root_hit_cnt / max(self.root_total_query_cnt, 1),
-            )
-
-        # Iterate over each layer of the transformer
-        for layer in range(self.num_layers):
-            kv_cache_k_list = []
-            kv_cache_v_list = []
-
-            # Enumerate through each environment's key-value pairs
-            for idx, keys_values in enumerate(self.keys_values_wm_list):
-                k_cache = keys_values[layer]._k_cache._cache
-                v_cache = keys_values[layer]._v_cache._cache
-
-                effective_size = self.keys_values_wm_size_list[idx]
-                pad_size = max_size - effective_size
-
-                # If padding is required, trim the end and pad the beginning of the cache
-                if pad_size > 0:
-                    k_cache_trimmed = k_cache[:, :, :-pad_size, :]
-                    v_cache_trimmed = v_cache[:, :, :-pad_size, :]
-                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
-                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
-                else:
-                    k_cache_padded = k_cache
-                    v_cache_padded = v_cache
-
-                kv_cache_k_list.append(k_cache_padded)
-                kv_cache_v_list.append(v_cache_padded)
-
-            # Stack the caches along a new dimension and remove any extra dimensions
-            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-            self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-
-            # Update the cache size to the maximum size
-            self.keys_values_wm._keys_values[layer]._k_cache._size = max_size
-            self.keys_values_wm._keys_values[layer]._v_cache._size = max_size
-
-        return self.keys_values_wm_size_list
+    def _log_kv_padding_diagnostics(self) -> None:
+        """Preserve the established multi-task cache diagnostic schema."""
+        logging.info(
+            'KV-cache padding diagnostics: unequal_batches=%d/%d (%.4f), '
+            'padded_samples=%d/%d (%.4f), padding_tokens=%d, max_padding=%d, '
+            'root_hits=%d/%d (%.4f)',
+            self.kv_padding_unequal_batches,
+            self.kv_padding_total_batches,
+            self.kv_padding_unequal_batches / self.kv_padding_total_batches,
+            self.kv_padding_padded_samples,
+            self.kv_padding_total_samples,
+            self.kv_padding_padded_samples / self.kv_padding_total_samples,
+            self.kv_padding_token_count,
+            self.kv_padding_max_tokens,
+            self.root_hit_cnt,
+            self.root_total_query_cnt,
+            self.root_hit_cnt / max(self.root_total_query_cnt, 1),
+        )
 
     #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             latent_state_index_in_search_path=[], valid_context_lengths=None):
+                             latent_state_index_in_search_path=None, valid_context_lengths=None):
         """
         Update the cache context with the given latent state.
 
@@ -1565,62 +1507,18 @@ class WorldModelMT(WorldModel):
             for index in range(latent_state.size(0))
         ] if is_init_infer else list(self.keys_values_wm_size_list_current)
 
-        overflow_indices = [
-            index for index, size in enumerate(effective_sizes)
-            if size >= self.context_length - 1
-        ]
-        rebuilt_cache = None
-        retained_contexts = {}
-        if overflow_indices:
-            self.exact_kv_reset_batches += 1
-            self.exact_kv_reset_samples += len(overflow_indices)
-            rebuilt_cache = self.transformer.generate_empty_keys_values(
-                n=len(overflow_indices), max_tokens=self.context_length
-            )
-            if self.rebuild_kv_window_from_tokens:
-                if len(self.keys_values_wm_token_context_list) != latent_state.size(0):
-                    raise RuntimeError(
-                        'Multi-task raw token contexts are missing for an overflowing KV-cache batch.'
-                    )
-                keep_tokens = self.context_length - 3
-                for index in overflow_indices:
-                    history = self.keys_values_wm_token_context_list[index]
-                    if history.size(0) < keep_tokens:
-                        raise RuntimeError(
-                            f'KV cache reports {effective_sizes[index]} tokens but multi-task raw history '
-                            f'contains only {history.size(0)}; cannot rebuild exactly.'
-                        )
-                    retained_contexts[index] = history[-keep_tokens:]
-                reset_sequences = torch.stack([
-                    retained_contexts[index] for index in overflow_indices
-                ])
-            else:
-                reset_sequences = latent_state[overflow_indices]
-            reset_sequences = reset_sequences + self._lookup_position_embeddings(
-                torch.arange(reset_sequences.size(1), device=self.device)
-            )
-            self.transformer(reset_sequences, past_keys_values=rebuilt_cache)
-        overflow_offsets = {index: offset for offset, index in enumerate(overflow_indices)}
+        reset_batch = self._prepare_exact_cache_resets(latent_state, effective_sizes)
+        overflow_offsets = reset_batch.offsets
+        retained_contexts = reset_batch.retained_contexts
 
         for index, effective_size in enumerate(effective_sizes):
             cache_key = hash_state(latent_state[index].reshape(-1).cpu().numpy())
-            single_cache = self.transformer.generate_empty_keys_values(
-                n=1, max_tokens=self.context_length
-            )
             if index in overflow_offsets:
-                source_offset = overflow_offsets[index]
-                for source_layer, destination_layer in zip(
-                    rebuilt_cache._keys_values, single_cache._keys_values
-                ):
-                    destination_layer._k_cache._cache.copy_(
-                        source_layer._k_cache._cache[source_offset:source_offset + 1]
-                    )
-                    destination_layer._v_cache._cache.copy_(
-                        source_layer._v_cache._cache[source_offset:source_offset + 1]
-                    )
-                    destination_layer._k_cache._size = source_layer._k_cache._size
-                    destination_layer._v_cache._size = source_layer._v_cache._size
+                single_cache = self._copy_exact_cache_reset(reset_batch, index)
             else:
+                single_cache = self.transformer.generate_empty_keys_values(
+                    n=1, max_tokens=self.context_length
+                )
                 padding = batched_size - effective_size
                 for source_layer, destination_layer in zip(
                     self.keys_values_wm._keys_values, single_cache._keys_values
