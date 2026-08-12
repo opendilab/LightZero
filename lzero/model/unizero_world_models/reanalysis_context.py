@@ -71,12 +71,10 @@ class ReanalysisContextMixin:
                 f'{actions.size(1)} < {roots_per_sequence - 1}.'
             )
 
-        history_latent_segment = history_latent_segment or [
-            [] for _ in range(sequence_count)
-        ]
-        history_action_segment = history_action_segment or [
-            [] for _ in range(sequence_count)
-        ]
+        if history_latent_segment is None:
+            history_latent_segment = [[] for _ in range(sequence_count)]
+        if history_action_segment is None:
+            history_action_segment = [[] for _ in range(sequence_count)]
         if len(history_latent_segment) != sequence_count or (
                 len(history_action_segment) != sequence_count
         ):

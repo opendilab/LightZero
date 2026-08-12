@@ -61,6 +61,9 @@ def _prepare_run_directory(run_dir, resume_from=None, resume_in_place=False):
 
 def _experimental_config_overrides(
         infer_context_length=None,
+        exact_kv_window_reset=False,
+        rebuild_kv_window_from_tokens=False,
+        contextual_reanalysis=False,
         bootstrap_value_context=False,
         open_loop_consistency_weight=None,
         open_loop_recurrent_weight=None,
@@ -86,6 +89,12 @@ def _experimental_config_overrides(
             )
         world_model_overrides['context_length'] = 2 * infer_context_length
 
+    if exact_kv_window_reset:
+        world_model_overrides['exact_kv_window_reset'] = True
+    if rebuild_kv_window_from_tokens:
+        world_model_overrides['rebuild_kv_window_from_tokens'] = True
+    if contextual_reanalysis:
+        policy_overrides['contextual_reanalysis'] = True
     if bootstrap_value_context:
         policy_overrides['bootstrap_value_context'] = True
 
@@ -236,6 +245,9 @@ def main(
     policy_experiment_overrides, world_model_experiment_overrides = (
         _experimental_config_overrides(
             infer_context_length=infer_context_length_override,
+            exact_kv_window_reset=exact_kv_window_reset,
+            rebuild_kv_window_from_tokens=rebuild_kv_window_from_tokens,
+            contextual_reanalysis=contextual_reanalysis,
             bootstrap_value_context=bootstrap_value_context,
             open_loop_consistency_weight=open_loop_consistency_weight_override,
             open_loop_recurrent_weight=open_loop_recurrent_weight_override,
@@ -323,8 +335,6 @@ def main(
                     use_normal_head=True,
                     optim_type='AdamW_mix_lr_wdecay',
                     use_new_cache_manager=use_new_cache_manager,
-                    exact_kv_window_reset=exact_kv_window_reset,
-                    rebuild_kv_window_from_tokens=rebuild_kv_window_from_tokens,
                     open_loop_diagnostic_freq=open_loop_diagnostic_freq,
                     open_loop_diagnostic_batch_size=collector_env_num,
                     # Policy-stability protections (500K crash chain: extreme target_policy ->
@@ -344,7 +354,6 @@ def main(
             num_unroll_steps=num_unroll_steps,
             num_segments=num_segments,
             game_segment_length=game_segment_length,
-            contextual_reanalysis=contextual_reanalysis,
             # Full learner checkpoints are ~530MB each; save every 50k train iters instead of
             # the default 10k to bound disk usage. ckpt_best (on new best eval) is unaffected.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=save_ckpt_after_iter))),

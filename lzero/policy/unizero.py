@@ -75,6 +75,24 @@ def replay_distribution_metrics(weights: torch.Tensor, value_priority: torch.Ten
     }
 
 
+def encoder_clip_metrics(
+        threshold: float,
+        applied: bool,
+        apply_count: int,
+        scale_factor: float,
+        max_latent_norm: float,
+) -> Dict[str, float]:
+    """Return encoder-clip diagnostics using DI-engine's float scalar contract."""
+    return {
+        'encoder_clip/enabled': float(threshold > 0),
+        'encoder_clip/applied': float(applied),
+        'encoder_clip/apply_count': float(apply_count),
+        'encoder_clip/scale_factor': float(scale_factor),
+        'encoder_clip/max_latent_norm': float(max_latent_norm),
+        'encoder_clip/threshold': float(threshold),
+    }
+
+
 def scale_module_weights_vectorized(module: torch.nn.Module, scale_factor: float):
     """
     Efficiently scale all weights of a module using vectorized operations.
@@ -306,6 +324,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 max_cache_size=5000,
                 # (bool) Whether to use the structured KVCacheManager instead of legacy dict pools.
                 use_new_cache_manager=False,
+                # (bool) Exact absolute-position cache repair modes. Both are opt-in because
+                # they replay the retained token window when it rolls over.
+                exact_kv_window_reset=False,
+                rebuild_kv_window_from_tokens=False,
                 # (int) The number of environments.
                 env_num=8,
                 # (float) The weight of the latent reconstruction loss.
@@ -1607,12 +1629,13 @@ class UniZeroPolicy(MuZeroPolicy):
         if self.use_encoder_clip_annealing:
             return_log_dict['current_encoder_clip_value'] = current_clip_value
             return_log_dict['stability/current_encoder_clip_value'] = current_clip_value
-        return_log_dict['encoder_clip/enabled'] = float(current_clip_value > 0)
-        return_log_dict['encoder_clip/applied'] = float(encoder_clip_applied)
-        return_log_dict['encoder_clip/apply_count'] = self._encoder_clip_apply_count
-        return_log_dict['encoder_clip/scale_factor'] = encoder_clip_scale_factor
-        return_log_dict['encoder_clip/max_latent_norm'] = encoder_clip_max_latent_norm
-        return_log_dict['encoder_clip/threshold'] = current_clip_value
+        return_log_dict.update(encoder_clip_metrics(
+            threshold=current_clip_value,
+            applied=encoder_clip_applied,
+            apply_count=self._encoder_clip_apply_count,
+            scale_factor=encoder_clip_scale_factor,
+            max_latent_norm=encoder_clip_max_latent_norm,
+        ))
 
         if self.use_head_clip and self.head_clip_manager is not None:
             # Add head clip results to log (if any)

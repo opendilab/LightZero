@@ -28,6 +28,9 @@ def test_unizero_policy_defaults_disable_experimental_training_features():
     world_model_config = config['model']['world_model_cfg']
 
     assert world_model_config['context_length'] == 2 * 4
+    assert world_model_config['exact_kv_window_reset'] is False
+    assert world_model_config['rebuild_kv_window_from_tokens'] is False
+    assert config['contextual_reanalysis'] is False
     assert config['bootstrap_value_context'] is False
     assert world_model_config['open_loop_consistency_loss_weight'] == 0.
     assert world_model_config['open_loop_recurrent_loss_weight'] == 0.
@@ -58,6 +61,8 @@ def test_atari_experimental_overrides_are_sparse_and_explicit():
     policy_overrides, world_model_overrides = (
         atari_unizero_segment_config._experimental_config_overrides(
             infer_context_length=5,
+            exact_kv_window_reset=True,
+            contextual_reanalysis=True,
             bootstrap_value_context=True,
             open_loop_consistency_weight=1.,
             open_loop_consistency_batch_size=8,
@@ -67,17 +72,24 @@ def test_atari_experimental_overrides_are_sparse_and_explicit():
         )
     )
     assert policy_overrides == {
+        'contextual_reanalysis': True,
         'bootstrap_value_context': True,
         'use_encoder_clip_annealing': True,
         'latent_norm_clip_threshold': 10.0,
     }
     assert world_model_overrides == {
         'context_length': 10,
+        'exact_kv_window_reset': True,
         'open_loop_consistency_loss_weight': 1.,
         'open_loop_consistency_batch_size': 8,
         'open_loop_consistency_horizon': 4,
         'open_loop_prefix_transitions': 3,
     }
+
+    _, world_model_overrides = atari_unizero_segment_config._experimental_config_overrides(
+        rebuild_kv_window_from_tokens=True
+    )
+    assert world_model_overrides == {'rebuild_kv_window_from_tokens': True}
 
 
 def test_explicit_encoder_clip_disable_sets_both_projection_owners():

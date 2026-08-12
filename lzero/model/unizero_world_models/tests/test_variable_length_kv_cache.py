@@ -78,6 +78,15 @@ def _copy_into_left_padded_batch(transformer, short_cache, long_cache):
 @pytest.mark.unittest
 class TestVariableLengthKVCache:
 
+    def test_multitask_statistics_initialize_contextual_reanalysis_counters(self):
+        world_model = SimpleNamespace()
+
+        WorldModelMT._initialize_statistics(world_model)
+
+        assert world_model.reanalysis_root_seed_count == 0
+        assert world_model.reanalysis_root_seed_hit_count == 0
+        assert world_model._reanalysis_seeded_root_keys == set()
+
     def test_single_and_multitask_root_cache_rings_share_the_search_capacity_rule(self):
         config = SimpleNamespace(max_cache_size=5000, num_simulations=50)
         assert WorldModelMT._initial_cache_pool_size(config) == 256

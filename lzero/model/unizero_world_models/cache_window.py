@@ -77,6 +77,8 @@ class CacheWindowMixin:
 
     def _copy_exact_cache_reset(self, reset_batch: ExactCacheResetBatch, index: int):
         """Copy one sample from a batched rebuild into an independent cache."""
+        if reset_batch.cache is None:
+            raise RuntimeError('Cannot copy an empty exact-cache rebuild batch.')
         destination_cache = self.transformer.generate_empty_keys_values(
             n=1, max_tokens=self.context_length
         )

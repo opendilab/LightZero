@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from lzero.policy.unizero import (
+    encoder_clip_metrics,
     replay_distribution_metrics,
     representation_health_metrics,
     should_run_periodic_monitor,
@@ -47,3 +48,16 @@ def test_replay_distribution_metrics_expose_effective_sample_size():
     assert uniform['replay/is_weight_ess_fraction'] == pytest.approx(1.0)
     assert uniform['replay/value_priority_std'] == pytest.approx(1.11803399)
     assert skewed['replay/is_weight_ess_fraction'] < 0.5
+
+
+def test_encoder_clip_metrics_follow_learner_monitor_float_contract():
+    metrics = encoder_clip_metrics(
+        threshold=10,
+        applied=True,
+        apply_count=3,
+        scale_factor=0.75,
+        max_latent_norm=13,
+    )
+
+    assert metrics['encoder_clip/apply_count'] == 3.0
+    assert all(type(value) is float for value in metrics.values())

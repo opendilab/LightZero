@@ -491,6 +491,9 @@ class WorldModelMT(WorldModel):
         self.kv_padding_max_tokens = 0
         self.exact_kv_reset_batches = 0
         self.exact_kv_reset_samples = 0
+        self.reanalysis_root_seed_count = 0
+        self.reanalysis_root_seed_hit_count = 0
+        self._reanalysis_seeded_root_keys = set()
 
     def _initialize_transformer_keys_values(self) -> None:
         """Initializes empty key-value cache structures for the transformer."""
@@ -2308,19 +2311,8 @@ class WorldModelMT(WorldModel):
 
     #@profile
     def clear_caches(self):
-        """
-        Clears the caches of the world model.
-        """
-        for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear()
-        self.past_kv_cache_recurrent_infer.clear()
-        self.keys_values_wm_list.clear()
-        for token_contexts in self.past_token_context_init_infer_envs:
-            token_contexts.clear()
-        self.past_token_context_recurrent_infer.clear()
-        self.keys_values_wm_token_context_list.clear()
-
-        print(f'rank {self._rank} Cleared {self.__class__.__name__} past_kv_cache.')
+        """Clear legacy/new-manager KV state through the shared implementation."""
+        super().clear_caches()
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"
