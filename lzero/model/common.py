@@ -840,7 +840,10 @@ class RepresentationNetworkMLP(nn.Module):
             - x (:obj:`torch.Tensor`): (B, observation_shape)
             - output (:obj:`torch.Tensor`): (B, hidden_channels)
         """
-        x = self.fc_representation(x)
+        # Vector observations may be stored as uint8 in replay (for example,
+        # MiniGrid FlatObsWrapper).  Cast at the encoder boundary so collection,
+        # evaluation, and learning all feed a valid dtype to linear layers.
+        x = self.fc_representation(x.float())
         x = self.norm(x)
 
         return x

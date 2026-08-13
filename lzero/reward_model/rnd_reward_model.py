@@ -193,7 +193,7 @@ class RNDRewardModel(BaseRewardModel):
         elif self.input_type == 'latent_state':
             train_data = random.sample(self.train_latent_state, self.cfg.batch_size)
 
-        train_data = torch.stack(train_data).to(self.device)
+        train_data = torch.stack(train_data).to(self.device).float()
 
         if self.cfg.input_norm:
             # Note: observation normalization: transform obs to mean 0, std 1
@@ -234,22 +234,43 @@ class RNDRewardModel(BaseRewardModel):
         obs_batch_orig = data[0][0]
         target_reward = data[1][0]
         batch_size = obs_batch_orig.shape[0]
-        # reshape to (4, 2835, 6)
-        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size, self.cfg.obs_shape, 6))
-        # reshape to (24, 2835)
-        obs_batch_tmp = np.reshape(obs_batch_tmp, (batch_size * 6, self.cfg.obs_shape))
+        if not isinstance(self.cfg.obs_shape, int):
+            raise ValueError(
+                f'RNDRewardModel currently expects a flat integer obs_shape, got {self.cfg.obs_shape!r}'
+            )
+
+        # MuZero flattens [batch, sequence, observation] into [batch,
+        # sequence * observation] before the reward model sees it.  Derive the
+        # sequence length instead of assuming num_unroll_steps == 5 (six
+        # observations/targets), and fail early on inconsistent configurations.
+        flattened_obs_size = int(np.prod(obs_batch_orig.shape[1:]))
+        if flattened_obs_size % self.cfg.obs_shape != 0:
+            raise ValueError(
+                f'Flattened observation size {flattened_obs_size} is not divisible by '
+                f'configured obs_shape {self.cfg.obs_shape}.'
+            )
+        sequence_length = flattened_obs_size // self.cfg.obs_shape
+        target_sequence_length = target_reward.shape[1]
+        if sequence_length != target_sequence_length:
+            raise ValueError(
+                f'RND observation sequence length ({sequence_length}) does not match reward target sequence '
+                f'length ({target_sequence_length}). Check frame_stack_num and num_unroll_steps.'
+            )
+        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size * sequence_length, self.cfg.obs_shape))
 
         if self.input_type == 'latent_state':
             with torch.no_grad():
-                latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self.device))
+                latent_state = self.representation_network(
+                    torch.from_numpy(obs_batch_tmp).to(self.device).float()
+                )
             input_data = latent_state
         elif self.input_type in ['obs', 'obs_latent_state']:
-            input_data = to_tensor(obs_batch_tmp).to(self.device)
+            input_data = to_tensor(obs_batch_tmp).to(self.device).float()
 
         # NOTE: deepcopy reward part of data is very important,
         # otherwise the reward of data in the replay buffer will be incorrectly modified.
         target_reward_augmented = copy.deepcopy(target_reward)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * 6, 1))
+        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * sequence_length, 1))
 
         if self.cfg.input_norm:
             # add this line to avoid inplace operation on the original tensor.
@@ -294,24 +315,31 @@ class RNDRewardModel(BaseRewardModel):
         self.tb_logger.add_scalar('augmented_reward/reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
         self.tb_logger.add_scalar('augmented_reward/reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
 
-        # reshape to (target_reward_augmented.shape[0], 6, 1)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, 6, 1))
+        target_reward_augmented = np.reshape(
+            target_reward_augmented, (batch_size, sequence_length, 1)
+        )
         data[1][0] = target_reward_augmented
         train_data_augmented = data
 
         return train_data_augmented
 
     def collect_data(self, data: list) -> None:
-        # TODO(pu): now we only collect the first 300 steps of each game segment.
-        collected_transitions = np.concatenate([game_segment.obs_segment[:300] for game_segment in data[0]], axis=0)
+        # Exclude cross-segment bootstrap padding.  The old hard-coded 300
+        # silently included padding whenever game_segment_length was smaller.
+        collected_transitions = np.concatenate(
+            [game_segment.obs_segment[:game_segment.game_segment_length] for game_segment in data[0]], axis=0
+        )
         if self.input_type == 'latent_state':
             with torch.no_grad():
                 self.train_latent_state.extend(
-                    self.representation_network(torch.from_numpy(collected_transitions).to(self.device)))
+                    self.representation_network(
+                        torch.from_numpy(collected_transitions).to(self.device).float()
+                    ).detach().cpu()
+                )
         elif self.input_type == 'obs':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
+            self.train_obs.extend(to_tensor(collected_transitions))
         elif self.input_type == 'obs_latent_state':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
+            self.train_obs.extend(to_tensor(collected_transitions))
 
     def clear_old_data(self) -> None:
         if self.input_type == 'latent_state':

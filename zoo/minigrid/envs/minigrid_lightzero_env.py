@@ -85,10 +85,13 @@ class MiniGridEnvLightZero(MiniGridEnv):
                 self._env = gym.make(self._env_id, render_mode="rgb_array")
             else:
                 self._env = gym.make(self._env_id)
-            # NOTE: customize the max step of the env
-            self._env.max_steps = self._max_step
+            # MiniGrid owns ``max_steps`` on the base environment.  Assigning it
+            # to a Gymnasium wrapper only creates/shadows a wrapper attribute in
+            # recent Gymnasium releases and leaves the real episode horizon
+            # unchanged.
+            self._env.unwrapped.max_steps = self._max_step
 
-            if self._env_id in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
+            if self._env_id in ['MiniGrid-AKTDT-13x13-v0', 'MiniGrid-AKTDT-13x13-1-v0']:
                 # customize the agent field of view size, note this must be an odd number
                 # This also related to the observation space, see gym_minigrid.wrappers for more details
                 self._env = ViewSizeWrapper(self._env, agent_view_size=5)
@@ -102,7 +105,10 @@ class MiniGridEnvLightZero(MiniGridEnv):
                 self._env = ObsPlusPrevActRewWrapper(self._env)
             self._init_flag = True
         if self._flat_obs:
-            self._observation_space = gym.spaces.Box(0, 1, shape=(2835, ))
+            # FlatObsWrapper currently emits uint8 values in [0, 255] (the
+            # encoded image itself contains values greater than one).  Reuse
+            # its space instead of advertising the old, invalid [0, 1] box.
+            self._observation_space = self._env.observation_space
         else:
             self._observation_space = self._env.observation_space
             # to be compatible with subprocess env manager
@@ -111,8 +117,11 @@ class MiniGridEnvLightZero(MiniGridEnv):
             else:
                 self._observation_space.dtype = np.dtype('float32')
         self._action_space = self._env.action_space
+        # Gymnasium>=1.0 no longer forwards arbitrary attributes through
+        # wrappers, so reward_range must be read from the base environment.
+        reward_range = self._env.unwrapped.reward_range
         self._reward_space = gym.spaces.Box(
-            low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1, ), dtype=np.float32
+            low=reward_range[0], high=reward_range[1], shape=(1, ), dtype=np.float32
         )
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
@@ -196,7 +205,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
-        rew = to_ndarray(rew)  # wrapped to be transferred to an array with shape (1,)
+        rew = to_ndarray([rew], dtype=np.float32)
 
         action_mask = np.ones(self.action_space.n, 'int8')
         self._timestep += 1
