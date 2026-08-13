@@ -133,6 +133,15 @@ class RNDRewardModel(BaseRewardModel):
         # (float) The weight of intrinsic reward
         # r = intrinsic_reward_weight * r_i + r_e.
         intrinsic_reward_weight=0.01,
+        # (float or None) Final intrinsic-reward weight after linear decay.
+        # ``None`` keeps the legacy constant-weight behavior.
+        intrinsic_reward_weight_final=None,
+        # (int) Learner/RND estimate step at which linear decay starts.
+        intrinsic_reward_weight_decay_start=0,
+        # (int) Number of estimate steps used to reach the final weight.
+        # A non-positive value applies the final weight immediately at the
+        # decay start (when a final weight is configured).
+        intrinsic_reward_weight_decay_steps=0,
         # (bool) Whether to normalize extrinsic reward.
         # Normalize the reward to [0, extrinsic_reward_norm_max].
         extrinsic_reward_norm=True,
@@ -186,6 +195,24 @@ class RNDRewardModel(BaseRewardModel):
         self._running_mean_std_rnd_obs = RunningMeanStd(epsilon=1e-4)
         self.estimate_cnt_rnd = 0
         self.train_cnt_rnd = 0
+
+    def _current_intrinsic_reward_weight(self) -> float:
+        """Return the scheduled RND coefficient for the current estimate step."""
+        initial_weight = float(self.cfg.intrinsic_reward_weight)
+        final_weight = getattr(self.cfg, 'intrinsic_reward_weight_final', None)
+        if final_weight is None:
+            return initial_weight
+
+        final_weight = float(final_weight)
+        decay_start = max(0, int(getattr(self.cfg, 'intrinsic_reward_weight_decay_start', 0)))
+        decay_steps = max(0, int(getattr(self.cfg, 'intrinsic_reward_weight_decay_steps', 0)))
+        if self.estimate_cnt_rnd <= decay_start:
+            return initial_weight
+        if decay_steps == 0:
+            return final_weight
+
+        progress = min(1.0, (self.estimate_cnt_rnd - decay_start) / decay_steps)
+        return initial_weight + progress * (final_weight - initial_weight)
 
     def _train_with_data_one_step(self) -> None:
         if self.input_type in ['obs', 'obs_latent_state']:
@@ -298,11 +325,18 @@ class RNDRewardModel(BaseRewardModel):
             self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
 
         rnd_reward = rnd_reward.to(self.device).unsqueeze(1).cpu().numpy()
+        intrinsic_reward_weight = self._current_intrinsic_reward_weight()
+        self.tb_logger.add_scalar(
+            'rnd_reward_model/intrinsic_reward_weight', intrinsic_reward_weight, self.estimate_cnt_rnd
+        )
         if self.intrinsic_reward_type == 'add':
             if self.cfg.extrinsic_reward_norm:
-                target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max + rnd_reward * self.cfg.intrinsic_reward_weight
+                target_reward_augmented = (
+                    target_reward_augmented / self.cfg.extrinsic_reward_norm_max
+                    + rnd_reward * intrinsic_reward_weight
+                )
             else:
-                target_reward_augmented = target_reward_augmented + rnd_reward * self.cfg.intrinsic_reward_weight
+                target_reward_augmented = target_reward_augmented + rnd_reward * intrinsic_reward_weight
         elif self.intrinsic_reward_type == 'new':
             if self.cfg.extrinsic_reward_norm:
                 target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max
