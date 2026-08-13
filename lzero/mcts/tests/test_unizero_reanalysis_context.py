@@ -151,6 +151,43 @@ def test_direct_bootstrap_encoder_uses_the_requested_task_tokenizer():
 
 
 @pytest.mark.parametrize('buffer_cls', [UniZeroGameBuffer, SampledUniZeroGameBuffer])
+def test_contextual_reanalysis_skips_unused_initial_transformer(buffer_cls):
+    encoded_batches = []
+
+    class _Tokenizer:
+
+        def encode_to_obs_embeddings(self, observations):
+            encoded_batches.append(observations.clone())
+            return observations + 1
+
+    class _Model:
+        world_model = SimpleNamespace(
+            tokenizer=_Tokenizer(),
+            build_reanalysis_root_token_contexts=lambda *args, **kwargs: None,
+            seed_reanalysis_root_caches=lambda *args, **kwargs: None,
+        )
+
+        def initial_inference(self, *args, **kwargs):
+            raise AssertionError('contextual reanalysis must not run legacy initial inference')
+
+    buffer = buffer_cls.__new__(buffer_cls)
+    buffer.task_id = None
+    buffer.reanalyze_num = 2
+    buffer._cfg = SimpleNamespace(contextual_reanalysis=True, mcts_ctree=True)
+    observations = torch.arange(8, dtype=torch.float32).reshape(2, 1, 4)
+
+    rewards, policy_placeholders, latent_states = buffer._prepare_reanalysis_root_inputs(
+        _Model(), observations, np.zeros((2, 1), dtype=np.int64), np.array([0, 0])
+    )
+
+    assert len(encoded_batches) == 1
+    assert torch.equal(encoded_batches[0], observations)
+    assert rewards == [0.0, 0.0]
+    assert policy_placeholders == [None, None]
+    np.testing.assert_array_equal(latent_states, (observations + 1).numpy())
+
+
+@pytest.mark.parametrize('buffer_cls', [UniZeroGameBuffer, SampledUniZeroGameBuffer])
 def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
         monkeypatch, buffer_cls
 ):
