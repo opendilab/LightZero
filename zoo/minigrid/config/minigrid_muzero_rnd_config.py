@@ -111,7 +111,6 @@ minigrid_muzero_rnd_config = dict(
         # configure_optimizers().
         optim_type='AdamW',
         weight_decay=1e-4,
-        model_parameter_health_monitor_interval=100,
         piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.

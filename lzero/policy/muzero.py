@@ -104,10 +104,6 @@ class MuZeroPolicy(Policy):
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
-        # (int) Log key MuZero matrix norms/nonzero ratios every N learner
-        # updates.  Zero disables the monitor.  This is intentionally separate
-        # from monitor_extra_statistics because it performs device reductions.
-        model_parameter_health_monitor_interval=0,
         # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
         # (bool): Indicates whether to perform an offline evaluation of the checkpoint (ckpt).
@@ -214,7 +210,7 @@ class MuZeroPolicy(Policy):
         # the current maximum priority.  This is especially useful in sparse-
         # reward environments, where the collector-side value error can be
         # nearly uniform before the first successful trajectories are learned.
-        use_max_priority_for_new_data=True,
+        use_max_priority_for_new_data=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -278,57 +274,6 @@ class MuZeroPolicy(Policy):
         """
         self.train_iter = train_iter
         self.env_step = env_step
-
-    @staticmethod
-    @torch.no_grad()
-    def _module_parameter_health(module: torch.nn.Module, name: str) -> Dict[str, float]:
-        """Return inexpensive collapse diagnostics for a model component."""
-        matrices = [parameter.detach().float() for parameter in module.parameters() if parameter.ndim >= 2]
-        if not matrices:
-            return {}
-
-        squared_l2 = sum(torch.sum(matrix * matrix).item() for matrix in matrices)
-        numel = sum(matrix.numel() for matrix in matrices)
-        nonzero = sum(torch.count_nonzero(matrix).item() for matrix in matrices)
-        stats = {
-            f'analysis/model_parameters/{name}_weight_l2': squared_l2 ** 0.5,
-            f'analysis/model_parameters/{name}_weight_nonzero_ratio': nonzero / numel,
-        }
-
-        # Effective rank is useful for the small policy/value/reward heads, but
-        # cubic SVDs on the 512-wide backbone would noticeably slow training.
-        rank_candidates = [
-            matrix.reshape(matrix.shape[0], -1) for matrix in matrices
-            if min(matrix.shape[0], matrix.numel() // matrix.shape[0]) <= 64 and matrix.numel() <= 100_000
-        ]
-        if rank_candidates:
-            matrix = max(rank_candidates, key=lambda tensor: tensor.numel())
-            singular_values = torch.linalg.svdvals(matrix)
-            singular_value_sum = singular_values.sum()
-            if singular_value_sum.item() > 0:
-                probabilities = singular_values / singular_value_sum
-                entropy = -(probabilities * probabilities.clamp_min(1e-12).log()).sum()
-                stats[f'analysis/model_parameters/{name}_effective_rank'] = torch.exp(entropy).item()
-            else:
-                stats[f'analysis/model_parameters/{name}_effective_rank'] = 0.0
-        return stats
-
-    def _model_parameter_health(self) -> Dict[str, float]:
-        model = self._learn_model
-        prediction = model.prediction_network
-        dynamics = model.dynamics_network
-        components = {
-            'representation': model.representation_network,
-            'dynamics': dynamics,
-            'prediction_common': prediction.fc_prediction_common,
-            'policy_head': prediction.fc_policy_head,
-            'value_head': prediction.fc_value_head,
-            'reward_head': dynamics.fc_reward_head,
-        }
-        stats = {}
-        for name, module in components.items():
-            stats.update(self._module_parameter_health(module, name))
-        return stats
 
     def _init_learn(self) -> None:
         """
@@ -415,7 +360,6 @@ class MuZeroPolicy(Policy):
         self.grad_norm_after = 0.
         self.dormant_ratio_encoder = 0.
         self.dormant_ratio_dynamics = 0.
-        self._model_parameter_health_update_count = 0
 
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
@@ -719,14 +663,6 @@ class MuZeroPolicy(Policy):
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
-
-        self._model_parameter_health_update_count += 1
-        health_interval = self._cfg.model_parameter_health_monitor_interval
-        if health_interval > 0 and (
-                self._model_parameter_health_update_count == 1
-                or self._model_parameter_health_update_count % health_interval == 0
-        ):
-            return_log_dict.update(self._model_parameter_health())
         
         # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
         if self._cfg.model.harmony_balance:
