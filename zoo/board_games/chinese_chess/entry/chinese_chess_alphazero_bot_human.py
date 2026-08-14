@@ -4,12 +4,15 @@ import argparse
 
 from lzero.entry import eval_alphazero
 from zoo.board_games.chinese_chess.config.chinese_chess_alphazero_bot_mode_config import create_config, main_config
+from zoo.board_games.chinese_chess.envs.chinese_chess_env import HUMAN_QUIT_MESSAGE
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('checkpoint', help='path to an AlphaZero .pth.tar checkpoint')
     parser.add_argument('--simulations', type=int, default=200, help='MCTS simulations per bot move')
+    parser.add_argument('--num-res-blocks', type=int, default=None, help='override checkpoint model depth')
+    parser.add_argument('--num-channels', type=int, default=None, help='override checkpoint model width')
     args = parser.parse_args()
     if args.simulations < 4 or args.simulations % 4:
         parser.error('--simulations must be a positive multiple of 4 for AlphaZero evaluation')
@@ -18,18 +21,27 @@ def main() -> None:
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
     main_config.policy.evaluator_env_num = 1
+    if args.num_res_blocks is not None:
+        main_config.policy.model.num_res_blocks = args.num_res_blocks
+    if args.num_channels is not None:
+        main_config.policy.model.num_channels = args.num_channels
     # AlphaZeroPolicy deliberately uses four times the configured training
     # simulations in eval mode. Compensate here so the terminal CLI denotes
     # the actual search budget per bot move.
     main_config.policy.mcts.num_simulations = args.simulations // 4
     create_config.env_manager.type = 'base'
-    eval_alphazero(
-        [main_config, create_config],
-        seed=0,
-        num_episodes_each_seed=1,
-        print_seed_details=True,
-        model_path=args.checkpoint
-    )
+    try:
+        eval_alphazero(
+            [main_config, create_config],
+            seed=0,
+            num_episodes_each_seed=1,
+            print_seed_details=True,
+            model_path=args.checkpoint
+        )
+    except RuntimeError as error:
+        if HUMAN_QUIT_MESSAGE not in str(error):
+            raise
+        print('Game exited.')
 
 
 if __name__ == '__main__':

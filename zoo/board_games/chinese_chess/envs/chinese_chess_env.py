@@ -44,6 +44,11 @@ _MAX_POSITION_HASHES = 121
 _HASH_CHUNKS = 4  # uint64 encoded as four uint16 values in the int16 state array.
 _SERIALIZED_HEADER_SIZE = 5
 _SERIALIZED_SIZE = _SERIALIZED_HEADER_SIZE + HISTORY_LENGTH * 90 + _MAX_POSITION_HASHES * _HASH_CHUNKS
+HUMAN_QUIT_MESSAGE = 'human requested terminal game exit'
+
+
+class HumanQuitError(RuntimeError):
+    """Signal a requested terminal exit through DI-engine env managers."""
 
 
 @ENV_REGISTRY.register('chinese_chess')
@@ -278,9 +283,15 @@ class ChineseChessEnv(BaseEnv):
         if agent_timestep.done:
             agent_timestep.obs['to_play'] = -1
             return agent_timestep
-        opponent_action = (
-            self.human_to_action() if self.battle_mode == 'eval_mode' and self.agent_vs_human else self.bot_action()
-        )
+        try:
+            opponent_action = (
+                self.human_to_action() if self.battle_mode == 'eval_mode' and self.agent_vs_human else self.bot_action()
+            )
+        except HumanQuitError:
+            obs = self._make_obs()
+            obs['to_play'] = -1
+            info = {'eval_episode_return': np.float32(0.0), 'human_quit': True}
+            return BaseEnvTimestep(obs, np.float32(0.0), True, info)
         opponent_timestep = self._player_step(opponent_action)
         reward = np.float32(-float(opponent_timestep.reward))
         opponent_timestep.info['eval_episode_return'] = reward
@@ -302,7 +313,7 @@ class ChineseChessEnv(BaseEnv):
             try:
                 text = input('Your move (ICCS, e.g. h9g7; q to quit): ').strip().lower()
                 if text in ('q', 'quit', 'exit'):
-                    raise KeyboardInterrupt
+                    raise HumanQuitError(HUMAN_QUIT_MESSAGE)
                 physical = move_to_action(uci_to_move(text))
                 action = self._physical_to_canonical_action(physical)
                 if action in self.legal_actions:

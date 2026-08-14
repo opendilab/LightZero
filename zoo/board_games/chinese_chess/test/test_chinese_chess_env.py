@@ -3,7 +3,7 @@ import pytest
 
 pytest.importorskip('ding')
 
-from zoo.board_games.chinese_chess.envs.chinese_chess_env import ChineseChessEnv
+from zoo.board_games.chinese_chess.envs.chinese_chess_env import ChineseChessEnv, HumanQuitError
 
 
 def test_reset_contract_and_seeded_random_bot() -> None:
@@ -69,3 +69,16 @@ def test_terminal_human_move_accepts_iccs(monkeypatch: pytest.MonkeyPatch, capsy
     output = capsys.readouterr().out
     assert 'a b c d e f g h i' in output
     assert 'Turn: Red' in output
+
+
+def test_terminal_human_can_quit(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = ChineseChessEnv(dict(battle_mode='eval_mode', agent_vs_human=True))
+    monkeypatch.setattr('builtins.input', lambda _: 'q')
+    with pytest.raises(HumanQuitError, match='human requested terminal game exit'):
+        env.human_to_action()
+
+    env.reset()
+    timestep = env.step(env.legal_actions[0])
+    assert timestep.done
+    assert timestep.info['human_quit'] is True
+    assert float(timestep.reward) == 0.0

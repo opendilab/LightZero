@@ -30,6 +30,9 @@ python -m zoo.board_games.chinese_chess.entry.chinese_chess_alphazero_bot_human 
 python -m zoo.board_games.chinese_chess.entry.chinese_chess_muzero_bot_human /path/to/ckpt_best.pth.tar
 ```
 
+When training overrides `--num-res-blocks` or `--num-channels`, pass the same overrides to the terminal and
+convergence-evaluation entries so their model architecture matches the checkpoint.
+
 Measure convergence over several deterministic random-bot seeds:
 
 ```bash

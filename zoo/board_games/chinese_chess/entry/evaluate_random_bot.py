@@ -29,10 +29,26 @@ def main() -> None:
     parser.add_argument('checkpoint', help='path to a .pth.tar checkpoint')
     parser.add_argument('--episodes', type=int, default=100, help='episodes per seed')
     parser.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2])
+    parser.add_argument('--simulations', type=int, default=None, help='MCTS simulations per agent move')
+    parser.add_argument('--num-res-blocks', type=int, default=None, help='override checkpoint model depth')
+    parser.add_argument('--num-channels', type=int, default=None, help='override checkpoint model width')
     args = parser.parse_args()
 
     config, create_config, evaluate = _load(args.algo)
     config.env.agent_vs_human = False
+    if args.num_res_blocks is not None:
+        config.policy.model.num_res_blocks = args.num_res_blocks
+    if args.num_channels is not None:
+        config.policy.model.num_channels = args.num_channels
+    if args.simulations is not None:
+        if args.simulations <= 0:
+            parser.error('--simulations must be positive')
+        if args.algo == 'alphazero':
+            if args.simulations < 4 or args.simulations % 4:
+                parser.error('--simulations must be a positive multiple of 4 for AlphaZero evaluation')
+            config.policy.mcts.num_simulations = args.simulations // 4
+        else:
+            config.policy.num_simulations = args.simulations
     all_returns = []
     for seed in args.seeds:
         _, returns = evaluate(

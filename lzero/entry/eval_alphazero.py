@@ -54,6 +54,11 @@ def eval_alphazero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+    # AlphaZero's collect/eval modes construct registered simulation
+    # environments during policy initialization. Keep this consistent with
+    # train_alphazero, which supplies both compiled and create configs.
+    cfg.policy.full_cfg = cfg
+    cfg.policy.create_cfg = create_cfg
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
