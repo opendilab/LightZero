@@ -133,6 +133,15 @@ class RNDRewardModel(BaseRewardModel):
         # (float) The weight of intrinsic reward
         # r = intrinsic_reward_weight * r_i + r_e.
         intrinsic_reward_weight=0.01,
+        # (float or None) Final intrinsic-reward weight after linear decay.
+        # ``None`` keeps the legacy constant-weight behavior.
+        intrinsic_reward_weight_final=None,
+        # (int) Learner/RND estimate step at which linear decay starts.
+        intrinsic_reward_weight_decay_start=0,
+        # (int) Number of estimate steps used to reach the final weight.
+        # A non-positive value applies the final weight immediately at the
+        # decay start (when a final weight is configured).
+        intrinsic_reward_weight_decay_steps=0,
         # (bool) Whether to normalize extrinsic reward.
         # Normalize the reward to [0, extrinsic_reward_norm_max].
         extrinsic_reward_norm=True,
@@ -187,13 +196,31 @@ class RNDRewardModel(BaseRewardModel):
         self.estimate_cnt_rnd = 0
         self.train_cnt_rnd = 0
 
+    def _current_intrinsic_reward_weight(self) -> float:
+        """Return the scheduled RND coefficient for the current estimate step."""
+        initial_weight = float(self.cfg.intrinsic_reward_weight)
+        final_weight = getattr(self.cfg, 'intrinsic_reward_weight_final', None)
+        if final_weight is None:
+            return initial_weight
+
+        final_weight = float(final_weight)
+        decay_start = max(0, int(getattr(self.cfg, 'intrinsic_reward_weight_decay_start', 0)))
+        decay_steps = max(0, int(getattr(self.cfg, 'intrinsic_reward_weight_decay_steps', 0)))
+        if self.estimate_cnt_rnd <= decay_start:
+            return initial_weight
+        if decay_steps == 0:
+            return final_weight
+
+        progress = min(1.0, (self.estimate_cnt_rnd - decay_start) / decay_steps)
+        return initial_weight + progress * (final_weight - initial_weight)
+
     def _train_with_data_one_step(self) -> None:
         if self.input_type in ['obs', 'obs_latent_state']:
             train_data = random.sample(self.train_obs, self.cfg.batch_size)
         elif self.input_type == 'latent_state':
             train_data = random.sample(self.train_latent_state, self.cfg.batch_size)
 
-        train_data = torch.stack(train_data).to(self.device)
+        train_data = torch.stack(train_data).to(self.device).float()
 
         if self.cfg.input_norm:
             # Note: observation normalization: transform obs to mean 0, std 1
@@ -234,22 +261,43 @@ class RNDRewardModel(BaseRewardModel):
         obs_batch_orig = data[0][0]
         target_reward = data[1][0]
         batch_size = obs_batch_orig.shape[0]
-        # reshape to (4, 2835, 6)
-        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size, self.cfg.obs_shape, 6))
-        # reshape to (24, 2835)
-        obs_batch_tmp = np.reshape(obs_batch_tmp, (batch_size * 6, self.cfg.obs_shape))
+        if not isinstance(self.cfg.obs_shape, int):
+            raise ValueError(
+                f'RNDRewardModel currently expects a flat integer obs_shape, got {self.cfg.obs_shape!r}'
+            )
+
+        # MuZero flattens [batch, sequence, observation] into [batch,
+        # sequence * observation] before the reward model sees it.  Derive the
+        # sequence length instead of assuming num_unroll_steps == 5 (six
+        # observations/targets), and fail early on inconsistent configurations.
+        flattened_obs_size = int(np.prod(obs_batch_orig.shape[1:]))
+        if flattened_obs_size % self.cfg.obs_shape != 0:
+            raise ValueError(
+                f'Flattened observation size {flattened_obs_size} is not divisible by '
+                f'configured obs_shape {self.cfg.obs_shape}.'
+            )
+        sequence_length = flattened_obs_size // self.cfg.obs_shape
+        target_sequence_length = target_reward.shape[1]
+        if sequence_length != target_sequence_length:
+            raise ValueError(
+                f'RND observation sequence length ({sequence_length}) does not match reward target sequence '
+                f'length ({target_sequence_length}). Check frame_stack_num and num_unroll_steps.'
+            )
+        obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size * sequence_length, self.cfg.obs_shape))
 
         if self.input_type == 'latent_state':
             with torch.no_grad():
-                latent_state = self.representation_network(torch.from_numpy(obs_batch_tmp).to(self.device))
+                latent_state = self.representation_network(
+                    torch.from_numpy(obs_batch_tmp).to(self.device).float()
+                )
             input_data = latent_state
         elif self.input_type in ['obs', 'obs_latent_state']:
-            input_data = to_tensor(obs_batch_tmp).to(self.device)
+            input_data = to_tensor(obs_batch_tmp).to(self.device).float()
 
         # NOTE: deepcopy reward part of data is very important,
         # otherwise the reward of data in the replay buffer will be incorrectly modified.
         target_reward_augmented = copy.deepcopy(target_reward)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * 6, 1))
+        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * sequence_length, 1))
 
         if self.cfg.input_norm:
             # add this line to avoid inplace operation on the original tensor.
@@ -277,11 +325,18 @@ class RNDRewardModel(BaseRewardModel):
             self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
 
         rnd_reward = rnd_reward.to(self.device).unsqueeze(1).cpu().numpy()
+        intrinsic_reward_weight = self._current_intrinsic_reward_weight()
+        self.tb_logger.add_scalar(
+            'rnd_reward_model/intrinsic_reward_weight', intrinsic_reward_weight, self.estimate_cnt_rnd
+        )
         if self.intrinsic_reward_type == 'add':
             if self.cfg.extrinsic_reward_norm:
-                target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max + rnd_reward * self.cfg.intrinsic_reward_weight
+                target_reward_augmented = (
+                    target_reward_augmented / self.cfg.extrinsic_reward_norm_max
+                    + rnd_reward * intrinsic_reward_weight
+                )
             else:
-                target_reward_augmented = target_reward_augmented + rnd_reward * self.cfg.intrinsic_reward_weight
+                target_reward_augmented = target_reward_augmented + rnd_reward * intrinsic_reward_weight
         elif self.intrinsic_reward_type == 'new':
             if self.cfg.extrinsic_reward_norm:
                 target_reward_augmented = target_reward_augmented / self.cfg.extrinsic_reward_norm_max
@@ -294,24 +349,31 @@ class RNDRewardModel(BaseRewardModel):
         self.tb_logger.add_scalar('augmented_reward/reward_min', np.min(target_reward_augmented), self.estimate_cnt_rnd)
         self.tb_logger.add_scalar('augmented_reward/reward_std', np.std(target_reward_augmented), self.estimate_cnt_rnd)
 
-        # reshape to (target_reward_augmented.shape[0], 6, 1)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size, 6, 1))
+        target_reward_augmented = np.reshape(
+            target_reward_augmented, (batch_size, sequence_length, 1)
+        )
         data[1][0] = target_reward_augmented
         train_data_augmented = data
 
         return train_data_augmented
 
     def collect_data(self, data: list) -> None:
-        # TODO(pu): now we only collect the first 300 steps of each game segment.
-        collected_transitions = np.concatenate([game_segment.obs_segment[:300] for game_segment in data[0]], axis=0)
+        # Exclude cross-segment bootstrap padding.  The old hard-coded 300
+        # silently included padding whenever game_segment_length was smaller.
+        collected_transitions = np.concatenate(
+            [game_segment.obs_segment[:game_segment.game_segment_length] for game_segment in data[0]], axis=0
+        )
         if self.input_type == 'latent_state':
             with torch.no_grad():
                 self.train_latent_state.extend(
-                    self.representation_network(torch.from_numpy(collected_transitions).to(self.device)))
+                    self.representation_network(
+                        torch.from_numpy(collected_transitions).to(self.device).float()
+                    ).detach().cpu()
+                )
         elif self.input_type == 'obs':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
+            self.train_obs.extend(to_tensor(collected_transitions))
         elif self.input_type == 'obs_latent_state':
-            self.train_obs.extend(to_tensor(collected_transitions).to(self.device))
+            self.train_obs.extend(to_tensor(collected_transitions))
 
     def clear_old_data(self) -> None:
         if self.input_type == 'latent_state':

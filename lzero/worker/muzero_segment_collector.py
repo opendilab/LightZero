@@ -213,7 +213,8 @@ class MuZeroSegmentCollector(ISerialCollector):
         Returns:
             - priorities (:obj:`Optional[np.ndarray]`): An array of computed priorities, or None if priority is disabled.
         """
-        if self.policy_config.use_priority:
+        use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+        if self.policy_config.use_priority and not use_max_priority:
             # Calculate priorities as the L1 loss between predicted and search values.
             # The reduction is 'none' to get per-element losses.
             # A small epsilon (1e-6) is added to prevent zero priorities.
@@ -221,7 +222,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device).float().view(-1)
             priorities = L1Loss(reduction='none')(pred_values, search_values).detach().cpu().numpy() + 1e-6
         else:
-            # If not using priority, all new data will use the maximum priority in the replay buffer.
+            # ``None`` asks replay to assign the current maximum priority.
             priorities = None
 
         return priorities
@@ -502,7 +503,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
-                    if self.policy_config.use_priority:
+                    use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+                    if self.policy_config.use_priority and not use_max_priority:
                         pred_values_lst[env_id].append(pred_value_dict_with_env_id[env_id])
                         search_values_lst[env_id].append(value_dict_with_env_id[env_id])
                         if self.policy_config.gumbel_algo and not collect_with_pure_policy:

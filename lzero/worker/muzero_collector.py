@@ -214,7 +214,8 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - priorities (:obj:`Optional[np.ndarray]`): An array of priorities for the transitions. Returns None if priority is not used.
         """
-        if self.policy_config.use_priority:
+        use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+        if self.policy_config.use_priority and not use_max_priority:
             # Calculate priorities as the L1 loss between predicted values and search values.
             # 'reduction=none' ensures the loss is calculated for each element individually.
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
@@ -223,7 +224,8 @@ class MuZeroCollector(ISerialCollector):
             # A small epsilon is added to avoid zero priorities.
             priorities = L1Loss(reduction='none')(pred_values, search_values).detach().cpu().numpy() + 1e-6
         else:
-            # If priority is not used, return None. The replay buffer will use max priority for new data.
+            # ``None`` asks the replay buffer to assign its current maximum
+            # priority.  This is also the correct fast path when PER is off.
             priorities = None
 
         return priorities
@@ -505,7 +507,8 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
                     
                     eps_steps_lst[env_id] += 1
-                    if self.policy_config.use_priority:
+                    use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+                    if self.policy_config.use_priority and not use_max_priority:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 

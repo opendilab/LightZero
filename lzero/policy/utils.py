@@ -490,7 +490,11 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tup
     """
     # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
     # Also, ensure the tensor is of the correct floating-point type for the model.
-    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
+    # Some Gymnasium environments (including MiniGrid's FlatObsWrapper) emit
+    # uint8 vector observations.  MLP/linear layers require floating-point
+    # inputs, so normalize the dtype at the policy boundary while retaining the
+    # compact replay-buffer representation.
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
 
     # Calculate the dimension size to slice based on the model configuration.
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.

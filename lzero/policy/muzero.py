@@ -206,6 +206,11 @@ class MuZeroPolicy(Policy):
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=False,
+        # (bool) Whether newly collected transitions should enter replay with
+        # the current maximum priority.  This is especially useful in sparse-
+        # reward environments, where the collector-side value error can be
+        # nearly uniform before the first successful trajectories are learned.
+        use_max_priority_for_new_data=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
