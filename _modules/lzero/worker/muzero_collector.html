@@ -308,7 +308,8 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - priorities (:obj:`Optional[np.ndarray]`): An array of priorities for the transitions. Returns None if priority is not used.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
+        <span class="n">use_max_priority</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="p">,</span> <span class="s1">&#39;use_max_priority_for_new_data&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_priority</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">use_max_priority</span><span class="p">:</span>
             <span class="c1"># Calculate priorities as the L1 loss between predicted values and search values.</span>
             <span class="c1"># &#39;reduction=none&#39; ensures the loss is calculated for each element individually.</span>
             <span class="n">pred_values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pred_values_lst</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
@@ -317,7 +318,8 @@
             <span class="c1"># A small epsilon is added to avoid zero priorities.</span>
             <span class="n">priorities</span> <span class="o">=</span> <span class="n">L1Loss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;none&#39;</span><span class="p">)(</span><span class="n">pred_values</span><span class="p">,</span> <span class="n">search_values</span><span class="p">)</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="o">+</span> <span class="mf">1e-6</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># If priority is not used, return None. The replay buffer will use max priority for new data.</span>
+            <span class="c1"># ``None`` asks the replay buffer to assign its current maximum</span>
+            <span class="c1"># priority.  This is also the correct fast path when PER is off.</span>
             <span class="n">priorities</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="k">return</span> <span class="n">priorities</span></div>
@@ -599,7 +601,8 @@
                             <span class="n">completed_value_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">completed_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]))</span>
                     
                     <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
-                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
+                    <span class="n">use_max_priority</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="p">,</span> <span class="s1">&#39;use_max_priority_for_new_data&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_priority</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">use_max_priority</span><span class="p">:</span>
                         <span class="n">pred_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
                         <span class="n">search_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
 

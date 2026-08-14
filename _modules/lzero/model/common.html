@@ -934,7 +934,10 @@
 <span class="sd">            - x (:obj:`torch.Tensor`): (B, observation_shape)</span>
 <span class="sd">            - output (:obj:`torch.Tensor`): (B, hidden_channels)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_representation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="c1"># Vector observations may be stored as uint8 in replay (for example,</span>
+        <span class="c1"># MiniGrid FlatObsWrapper).  Cast at the encoder boundary so collection,</span>
+        <span class="c1"># evaluation, and learning all feed a valid dtype to linear layers.</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_representation</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">x</span></div></div>

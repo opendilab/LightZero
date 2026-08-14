@@ -300,6 +300,11 @@
         <span class="c1"># ****** Priority ******</span>
         <span class="c1"># (bool) Whether to use priority when sampling training data from the buffer.</span>
         <span class="n">use_priority</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether newly collected transitions should enter replay with</span>
+        <span class="c1"># the current maximum priority.  This is especially useful in sparse-</span>
+        <span class="c1"># reward environments, where the collector-side value error can be</span>
+        <span class="c1"># nearly uniform before the first successful trajectories are learned.</span>
+        <span class="n">use_max_priority_for_new_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (float) The degree of prioritization to use. A value of 0 means no prioritization,</span>
         <span class="c1"># while a value of 1 means full prioritization.</span>
         <span class="n">priority_prob_alpha</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
