@@ -11,12 +11,17 @@ def main() -> None:
     parser.add_argument('checkpoint', help='path to an AlphaZero .pth.tar checkpoint')
     parser.add_argument('--simulations', type=int, default=200, help='MCTS simulations per bot move')
     args = parser.parse_args()
+    if args.simulations < 4 or args.simulations % 4:
+        parser.error('--simulations must be a positive multiple of 4 for AlphaZero evaluation')
 
     main_config.env.agent_vs_human = True
     main_config.env.evaluator_env_num = 1
     main_config.env.n_evaluator_episode = 1
     main_config.policy.evaluator_env_num = 1
-    main_config.policy.mcts.num_simulations = args.simulations
+    # AlphaZeroPolicy deliberately uses four times the configured training
+    # simulations in eval mode. Compensate here so the terminal CLI denotes
+    # the actual search budget per bot move.
+    main_config.policy.mcts.num_simulations = args.simulations // 4
     create_config.env_manager.type = 'base'
     eval_alphazero(
         [main_config, create_config],

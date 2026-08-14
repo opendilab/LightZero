@@ -56,3 +56,16 @@ def test_simulate_action_does_not_mutate_source() -> None:
     child = env.simulate_action(env.legal_actions[0])
     np.testing.assert_array_equal(env._serialize(), original)
     assert child._state.ply == env._state.ply + 1
+
+
+def test_terminal_human_move_accepts_iccs(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    env = ChineseChessEnv(dict(battle_mode='eval_mode', agent_vs_human=True))
+    env.reset()
+    expected_action = env.legal_actions[0]
+    move = env.action_to_string(expected_action)
+    monkeypatch.setattr('builtins.input', lambda _: move)
+
+    assert env.human_to_action() == expected_action
+    output = capsys.readouterr().out
+    assert 'a b c d e f g h i' in output
+    assert 'Turn: Red' in output

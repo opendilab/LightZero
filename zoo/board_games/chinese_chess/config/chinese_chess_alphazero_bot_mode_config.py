@@ -23,6 +23,7 @@ chinese_chess_alphazero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
+        stop_value=0.9,
         manager=dict(shared_memory=False),
         agent_vs_human=False,
         prob_random_agent=0.0,
