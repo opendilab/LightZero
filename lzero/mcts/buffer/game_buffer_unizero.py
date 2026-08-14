@@ -290,7 +290,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2], current_batch[-1]  # current_batch[2] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[2], current_batch[7]
         )
 
         # target policy
@@ -315,8 +315,117 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         train_data = [current_batch, target_batch]
         return train_data
 
+    def get_on_policy_indices(self, collection_train_iter: int) -> np.ndarray:
+        """Return flat replay indices produced by exactly one collection policy version."""
+        indices = []
+        horizon = int(self._cfg.num_unroll_steps)
+        for flat_index, (global_segment_index, position) in enumerate(self.game_segment_game_pos_look_up):
+            segment_index = global_segment_index - self.base_idx
+            segment = self.game_segment_buffer[segment_index]
+            if (
+                position % horizon == 0
+                and getattr(segment, 'collection_train_iter', None) == int(collection_train_iter)
+            ):
+                indices.append(flat_index)
+        return np.asarray(indices, dtype=np.int64)
+
+    def _orig_data_from_indices(self, indices: np.ndarray, collection_train_iter: int) -> Tuple[Any]:
+        game_segments, positions = [], []
+        for flat_index in np.asarray(indices, dtype=np.int64).reshape(-1):
+            global_segment_index, position = self.game_segment_game_pos_look_up[int(flat_index)]
+            segment = self.game_segment_buffer[global_segment_index - self.base_idx]
+            actual_version = getattr(segment, 'collection_train_iter', None)
+            if actual_version != int(collection_train_iter):
+                raise RuntimeError(
+                    'Stale PPO sample detected: '
+                    f'expected policy version {collection_train_iter}, got {actual_version}'
+                )
+            game_segments.append(segment)
+            positions.append(position)
+        batch_size = len(game_segments)
+        return (
+            game_segments,
+            positions,
+            np.asarray(indices, dtype=np.int64),
+            np.ones(batch_size, dtype=np.float32),
+            np.zeros(batch_size, dtype=np.float64),
+        )
+
+    def sample_on_policy(
+            self, indices: np.ndarray, policy: Any, collection_train_iter: int
+    ) -> List[Any]:
+        """Build a PPO minibatch exclusively from the latest collected rollout."""
+        if len(indices) == 0:
+            raise ValueError('Cannot build an empty PPO minibatch')
+        orig_data = self._orig_data_from_indices(indices, collection_train_iter)
+        _, _, _, current_batch = self._make_batch(
+            len(indices), reanalyze_ratio=0.0, orig_data=orig_data, include_ppo=True
+        )
+
+        horizon = int(self._cfg.num_unroll_steps)
+        rewards, returns, policies = [], [], []
+        for segment, position in zip(orig_data[0], orig_data[1]):
+            reward = np.asarray(segment.reward_segment[position:position + horizon + 1], dtype=np.float32).tolist()
+            reward += [0.0] * (horizon + 1 - len(reward))
+            value_return = np.asarray(segment.return_segment[position:position + horizon + 1], dtype=np.float32).tolist()
+            value_return += [0.0] * (horizon + 1 - len(value_return))
+            rewards.append(reward)
+            returns.append(value_return)
+            policies.append(np.zeros((horizon + 1, self.action_space_size), dtype=np.float32))
+
+        target_batch = [
+            np.asarray(rewards, dtype=np.float32),
+            np.asarray(returns, dtype=np.float32),
+            np.asarray(policies, dtype=np.float32),
+        ]
+        return [current_batch, target_batch]
+
+    def sample_world_model(self, batch_size: int) -> List[Any]:
+        """Sample replay for latent/reward learning without MCTS target work.
+
+        In PPO mode the actor and critic heads are frozen during this phase, so
+        target-network value inference and policy reanalysis would be pure cost.
+        """
+        reward_value_context, _, _, current_batch = self._make_batch(
+            batch_size, reanalyze_ratio=0.0
+        )
+        positions = reward_value_context[2]
+        reward_segments = reward_value_context[3]
+        horizon = int(self._cfg.num_unroll_steps)
+        rewards = []
+        for position, reward_segment in zip(positions, reward_segments):
+            values = np.asarray(
+                reward_segment[position:position + horizon + 1], dtype=np.float32
+            ).reshape(-1).tolist()
+            values += [0.0] * (horizon + 1 - len(values))
+            rewards.append(values)
+        target_batch = [
+            np.asarray(rewards, dtype=np.float32),
+            np.zeros((len(rewards), horizon + 1), dtype=np.float32),
+            np.zeros(
+                (len(rewards), horizon + 1, self.action_space_size), dtype=np.float32
+            ),
+        ]
+        return [current_batch, target_batch]
+
+    def release_on_policy_data(self, collection_train_iter: int) -> None:
+        """Drop rollout-only tensors after PPO epochs to keep replay memory bounded."""
+        for segment in self.game_segment_buffer:
+            if getattr(segment, 'collection_train_iter', None) == int(collection_train_iter):
+                segment.behavior_log_prob_segment = np.asarray([], dtype=np.float32)
+                segment.behavior_action_mask_segment = np.asarray([], dtype=np.bool_)
+                segment.behavior_policy_feature_segment = np.asarray([], dtype=np.float32)
+                segment.advantage_segment = np.asarray([], dtype=np.float32)
+                segment.return_segment = np.asarray([], dtype=np.float32)
+
     #@profile
-    def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+    def _make_batch(
+            self,
+            batch_size: int,
+            reanalyze_ratio: float,
+            orig_data: Optional[Tuple[Any]] = None,
+            include_ppo: bool = False,
+    ) -> Tuple[Any]:
         """
         Overview:
             first sample orig_data through ``_sample_orig_data()``,
@@ -332,10 +441,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
-        if self.sample_type == 'transition':
-            orig_data = self._sample_orig_data(batch_size)
-        elif self.sample_type == 'episode':
-            orig_data = self._sample_orig_data_episode(batch_size)
+        if orig_data is None:
+            if self.sample_type == 'transition':
+                orig_data = self._sample_orig_data(batch_size)
+            elif self.sample_type == 'episode':
+                orig_data = self._sample_orig_data_episode(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
@@ -395,6 +505,47 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         # formalize the inputs of a batch
         current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
+        if include_ppo:
+            advantage_list, behavior_log_prob_list = [], []
+            return_list, behavior_action_mask_list = [], []
+            behavior_policy_feature_list, policy_version_list = [], []
+            horizon = int(self._cfg.num_unroll_steps)
+            for game, position in zip(game_segment_list, pos_in_game_segment_list):
+                advantages = np.asarray(
+                    game.advantage_segment[position:position + horizon], dtype=np.float32
+                ).tolist()
+                advantages += [0.0] * (horizon - len(advantages))
+                behavior_log_probs = np.asarray(
+                    game.behavior_log_prob_segment[position:position + horizon], dtype=np.float32
+                ).tolist()
+                behavior_log_probs += [0.0] * (horizon - len(behavior_log_probs))
+                value_returns = np.asarray(
+                    game.return_segment[position:position + horizon + 1], dtype=np.float32
+                ).tolist()
+                value_returns += [0.0] * (horizon + 1 - len(value_returns))
+                action_masks = np.asarray(
+                    game.behavior_action_mask_segment[position:position + horizon], dtype=np.bool_
+                ).tolist()
+                action_masks += [[True] * self.action_space_size for _ in range(horizon - len(action_masks))]
+                policy_features = np.asarray(
+                    game.behavior_policy_feature_segment[position:position + horizon], dtype=np.float32
+                ).tolist()
+                feature_dim = int(game.behavior_policy_feature_segment.shape[-1])
+                policy_features += [[0.0] * feature_dim for _ in range(horizon - len(policy_features))]
+                advantage_list.append(advantages)
+                behavior_log_prob_list.append(behavior_log_probs)
+                return_list.append(value_returns)
+                behavior_action_mask_list.append(action_masks)
+                behavior_policy_feature_list.append(policy_features)
+                policy_version_list.append(int(game.collection_train_iter))
+            current_batch.extend([
+                advantage_list,
+                behavior_log_prob_list,
+                return_list,
+                behavior_action_mask_list,
+                behavior_policy_feature_list,
+                policy_version_list,
+            ])
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 

@@ -557,6 +557,51 @@ class TestPerSampleISWeights:
         grad_norms = [p.grad.norm().item() for p in wm.parameters() if p.grad is not None]
         assert len(grad_norms) > 0 and all(g == g for g in grad_norms)
 
+    def test_ppo_actor_critic_update_isolated_from_world_model_gradients(self):
+        """Large reconstruction gradients must not consume PPO's global clip budget."""
+        torch.manual_seed(41)
+        wm = _build_world_model()
+        handle = InverseScalarTransform(DiscreteSupport(-50, 51, 1), True)
+        batch = _make_batch(torch.ones(B, T, dtype=torch.bool))
+        features = torch.randn(B, T, EMBED_DIM)
+        actions = batch['actions']
+        action_mask = torch.ones(B, T, A, dtype=torch.bool)
+        with torch.no_grad():
+            behavior_logits = wm.head_policy.head_module(features)
+            old_log_prob = torch.distributions.Categorical(logits=behavior_logits).log_prob(actions)
+        batch.update(
+            actor_critic_only=True,
+            ppo_policy_features=features,
+            ppo_action_mask=action_mask,
+            ppo_old_log_prob=old_log_prob,
+            ppo_advantages=torch.randn(B, T),
+            ppo_clip_ratio=0.2,
+            ppo_entropy_weight=0.01,
+        )
+
+        def fail_if_encoded(*args, **kwargs):
+            raise AssertionError('PPO fast path must not rerun either tokenizer')
+
+        wm.tokenizer.encode_to_obs_embeddings = fail_if_encoded
+
+        losses = wm.compute_loss(batch, wm.tokenizer, handle, global_step=0)
+        assert losses.intermediate_losses['loss_obs'] == 0
+        assert losses.intermediate_losses['loss_rewards'] == 0
+        losses.loss_total.backward()
+
+        def has_nonzero_grad(module):
+            return any(
+                parameter.grad is not None and parameter.grad.abs().sum() > 0
+                for parameter in module.parameters()
+            )
+
+        assert has_nonzero_grad(wm.head_policy)
+        assert has_nonzero_grad(wm.head_value)
+        assert not has_nonzero_grad(wm.transformer)
+        assert not has_nonzero_grad(wm.tokenizer)
+        assert not has_nonzero_grad(wm.head_observations)
+        assert not has_nonzero_grad(wm.head_rewards)
+
     def test_per_sample_is_weights_discriminates_samples(self):
         """Stub container with strongly varied per-sample losses: only the per-sample path can
         weight samples differently from the scalar mean."""

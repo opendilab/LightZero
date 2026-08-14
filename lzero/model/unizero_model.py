@@ -83,13 +83,16 @@ class UniZeroModel(nn.Module):
             self.representation_network = RepresentationNetworkMLP(
                 observation_shape,
                 hidden_channels=world_model_cfg.embed_dim,
-                layer_num=2,
+                num_layers=2,
                 activation=self.activation,
                 group_size=world_model_cfg.group_size,
                 final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
             )
-            # TODO: only for MemoryEnv now
-            self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
+            self.decoder_network = VectorDecoderForMemoryEnv(
+                embedding_dim=world_model_cfg.embed_dim,
+                output_dim=observation_shape,
+                norm_type=norm_type,
+            )
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
@@ -428,7 +431,7 @@ class UniZeroModel(nn.Module):
         }
         
         # Perform initial inference using the world model
-        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, start_pos)
+        output_sequence, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, start_pos)
         
         # Extract and squeeze the outputs for clarity
         latent_state = obs_token
@@ -441,6 +444,7 @@ class UniZeroModel(nn.Module):
             reward=[0. for _ in range(batch_size)],  # Initialize reward to zero vector
             policy_logits=policy_logits,
             latent_state=latent_state,
+            policy_features=output_sequence[:, -1],
         )
 
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index: int = 0,
