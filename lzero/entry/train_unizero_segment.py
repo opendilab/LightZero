@@ -1,29 +1,66 @@
-import logging
 import os
 from functools import partial
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import torch
 import wandb
 from ding.config import compile_config
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
+from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import EasyTimer
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+from ding.utils import EasyTimer, get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
-from torch.utils.tensorboard import SummaryWriter
-
+from ditk import logging
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
-from .utils import random_collect, calculate_update_per_collect
+from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+
+from .utils import calculate_update_per_collect, random_collect
 
 timer = EasyTimer()
+
+
+def _restore_resume_counters(learner, collector, train_iter: int, envstep: int) -> None:
+    """Restore both owners of the counters persisted in learner checkpoints.
+
+    The collector owns the value used by the serial loop and evaluator, whereas
+    ``BaseLearner`` owns the value written to checkpoints.  If only the collector is
+    restored, a best checkpoint saved during the first post-resume evaluation records
+    ``last_step=0`` and a second preemption silently resets envstep-based schedules.
+    """
+    if train_iter > 0:
+        # BaseLearner.train_iter is a read-only property backed by the CountVar `_last_iter`.
+        learner._last_iter.update(train_iter)
+    if envstep > 0:
+        collector._total_envstep_count = envstep
+        learner.collector_envstep = envstep
+
+
+def _required_replay_transitions(
+        resume_train_iter: int, batch_size: int, resume_buffer_min_transitions: int
+) -> int:
+    """Return the replay population required before learning (re)starts.
+
+    Learner checkpoints do not contain the in-memory game buffer. Updating a mature resumed model as
+    soon as a single batch is available makes the first gradients come from an extremely narrow set of
+    new trajectories. Fresh runs retain the historical one-batch threshold; resumed runs can request
+    a short policy-collection warmup.
+    """
+    if batch_size <= 0:
+        raise ValueError(f'batch_size must be positive, got {batch_size}')
+    if resume_buffer_min_transitions < 0:
+        raise ValueError(
+            f'resume_buffer_min_transitions must be non-negative, got {resume_buffer_min_transitions}'
+        )
+    one_full_batch = batch_size + 1  # Preserve the existing strict ``> batch_size`` condition.
+    if resume_train_iter <= 0:
+        return one_full_batch
+    return max(one_full_batch, resume_buffer_min_transitions)
+
 
 def train_unizero_segment(
         input_cfg: Tuple[dict, dict],
@@ -68,7 +105,13 @@ def train_unizero_segment(
     logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
     # Compile the configuration
-    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    # The config launcher creates the per-run directory first so it can place
+    # metadata and console.log there.  Keep that explicit directory name
+    # instead of letting DI-engine append another timestamp merely because the
+    # directory already exists.
+    cfg = compile_config(
+        cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True, renew_dir=False
+    )
 
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -76,17 +119,28 @@ def train_unizero_segment(
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
     collector_env.seed(cfg.seed)
-    # collector_env.seed(cfg.seed, dynamic_seed=False)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # Load pretrained model if specified
+    resume_train_iter, resume_envstep = 0, 0
     if model_path is not None:
         logging.info(f'Loading model from {model_path} begin...')
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-        logging.info(f'Loading model from {model_path} end!')
+        checkpoint = torch.load(model_path, map_location=cfg.policy.device)
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            # Learner checkpoint: {'model', 'target_model', 'optimizer_world_model', 'last_iter',
+            # 'last_step'}. UniZeroPolicy._load_state_dict_learn expects exactly this dict (it reads
+            # the 'model' and 'target_model' keys itself).
+            resume_train_iter = checkpoint.get('last_iter', 0)
+            resume_envstep = checkpoint.get('last_step', 0)
+            policy.learn_mode.load_state_dict(checkpoint)
+        else:
+            # Raw model weights file.
+            policy._learn_model.load_state_dict(checkpoint)
+        logging.info(f'Loading model from {model_path} end! '
+                     f'(resume_train_iter={resume_train_iter}, resume_envstep={resume_envstep})')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -101,6 +155,11 @@ def train_unizero_segment(
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
                           tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)
 
+    # When resuming from a learner checkpoint, restore the training counters so
+    # that schedules (encoder-clip annealing, eval cadence) and the envstep accounting continue
+    # instead of restarting from zero.
+    _restore_resume_counters(learner, collector, resume_train_iter, resume_envstep)
+
     # Learner's before_run hook
     learner.call_hook('before_run')
 
@@ -112,6 +171,16 @@ def train_unizero_segment(
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
     batch_size = policy._cfg.batch_size
+    required_replay_transitions = _required_replay_transitions(
+        resume_train_iter,
+        batch_size,
+        int(getattr(cfg.policy, 'resume_buffer_min_transitions', 0)),
+    )
+    if resume_train_iter > 0 and required_replay_transitions > batch_size + 1:
+        logging.info(
+            'Resume replay warmup: collect at least %d transitions before learner updates.',
+            required_replay_transitions,
+        )
 
     # TODO: for visualize
     # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
@@ -154,10 +223,11 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-        if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
-        
-            evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            save_ckpt_fn = learner.save_checkpoint if getattr(cfg.policy, 'save_ckpt_in_eval', True) else None
+            stop, reward = evaluator.eval(save_ckpt_fn, learner.train_iter, collector.envstep)
+            if stop:
+                break
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -189,10 +259,14 @@ def train_unizero_segment(
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+            data_sufficient = data_sufficient and (
+                replay_buffer.get_num_of_transitions() >= required_replay_transitions
+            )
             if not data_sufficient:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
+                    f'batch_size: {batch_size}, required_transitions: {required_replay_transitions}, '
+                    f'replay_buffer: {replay_buffer}. Continue to collect now ....'
                 )
                 continue
 

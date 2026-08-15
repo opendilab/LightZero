@@ -6,7 +6,7 @@ from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP, MLP_V2
-from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
+from .utils import renormalize, get_params_mean
 
 
 @MODEL_REGISTRY.register('MuZeroModelMLP')
@@ -440,9 +440,3 @@ class DynamicsNetwork(nn.Module):
         reward = self.fc_reward_head(next_latent_state_encoding)
 
         return next_latent_state, reward
-
-    def get_dynamic_mean(self) -> float:
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> float:
-        return get_reward_mean(self)

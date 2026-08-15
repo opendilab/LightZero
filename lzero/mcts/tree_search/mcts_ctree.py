@@ -1,5 +1,5 @@
 import copy
-from typing import TYPE_CHECKING, List, Any, Union
+from typing import TYPE_CHECKING, List, Any, Union, Optional
 
 import numpy as np
 import torch
@@ -38,6 +38,8 @@ class UniZeroMCTSCtree(object):
         # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
         env_type='not_board_games',
+        # Keep collection tie-breaking stochastic; policy eval overrides this to True.
+        deterministic=False,
     )
 
     @classmethod
@@ -73,14 +75,13 @@ class UniZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], timestep: Union[int, List[Any]]=None, task_id=None
-    ) -> None:
+            List[Any]], timestep: Union[int, List[Any]] = None, task_id: Optional[int] = None
+    ) -> dict:
         """
         Overview:
-            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
+            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel.
             This method utilizes the C++ implementation of the tree search for efficiency.
 
         Arguments:
@@ -89,6 +90,7 @@ class UniZeroMCTSCtree(object):
             - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
             - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
             - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
+            - task_id (:obj:`Optional[int]`): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()
@@ -126,26 +128,19 @@ class UniZeroMCTSCtree(object):
                 if self._cfg.env_type == 'not_board_games':
                     latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                         roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                        to_play_batch
+                        to_play_batch, self._cfg.deterministic
                     )
                 else:
                     latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                         roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                        copy.deepcopy(to_play_batch)
+                        copy.deepcopy(to_play_batch), self._cfg.deterministic
                     )
 
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
-                try:
-                    latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
-                except Exception as e:
-                    print("="*20)
-                    print(e)
-                    print("roots:", roots, "latent_state_roots:", latent_state_roots)
-                    print ("latent_state_roots.shape:", latent_state_roots.shape)
-
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
 
                 # TODO: .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
@@ -172,10 +167,10 @@ class UniZeroMCTSCtree(object):
                         # single task setting
                         network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth)
                 else:
-                    # for UniZero
+                    # for UniZero using RoPE
                     if task_id is not None:
                         # multi task setting
-                        # network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id)
+                        # network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id) # TODO: support RoPE
                         network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
                     else:
                         # single task setting
@@ -270,10 +265,9 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]], task_id=None
+            List[Any]], task_id: Optional[int] = None
     ) -> None:
         """
         Overview:
@@ -283,6 +277,7 @@ class MuZeroMCTSCtree(object):
             - roots (:obj:`Any`): a batch of expanded root nodes
             - latent_state_roots (:obj:`list`): the hidden states of the roots
             - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games
+            - task_id (:obj:`Optional[int]`): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()
@@ -548,7 +543,6 @@ class MuZeroRNNFullObsMCTSCtree(object):
         """
         return tree_muzero.Roots(active_collect_env_num, legal_actions)
 
-    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
             world_model_latent_history_roots: List[Any], to_play_batch: Union[int, List[Any]], ready_env_id=None,

@@ -1,15 +1,20 @@
 import logging
-from typing import Dict, Union, Optional, List, Tuple, Any
+import os
+from collections import OrderedDict, defaultdict
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
-
 from lzero.model.common import SimNorm
-from lzero.model.utils import calculate_dormant_ratio, compute_average_weight_magnitude, compute_effective_rank
+from lzero.model.utils import (calculate_dormant_ratio,
+                               compute_average_weight_magnitude,
+                               compute_effective_rank)
+from torch.distributions import (Categorical, Independent, Normal,
+                                 TanhTransform, TransformedDistribution)
+
 from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
@@ -92,7 +97,7 @@ class WorldModel(nn.Module):
         if not self.config.rotary_emb:
             self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             self.precompute_pos_emb_diff_kv()
-            print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+            logging.info(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         if self.task_embed_option == "concat_task_embed":
@@ -116,7 +121,7 @@ class WorldModel(nn.Module):
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
+        self.head_observations = self._create_head_for_latent(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim, \
                                                     self._get_final_norm(self.final_norm_option_in_obs_head)  # NOTE: using the specified normalization method for observations head
                                                    )
         if self.continuous_action_space:
@@ -127,15 +132,15 @@ class WorldModel(nn.Module):
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
+        # Apply weight initialization, the order is important
+        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+
         self.head_dict = {}
         for name, module in self.named_children():
             if name.startswith("head_"):
                 self.head_dict[name] = module
         if self.head_dict:
             self.head_dict = nn.ModuleDict(self.head_dict)
-
-        # Apply weight initialization, the order is important
-        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
 
         # Build the set of modules to skip during re-initialization.
         # This is compatible with cases where self.tokenizer.encoder does not have 'pretrained_model',
@@ -159,9 +164,6 @@ class WorldModel(nn.Module):
 
         self._initialize_last_layer()
 
-        # # Cache structures
-        # self._initialize_cache_structures()
-
         # Projection input dimension
         self._initialize_projection_input_dim()
 
@@ -170,13 +172,18 @@ class WorldModel(nn.Module):
 
         # Initialize keys and values for transformer
         self._initialize_transformer_keys_values()
+        self.current_infer_env_ids: Optional[List[int]] = None
 
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
-        # 先设置为game_segment_length，以保持self.shared_pool_init_infer都是有效的kv
-         # TODO: 非常重要，应该改为和segment_length一样
-        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+        # Per-env ring-buffer capacity for the init-inference kv caches. It must be at least
+        # num_simulations: one MCTS search writes up to num_simulations distinct entries per env, and a
+        # smaller ring wraps around mid-search, overwriting entries before they can be re-queried (the
+        # old value, game_segment_length=20, was far below num_simulations=50, so the pool was
+        # effectively non-functional). max_cache_size acts as a memory guard.
+        self.shared_pool_size_init = min(int(getattr(self.config, 'max_cache_size', 5000)),
+                                         max(256, 2 * int(getattr(self.config, 'num_simulations', 50))))
 
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
@@ -207,42 +214,155 @@ class WorldModel(nn.Module):
         """Initialize cache structures for past keys and values."""
         from collections import defaultdict
 
-        # self.past_kv_cache_recurrent_infer = defaultdict(dict)
-        # self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
+        # ==================== Parallel KV Cache Systems ====================
+        # Check if we should use the new KV cache manager
+        self.use_new_cache_manager = getattr(self.config, 'use_new_cache_manager', False)
 
-        self.past_kv_cache_recurrent_infer = {}
-        self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
-        self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
-        # 辅助数据结构，用于反向查找：pool_index -> key
-        self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
+        if self.use_new_cache_manager:
+            # Use new unified KV cache manager
+            from .kv_cache_manager import KVCacheManager
+            self.kv_cache_manager = KVCacheManager(
+                config=self.config,
+                env_num=self.env_num,
+                enable_stats=True,
+                clear_recur_log_freq=1000,  # MCTS recurrent clearing log, print every 1000 times
+                clear_all_log_freq=100      # Episode reset clearing log, print every 100 times
+            )
+            # Keep backward compatibility references
+            self.keys_values_wm_list = self.kv_cache_manager.keys_values_wm_list
+            self.keys_values_wm_size_list = self.kv_cache_manager.keys_values_wm_size_list
 
-        self.keys_values_wm_list = []
-        self.keys_values_wm_size_list = []
-        
+            # ==================== BUG FIX: Complete Refactoring ====================
+            # DO NOT initialize old system attributes when using new cache manager.
+            # Any code that depends on these old attributes must be refactored to use
+            # kv_cache_manager instead.
+            #
+            # Old attributes that are NO LONGER available in new system:
+            # - self.past_kv_cache_recurrent_infer
+            # - self.pool_idx_to_key_map_recur_infer
+            # - self.past_kv_cache_init_infer_envs
+            # - self.pool_idx_to_key_map_init_envs
+            #
+            # Migration guide:
+            # - For accessing init cache: use kv_cache_manager.get_init_cache(env_id, key)
+            # - For accessing recur cache: use kv_cache_manager.get_recur_cache(key)
+            # - For hierarchical lookup: use kv_cache_manager.hierarchical_get(env_id, key)
+            # ======================================================================
+
+            logging.info("✓ Using NEW KVCacheManager for cache management")
+        else:
+            # Use old cache system (original implementation)
+            self.past_kv_cache_recurrent_infer = {}
+            self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+            self.past_kv_cache_init_infer_envs = [{} for _ in range(self.env_num)]
+            # Auxiliary data structure for reverse lookup: pool_index -> key
+            self.pool_idx_to_key_map_init_envs = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
+
+            self.keys_values_wm_list = []
+            self.keys_values_wm_size_list = []
+            logging.info("Using OLD cache system (original implementation)")
+        # =============================================================================
+
+    def _inspect_and_log_head_params(self, head_name: str, head_module: nn.Module, status: str):
+        """
+        Inspect and log parameter statistics for the specified Head module.
+
+        Args:
+            head_name (str): The name of the Head to inspect (e.g., "Value Head").
+            head_module (nn.Module): The actual nn.Sequential module of the Head.
+            status (str): A string describing the current status (e.g., "Before Re-init").
+        """
+        logging.info(f"--- Inspecting {head_name} parameters ({status}) ---")
+        with torch.no_grad():
+            for param_name, param in head_module.named_parameters():
+                if param.numel() > 0:
+                    stats = {
+                        "mean": param.mean().item(),
+                        "std": param.std().item(),
+                        "abs_mean": param.abs().mean().item(),
+                        "max": param.max().item(),
+                        "min": param.min().item(),
+                    }
+                    logging.info(
+                        f"  -> {param_name:<20} | "
+                        f"Mean: {stats['mean']:.4f}, Std: {stats['std']:.4f}, "
+                        f"AbsMean: {stats['abs_mean']:.4f}, "
+                        f"Max: {stats['max']:.4f}, Min: {stats['min']:.4f}"
+                    )
+        logging.info("-" * (23 + len(head_name) + len(status)))
+
+    def reinit_prediction_heads(self, heads_to_reinit: List[str] = ['value', 'reward']) -> None:
+        """
+        Reinitialize the parameters of specified prediction heads (e.g., Value Head and Reward Head).
+        Parameter statistics are logged before and after reinitialization for analysis.
+
+        Args:
+            heads_to_reinit (List[str]): A list containing the names of the heads to reinitialize.
+                                        Defaults to ['value', 'reward'].
+        """
+        logging.info(f"Starting reinitialization of prediction heads: {heads_to_reinit}")
+
+        head_map = {
+            'value': self.head_value,
+            'reward': self.head_rewards,
+            'policy': self.head_policy,
+        }
+
+        def _init_weights_for_head(module):
+            # TODO
+            init_weights(module, norm_type=self.config.norm_type, liner_weight_zero=True)
+
+        for head_name in heads_to_reinit:
+            if head_name in head_map and hasattr(head_map[head_name], 'head_module'):
+                head_instance = head_map[head_name]
+                capitalized_name = head_name.capitalize() + " Head"
+
+                # 1. Inspect parameters before reinitialization
+                self._inspect_and_log_head_params(capitalized_name, head_instance.head_module, "Before Re-init")
+
+                # 2. Apply reinitialization
+                logging.info(f"Reinitializing {capitalized_name}...")
+                head_instance.head_module.apply(_init_weights_for_head)
+
+                # 3. Inspect parameters again after reinitialization
+                self._inspect_and_log_head_params(capitalized_name, head_instance.head_module, "After Re-init")
+
+                logging.info(f"{capitalized_name} parameters successfully reinitialized.")
+            else:
+                logging.warning(f"Prediction head named '{head_name}' or its 'head_module' not found. Skipping.")
+
+        logging.info("Reinitialization of all specified prediction heads completed.")
+
     def _analyze_latent_representation(
-            self, 
-            latent_states: torch.Tensor, 
-            timesteps: torch.Tensor, 
-            game_states: torch.Tensor, 
+            self,
+            latent_states: torch.Tensor,
+            timesteps: torch.Tensor,
+            game_states: torch.Tensor,
             predicted_values: torch.Tensor,
             predicted_rewards: torch.Tensor,
             step_counter: int
         ):
             """
-            分析并记录 latent states 的统计信息和t-SNE可视化。
-            【新功能】：在t-SNE图上显示对应的游戏图像，并标注预测的Value和Reward。
-            【已修改】：如果保存路径已存在同名文件，则在文件名后附加时间戳。
-            
+            Analyze and log statistics of latent states with t-SNE visualization.
+            [New feature]: Display corresponding game images on t-SNE plot with predicted Value and Reward annotations.
+            [Modified]: If the save path already exists, append a timestamp to the filename.
+
             Args:
-                latent_states (torch.Tensor): Encoder的输出, shape (B*L, 1, E)
-                timesteps (torch.Tensor): 对应的时间步, shape (B, L)
-                game_states (torch.Tensor): 原始的游戏观测, shape (B, L, C, H, W)
-                predicted_values (torch.Tensor): 预测的标量Value, shape (B*L,)
-                predicted_rewards (torch.Tensor): 预测的标量Reward, shape (B*L,)
-                step_counter (int): 全局训练步数
+                latent_states (torch.Tensor): Encoder output, shape (B*L, 1, E)
+                timesteps (torch.Tensor): Corresponding timesteps, shape (B, L)
+                game_states (torch.Tensor): Original game observations, shape (B, L, C, H, W)
+                predicted_values (torch.Tensor): Predicted scalar Values, shape (B*L,)
+                predicted_rewards (torch.Tensor): Predicted scalar Rewards, shape (B*L,)
+                step_counter (int): Global training step count
             """
-            # ... (统计分析部分保持不变) ...
-            # (确保 latent_states 和 game_states 的形状为 (N, ...))
+            # Plotting/ML dependencies are imported lazily: this analysis path is only enabled
+            # for occasional debugging and should not add hard dependencies to normal training.
+            import datetime
+            import matplotlib.pyplot as plt
+            from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+            from sklearn.manifold import TSNE
+
+            # Ensure latent_states and game_states have shape (N, ...)
             if latent_states.dim() > 2:
                 latent_states = latent_states.reshape(-1, latent_states.shape[-1])
             num_c, num_h, num_w = game_states.shape[-3:]
@@ -252,15 +372,13 @@ class WorldModel(nn.Module):
                 l2_norm = torch.norm(latent_states, p=2, dim=1).mean()
                 mean = latent_states.mean()
                 std = latent_states.std()
-                print(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
+                logging.info(f"[Step {step_counter}] Latent Stats | L2 Norm: {l2_norm:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
 
-            # 带图像和V/R值的 t-SNE 可视化
+            # t-SNE visualization with images and V/R values
             if step_counter >= 0:
-            # if step_counter > 0 and step_counter % 200 == 0:
+                logging.info(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
 
-                print(f"[Step {step_counter}] Performing t-SNE analysis with images, values, and rewards...")
-
-                # 将数据转换到CPU
+                # Convert data to CPU
                 latents_np = latent_states.detach().cpu().numpy()
                 images_np = game_states.detach().cpu().numpy()
                 values_np = predicted_values.detach().cpu().numpy()
@@ -269,15 +387,15 @@ class WorldModel(nn.Module):
                 tsne = TSNE(n_components=2, perplexity=30, n_iter=300, random_state=42)
                 tsne_results = tsne.fit_transform(latents_np)
 
-                # --- 绘制带图像和标注的散点图 ---
+                # Draw scatter plot with images and annotations
 
-                # 减少图像数量以保持清晰
-                num_points_to_plot = min(len(latents_np), 70) # 减少到70个点
+                # Reduce number of images to keep clarity
+                num_points_to_plot = min(len(latents_np), 70)  # Reduce to 70 points
                 indices = np.random.choice(len(latents_np), num_points_to_plot, replace=False)
 
-                fig, ax = plt.subplots(figsize=(20, 18)) # 增大画布尺寸
+                fig, ax = plt.subplots(figsize=(20, 18))  # Increase canvas size
 
-                # 先画出所有点的散点图作为背景
+                # First draw all points as background scatter plot
                 ax.scatter(tsne_results[:, 0], tsne_results[:, 1], c=values_np, cmap='viridis', alpha=0.3, s=10)
 
                 for i in indices:
@@ -285,12 +403,12 @@ class WorldModel(nn.Module):
                     img = images_np[i].transpose(1, 2, 0)
                     img = np.clip(img, 0, 1)
 
-                    # 放置图像
-                    im = OffsetImage(img, zoom=0.7) # 稍微放大图像
+                    # Place image
+                    im = OffsetImage(img, zoom=0.7)  # Slightly enlarge image
                     ab = AnnotationBbox(im, (x, y), frameon=True, pad=0.0, bboxprops=dict(edgecolor='none'))
                     ax.add_artist(ab)
 
-                    # 在图像下方添加文字标注
+                    # Add text annotation below image
                     text_label = f"V:{values_np[i]:.1f} R:{rewards_np[i]:.1f}"
                     ax.text(x, y - 1.0, text_label, ha='center', va='top', fontsize=8, color='red',
                             bbox=dict(boxstyle='round,pad=0.2', fc='yellow', alpha=0.5))
@@ -302,38 +420,36 @@ class WorldModel(nn.Module):
                 ax.set_xlabel('t-SNE dimension 1', fontsize=12)
                 ax.set_ylabel('t-SNE dimension 2', fontsize=12)
 
-                # 添加colorbar来解释背景点的颜色
+                # Add colorbar to explain background point colors
                 norm = plt.Normalize(values_np.min(), values_np.max())
                 sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
                 sm.set_array([])
                 fig.colorbar(sm, ax=ax, label='Predicted Value')
 
-                # --- 修改部分：检查文件是否存在，如果存在则添加时间戳 ---
-                # 1. 构建基础路径
-                # base_save_path = (
-                #     f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
-                #     f'tsne_with_vr_{self.config.optim_type}_lr{self.config.learning_rate}_step_{step_counter}.png'
-                # )
-                base_save_path = (
-                    f'/mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/atari/unizero_mspacman_analyze/'
-                    f'tsne_with_vr_{self.config.optim_type}_step_{step_counter}.png'
+                # Save under a configurable analysis directory (defaults to ./analysis);
+                # if the file exists, append a timestamp to the filename.
+                analysis_save_dir = getattr(self.config, 'analysis_save_dir', './analysis')
+                os.makedirs(analysis_save_dir, exist_ok=True)
+                base_save_path = os.path.join(
+                    analysis_save_dir,
+                    f'tsne_with_vr_{getattr(self.config, "optim_type", "default")}_step_{step_counter}.png'
                 )
 
-                # 2. 检查文件是否存在，并确定最终保存路径
+                # Check if file exists and determine final save path
                 if os.path.exists(base_save_path):
-                    # 如果文件已存在，则生成时间戳并附加到文件名
+                    # If file already exists, generate timestamp and append to filename
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     path_root, path_ext = os.path.splitext(base_save_path)
                     save_path = f"{path_root}_{timestamp}{path_ext}"
-                    print(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
+                    logging.info(f"File '{base_save_path}' already exists. Saving to new path with timestamp.")
                 else:
-                    # 如果文件不存在，则使用原始路径
+                    # If file doesn't exist, use original path
                     save_path = base_save_path
 
-                # 3. 保存图像
+                # Save image
                 plt.savefig(save_path)
-                plt.close(fig) # 明确关闭图形对象
-                print(f"t-SNE plot with V/R annotations saved to {save_path}")
+                plt.close(fig)  # Explicitly close figure object
+                logging.info(f"t-SNE plot with V/R annotations saved to {save_path}")
 
     def _get_final_norm(self, norm_option: str) -> nn.Module:
         """
@@ -392,7 +508,7 @@ class WorldModel(nn.Module):
             - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
         """
         src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
-        
+
         if self.shared_pool_wm[self.shared_pool_index_wm] is None:
             # import ipdb; ipdb.set_trace()
             self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
@@ -405,7 +521,7 @@ class WorldModel(nn.Module):
             )
         
         dst_kv = self.shared_pool_wm[self.shared_pool_index_wm]
-        
+
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
             # Copy the key and value caches using torch.copy_() for efficient data transfer
             # try:
@@ -478,6 +594,50 @@ class WorldModel(nn.Module):
         self.num_layers = self.config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
+        # ==================== [NEW] Policy Stability Fix Options ====================
+        # Load fix options from config (with defaults for backward compatibility)
+        self.use_policy_logits_clip = getattr(self.config, 'use_policy_logits_clip', False)
+        self.policy_logits_clip_method = getattr(self.config, 'policy_logits_clip_method', 'normalize_max')
+        self.policy_logits_clip_min = getattr(self.config, 'policy_logits_clip_min', -10.0)
+        self.policy_logits_clip_max = getattr(self.config, 'policy_logits_clip_max', 10.0)
+        self.policy_logits_soft_beta = getattr(self.config, 'policy_logits_soft_beta', 1.0)
+        self.policy_logits_adaptive_percentile = getattr(self.config, 'policy_logits_adaptive_percentile', 95)
+
+        # Running statistics for adaptive clipping
+        if self.policy_logits_clip_method == 'adaptive':
+            self.register_buffer('policy_logits_running_max', torch.tensor(10.0))
+            self.register_buffer('policy_logits_running_min', torch.tensor(-10.0))
+            self.policy_logits_momentum = 0.99
+
+        # [NEW] Fix5: Temperature scaling for policy loss
+        self.use_policy_loss_temperature = getattr(self.config, 'use_policy_loss_temperature', False)
+        self.policy_loss_temperature = getattr(self.config, 'policy_loss_temperature', 1.0)
+
+        # [NEW] Fix3: Check if target policy re-smooth is enabled (now deprecated in favor of Fix2)
+        use_target_policy_resmooth = getattr(self.config, 'use_target_policy_resmooth', False)
+        if use_target_policy_resmooth:
+            logging.warning(
+                "[DEPRECATED] use_target_policy_resmooth=True is deprecated! "
+                "Policy label smoothing should now be controlled by 'continuous_ls_eps' in policy config. "
+                "Fix3 (use_target_policy_resmooth) creates redundant smoothing with Fix2. "
+                "Please set use_target_policy_resmooth=False and use continuous_ls_eps instead."
+            )
+
+        # [NEW] Debug: Print configuration on initialization
+        if self.use_policy_logits_clip:
+            logging.info(
+                f"[Policy Logits Control] ENABLED\n"
+                f"  Method: {self.policy_logits_clip_method}\n"
+                f"  Range: [{self.policy_logits_clip_min}, {self.policy_logits_clip_max}]\n"
+                f"  Soft Beta: {self.policy_logits_soft_beta if 'soft' in self.policy_logits_clip_method else 'N/A'}"
+            )
+        else:
+            logging.warning(f"[Policy Logits Control] DISABLED! Logits may grow unbounded.")
+
+        if self.use_policy_loss_temperature and self.policy_loss_temperature != 1.0:
+            logging.info(f"[Policy Loss Temperature] ENABLED: temperature={self.policy_loss_temperature}")
+        # =============================================================================
+
     def _initialize_patterns(self) -> None:
         """Initialize patterns for block masks."""
         self.all_but_last_latent_state_pattern = torch.ones(self.config.tokens_per_block)
@@ -487,14 +647,144 @@ class WorldModel(nn.Module):
         self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
         self.value_policy_tokens_pattern[-2] = 1
 
+    def _apply_policy_logits_control(self, logits_policy: torch.Tensor) -> torch.Tensor:
+        """
+        Apply policy logits control using various methods to prevent explosion.
+
+        This method implements multiple strategies to constrain policy logits:
+        1. 'hard': Hard clamp (torch.clamp) - Simple but gradients die at boundaries
+        2. 'soft_tanh': Soft clamp using tanh - Smooth, gradients never zero
+        3. 'soft_sigmoid': Soft clamp using sigmoid - Similar to tanh but different curve
+        4. 'normalize_max': Subtract max then clamp - Preserves relative order, safer
+        5. 'normalize_mean': Subtract mean then clamp - Centers distribution
+        6. 'adaptive': Adaptive clipping based on running statistics
+        7. 'none': No clipping
+
+        Arguments:
+            - logits_policy (:obj:`torch.Tensor`): Raw policy logits from head_policy
+                Shape: [batch_size, num_steps, action_dim] or [batch_size * num_steps, action_dim]
+
+        Returns:
+            - torch.Tensor: Controlled policy logits with the same shape
+
+        Examples:
+            >>> logits = torch.randn(32, 10, 6) * 20  # Large logits
+            >>> controlled = self._apply_policy_logits_control(logits)
+            >>> assert controlled.abs().max() <= self.policy_logits_clip_max
+        """
+        if not self.use_policy_logits_clip or self.policy_logits_clip_method == 'none':
+            return logits_policy
+
+        method = self.policy_logits_clip_method
+        clip_min = self.policy_logits_clip_min
+        clip_max = self.policy_logits_clip_max
+
+        # ==================== Method 1: Hard Clamp ====================
+        if method == 'hard':
+            # Simple hard clipping
+            # Pros: Simple, fast
+            # Cons: Gradients become zero outside [clip_min, clip_max]
+            return torch.clamp(logits_policy, min=clip_min, max=clip_max)
+
+        # ==================== Method 2: Soft Tanh Clamp ====================
+        elif method == 'soft_tanh':
+            # Soft clamp using tanh function: clip_max * tanh(x / clip_max)
+            # Pros: Gradients never zero, smooth transition
+            # Cons: Slightly more computation
+            # When x is small: tanh(x) ≈ x, so output ≈ x (unchanged)
+            # When x is large: tanh(x) → 1, so output → clip_max (smoothly saturates)
+            C = clip_max  # Use positive bound as scale
+            beta = self.policy_logits_soft_beta  # Smoothness parameter
+            return C * torch.tanh(logits_policy / (C * beta))
+
+        # ==================== Method 3: Soft Sigmoid Clamp ====================
+        elif method == 'soft_sigmoid':
+            # Soft clamp using sigmoid: maps (-∞, ∞) to (clip_min, clip_max)
+            # Formula: clip_min + (clip_max - clip_min) * sigmoid(x / beta)
+            # Pros: Smooth, bounded
+            # Cons: Compresses entire range, may lose relative ordering
+            beta = self.policy_logits_soft_beta
+            range_size = clip_max - clip_min
+            return clip_min + range_size * torch.sigmoid(logits_policy / beta)
+
+        # ==================== Method 4: Normalize Max + Hard Clamp ====================
+        elif method == 'normalize_max':
+            # Subtract max value first (exploits softmax translation invariance)
+            # softmax(x) = softmax(x - c) for any constant c
+            # By subtracting max, we ensure the largest logit is 0, others are negative
+            # Then apply hard clamp (mainly affects the negative tail)
+            # Pros: Preserves relative ordering, safer than pure hard clamp
+            # Cons: Still has gradient issues for very negative values
+            logits_normalized = logits_policy - logits_policy.max(dim=-1, keepdim=True)[0].detach()
+            return torch.clamp(logits_normalized, min=clip_min, max=clip_max)
+
+        # ==================== Method 5: Normalize Mean + Hard Clamp ====================
+        elif method == 'normalize_mean':
+            # Subtract mean (centers the distribution)
+            # Pros: Centers logits around 0, prevents drift
+            # Cons: May change relative probabilities more than normalize_max
+            logits_normalized = logits_policy - logits_policy.mean(dim=-1, keepdim=True).detach()
+            return torch.clamp(logits_normalized, min=clip_min, max=clip_max)
+
+        # ==================== Method 6: Adaptive Clipping ====================
+        elif method == 'adaptive':
+            # Dynamically adjust clipping thresholds based on running statistics
+            # Update running stats (only during training)
+            if self.training:
+                with torch.no_grad():
+                    # Compute percentile-based bounds
+                    flat_logits = logits_policy.view(-1)
+                    percentile = self.policy_logits_adaptive_percentile
+                    current_max = torch.quantile(flat_logits, percentile / 100.0)
+                    current_min = torch.quantile(flat_logits, (100 - percentile) / 100.0)
+
+                    # Update running statistics with momentum
+                    self.policy_logits_running_max = (
+                        self.policy_logits_momentum * self.policy_logits_running_max +
+                        (1 - self.policy_logits_momentum) * current_max
+                    )
+                    self.policy_logits_running_min = (
+                        self.policy_logits_momentum * self.policy_logits_running_min +
+                        (1 - self.policy_logits_momentum) * current_min
+                    )
+
+            # Use running stats for clipping
+            adaptive_max = torch.clamp(self.policy_logits_running_max, max=clip_max)
+            adaptive_min = torch.clamp(self.policy_logits_running_min, min=clip_min)
+            return torch.clamp(logits_policy, min=adaptive_min, max=adaptive_max)
+
+        else:
+            raise ValueError(
+                f"Unknown policy_logits_clip_method: {method}. "
+                f"Valid options: 'hard', 'soft_tanh', 'soft_sigmoid', 'normalize_max', "
+                f"'normalize_mean', 'adaptive', 'none'"
+            )
+
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
         modules = [
-            nn.LayerNorm(self.config.embed_dim),  # <-- 核心优化！ # TODO
-            nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            nn.LayerNorm(self.config.embed_dim),      # 2. <-- 新增！稳定内部激活
+            nn.LayerNorm(self.config.embed_dim),  # Core optimization! # TODO
+            nn.Linear(self.config.embed_dim, self.config.embed_dim*4),
+            nn.LayerNorm(self.config.embed_dim*4),  # 2. New! Stabilize internal activations
             nn.GELU(approximate='tanh'),
-            nn.Linear(self.config.embed_dim, output_dim)
+            nn.Linear(self.config.embed_dim*4, output_dim)
+        ]
+        if norm_layer:
+            modules.append(norm_layer)
+        return Head(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=nn.Sequential(*modules)
+        )
+    
+    def _create_head_for_latent(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+        """Create head modules for the transformer."""
+        modules = [
+            nn.LayerNorm(self.config.embed_dim),  # Core optimization! # TODO
+            nn.Linear(self.config.embed_dim, self.config.embed_dim*4),
+            nn.LayerNorm(self.config.embed_dim*4),  # 2. New! Stabilize internal activations
+            nn.GELU(approximate='tanh'),
+            nn.Linear(self.config.embed_dim*4, output_dim)
         ]
         if norm_layer:
             modules.append(norm_layer)
@@ -525,12 +815,32 @@ class WorldModel(nn.Module):
 
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
-        last_linear_layer_init_zero = True  # TODO
+        last_linear_layer_init_zero = getattr(self.config, 'last_linear_layer_init_zero', True)
         if last_linear_layer_init_zero:
+            zero_init_head_names = getattr(self.config, 'zero_init_head_names', None)
             if self.continuous_action_space:
-                module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
+                default_heads_to_initialize = ['value', 'reward', 'observation']
             else:
-                module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
+                default_heads_to_initialize = ['policy', 'value', 'reward', 'observation']
+            if zero_init_head_names is None:
+                zero_init_head_names = default_heads_to_initialize
+            elif isinstance(zero_init_head_names, str):
+                zero_init_head_names = [zero_init_head_names]
+
+            head_map = {
+                'policy': self.head_policy,
+                'value': self.head_value,
+                'reward': self.head_rewards,
+                'rewards': self.head_rewards,
+                'observation': self.head_observations,
+                'observations': self.head_observations,
+            }
+            module_to_initialize = []
+            for head_name in zero_init_head_names:
+                if head_name not in head_map:
+                    raise ValueError(f"Unknown zero-init head name: {head_name}")
+                module_to_initialize.append(head_map[head_name])
+
             for head in module_to_initialize:
                 for layer in reversed(head.head_module):
                     if isinstance(layer, nn.Linear):
@@ -856,6 +1166,14 @@ class WorldModel(nn.Module):
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+
+        # ==================== [NEW] Advanced Policy Logits Control ====================
+        # Apply configurable policy logits control to prevent explosion
+        # Multiple methods available: hard, soft_tanh, soft_sigmoid, normalize_max, etc.
+        if self.use_policy_logits_clip:
+            logits_policy = self._apply_policy_logits_control(logits_policy)
+        # ================================================================================
+
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
         # The 'logits_ends' is intentionally set to None.
@@ -1027,6 +1345,7 @@ class WorldModel(nn.Module):
             batch_obs = obs_act_dict['obs']  # obs_act_dict['obs'] is at timestep t
             batch_action = obs_act_dict['action'] # obs_act_dict['action'] is at timestep t
             batch_current_obs = obs_act_dict['current_obs'] # obs_act_dict['current_obs'] is at timestep t+1
+            ready_env_id = obs_act_dict.get('ready_env_id', None)
 
         # Encode observations to latent embeddings.
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_obs)
@@ -1038,7 +1357,7 @@ class WorldModel(nn.Module):
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
-                                                                                   current_obs_embeddings, start_pos)
+                                                                 current_obs_embeddings, start_pos, ready_env_id)
         else:
             # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
             self.latent_state = obs_embeddings
@@ -1048,9 +1367,14 @@ class WorldModel(nn.Module):
 
     #@profile
     @torch.no_grad()
-    def wm_forward_for_initial_infererence(self, last_obs_embeddings: torch.LongTensor,
-                                                             batch_action=None,
-                                                             current_obs_embeddings=None, start_pos: int = 0) -> torch.FloatTensor:
+    def wm_forward_for_initial_infererence(
+            self,
+            last_obs_embeddings: torch.LongTensor,
+            batch_action=None,
+            current_obs_embeddings=None,
+            start_pos: int = 0,
+            ready_env_id: Optional[List[int]] = None
+    ) -> torch.FloatTensor:
         """
         Refresh key-value pairs with the initial latent state for inference.
 
@@ -1066,20 +1390,119 @@ class WorldModel(nn.Module):
 
         n, num_observations_tokens, _ = last_obs_embeddings.shape
 
-        # [FIX] Handle the case when batch_action is None (initial inference without action)
-        # In this case, we should just process the observations for initial latent state
-        if batch_action is None and current_obs_embeddings is None:
-            # Initial observation encoding without action, just return forward pass
-            # This happens at the very first step when collecting initial observations
-            outputs_wm = self.forward({'obs_embeddings': last_obs_embeddings}, start_pos=start_pos)
-        elif n <= self.env_num and current_obs_embeddings is not None:
+        def _slice_batch(value, indices: List[int]):
+            if value is None:
+                return None
+            if isinstance(value, torch.Tensor):
+                return value[indices]
+            if isinstance(value, np.ndarray):
+                return value[indices]
+            return [value[i] for i in indices]
+
+        def _start_pos_value(value, index: int) -> int:
+            if isinstance(value, (int, float)):
+                return int(value)
+            item = value[index]
+            if hasattr(item, "item"):
+                return int(item.item())
+            return int(item)
+
+        def _merge_world_model_outputs(chunks: List[Tuple[List[int], WorldModelOutput]],
+                                       batch_size: int) -> WorldModelOutput:
+            sample_output = chunks[0][1]
+
+            def _merge_tensor(attr: str):
+                sample_tensor = getattr(sample_output, attr)
+                if sample_tensor is None:
+                    return None
+                for _, output in chunks[1:]:
+                    source_tensor = getattr(output, attr)
+                    if source_tensor is None:
+                        return None
+                    if source_tensor.shape[1:] != sample_tensor.shape[1:]:
+                        if attr in {"output_sequence", "logits_policy", "logits_value"}:
+                            raise RuntimeError(
+                                f"Cannot merge mixed UniZero root batch: {attr} has incompatible shapes "
+                                f"{sample_tensor.shape[1:]} and {source_tensor.shape[1:]}."
+                            )
+                        logging.debug(
+                            f"Skipping mixed root batch merge for auxiliary {attr}: "
+                            f"incompatible shapes {sample_tensor.shape[1:]} and {source_tensor.shape[1:]}."
+                        )
+                        return None
+                merged = torch.empty(
+                    (batch_size, *sample_tensor.shape[1:]),
+                    dtype=sample_tensor.dtype,
+                    device=sample_tensor.device,
+                )
+                for indices, output in chunks:
+                    source_tensor = getattr(output, attr)
+                    for local_idx, batch_idx in enumerate(indices):
+                        merged[batch_idx].copy_(source_tensor[local_idx])
+                return merged
+
+            return WorldModelOutput(
+                output_sequence=_merge_tensor("output_sequence"),
+                logits_observations=_merge_tensor("logits_observations"),
+                logits_rewards=_merge_tensor("logits_rewards"),
+                logits_ends=_merge_tensor("logits_ends"),
+                logits_policy=_merge_tensor("logits_policy"),
+                logits_value=_merge_tensor("logits_value"),
+            )
+
+        if current_obs_embeddings is not None:
+            ready_env_num = current_obs_embeddings.shape[0]
+            if ready_env_id is None:
+                ready_env_id = list(range(ready_env_num))
+            else:
+                ready_env_id = [int(env_id) for env_id in ready_env_id]
+                if len(ready_env_id) != ready_env_num:
+                    raise ValueError(
+                        f"ready_env_id length ({len(ready_env_id)}) must match "
+                        f"current_obs_embeddings batch ({ready_env_num})."
+                    )
+            self.current_infer_env_ids = ready_env_id
+        if n <= self.env_num and current_obs_embeddings is not None:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
                  # Determine whether it is the first step in an episode.
                 if self.continuous_action_space:
                     first_step_flag = not isinstance(batch_action[0], np.ndarray)
                 else:
-                    first_step_flag = max(batch_action) == -1
+                    first_step_flags = [int(action) == -1 for action in batch_action]
+                    first_step_flag = any(first_step_flags)
+                    if first_step_flag and not all(first_step_flags):
+                        logging.debug(
+                            "Mixed first-step and continuing envs in one UniZero root batch; "
+                            "splitting the batch to preserve per-env KV-cache context."
+                        )
+                        first_indices = [idx for idx, flag in enumerate(first_step_flags) if flag]
+                        continuing_indices = [idx for idx, flag in enumerate(first_step_flags) if not flag]
+                        chunks = []
+                        if first_indices:
+                            chunks.append((
+                                first_indices,
+                                self.wm_forward_for_initial_infererence(
+                                    _slice_batch(last_obs_embeddings, first_indices),
+                                    _slice_batch(batch_action, first_indices),
+                                    _slice_batch(current_obs_embeddings, first_indices),
+                                    _slice_batch(start_pos, first_indices),
+                                    _slice_batch(ready_env_id, first_indices),
+                                )
+                            ))
+                        if continuing_indices:
+                            chunks.append((
+                                continuing_indices,
+                                self.wm_forward_for_initial_infererence(
+                                    _slice_batch(last_obs_embeddings, continuing_indices),
+                                    _slice_batch(batch_action, continuing_indices),
+                                    _slice_batch(current_obs_embeddings, continuing_indices),
+                                    _slice_batch(start_pos, continuing_indices),
+                                    _slice_batch(ready_env_id, continuing_indices),
+                                )
+                            ))
+                        self.current_infer_env_ids = ready_env_id
+                        return _merge_world_model_outputs(chunks, ready_env_num)
                 if first_step_flag:
                     # ------------------------- First Step of an Episode -------------------------
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
@@ -1089,7 +1512,7 @@ class WorldModel(nn.Module):
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
                     # Copy and store keys_values_wm for a single environment
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True, env_ids=ready_env_id)
                 else:
                     # --------------------- Continuing an Episode (Multi-environment) ---------------------
                     # current_obs_embeddings is the new latent_state, containing information from ready_env_num environments
@@ -1098,6 +1521,7 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list = []
 
                     for i in range(ready_env_num):
+                        cache_env_id = ready_env_id[i]
                         # Retrieve latent state for a single environment
                         # TODO: len(last_obs_embeddings) may smaller than len(current_obs_embeddings), because some environments may have done
 
@@ -1105,19 +1529,34 @@ class WorldModel(nn.Module):
                         # Compute hash value using latent state for a single environment
                         cache_key = hash_state(state_single_env.view(-1).cpu().numpy())  # last_obs_embeddings[i] is torch.Tensor
 
+                        # ==================== Storage Layer Integration ====================
                         # Retrieve cached value
-                        cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
-                        if cache_index is not None:
-                            matched_value = self.shared_pool_init_infer[i][cache_index]
+                        if self.use_new_cache_manager:
+                            # NEW SYSTEM: Use KVCacheManager
+                            matched_value = self.kv_cache_manager.get_init_cache(env_id=cache_env_id, cache_key=cache_key)
                         else:
-                            matched_value = None
+                            # OLD SYSTEM: Use legacy cache dictionaries
+                            cache_index = self.past_kv_cache_init_infer_envs[cache_env_id].get(cache_key)
+                            if cache_index is not None:
+                                matched_value = self.shared_pool_init_infer[cache_env_id][cache_index]
+                            else:
+                                matched_value = None
+                        # =============================================================================
 
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
-                            # NOTE: deepcopy is needed because forward modifies matched_value in place
-                            self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                            # ==================== BUG FIX: Cache Corruption Prevention ====================
+                            # Perform a deep copy because the transformer's forward pass modifies matched_value in-place.
+                            if self.use_new_cache_manager:
+                                # NEW SYSTEM: Use KeysValues.clone() for deep copy
+                                cached_copy = matched_value.clone()
+                                self.keys_values_wm_list.append(cached_copy)
+                            else:
+                                # OLD SYSTEM: Use custom_copy_kv_cache_to_shared_wm
+                                self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                            # =============================================================================
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -1125,9 +1564,9 @@ class WorldModel(nn.Module):
                             # If using RoPE positional encoding, then at reset, the pos_embed should use the absolute position start_pos[i].
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True, start_pos=start_pos[i].item())
+                                                      is_init_infer=True, start_pos=_start_pos_value(start_pos, i))
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
-                            self.keys_values_wm_size_list.append(1)
+                            self.keys_values_wm_size_list.append(self.keys_values_wm_single_env.size)
 
                     # Input self.keys_values_wm_list, output self.keys_values_wm
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
@@ -1158,7 +1597,7 @@ class WorldModel(nn.Module):
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
                     # Copy and store keys_values_wm for a single environment
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True, env_ids=ready_env_id)
 
         elif batch_action is not None and current_obs_embeddings is None:
             # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
@@ -1216,7 +1655,15 @@ class WorldModel(nn.Module):
         """
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, start_pos)
-        self.past_kv_cache_recurrent_infer.clear()
+
+        # ==================== BUG FIX: Clear Cache Using Correct API ====================
+        if self.use_new_cache_manager:
+            # NEW SYSTEM: Clear recurrent cache using KVCacheManager
+            self.kv_cache_manager.clear_recur_cache()
+        else:
+            # OLD SYSTEM: Clear using legacy attribute
+            self.past_kv_cache_recurrent_infer.clear()
+        # =============================================================================
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
@@ -1375,7 +1822,7 @@ class WorldModel(nn.Module):
 
     #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             search_depth=[], valid_context_lengths=None):
+                             search_depth=[], valid_context_lengths=None, env_ids: Optional[List[int]] = None):
         """
         Update the cache context with the given latent state.
 
@@ -1389,8 +1836,18 @@ class WorldModel(nn.Module):
         if self.context_length <= 2:
             # No context to update if the context length is less than or equal to 2.
             return
+        if is_init_infer:
+            if env_ids is None:
+                env_ids = list(range(latent_state.size(0)))
+            else:
+                env_ids = [int(env_id) for env_id in env_ids]
+                if len(env_ids) != latent_state.size(0):
+                    raise ValueError(
+                        f"env_ids length ({len(env_ids)}) must match latent_state batch ({latent_state.size(0)})."
+                    )
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
+            cache_env_id = env_ids[i] if is_init_infer else i
             cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor
             context_length = self.context_length
 
@@ -1510,53 +1967,62 @@ class WorldModel(nn.Module):
                         self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length - 3
                         self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length - 3
 
-            # ORIGNAL
-            # if is_init_infer:
-            #     # Store the latest key-value cache for initial inference
-            #     cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
-            #     self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
-            # else:
-            #     # Store the latest key-value cache for recurrent inference
-            #     cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
-            #     self.past_kv_cache_recurrent_infer[cache_key] = cache_index
-
-
-            if is_init_infer:
-                # TODO
-                # ==================== 主动淘汰修复逻辑 ====================
-                # 1. 获取即将被覆写的物理索引
-                index_to_write = self.shared_pool_index_init_envs[i]
-                # 2. 使用辅助列表查找该索引上存储的旧的 key
-                old_key_to_evict = self.pool_idx_to_key_map_init_envs[i][index_to_write]
-                # 3. 如果存在旧 key，就从主 cache map 中删除它
-                if old_key_to_evict is not None:
-                    # 确保要删除的键确实存在，避免意外错误
-                    if old_key_to_evict in self.past_kv_cache_init_infer_envs[i]:
-                        del self.past_kv_cache_init_infer_envs[i][old_key_to_evict]
-
-                # 现在可以安全地写入新数据了
-                cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
-
-                # 4. 在主 cache map 和辅助列表中同时更新新的映射关系
-                self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
-                self.pool_idx_to_key_map_init_envs[i][index_to_write] = cache_key
+            if self.use_new_cache_manager:
+                # NEW SYSTEM: Use KVCacheManager for cache storage
+                # The manager stores a private fixed-pool copy, so callers do not
+                # allocate an extra clone on every recurrent MCTS update.
+                if is_init_infer:
+                    # Store to per-environment init cache pool
+                    # Note: KVCacheManager automatically handles eviction logic (FIFO/LRU)
+                    self.kv_cache_manager.set_init_cache(
+                        env_id=cache_env_id,
+                        cache_key=cache_key,
+                        kv_cache=self.keys_values_wm_single_env
+                    )
+                else:
+                    # Store to global recurrent cache pool
+                    self.kv_cache_manager.set_recur_cache(
+                        cache_key=cache_key,
+                        kv_cache=self.keys_values_wm_single_env
+                    )
             else:
-                # ==================== RECURRENT INFER FIX ====================
-                # 1. 获取即将被覆写的物理索引
-                index_to_write = self.shared_pool_index
-                # 2. 使用辅助列表查找该索引上存储的旧的 key
-                old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
-                # 3. 如果存在旧 key，就从主 cache map 中删除它
-                if old_key_to_evict is not None:
-                    if old_key_to_evict in self.past_kv_cache_recurrent_infer:
-                        del self.past_kv_cache_recurrent_infer[old_key_to_evict]
+                # OLD SYSTEM: Use legacy cache with manual eviction
+                if is_init_infer:
+                    # ==================== Active Eviction Fix Logic ====================
+                    # 1. Get the physical index that will be overwritten
+                    index_to_write = self.shared_pool_index_init_envs[cache_env_id]
+                    # 2. Use auxiliary list to find the old key stored at this index
+                    old_key_to_evict = self.pool_idx_to_key_map_init_envs[cache_env_id][index_to_write]
+                    # 3. If old key exists, delete it from the main cache map
+                    if old_key_to_evict is not None:
+                        # Ensure the key to be deleted actually exists to avoid unexpected errors
+                        if old_key_to_evict in self.past_kv_cache_init_infer_envs[cache_env_id]:
+                            del self.past_kv_cache_init_infer_envs[cache_env_id][old_key_to_evict]
 
-                # 4. 现在可以安全地写入新数据了
-                cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+                    # Now it's safe to write new data
+                    cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, cache_env_id)
 
-                # 5. 在主 cache map 和辅助列表中同时更新新的映射关系
-                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
-                self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
+                    # 4. Update both the main cache map and auxiliary list with new mapping
+                    self.past_kv_cache_init_infer_envs[cache_env_id][cache_key] = cache_index
+                    self.pool_idx_to_key_map_init_envs[cache_env_id][index_to_write] = cache_key
+                else:
+                    # ==================== RECURRENT INFER FIX ====================
+                    # 1. Get the physical index that will be overwritten
+                    index_to_write = self.shared_pool_index
+                    # 2. Use auxiliary list to find the old key stored at this index
+                    old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
+                    # 3. If old key exists, delete it from the main cache map
+                    if old_key_to_evict is not None:
+                        if old_key_to_evict in self.past_kv_cache_recurrent_infer:
+                            del self.past_kv_cache_recurrent_infer[old_key_to_evict]
+
+                    # 4. Now it's safe to write new data
+                    cache_index = self.custom_copy_kv_cache_to_shared_recur(self.keys_values_wm_single_env)
+
+                    # 5. Update both the main cache map and auxiliary list with new mapping
+                    self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                    self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
+            # =============================================================================
 
 
 
@@ -1577,8 +2043,18 @@ class WorldModel(nn.Module):
         Returns:
             - list: Sizes of the key-value caches for each environment.
         """
+        # The per-env cache structures (past_kv_cache_init_infer_envs, shared_pool_init_infer, ...)
+        # are sized by env_num; serving more envs than that would silently cross-contaminate caches.
+        # This does not apply in the reanalyze phase, where per-env cache lookups are bypassed
+        # entirely and ready_env_num counts MCTS roots (reanalyze_batch x unroll steps) instead.
+        if not self.reanalyze_phase:
+            assert ready_env_num <= self.env_num, \
+                f'ready_env_num ({ready_env_num}) exceeds env_num ({self.env_num})'
         for index in range(ready_env_num):
             self.total_query_count += 1
+            cache_env_id = index
+            if self.current_infer_env_ids is not None and index < len(self.current_infer_env_ids):
+                cache_env_id = int(self.current_infer_env_ids[index])
             state_single_env = latent_state[index]  # latent_state[i] is np.array
             cache_key = hash_state(state_single_env)
 
@@ -1586,40 +2062,48 @@ class WorldModel(nn.Module):
                 # TODO: check if this is correct
                 matched_value = None
             else:
-                # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-                cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
-                if cache_index is not None:
-                    matched_value = self.shared_pool_init_infer[index][cache_index]
+                if self.use_new_cache_manager:
+                    # NEW SYSTEM: Use KVCacheManager's hierarchical_get for unified lookup
+                    matched_value = self.kv_cache_manager.hierarchical_get(env_id=cache_env_id, cache_key=cache_key)
+
+                    # Log cache miss (statistics are automatically handled by KVCacheManager)
+                    if matched_value is None:
+                        logging.debug(f"[NEW CACHE MISS] Not found for key={cache_key} in both init and recurrent cache.")
                 else:
-                    matched_value = None
+                    # OLD SYSTEM: Use legacy cache dictionaries and pools
+                    # Try to retrieve the cached value from past_kv_cache_init_infer_envs
+                    cache_index = self.past_kv_cache_init_infer_envs[cache_env_id].get(cache_key)
+                    if cache_index is not None:
+                        matched_value = self.shared_pool_init_infer[cache_env_id][cache_index]
+                    else:
+                        matched_value = None
 
-                # If not found, try to retrieve from past_kv_cache_recurrent_infer
-                # if matched_value is None:
-                #     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                    # Only try to find from recurrent_infer cache if not found in init_infer
+                    if matched_value is None:
+                        # Safely get the index from dictionary, it may return None
+                        recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
+                        # Only use it to retrieve value from physical pool if the index is valid (not None)
+                        if recur_cache_index is not None:
+                            matched_value = self.shared_pool_recur_infer[recur_cache_index]
 
-                # ==================== TODO ====================
-                # 步骤 2: 仅当在 init_infer 中未找到时，才尝试从 recurrent_infer 缓存中查找
-                if matched_value is None:
-                    # 2.1 安全地从字典中获取索引，它可能返回 None
-                    recur_cache_index = self.past_kv_cache_recurrent_infer.get(cache_key)
-                    # 2.2 只有在索引有效（不是 None）的情况下，才使用它来从物理池中检索值
-                    if recur_cache_index is not None:
-                        matched_value = self.shared_pool_recur_infer[recur_cache_index]
-
-                    # TODO
-                    if recur_cache_index is None:
-                        print(f"[CACHE MISS]  Not found for key={cache_key} in recurrent infer. Generating new cache.")
-                        # print(f"[CACHE MISS] {cache_key}")
+                        if recur_cache_index is None:
+                            logging.debug(f"[OLD CACHE MISS] Not found for key={cache_key} in recurrent infer. Generating new cache.")
+                # =============================================================================
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
-                # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
-                self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
-                # [FIX] Clamp size to prevent exceeding max_tokens
-                # matched_value.size may exceed max_tokens during long MCTS simulations
-                safe_size = min(matched_value.size, self.config.max_tokens - 1)
-                self.keys_values_wm_size_list.append(safe_size)
+                # Perform a deep copy because the transformer's forward pass modifies matched_value in-place.
+                # Without cloning, the original cache in init_pool or recur_pool would be polluted,
+                # causing incorrect predictions in subsequent queries.
+                if self.use_new_cache_manager:
+                    # NEW SYSTEM: Use KeysValues.clone() for deep copy
+                    cached_copy = matched_value.clone()
+                    self.keys_values_wm_list.append(cached_copy)
+                else:
+                    # OLD SYSTEM: Use custom_copy_kv_cache_to_shared_wm
+                    self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
+                self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
@@ -1642,7 +2126,7 @@ class WorldModel(nn.Module):
                     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, start_pos=start_pos_adjusted
                 )
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
-                self.keys_values_wm_size_list.append(1)
+                self.keys_values_wm_size_list.append(self.keys_values_wm_single_env.size)
 
         return self.keys_values_wm_size_list
 
@@ -1654,33 +2138,17 @@ class WorldModel(nn.Module):
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
-        # ========= for visual analysis =========
-        # Uncomment the lines below for visual analysis in Pong
-        # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
-        # Uncomment the lines below for visual analysis in visual match
-        # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
-
         # ======================== Logging for Analysis ========================
         # This block calculates various metrics for model analysis if the corresponding config flag is enabled.
         # These metrics help in debugging and understanding model behavior during training.
         if self.analysis_dormant_ratio_weight_rank:
             # --- Dormant Ratio Calculation ---
             # Calculate the dormant ratio of the encoder to monitor neuron activity.
-            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W) for images or (B, T, E) for text
+            shape = batch['observations'].shape  # Original shape, e.g., (B, T, C, H, W)
             # Reshape observations to create a single large batch for the encoder.
-
-            # [FIX] Handle both image and text observations
-            if len(shape) == 5:  # Image: (B, T, C, H, W)
-                # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
-                inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
-            elif len(shape) == 3:  # Text: (B, T, E)
-                # E.g., (2, 11, 512) -> (22, 512)
-                inputs = batch['observations'].contiguous().view(-1, shape[-1])
-            else:  # Fall back to original behavior for 2D or 4D
-                inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
-
+            # E.g., (32, 5, 3, 64, 64) -> (160, 3, 64, 64)
+            inputs = batch['observations'].contiguous().view(-1, *shape[-3:])
+            
             dormant_ratio_encoder_dict = calculate_dormant_ratio(
                 self.tokenizer.encoder, inputs.detach(), dormant_threshold=self.dormant_threshold
             )
@@ -1707,8 +2175,12 @@ class WorldModel(nn.Module):
                 self.tokenizer.encoder, inputs, representation_layer_name="sim_norm"
             )
 
-
-            self.past_kv_cache_recurrent_infer.clear()
+            # ==================== Clear Cache Using Correct API ====================
+            if self.use_new_cache_manager:
+                self.kv_cache_manager.clear_recur_cache()
+            else:
+                self.past_kv_cache_recurrent_infer.clear()
+            # =============================================================================
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
@@ -1731,16 +2203,15 @@ class WorldModel(nn.Module):
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
         
-        # [新增] 从模型输出中获取中间张量 x，并分离计算图
+        # Get intermediate tensor x from model output and detach computation graph
         intermediate_tensor_x = outputs.output_sequence.detach()
 
         global_step = kwargs.get('global_step', 0)
-        # if global_step >= 0 and global_step % 10000 == 0: # 20k
-        if global_step > 0 and global_step % 100000000000 == 0: # 20k # TODO
+        if global_step > 0 and global_step % 100000000000 == 0:  # TODO
 
             with torch.no_grad():
-                # 将logits转换为标量值
-                # 注意：outputs的形状是(B, L, E)，我们需要reshape
+                # Convert logits to scalar values
+                # Note: outputs shape is (B, L, E), we need to reshape
                 batch_size, seq_len = batch['actions'].shape[0], batch['actions'].shape[1]
 
                 pred_val_logits = outputs.logits_value.view(batch_size * seq_len, -1)
@@ -1753,68 +2224,61 @@ class WorldModel(nn.Module):
                     latent_states=obs_embeddings,
                     timesteps=batch['timestep'],
                     game_states=batch['observations'],
-                    predicted_values=scalar_values, # 传入预测的Value
-                    predicted_rewards=scalar_rewards, # 传入预测的Reward
+                    predicted_values=scalar_values,
+                    predicted_rewards=scalar_rewards,
                     step_counter=global_step
                 )
 
-        # [FIX] Add default value for use_priority if not present in config
-        use_priority = getattr(self.config, 'use_priority', False)
-
-        if use_priority:
-            # ==================== START MODIFICATION 5 ====================
-            # Calculate value_priority, similar to MuZero.
+        if self.config.use_priority:
+            # Calculate value_priority following MuZero: average absolute TD error
+            # over all valid unroll steps (not just step 0).
+            # Bug-fix: the original implementation only used logits_value[:, 0, :] (step 0),
+            # giving near-zero variance in priority across samples during early Pong training
+            # and making PER degrade to uniform sampling even when use_priority=True.
             with torch.no_grad():
-                # 1. Get the predicted value logits for the first step of the sequence (t=0).
-                # The shape is (B, support_size).
-                predicted_value_logits_step0 = outputs.logits_value[:, 0, :]
+                B, T, support_size = outputs.logits_value.shape
 
-                # 2. Convert the categorical prediction to a scalar value.
-                # The shape becomes (B, 1).
-                predicted_scalar_value_step0 = inverse_scalar_transform_handle(predicted_value_logits_step0)
+                # Reshape to [B*T, support_size], invert the categorical transform,
+                # then reshape back to [B, T].
+                all_value_logits = outputs.logits_value.reshape(B * T, support_size)
+                all_scalar_values = inverse_scalar_transform_handle(all_value_logits)  # [B*T, 1]
+                all_scalar_values = all_scalar_values.squeeze(-1).reshape(B, T)        # [B, T]
 
-                # 3. Get the target scalar value for the first step from the batch.
-                # The shape is (B, num_unroll_steps), so we take the first column.
-                target_scalar_value_step0 = batch['scalar_target_value'][:, 0]
+                # Target values aligned to [B, T].
+                target_scalar_values = batch['scalar_target_value'][:, :T]             # [B, T]
 
-                # 4. Calculate the L1 loss (absolute difference) between prediction and target.
-                # This is the priority. We use reduction='none' to get per-sample priorities.
-                value_priority = F.l1_loss(predicted_scalar_value_step0.squeeze(-1), target_scalar_value_step0, reduction='none')
-            # ===================== END MODIFICATION 5 =====================
+                # Per-step absolute TD error.
+                per_step_td = F.l1_loss(all_scalar_values, target_scalar_values, reduction='none')  # [B, T]
+
+                # Average over valid (non-padding) steps; clamp denominator to avoid div/0.
+                mask = batch['mask_padding']  # [B, T], True = valid
+                value_priority = (per_step_td * mask).sum(1) / mask.sum(1).clamp_min(1)  # [B]
         else:
             value_priority = torch.tensor(0.)
 
         if self.obs_type == 'image':
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            if self.config.latent_recon_loss_weight > 0 or self.config.perceptual_loss_weight > 0:
+                # Reconstruct observations from latent state representations
+                reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
-            #  ========== for visualization ==========
-            # Uncomment the lines below for visual analysis
-            # original_images, reconstructed_images = batch['observations'], reconstructed_images
-            # target_policy = batch['target_policy']
-            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            #  ========== for visualization ==========
-
-            # ========== Calculate reconstruction loss and perceptual loss ============
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            
-            latent_recon_loss = self.latent_recon_loss
-            perceptual_loss = self.perceptual_loss
+                # Calculate reconstruction loss and perceptual loss
+                target_images = batch['observations'].reshape(-1, 3, 64, 64)  # NOTE: for stack=1
+                if self.config.latent_recon_loss_weight > 0:
+                    latent_recon_loss = self.tokenizer.reconstruction_loss(target_images, reconstructed_images)
+                else:
+                    latent_recon_loss = self.latent_recon_loss
+                if self.config.perceptual_loss_weight > 0:
+                    perceptual_loss = self.tokenizer.perceptual_loss(target_images, reconstructed_images)
+                else:
+                    perceptual_loss = self.perceptual_loss
+            else:
+                # TODO:
+                latent_recon_loss = self.latent_recon_loss
+                perceptual_loss = self.perceptual_loss
 
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
-
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
-
-            # # Calculate reconstruction loss
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
-            #                                                        reconstructed_images)
             latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'text':
@@ -1845,26 +2309,10 @@ class WorldModel(nn.Module):
                 latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'image_memory':
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
-            # original_images, reconstructed_images = batch['observations'], reconstructed_images
-
-            #  ========== for visualization ==========
-            # Uncomment the lines below for visual analysis
-            # target_policy = batch['target_policy']
-            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            #  ========== for visualization ==========
-
-            # Calculate reconstruction loss and perceptual loss
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
-            #                                                        reconstructed_images)
             latent_recon_loss = self.latent_recon_loss
             perceptual_loss = self.perceptual_loss
 
-        # ========= logging for analysis =========
+        # ========= Logging for analysis =========
         if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the world model
             dormant_ratio_world_model = calculate_dormant_ratio(self, {
@@ -1873,25 +2321,17 @@ class WorldModel(nn.Module):
             dormant_ratio_transformer = dormant_ratio_world_model['transformer']
             dormant_ratio_head = dormant_ratio_world_model['head']
 
-            self.past_kv_cache_recurrent_infer.clear()
+            # ==================== Clear Cache Using Correct API ====================
+            if self.use_new_cache_manager:
+                self.kv_cache_manager.clear_recur_cache()
+            else:
+                self.past_kv_cache_recurrent_infer.clear()
+            # =============================================================================
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
             dormant_ratio_transformer = torch.tensor(0.)
             dormant_ratio_head = torch.tensor(0.)
-
-        #  ========== for visualization ==========
-        # Uncomment the lines below for visualization
-        # predict_policy = outputs.logits_policy
-        # predict_policy = F.softmax(outputs.logits_policy, dim=-1)
-        # predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # import pdb; pdb.set_trace()
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0613')
-
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode')
-        # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
-        #  ========== for visualization ==========
 
         # For training stability, use target_tokenizer to compute the true next latent state representations
         with torch.no_grad():
@@ -1927,15 +2367,29 @@ class WorldModel(nn.Module):
             # assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
             # for name, param in self.tokenizer.encoder.named_parameters():
             #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
+        elif self.predict_latent_loss_type == 'cos_sim':
+            # Cosine Similarity Loss
+            # print("predict_latent_loss_type == 'cos_sim'")
+            cosine_sim_loss = 1 - F.cosine_similarity(logits_observations, labels_observations, dim=-1)
+            loss_obs = cosine_sim_loss
 
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
         loss_obs = (loss_obs * mask_padding_expanded)
 
-        # Compute labels for policy and value
-        labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
-                                                                                   batch['target_policy'],
-                                                                                   batch['mask_padding'])
+        # ==================== [NEW] Fix3: Load re-smooth options from config ====================
+        use_target_policy_resmooth = getattr(self.config, 'use_target_policy_resmooth', False)
+        target_policy_resmooth_eps = getattr(self.config, 'target_policy_resmooth_eps', 0.05)
+        # ======================================================================================
+
+        # Compute labels for policy and value (with optional re-smoothing)
+        labels_policy, labels_value = self.compute_labels_world_model_value_policy(
+            batch['target_value'],
+            batch['target_policy'],
+            batch['mask_padding'],
+            use_target_policy_resmooth=use_target_policy_resmooth,
+            target_policy_resmooth_eps=target_policy_resmooth_eps
+        )
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
@@ -1956,14 +2410,20 @@ class WorldModel(nn.Module):
 
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
-        # ==== TODO: calculate the new priorities for each transition. ====
-        # value_priority = L1Loss(reduction='none')(labels_value.squeeze(-1), outputs['logits_value'][:, 0])
-        # value_priority = value_priority.data.cpu().numpy() + 1e-6
-
         # Compute timesteps
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
+        full_mask_count = batch['mask_padding'].sum()
+        if full_mask_count == 0:
+            raise ValueError("mask_padding is all zeros; cannot compute UniZero loss")
+        obs_mask_count = batch['mask_padding'][:, 1:].sum().clamp_min(1)
+
+        def _safe_masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+            selected_values = values[mask]
+            if selected_values.numel() == 0:
+                return values.new_tensor(0.)
+            return selected_values.mean()
 
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
@@ -1978,7 +2438,7 @@ class WorldModel(nn.Module):
             if loss_name == 'loss_obs':
                 seq_len = batch['actions'].shape[1] - 1
                 # Get the corresponding mask_padding
-                mask_padding = batch['mask_padding'][:, 1:seq_len]
+                mask_padding = batch['mask_padding'][:, 1:]
             else:
                 seq_len = batch['actions'].shape[1]
                 # Get the corresponding mask_padding
@@ -1989,30 +2449,51 @@ class WorldModel(nn.Module):
 
             # First step loss
             first_step_mask = mask_padding[:, 0]
-            first_step_losses[loss_name] = loss_tmp[:, 0][first_step_mask].mean()
+            first_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, 0], first_step_mask)
 
             # Middle step loss
             middle_timestep = seq_len // 2
             middle_step_mask = mask_padding[:, middle_timestep]
-            middle_step_losses[loss_name] = loss_tmp[:, middle_timestep][middle_step_mask].mean()
+            middle_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, middle_timestep], middle_step_mask)
 
             # Last step loss
             last_step_mask = mask_padding[:, -1]
-            last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
+            last_step_losses[loss_name] = _safe_masked_mean(loss_tmp[:, -1], last_step_mask)
 
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
         # Calculate overall discounted loss
-        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ batch['mask_padding'][:,1:].sum()
-        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
-        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
+        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ obs_mask_count
+        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
 
-        # 为了让外部的训练循环能够获取encoder的输出，我们将其加入返回字典
-        # 使用 .detach() 是因为这个张量仅用于后续的clip操作，不应影响梯度计算
+        # ==================== Per-sample losses for PER importance-sampling weights ====================
+        # The ``discounted_*`` losses above are batch-level scalars, so multiplying them by per-sample
+        # IS weights in the policy collapses to ``loss * mean(weights)`` and the weights have no effect.
+        # These [B] counterparts let the policy apply the weights per sample. Each sample's loss is the
+        # discounted sum over its unmasked timesteps, normalized by its own valid-step count.
+        per_sample_kwargs = {}
+        if not self.continuous_action_space:
+            num_steps = batch['actions'].shape[1]
+            mask_float = batch['mask_padding'].float()
+            per_sample_valid_count = mask_float.sum(dim=1).clamp_min(1)
+            per_sample_obs_valid_count = mask_float[:, 1:].sum(dim=1).clamp_min(1)
+            per_sample_kwargs = dict(
+                per_sample_loss_obs=(loss_obs.view(-1, num_steps - 1) * discounts[1:]).sum(dim=1) / per_sample_obs_valid_count,
+                per_sample_loss_rewards=(loss_rewards.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_value=(loss_value.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy=(loss_policy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_orig_policy=(orig_policy_loss.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy_entropy=(policy_entropy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+            )
+        # =================================================================================================
+
+        # Add encoder output to return dictionary for external training loop access
+        # Using .detach() because this tensor is only used for subsequent clip operations and should not affect gradient computation
         detached_obs_embeddings = obs_embeddings.detach()
 
         if self.continuous_action_space:
@@ -2046,7 +2527,10 @@ class WorldModel(nn.Module):
                 
                 value_priority=value_priority,
                 intermediate_tensor_x=intermediate_tensor_x,
-                obs_embeddings=detached_obs_embeddings, # <-- 新增
+                obs_embeddings=detached_obs_embeddings,
+                logits_value=outputs.logits_value.detach(), 
+                logits_reward=outputs.logits_rewards.detach(),
+                logits_policy=outputs.logits_policy.detach(),
             )
         else:
             return LossWithIntermediateLosses(
@@ -2073,11 +2557,14 @@ class WorldModel(nn.Module):
                 e_rank_last_linear = e_rank_last_linear,
                 e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
-
                 value_priority=value_priority,
                 intermediate_tensor_x=intermediate_tensor_x,
-                obs_embeddings=detached_obs_embeddings, # <-- 新增
-            ), inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, outputs.logits_value.shape[-1])).detach()
+                obs_embeddings=detached_obs_embeddings,
+                logits_value=outputs.logits_value.detach(),
+                logits_reward=outputs.logits_rewards.detach(),
+                logits_policy=outputs.logits_policy.detach(),
+                **per_sample_kwargs,
+            )
 
     
     # TODO: test correctness
@@ -2226,9 +2713,15 @@ class WorldModel(nn.Module):
 
         logits = getattr(outputs, f'logits_{element}')
 
+        # ==================== TODO: Temperature Scaling for Policy ====================
+        if element == 'policy' and self.use_policy_loss_temperature and self.policy_loss_temperature != 1.0:
+            # Apply temperature scaling to soften the distribution
+            logits = logits / self.policy_loss_temperature
+        # ===================================================================================
+
         if torch.isnan(logits).any():
             raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")
-        
+
         if torch.isnan(labels).any():
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
@@ -2287,9 +2780,20 @@ class WorldModel(nn.Module):
 
     #@profile
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
-                                                mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                                                mask_padding: torch.BoolTensor,
+                                                use_target_policy_resmooth: bool = False,
+                                                target_policy_resmooth_eps: float = 0.05) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Compute labels for value and policy predictions. """
         mask_fill = torch.logical_not(mask_padding)
+
+        # ==================== [NEW] Fix3: Re-smooth Target Policy ====================
+        # Re-smooth target_policy to prevent extreme distributions in buffer
+        if use_target_policy_resmooth and target_policy_resmooth_eps > 0:
+            num_actions = target_policy.shape[-1]
+            uniform_dist = torch.ones_like(target_policy) / num_actions
+            target_policy = (1 - target_policy_resmooth_eps) * target_policy + \
+                           target_policy_resmooth_eps * uniform_dist
+        # =============================================================================
 
         # Fill the masked areas of policy
         mask_fill_policy = mask_fill.unsqueeze(-1).expand_as(target_policy)
@@ -2308,11 +2812,24 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
-        for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear()
-        self.past_kv_cache_recurrent_infer.clear()
-        self.keys_values_wm_list.clear()
-        print(f'Cleared {self.__class__.__name__} past_kv_cache.')
+        self.current_infer_env_ids = None
+        if self.use_new_cache_manager:
+            # Use new KV cache manager's clear method
+            self.kv_cache_manager.clear_all()
+            logging.debug(f'Cleared {self.__class__.__name__} KV caches (NEW system).')
+
+            # Optionally print stats before clearing
+            if hasattr(self.kv_cache_manager, 'get_stats_summary'):
+                stats = self.kv_cache_manager.get_stats_summary()
+                if stats.get('stats_enabled'):
+                    logging.debug(f'Cache stats before clear: {stats}')
+        else:
+            # Use old cache clearing logic
+            for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            self.past_kv_cache_recurrent_infer.clear()
+            self.keys_values_wm_list.clear()
+            logging.debug(f'Cleared {self.__class__.__name__} past_kv_cache (OLD system).')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

@@ -1,7 +1,44 @@
 # -*- coding: utf-8 -*-
 """
-Optimized and refactored utility code for reinforcement learning models,
-focusing on clarity, professionalism, efficiency, and extensibility.
+### 🛠️ Utility Modules
+
+- **`utils.py`** - Common utility functions library
+  - **Math & Tensor Utilities**:
+    - `symlog`, `inv_symlog` - Symmetric logarithm transformations
+    - `initialize_zeros_batch`, `initialize_pad_batch` - Batch initialization
+
+  - **LoRA Utilities**:
+    - `freeze_non_lora_parameters` - Freeze non-LoRA parameters
+
+  - **Task & Curriculum Learning Utilities**:
+    - `compute_task_weights` - Compute task weights
+    - `TemperatureScheduler` - Temperature scheduler
+    - `tasks_per_stage` - Calculate tasks per stage
+    - `compute_unizero_mt_normalized_stats` - Compute normalized statistics
+    - `allocate_batch_size` - Dynamically allocate batch sizes
+
+  - **Distributed Training Utilities (DDP)**:
+    - `is_ddp_enabled` - Check if DDP is enabled
+    - `ddp_synchronize` - DDP synchronization
+    - `ddp_all_reduce_sum` - DDP all-reduce sum
+
+  - **RL Workflow Utilities**:
+    - `calculate_update_per_collect` - Calculate updates per collection
+    - `random_collect` - Random policy data collection
+    - `convert_to_batch_for_unizero` - UniZero batch data conversion
+    - `create_unizero_loss_metrics` - Create loss metrics function
+    - `UniZeroDataLoader` - UniZero data loader
+
+  - **Logging Utilities**:
+    - `log_module_trainable_status` - Log module trainable status
+    - `log_param_statistics` - Log parameter statistics
+    - `log_buffer_memory_usage` - Log buffer memory usage
+    - `log_buffer_run_time` - Log buffer runtime
+
+- **`__init__.py`** - Package initialization file
+  - Exports all training and evaluation entry functions
+  - Exports commonly used functions from utility modules
+
 """
 
 # ==============================================================================
@@ -9,7 +46,8 @@ focusing on clarity, professionalism, efficiency, and extensibility.
 # ==============================================================================
 from __future__ import annotations
 
-import logging
+import concurrent.futures
+from ditk import logging
 import math
 import os
 import re
@@ -37,6 +75,17 @@ ISerialCollector = Any
 BaseEnvManager = Any
 IBuffer = Any
 GameBuffer = Any
+BaseLearner = Any
+Evaluator = Any
+Collector = Any
+
+
+# ==============================================================================
+# Global Constants
+# ==============================================================================
+
+# Timeout for evaluation process in seconds (200 minutes)
+EVALUATION_TIMEOUT = 12000
 
 
 # ==============================================================================
@@ -73,36 +122,6 @@ def inv_symlog(x: torch.Tensor) -> torch.Tensor:
         - torch.Tensor: The tensor restored to its original scale.
     """
     return torch.sign(x) * (torch.exp(torch.abs(x)) - 1)
-
-
-def initialize_zeros_batch(
-    observation_shape: Union[int, List[int], Tuple[int, ...]],
-    batch_size: int,
-    device: str
-) -> torch.Tensor:
-    """
-    Overview:
-        Initializes a zeros tensor for a batch of observations based on the
-        provided shape. This is commonly used to prepare initial input for models
-        like UniZero.
-
-    Arguments:
-        - observation_shape (:obj:`Union[int, List[int], Tuple[int, ...]]`): The shape of a single observation.
-        - batch_size (:obj:`int`): The number of observations in the batch.
-        - device (:obj:`str`): The device to store the tensor on (e.g., 'cpu', 'cuda').
-
-    Returns:
-        - torch.Tensor: A zeros tensor with the shape [batch_size, *observation_shape].
-    """
-    if isinstance(observation_shape, (list, tuple)):
-        shape = (batch_size, *observation_shape)
-    elif isinstance(observation_shape, int):
-        shape = (batch_size, observation_shape)
-    else:
-        raise TypeError(
-            f"observation_shape must be an int, list, or tuple, but got {type(observation_shape).__name__}"
-        )
-    return torch.zeros(shape, device=device)
 
 
 # ==============================================================================
@@ -528,44 +547,13 @@ def calculate_update_per_collect(
             collected_transitions_tensor
         ).item()
         updates = int(total_collected_transitions * cfg.policy.replay_ratio)
-        print(f"\ntotal_collected_transitions={total_collected_transitions}\tupdates={updates}\n")
     else:
         # In a single-process setup.
         updates = int(collected_transitions_num * cfg.policy.replay_ratio)
-        print(f"collected_transitions_num={collected_transitions_num}\tupdates={updates}")
 
     return max(1, updates) # Ensure at least one update.
 
 
-def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str, pad_token_id: int = 0) -> torch.Tensor:
-    """
-    Overview:
-        Initialize a tensor filled with `pad_token_id` for batch observations. 
-        This function is designed to be flexible and can handle both textual 
-        and non-textual observations:
-        
-        - For textual observations: it initializes `input_ids` with padding tokens, 
-        ensuring consistent sequence lengths within a batch.
-        - For non-textual observations: it provides a convenient way to fill 
-        observation tensors with a default of 0, 
-        ensuring shape compatibility and preventing uninitialized values.
-    Arguments:
-        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
-        - batch_size (:obj:`int`): The batch size.
-        - device (:obj:`str`): The device to store the tensor.
-        - pad_token_id (:obj:`int`): The token ID (or placeholder value) used for padding.
-    Returns:
-        - padded_tensor (:obj:`torch.Tensor`): A tensor of the given shape, 
-        filled with `pad_token_id`.
-    """
-    if isinstance(observation_shape, (list, tuple)):
-        shape = [batch_size, *observation_shape]
-    elif isinstance(observation_shape, int):
-        shape = [batch_size, observation_shape]
-    else:
-        raise TypeError(f"observation_shape must be int, list, or tuple, but got {type(observation_shape).__name__}")
-
-    return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == 0 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
 
 def random_collect(
     policy_cfg: EasyDict,
@@ -615,6 +603,245 @@ def random_collect(
     # Restore the original policy to the collector.
     collector.reset_policy(policy.collect_mode)
 
+
+def safe_eval(
+    evaluator: Evaluator,
+    learner: BaseLearner,
+    collector: Collector,
+    rank: int,
+    world_size: int,
+    timeout: int = EVALUATION_TIMEOUT
+) -> Tuple[Optional[bool], Optional[Any]]:
+    """
+    Overview:
+        Safely executes an evaluation task with a timeout to prevent hangs.
+        This function runs the evaluation in a separate thread and enforces a timeout
+        to ensure the training process doesn't get stuck during evaluation.
+
+    Arguments:
+        - evaluator (:obj:`Evaluator`): The evaluator instance.
+        - learner (:obj:`BaseLearner`): The learner instance, used for saving checkpoints.
+        - collector (:obj:`Collector`): The data collector instance, used to get current envstep.
+        - rank (:obj:`int`): The rank of the current process in distributed training.
+        - world_size (:obj:`int`): The total number of processes in distributed training.
+        - timeout (:obj:`int`): The maximum time (in seconds) to wait for evaluation. Defaults to EVALUATION_TIMEOUT.
+
+    Returns:
+        - Tuple[Optional[bool], Optional[Any]]: A tuple containing:
+            - stop_flag: Boolean indicating if training should stop (None if timeout/error)
+            - reward_dict: Dictionary containing evaluation metrics (None if timeout/error)
+    """
+    try:
+        logging.info(f"========= Evaluation starting on Rank {rank}/{world_size} =========")
+        # Reset the stop_event to ensure it is not set before each evaluation.
+        evaluator.stop_event.clear()
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit the evaluation task to run in a separate thread.
+            future = executor.submit(
+                evaluator.eval,
+                learner.save_checkpoint,
+                learner.train_iter,
+                collector.envstep
+            )
+            try:
+                stop_flag, reward = future.result(timeout=timeout)
+                logging.info(f"====== Evaluation finished on Rank {rank}/{world_size} ======")
+                return stop_flag, reward
+            except concurrent.futures.TimeoutError:
+                # If a timeout occurs, set the stop_event to signal the evaluation thread to stop.
+                evaluator.stop_event.set()
+                logging.error(
+                    f"Evaluation timed out on Rank {rank}/{world_size} after {timeout} seconds. "
+                    f"Continuing training."
+                )
+                return None, None
+
+    except Exception as e:
+        logging.error(
+            f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}",
+            exc_info=True
+        )
+        return None, None
+
+
+def convert_to_batch_for_unizero(batch_data, policy_cfg, reward_support, value_support):
+    """
+    Overview:
+        Convert replay buffer sample data to batch_for_unizero format for world_model.compute_loss.
+        This function transforms the raw data from the replay buffer into the format expected
+        by the UniZero world model's compute_loss method.
+
+    Arguments:
+        - batch_data: Data sampled from replay buffer (current_batch, target_batch)
+        - policy_cfg: Policy configuration object
+        - reward_support: Reward support tensor for categorical distribution
+        - value_support: Value support tensor for categorical distribution
+
+    Returns:
+        - batch_for_unizero (:obj:`dict`): Dictionary containing formatted data for world model
+    """
+    from lzero.policy.utils import to_torch_float_tensor, prepare_obs, prepare_obs_stack_for_unizero
+    from lzero.policy import scalar_transform, phi_transform
+
+    # Unpack batch data
+    current_batch, target_batch = batch_data[:2]
+    obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
+    target_reward, target_value, target_policy = target_batch
+
+    # Prepare observations
+    if policy_cfg.model.frame_stack_num > 1:
+        obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, policy_cfg)
+    else:
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, policy_cfg)
+
+    # Convert to tensors
+    action_batch = torch.from_numpy(action_batch).to(policy_cfg.device).unsqueeze(-1).long()
+    timestep_batch = torch.from_numpy(timestep_batch).to(policy_cfg.device).unsqueeze(-1).long()
+    data_list = [mask_batch, target_reward, target_value, target_policy, weights]
+    mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(
+        data_list, policy_cfg.device
+    )
+    target_reward = target_reward.view(policy_cfg.batch_size, -1)
+    target_value = target_value.view(policy_cfg.batch_size, -1)
+
+    # Transform rewards and values
+    transformed_target_reward = scalar_transform(target_reward)
+    transformed_target_value = scalar_transform(target_value)
+
+    # Convert to categorical distributions
+    target_reward_categorical = phi_transform(reward_support, transformed_target_reward)
+    target_value_categorical = phi_transform(value_support, transformed_target_value)
+
+    # Prepare batch_for_unizero
+    batch_for_unizero = {}
+    if isinstance(policy_cfg.model.observation_shape, int) or len(policy_cfg.model.observation_shape) == 1:
+        batch_for_unizero['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+            policy_cfg.batch_size, -1, policy_cfg.model.observation_shape)
+    elif len(policy_cfg.model.observation_shape) == 3:
+        batch_for_unizero['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+            policy_cfg.batch_size, -1, *policy_cfg.model.observation_shape)
+
+    batch_for_unizero['actions'] = action_batch.squeeze(-1)
+    batch_for_unizero['timestep'] = timestep_batch.squeeze(-1)
+    batch_for_unizero['rewards'] = target_reward_categorical[:, :-1]
+    batch_for_unizero['mask_padding'] = mask_batch == 1.0
+    batch_for_unizero['mask_padding'] = batch_for_unizero['mask_padding'][:, :-1]
+    batch_for_unizero['observations'] = batch_for_unizero['observations'][:, :-1]
+    batch_for_unizero['ends'] = torch.zeros(batch_for_unizero['mask_padding'].shape, dtype=torch.long, device=policy_cfg.device)
+    batch_for_unizero['target_value'] = target_value_categorical[:, :-1]
+    batch_for_unizero['target_policy'] = target_policy[:, :-1]
+
+    return batch_for_unizero
+
+
+def create_unizero_loss_metrics(policy):
+    """
+    Overview:
+        Create a metrics function for computing UniZero losses without gradient updates.
+        This is used for loss landscape visualization where we need to compute losses
+        at different parameter values without actually updating the model.
+
+    Arguments:
+        - policy: The policy instance containing model, configuration, and all necessary attributes
+
+    Returns:
+        - compute_metrics (:obj:`Callable`): Function that computes losses for a batch of data
+    """
+    from ditk import logging
+
+    # Get reward_support and value_support from policy
+    reward_support = policy.reward_support
+    value_support = policy.value_support
+
+    def compute_metrics(net, dataloader, use_cuda):
+        """
+        Compute losses for loss landscape visualization.
+
+        Arguments:
+            - net: The neural network model
+            - dataloader: DataLoader providing batches of data
+            - use_cuda: Whether to use CUDA
+
+        Returns:
+            - dict: Dictionary containing averaged losses (policy_loss, value_loss, reward_loss, total_loss)
+        """
+        net.eval()
+        total_policy_loss = 0.0
+        total_value_loss = 0.0
+        total_reward_loss = 0.0
+        total_batches = 0
+
+        with torch.no_grad():
+            for batch_data in dataloader:
+                try:
+                    # Convert replay buffer sample to batch_for_unizero format
+                    batch_for_unizero = convert_to_batch_for_unizero(
+                        batch_data,
+                        policy._cfg,
+                        reward_support,
+                        value_support
+                    )
+
+                    # Call world_model.compute_loss (no backward, no optimizer.step)
+                    losses = net.world_model.compute_loss(
+                        batch_for_unizero,
+                        policy._target_model.world_model.tokenizer,
+                        policy.value_inverse_scalar_transform_handle
+                    )
+
+                    # Extract individual losses from intermediate_losses
+                    total_policy_loss += losses.intermediate_losses['loss_policy'].item()
+                    total_value_loss += losses.intermediate_losses['loss_value'].item()
+                    total_reward_loss += losses.intermediate_losses['loss_rewards'].item()
+                    total_batches += 1
+                except Exception as e:
+                    logging.warning(f"Error processing batch in compute_metrics: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+
+        if total_batches > 0:
+            return {
+                'policy_loss': total_policy_loss / total_batches,
+                'value_loss': total_value_loss / total_batches,
+                'reward_loss': total_reward_loss / total_batches,
+                'total_loss': (total_policy_loss + total_value_loss + total_reward_loss) / total_batches
+            }
+        else:
+            return {'policy_loss': 0.0, 'value_loss': 0.0, 'reward_loss': 0.0, 'total_loss': 0.0}
+
+    return compute_metrics
+
+
+class UniZeroDataLoader:
+    """
+    Overview:
+        DataLoader wrapper for UniZero replay buffer sampling.
+        This provides an iterator interface for sampling batches from the replay buffer,
+        compatible with loss landscape visualization tools.
+
+    Arguments:
+        - replay_buffer: The game buffer containing collected episodes
+        - policy: The policy instance for sampling
+        - batch_size (:obj:`int`): Number of samples per batch
+        - num_batches (:obj:`int`): Total number of batches to sample
+    """
+    def __init__(self, replay_buffer, policy, batch_size, num_batches):
+        self.buffer = replay_buffer
+        self.policy = policy
+        self.batch_size = batch_size
+        self.num_batches = num_batches
+
+    def __iter__(self):
+        """Iterator that yields batches from the replay buffer"""
+        for _ in range(self.num_batches):
+            batch = self.buffer.sample(self.batch_size, self.policy)
+            yield batch
+
+    def __len__(self):
+        """Return the total number of batches"""
+        return self.num_batches
 
 # ==============================================================================
 # Logging Utilities
@@ -743,6 +970,80 @@ def log_buffer_run_time(train_iter: int, buffer: GameBuffer, writer: SummaryWrit
 
     # Reset metrics after logging to prepare for the next interval.
     buffer.reset_runtime_metrics()
+
+
+# ==============================================================================
+# Example Usage
+# ==============================================================================
+if __name__ == '__main__':
+    # Configure a basic logger to see output from functions with `verbose=True`
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    print("\n--- Example for `compute_task_weights` ---")
+    task_rewards_list = [
+        {"task1": 10, "task2": 100, "task3": 1000, "task4": 500, "task5": 300},
+        {"task1": 1, "task2": 10, "task3": 100, "task4": 1000, "task5": 10000},
+        {"task1": 0.1, "task2": 0.5, "task3": 0.9, "task4": 5, "task5": 10},
+    ]
+
+    for i, task_rewards in enumerate(task_rewards_list, start=1):
+        print(f"\n--- Case {i} ---")
+        print(f"Original Rewards: {task_rewards}")
+
+        # Example 1: Using 'none' normalization (proportional to raw values)
+        weights_none = compute_task_weights(task_rewards, option="none", use_softmax=False)
+        print(f"Weights (proportional to raw values): {weights_none}")
+
+        # Example 2: Using 'symlog' normalization
+        weights_symlog = compute_task_weights(task_rewards, option="symlog", use_softmax=False)
+        print(f"Weights (with symlog normalization): {weights_symlog}")
+
+        # Example 3: Using 'rank' normalization and softmax with inverse proportion
+        weights_rank_softmax = compute_task_weights(task_rewards, option="rank", use_softmax=True, reverse=True)
+        print(f"Weights (inverse rank with softmax): {weights_rank_softmax}")
+
+    print("\n--- Example for `freeze_non_lora` ---")
+
+    # ==========================================================================
+    # FIX: The nn.Parameter must be wrapped in an nn.Module subclass to be
+    #      placed inside an nn.ModuleDict.
+    # ==========================================================================
+    class AdapterScale(nn.Module):
+        """A simple nn.Module wrapper for a single learnable parameter."""
+        def __init__(self):
+            super().__init__()
+            self.logit = nn.Parameter(torch.randn(1))
+
+    # Create a dummy model to demonstrate freezing
+    class DummyModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = nn.Linear(10, 10)
+            self.layer1 = nn.Linear(10, 10)
+            # Simulate LoRA parameters with correct naming
+            self.layer1.lora_A = nn.Parameter(torch.randn(10, 2))
+            self.layer1.lora_B = nn.Parameter(torch.randn(2, 10))
+            
+            # Correctly structure the adapter_scales using the wrapper module.
+            # This ensures that the value associated with key '0' is a valid nn.Module.
+            self.adapter_scales = nn.ModuleDict({
+                '0': AdapterScale()
+            })
+
+    model = DummyModel()
+    print("Initial parameter status:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nFreezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=True, verbose=True)
+    print("\nParameter status after freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nUn-freezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=False, verbose=True)
+    print("\nParameter status after un-freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+    
 
 
 # ==============================================================================

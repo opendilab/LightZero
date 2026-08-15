@@ -431,7 +431,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 [-1 for _ in range(self.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         # NOTE: check the effect of reanalyze_phase
         model.world_model.reanalyze_phase = True
@@ -446,6 +446,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
 
             if self.task_id is not None:
+                # TODO: support RoPE
                 # m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
                 m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
 
@@ -458,7 +459,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [
                     m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    inverse_scalar_transform(m_output.value, self.value_support),
                     m_output.policy_logits
                 ]
             )
@@ -671,73 +672,20 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
         """
-        # The indices to the priority array are stored at index -4 of the current_batch.
-        indices = train_data[0][-4]
-        # The creation timestamps are stored at index -2 of the current_batch.
-        # NOTE: The original code used -1, which corresponds to timestep_list.
-        # The correct list is make_time_list, which is at index -2.
-        make_times = train_data[0][-2]
-        
+        current_batch = train_data[0]
+        indices = current_batch[4]
+        make_times = current_batch[6]
+        metas = {'make_time': make_times, 'batch_priorities': batch_priorities}
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
-            # ==================== START OF ROBUST FIX ====================
 
-            # FIX 1: Use the first timestamp of the segment for comparison.
-            # make_times[i] can be a list of timestamps for the unrolled segment. We only need the first one.
-            if isinstance(make_times[i], (list, np.ndarray)) and len(make_times[i]) > 0:
-                first_transition_time = make_times[i][0]
-            else:
-                # Fallback for scalar or empty list
-                first_transition_time = make_times[i]
+            make_time = np.asarray(metas['make_time'][i]).reshape(-1)
+            first_transition_time = float(make_time[0]) if make_time.size > 0 else 0.0
 
             if first_transition_time > self.clear_time:
-                # FIX 2: Convert the index from float to integer before using it to index a Python list.
-                try:
-                    idx = int(indices[i])
-                    prio = batch_priorities[i]
+                # Handle IndexError by converting the float index to an integer before use.
+                idx = int(indices[i])
+                prio = metas['batch_priorities'][i]
 
-                    # Ensure the index is within the valid range of the priorities list.
-                    if 0 <= idx < len(self.game_pos_priorities):
-                        self.game_pos_priorities[idx] = prio
-                    # else:
-                    #     # This case can be logged if debugging is needed. It means we are trying to update
-                    #     # the priority of a sample that has already been removed from the buffer.
-                    #     pass
-                except (ValueError, TypeError) as e:
-                    # Log error if conversion fails, though it's unlikely with the int() cast.
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Could not update priority for index {indices[i]}. Error: {e}")
-
-            # ===================== END OF ROBUST FIX =====================
-
-    # def update_priority(self, train_data: List[np.ndarray], batch_priorities: np.ndarray) -> None:
-    #     """
-    #     Overview:
-    #         Update the priority of training data.
-    #     Arguments:
-    #         - train_data (:obj:`List[np.ndarray]`): training data to be updated priority.
-    #         - batch_priorities (:obj:`np.ndarray`): priorities to update to.
-    #     NOTE:
-    #         train_data = [current_batch, target_batch]
-    #         current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
-    #     """
-    #     # TODO: NOTE: -4 is batch_index_list
-    #     indices = train_data[0][-4]
-    #     metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
-    #     # only update the priorities for data still in replay buffer
-    #     for i in range(len(indices)):
-    #         # ==================== START OF FINAL FIX ====================
-
-    #         # FIX 1: Handle ValueError by using the first timestamp of the segment for comparison.
-    #         first_transition_time = metas['make_time'][i][0]
-
-    #         if first_transition_time > self.clear_time:
-    #             # FIX 2: Handle IndexError by converting the float index to an integer before use.
-    #             idx = int(indices[i])
-    #             prio = metas['batch_priorities'][i]
-
-    #             # Now, idx is a valid integer index.
-    #             self.game_pos_priorities[idx] = prio
-
-    #         # ===================== END OF FINAL FIX =====================
+                # Now, idx is a valid integer index.
+                self.game_pos_priorities[idx] = prio

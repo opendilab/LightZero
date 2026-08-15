@@ -4,14 +4,16 @@ Modified from https://github.com/CompVis/taming-transformers
 
 import hashlib
 import os
-from collections import namedtuple
-from pathlib import Path
-
-import requests
 import torch
 import torch.nn as nn
 from torchvision import models
-from tqdm import tqdm
+from collections import namedtuple
+from pathlib import Path
+from ditk import logging
+
+
+DEFAULT_TORCH_HOME = Path(__file__).resolve().parents[3] / "tokenizer_pretrained_vgg"
+VGG16_CKPT_NAME = "vgg16-397923af.pth"
 
 
 class LPIPS(nn.Module):
@@ -20,21 +22,47 @@ class LPIPS(nn.Module):
         super().__init__()
         self.scaling_layer = ScalingLayer()
         self.chns = [64, 128, 256, 512, 512]  # vg16 features
+        self.torch_home = resolve_torch_home()
 
-        # Comment out the following line if you don't need perceptual loss
-        # self.net = vgg16(pretrained=True, requires_grad=False)
-        # self.lin0 = NetLinLayer(self.chns[0], use_dropout=use_dropout)
-        # self.lin1 = NetLinLayer(self.chns[1], use_dropout=use_dropout)
-        # self.lin2 = NetLinLayer(self.chns[2], use_dropout=use_dropout)
-        # self.lin3 = NetLinLayer(self.chns[3], use_dropout=use_dropout)
-        # self.lin4 = NetLinLayer(self.chns[4], use_dropout=use_dropout)
-        # self.load_from_pretrained()
-        # for param in self.parameters():
-        #     param.requires_grad = False
+        self.net = vgg16(pretrained=True, requires_grad=False, torch_home=self.torch_home)
+        self.lin0 = NetLinLayer(self.chns[0], use_dropout=use_dropout)
+        self.lin1 = NetLinLayer(self.chns[1], use_dropout=use_dropout)
+        self.lin2 = NetLinLayer(self.chns[2], use_dropout=use_dropout)
+        self.lin3 = NetLinLayer(self.chns[3], use_dropout=use_dropout)
+        self.lin4 = NetLinLayer(self.chns[4], use_dropout=use_dropout)
+        self.load_from_pretrained()
+        for param in self.parameters():
+            param.requires_grad = False
 
     def load_from_pretrained(self) -> None:
-        ckpt = get_ckpt_path(name="vgg_lpips", root=Path.home() / ".cache/iris/tokenizer_pretrained_vgg")  # Download VGG if necessary
-        self.load_state_dict(torch.load(ckpt, map_location=torch.device("cpu")), strict=False)
+        """
+        Load LPIPS linear layer weights (vgg.pth) from TORCH_HOME directory.
+
+        Raises:
+            FileNotFoundError: If checkpoint file cannot be loaded.
+            RuntimeError: If state dict loading fails.
+        """
+        try:
+            logging.info(f"Loading LPIPS pretrained weights from TORCH_HOME: {self.torch_home}")
+            ckpt = get_ckpt_path(name="vgg_lpips", root=self.torch_home)
+
+            if not os.path.exists(ckpt):
+                error_msg = f"Checkpoint file not found: {ckpt}"
+                logging.error(error_msg)
+                raise FileNotFoundError(error_msg)
+
+            logging.info(f"Loading checkpoint from: {ckpt}")
+            state_dict = torch.load(ckpt, map_location=torch.device("cpu"))
+            self.load_state_dict(state_dict, strict=False)
+            logging.info(f"Successfully loaded LPIPS pretrained weights from: {ckpt}")
+
+        except FileNotFoundError as e:
+            logging.error(f"Failed to load LPIPS checkpoint: {e}")
+            raise
+        except Exception as e:
+            error_msg = f"Failed to load LPIPS pretrained weights: {e}"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg) from e
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         in0_input, in1_input = (self.scaling_layer(input), self.scaling_layer(target))
@@ -72,9 +100,19 @@ class NetLinLayer(nn.Module):
 
 
 class vgg16(torch.nn.Module):
-    def __init__(self, requires_grad: bool = False, pretrained: bool = True) -> None:
+    def __init__(self, requires_grad: bool = False, pretrained: bool = True, torch_home: Path = None) -> None:
         super(vgg16, self).__init__()
-        vgg_pretrained_features = models.vgg16(pretrained=pretrained).features
+        logging.info("Loading vgg16 backbone...")
+        vgg_model = models.vgg16(weights=None)
+        if pretrained:
+            ckpt = get_vgg16_ckpt_path(torch_home or resolve_torch_home())
+            logging.info(f"Loading vgg16 backbone weights from: {ckpt}")
+            state_dict = torch.load(ckpt, map_location=torch.device("cpu"))
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            vgg_model.load_state_dict(state_dict)
+        vgg_pretrained_features = vgg_model.features
+        logging.info("vgg16 backbone loaded.")
         self.slice1 = torch.nn.Sequential()
         self.slice2 = torch.nn.Sequential()
         self.slice3 = torch.nn.Sequential()
@@ -121,7 +159,7 @@ def spatial_average(x: torch.Tensor, keepdim: bool = True) -> torch.Tensor:
 
 
 # ********************************************************************
-# *************** Utilities to download pretrained vgg ***************
+# *************** Utilities to load pretrained vgg locally ************
 # ********************************************************************
 
 
@@ -140,30 +178,38 @@ MD5_MAP = {
 }
 
 
-def download(url: str, local_path: str, chunk_size: int = 1024) -> None:
-    os.makedirs(os.path.split(local_path)[0], exist_ok=True)
-    with requests.get(url, stream=True) as r:
-        total_size = int(r.headers.get("content-length", 0))
-        with tqdm(total=total_size, unit="B", unit_scale=True) as pbar:
-            with open(local_path, "wb") as f:
-                for data in r.iter_content(chunk_size=chunk_size):
-                    if data:
-                        f.write(data)
-                        pbar.update(chunk_size)
-
-
 def md5_hash(path: str) -> str:
     with open(path, "rb") as f:
         content = f.read()
     return hashlib.md5(content).hexdigest()
 
 
+def resolve_torch_home() -> Path:
+    return Path(os.environ.get("TORCH_HOME", DEFAULT_TORCH_HOME)).expanduser().resolve()
+
+
 def get_ckpt_path(name: str, root: str, check: bool = False) -> str:
     assert name in URL_MAP
-    path = os.path.join(root, CKPT_MAP[name])
-    if not os.path.exists(path) or (check and not md5_hash(path) == MD5_MAP[name]):
-        print("Downloading {} model from {} to {}".format(name, URL_MAP[name], path))
-        download(URL_MAP[name], path)
-        md5 = md5_hash(path)
-        assert md5 == MD5_MAP[name], md5
+    path = os.path.join(str(root), CKPT_MAP[name])
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Missing LPIPS checkpoint: {path}. Set TORCH_HOME to a directory containing {CKPT_MAP[name]}."
+        )
+    if check and not md5_hash(path) == MD5_MAP[name]:
+        raise RuntimeError(f"MD5 mismatch for {path}: expected {MD5_MAP[name]}, got {md5_hash(path)}")
     return path
+
+
+def get_vgg16_ckpt_path(root: Path) -> Path:
+    candidates = [
+        root / "hub" / "checkpoints" / VGG16_CKPT_NAME,
+        root / VGG16_CKPT_NAME,
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    candidate_text = ", ".join(str(path) for path in candidates)
+    raise FileNotFoundError(
+        f"Missing VGG16 checkpoint. Expected one of: {candidate_text}. "
+        f"Set TORCH_HOME to the pretrained VGG directory."
+    )

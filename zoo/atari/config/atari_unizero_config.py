@@ -65,6 +65,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     num_heads=8,
                     embed_dim=768,
                     obs_type='image',
+                    encoder_type='resnet',
                     env_num=max(collector_env_num, evaluator_env_num),
                     rotary_emb=False,
                 ),

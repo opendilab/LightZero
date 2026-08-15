@@ -1,7 +1,7 @@
+from ditk import logging
 import os
 from functools import partial
 from typing import Optional, Tuple
-import logging
 
 import numpy as np
 import torch
@@ -14,7 +14,6 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from lzero.worker import MuZeroEvaluator
-from lzero.entry.utils import initialize_zeros_batch
 
 
 def eval_muzero(

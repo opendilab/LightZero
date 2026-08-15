@@ -25,7 +25,7 @@ atari_efficientzero_config = dict(
     exp_name=f'data_rezero_ez/{env_id[:-14]}_rezero_efficientzero_ns{num_simulations}_upc{update_per_collect}_brf{buffer_reanalyze_freq}_seed0',
     env=dict(
         env_id=env_id,
-        obs_shape=(4, 96, 96),
+        obs_shape=(4, 64, 64),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -33,7 +33,7 @@ atari_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=(4, 96, 96),
+            observation_shape=(4, 64, 64),
             frame_stack_num=4,
             action_space_size=action_space_size,
             downsample=True,

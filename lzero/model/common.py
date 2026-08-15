@@ -297,7 +297,11 @@ class DownSample(nn.Module):
 
         # Initial convolution: stride 2
         self.conv1 = nn.Conv2d(observation_shape[0], out_channels // 2, kernel_size=3, stride=2, padding=1, bias=False)
-        self.norm1 = build_normalization(norm_type, dim=2)(out_channels // 2)
+        if norm_type == 'BN':
+            self.norm1 = nn.BatchNorm2d(out_channels // 2)
+        elif norm_type == 'LN':
+            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2],
+                                      eps=1e-5)
 
         # Stage 1 with residual blocks
         self.resblocks1 = nn.ModuleList([
@@ -331,7 +335,6 @@ class DownSample(nn.Module):
         Shapes:
             - x (:obj:`torch.Tensor`): (B, C_in, H, W)
             - output (:obj:`torch.Tensor`): (B, C_out, H_out, W_out)
-        x = self.norm1(x)
         """
         x = self.conv1(x)
         x = self.activation(x)
@@ -488,19 +491,12 @@ class HFLanguageRepresentationNetwork(nn.Module):
         super().__init__()
         from transformers import AutoModel, AutoTokenizer
 
-        if tokenizer is not None:
-            self.tokenizer = tokenizer
-        else:
-            if get_rank() == 0:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            if get_world_size() > 1:
-                torch.distributed.barrier()
-            if get_rank() != 0:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-
+        # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
         if get_rank() == 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
+
         if get_world_size() > 1:
+            # Wait for rank 0 to finish loading the model.
             torch.distributed.barrier()
         if get_rank() != 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
@@ -508,9 +504,19 @@ class HFLanguageRepresentationNetwork(nn.Module):
         for p in self.pretrained_model.parameters():
             p.requires_grad = False
 
+        if get_rank() != 0:
+            logging.info(f"Worker process is loading model from cache: {model_path}")
+            self.model = AutoModel.from_pretrained(model_path)
+            if tokenizer is None:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        
+        if tokenizer is not None:
+            self.tokenizer = tokenizer
+
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.pretrained_model.config.hidden_size, self.embedding_size)
 
+        # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":
@@ -533,18 +539,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
         x = x.long()
         
         # Construct the attention mask to exclude padding tokens.
-        attention_mask = (x != self.tokenizer.pad_token_id).long()
-        
-        # ==================== 修复开始 ====================
-        # 1. 显式地创建 token_type_ids
-        # 对于单句输入，token_type_ids 是一个与 input_ids 形状相同的全零张量。
-        token_type_ids = torch.zeros_like(x, device=x.device)
-
-        # 2. 移除危险的内部状态修改
-        # 下面的代码块是导致错误的根源，必须删除。
-        # if hasattr(self.pretrained_model, 'embeddings') and hasattr(self.pretrained_model.embeddings, 'token_type_ids'):
-        #     self.pretrained_model.embeddings.token_type_ids = None
-        # ==================== 修复结束 ====================
+        attention_mask = x != self.tokenizer.pad_token_id
 
         if no_grad:
             with torch.no_grad():
@@ -700,8 +695,12 @@ class RepresentationNetworkUniZero(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-        logging.info(f"Using norm type: {norm_type}")
-        logging.info(f"Using activation type: {activation}")
+
+        # Only log from rank 0 to avoid excessive output in distributed training
+        from ding.utils import get_rank
+        if get_rank() == 0:
+            logging.info(f"Using norm type: {norm_type}")
+            logging.info(f"Using activation type: {activation}")
 
         self.observation_shape = observation_shape
         self.downsample = downsample
@@ -735,18 +734,18 @@ class RepresentationNetworkUniZero(nn.Module):
         self.activation = activation
         self.embedding_dim = embedding_dim
 
-        # ==================== 修改开始 ====================
+        # ==================== Modification Start ====================
         if self.observation_shape[1] == 64:
-            # 修复：将硬编码的 64 替换为 num_channels
+            # Fix: Replace hardcoded 64 with num_channels
             self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
 
         elif self.observation_shape[1] in [84, 96]:
-            # 修复：将硬编码的 64 替换为 num_channels
+            # Fix: Replace hardcoded 64 with num_channels
             self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
-        # ==================== 修改结束 ====================
+        # ==================== Modification End ====================
 
-        self.final_norm_option_in_encoder=final_norm_option_in_encoder 
-        # 2. 在 __init__ 中统一初始化 final_norm
+        self.final_norm_option_in_encoder=final_norm_option_in_encoder
+        # Initialize final_norm uniformly in __init__
         if self.final_norm_option_in_encoder in ['LayerNorm', 'LayerNorm_Tanh']:
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
         elif self.final_norm_option_in_encoder == 'LayerNormNoAffine':
@@ -754,13 +753,13 @@ class RepresentationNetworkUniZero(nn.Module):
                 self.embedding_dim, eps=1e-5, elementwise_affine=False
             )
         elif self.final_norm_option_in_encoder == 'SimNorm':
-            # 确保 SimNorm 已被定义
+            # Ensure SimNorm is defined
             self.final_norm = SimNorm(simnorm_dim=group_size)
         elif self.final_norm_option_in_encoder == 'L2Norm':
-            # 直接实例化我们自定义的 L2Norm 模块
+            # Directly instantiate our custom L2Norm module
             self.final_norm = L2Norm(eps=1e-6)
         elif self.final_norm_option_in_encoder is None:
-            # 如果不需要归一化，可以设置为 nn.Identity() 或 None
+            # If no normalization is needed, set to nn.Identity() or None
             self.final_norm = nn.Identity()
         else:
             raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
@@ -792,12 +791,12 @@ class RepresentationNetworkUniZero(nn.Module):
         # NOTE: very important for training stability.
         # x = self.final_norm(x)
 
-        # 3. 在 forward 中统一调用 self.final_norm
-        # 这种结构更加清晰和可扩展
+        # Uniformly call self.final_norm in forward
+        # This structure is clearer and more extensible
         if self.final_norm is not None:
             x = self.final_norm(x)
 
-        # 针对 LayerNorm_Tanh 的特殊处理
+        # Special handling for LayerNorm_Tanh
         if self.final_norm_option_in_encoder == 'LayerNorm_Tanh':
             x = torch.tanh(x)
 
@@ -843,7 +842,15 @@ class RepresentationNetwork(nn.Module):
             self.downsample_net = DownSample(observation_shape, num_channels, activation, norm_type)
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-            self.norm = build_normalization(norm_type, dim=3)(num_channels, *observation_shape[1:])
+            if norm_type == 'BN':
+                self.norm = nn.BatchNorm2d(num_channels)
+            elif norm_type == 'LN':
+                if downsample:
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                        eps=1e-5)
+                else:
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
         self.resblocks = nn.ModuleList([
             ResBlock(in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False)
@@ -887,7 +894,7 @@ class RepresentationNetworkMLP(nn.Module):
     """
     def __init__(
             self,
-            observation_dim: int,
+            observation_shape: int,
             hidden_channels: int = 64,
             num_layers: int = 2,
             activation: nn.Module = nn.GELU(approximate='tanh'),
@@ -897,7 +904,7 @@ class RepresentationNetworkMLP(nn.Module):
     ) -> torch.Tensor:
         """
         Arguments:
-            - observation_dim (:obj:`int`): The dimension of the input vector observation.
+            - observation_shape (:obj:`int`): The dimension of the input vector observation.
             - hidden_channels (:obj:`int`): The number of neurons in the hidden and output layers.
             - num_layers (:obj:`int`): The total number of layers in the MLP.
             - activation (:obj:`nn.Module`): The activation function to use.
@@ -909,7 +916,7 @@ class RepresentationNetworkMLP(nn.Module):
         hidden_layers = [hidden_channels] * (num_layers - 1) if num_layers > 1 else []
         
         self.fc_representation = MLP_V2(
-            in_channels=observation_dim,
+            in_channels=observation_shape,
             hidden_channels=hidden_layers,
             out_channels=hidden_channels,
             activation=activation,
@@ -919,7 +926,7 @@ class RepresentationNetworkMLP(nn.Module):
             last_linear_layer_init_zero=True,
         )
 
-        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        # Select the normalization method based on the final_norm_option_in_encoder parameter.
         if final_norm_option_in_encoder.lower() == "simnorm":
             self.norm = SimNorm(simnorm_dim=group_size)
         elif final_norm_option_in_encoder.lower() == "layernorm":
@@ -931,10 +938,13 @@ class RepresentationNetworkMLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
-            - x (:obj:`torch.Tensor`): (B, observation_dim)
+            - x (:obj:`torch.Tensor`): (B, observation_shape)
             - output (:obj:`torch.Tensor`): (B, hidden_channels)
         """
-        x = self.fc_representation(x)
+        # Vector observations may be stored as uint8 in replay (for example,
+        # MiniGrid FlatObsWrapper).  Cast at the encoder boundary so collection,
+        # evaluation, and learning all feed a valid dtype to linear layers.
+        x = self.fc_representation(x.float())
         x = self.norm(x)
 
         return x

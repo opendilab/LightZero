@@ -102,6 +102,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
+            use_cache=True,
+            cache_size=100000,
         ),
         policy=dict(
             multi_gpu=True,  # Important for distributed data parallel (DDP)

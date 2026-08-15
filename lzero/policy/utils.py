@@ -1,8 +1,5 @@
 import inspect
 import logging
-from typing import List, Dict, Union
-from typing import Tuple
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -10,8 +7,69 @@ import torch.nn as nn
 from easydict import EasyDict
 from scipy.stats import entropy
 from torch.nn import functional as F
+from typing import List, Dict, Union, Tuple
 import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+
+def initialize_pad_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str, pad_token_id: int = 0) -> torch.Tensor:
+    """
+    Overview:
+        Initialize a tensor filled with `pad_token_id` for batch observations. 
+        This function is designed to be flexible and can handle both textual 
+        and non-textual observations:
+        
+        - For textual observations: it initializes `input_ids` with padding tokens, 
+        ensuring consistent sequence lengths within a batch.
+        - For non-textual observations: it provides a convenient way to fill 
+        observation tensors with a default of 0, 
+        ensuring shape compatibility and preventing uninitialized values.
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
+        - batch_size (:obj:`int`): The batch size.
+        - device (:obj:`str`): The device to store the tensor.
+        - pad_token_id (:obj:`int`): The token ID (or placeholder value) used for padding.
+    Returns:
+        - padded_tensor (:obj:`torch.Tensor`): A tensor of the given shape, 
+        filled with `pad_token_id`.
+    """
+    if isinstance(observation_shape, (list, tuple)):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError(f"observation_shape must be int, list, or tuple, but got {type(observation_shape).__name__}")
+
+    return torch.full(shape, fill_value=pad_token_id, dtype=torch.float32, device=device) if pad_token_id == -1 else torch.full(shape, fill_value=pad_token_id, dtype=torch.long, device=device)
+
+
+def initialize_zeros_batch(
+    observation_shape: Union[int, List[int], Tuple[int, ...]],
+    batch_size: int,
+    device: str
+) -> torch.Tensor:
+    """
+    Overview:
+        Initializes a zeros tensor for a batch of observations based on the
+        provided shape. This is commonly used to prepare initial input for models
+        like UniZero.
+
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int, ...]]`): The shape of a single observation.
+        - batch_size (:obj:`int`): The number of observations in the batch.
+        - device (:obj:`str`): The device to store the tensor on (e.g., 'cpu', 'cuda').
+
+    Returns:
+        - torch.Tensor: A zeros tensor with the shape [batch_size, *observation_shape].
+    """
+    if isinstance(observation_shape, (list, tuple)):
+        shape = (batch_size, *observation_shape)
+    elif isinstance(observation_shape, int):
+        shape = (batch_size, observation_shape)
+    else:
+        raise TypeError(
+            f"observation_shape must be an int, list, or tuple, but got {type(observation_shape).__name__}"
+        )
+    return torch.zeros(shape, device=device)
 
 def compute_bleu(reference: str, prediction: str) -> float:
     """
@@ -219,7 +277,8 @@ def configure_optimizers_nanogpt(
     weight_decay: float,
     learning_rate: float,
     betas: Tuple[float, float],
-    device_type: str
+    device_type: str,
+    optim_include_no_require_grad_params: bool = False
 ) -> torch.optim.AdamW:
     """
     Overview:
@@ -241,10 +300,10 @@ def configure_optimizers_nanogpt(
     # Start with all of the candidate parameters from the model.
     param_dict = {pn: p for pn, p in model.named_parameters()}
 
-    # TODO: The following code is commented out, which is crucial for a balanced pipeline.
-    # We do not filter out parameters with `requires_grad=False` because their `requires_grad`
-    # attribute might be set to `True` at a later stage during training.
-    param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+    # TODO: When `optim_include_no_require_grad_params` is True, keep `requires_grad=False` parameters
+    # in weight decay, since some may be unfrozen later (e.g., in the ScaleZero DPS pipeline).
+    if not optim_include_no_require_grad_params:
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
 
     # Create optimizer parameter groups. Any parameter that is 2D or higher will be weight decayed,
     # otherwise no. i.e. all weight tensors in matrix multiplications and embeddings will be decayed,
@@ -422,6 +481,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tup
     Arguments:
         - obs_batch_ori (:obj:`np.ndarray`): The original observations in a batch style.
         - cfg (:obj:`EasyDict`): The configuration dictionary containing model settings.
+        - task_id (:obj:`int`, optional): The global task ID, used in multitask settings to select the appropriate observation shape.
 
     Returns:
         - obs_batch (:obj:`torch.Tensor`): The tensor containing the observations for the initial inference.
@@ -430,7 +490,11 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict, task_id = None) -> Tup
     """
     # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
     # Also, ensure the tensor is of the correct floating-point type for the model.
-    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
+    # Some Gymnasium environments (including MiniGrid's FlatObsWrapper) emit
+    # uint8 vector observations.  MLP/linear layers require floating-point
+    # inputs, so normalize the dtype at the policy boundary while retaining the
+    # compact replay-buffer representation.
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
 
     # Calculate the dimension size to slice based on the model configuration.
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.

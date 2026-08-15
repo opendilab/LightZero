@@ -20,7 +20,7 @@ jobs:
       matrix:
         os:
           - 'self-hosted'
-          - 'macos-13'
+          - 'macos-15'
         python-version:
           - '3.8'
           - '3.9'
@@ -61,7 +61,7 @@ jobs:
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
         run: |
-          brew install tree cloc wget curl make zip graphviz
+          brew install tree cloc wget curl make zip graphviz swig
           brew install llvm  # Install llvm (which includes clang)
           brew install opencv  # Install OpenCV
           echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> $GITHUB_ENV  # update PATH

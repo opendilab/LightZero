@@ -37,7 +37,9 @@ jericho_ppo_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        manager=dict(shared_memory=False, )
+        manager=dict(shared_memory=False, ),
+        use_cache=True,
+        cache_size=100000,
     ),
     policy=dict(
         cuda=True,

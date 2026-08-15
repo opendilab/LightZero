@@ -1,18 +1,20 @@
 import copy
+import threading
 import time
 from collections import namedtuple
-from typing import Optional, Callable, Tuple, Dict, Any
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 import torch
 import wandb
 from ding.envs import BaseEnvManager
-from ding.torch_utils import to_ndarray, to_item, to_tensor
-from ding.utils import build_logger, EasyTimer
-from ding.utils import get_world_size, get_rank, broadcast_object_list
-from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
+from ding.torch_utils import to_item, to_ndarray, to_tensor
+from ding.utils import (EasyTimer, broadcast_object_list, build_logger,
+                        get_rank, get_world_size)
+from ding.worker.collector.base_serial_evaluator import (ISerialEvaluator,
+                                                         VectorEvalMonitor)
+from ditk import logging
 from easydict import EasyDict
-
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 import threading
@@ -31,7 +33,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     # Default configuration for the MuZeroEvaluator.
     config = dict(
         # The frequency of evaluation, measured in training iterations.
-        eval_freq=50,
+        eval_freq=5000,
     )
 
     @classmethod
@@ -61,7 +63,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     ) -> None:
         """
         Overview:
-            Initialize the MuZeroEvaluator.
+            Initializes the MuZeroEvaluator. This evaluator is compatible with MuZero, Sampled MuZero, Gumbel MuZero, EfficientZero, UniZero, and Sampled UniZero (i.e., all algorithms except AlphaZero).
         Arguments:
             - eval_freq (:obj:`int`): The frequency, in training iterations, at which to run evaluation.
             - n_evaluator_episode (:obj:`int`): The total number of episodes to run during each evaluation.
@@ -72,16 +74,17 @@ class MuZeroEvaluator(ISerialEvaluator):
             - exp_name (:obj:`str`): The name of the experiment, used for logging.
             - instance_name (:obj:`str`): The name of this evaluator instance.
             - policy_config (:obj:`Optional[EasyDict]`): Configuration for the policy.
-            - task_id (:obj:`Optional[int]`): The unique identifier for the task. If None, it operates in single-task mode.
+            - task_id (:obj:`Optional[int]`): The unique identifier for the task. If None, the evaluator operates in single-task mode. In a multi-task setting, each task corresponds to a specific evaluator instance.
         """
         self.stop_event = threading.Event()  # Event to signal a stop, e.g., due to a timeout.
         self.task_id = task_id
         self._eval_freq = eval_freq
         self._exp_name = exp_name
         self._instance_name = instance_name
+        self._rank = get_rank()
 
         # Initialize logger. Only rank 0 needs a full logger with TensorBoard.
-        if get_rank() == 0:
+        if self._rank == 0:
             if tb_logger is not None:
                 self._logger, _ = build_logger(
                     f'./{self._exp_name}/log/{self._instance_name}', self._instance_name, need_tb=False
@@ -92,17 +95,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                     f'./{self._exp_name}/log/{self._instance_name}', self._instance_name
                 )
         else:
-            self._logger, _ = build_logger(
-                f'./{self._exp_name}/log/{self._instance_name}', self._instance_name, need_tb=False
-            )
-            self._tb_logger = tb_logger
+            if tb_logger is not None:
+                self._logger, _ = build_logger(
+                    f'./{self._exp_name}/log/{self._instance_name}', self._instance_name, need_tb=False
+                )
+                self._tb_logger = tb_logger
 
-        self._rank = get_rank()
-        self._world_size = get_world_size()
-        print(f'rank {self._rank}, self.task_id: {self.task_id}')
-
+        logging.info(f'rank {self._rank}, self.task_id: {self.task_id}')
         self.reset(policy, env)
-
         self._timer = EasyTimer()
         self._default_n_episode = n_evaluator_episode
         self._stop_value = stop_value
@@ -198,7 +198,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             envstep: int = -1,
             n_episode: Optional[int] = None,
             return_trajectory: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[bool, Dict[str, Any]]:
         """
         Overview:
             Run a full evaluation process. It will evaluate the current policy, log the results,
@@ -213,18 +213,26 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): A flag indicating whether the training should stop (e.g., if the stop value is reached).
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing evaluation results, such as rewards and episode lengths.
         """
-        if torch.cuda.is_available():
-            print(f"=========in eval() Rank {get_rank()} ===========")
+        if torch.cuda.is_available() and self.task_id is not None:
+            # NOTE: important for unizero_multitask pipeline.
+            self._logger.info(f"=========in eval() Rank {get_rank()} ===========")
             device = torch.cuda.current_device()
-            print(f"当前默认的 GPU 设备编号: {device}")
+            self._logger.info(f"before set device: {device}")
             torch.cuda.set_device(get_rank())
-            print(f"set device后的 GPU 设备编号: {get_rank()}")
+            self._logger.info(f"after set device: {get_rank()}")
 
-        # The evaluator is designed to work on rank 0, but DDP support is being developed.
         episode_info = None
         stop_flag = False
-        # TODO(username): Refine evaluation logic for UniZero multitask with DDP v2.
-        if get_rank() >= 0:
+        if self.task_id is not None and get_rank() >= 0:
+            # In a multi-task setting, each task corresponds to a specific evaluator instance.
+            eval_flag = True
+        elif self.task_id is None and get_rank() == 0:
+            # In a single-task setting, only evaluate rank 0.
+            eval_flag = True
+        else:
+            eval_flag = False
+
+        if eval_flag:
             if n_episode is None:
                 n_episode = self._default_n_episode
             assert n_episode is not None, "Please specify the number of evaluation episodes (n_episode)."
@@ -251,7 +259,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             timestep_dict = {}
             for i in range(env_nums):
                 if 'timestep' not in init_obs[i]:
-                    print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                    self._logger.warning(f"'timestep' key is missing in init_obs[{i}], assigning value -1")
                 timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
 
             dones = np.array([False for _ in range(env_nums)])
@@ -272,11 +280,11 @@ class MuZeroEvaluator(ISerialEvaluator):
             ready_env_id = set()
             remain_episode = n_episode
             eps_steps_lst = np.zeros(env_nums)
-
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Check if a timeout has occurred.
                     if self.stop_event.is_set():
+                        # self.stop_event may be set in safe_eval() methd in lzero/entry/utils.py
                         self._logger.info("[EVALUATOR]: Evaluation aborted due to timeout.")
                         break
 
@@ -285,13 +293,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                     new_available_env_id = set(obs.keys()).difference(ready_env_id)
                     ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                     remain_episode -= min(len(new_available_env_id), remain_episode)
+                    ready_env_id_list = sorted(ready_env_id)
 
                     # Prepare stacked observations and other inputs for the policy.
-                    stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
-                    stack_obs = list(stack_obs.values())
-                    action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
-                    to_play = [to_play_dict[env_id] for env_id in ready_env_id]
-                    timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+                    stack_obs = [game_segments[env_id].get_obs() for env_id in ready_env_id_list]
+                    action_mask = [action_mask_dict[env_id] for env_id in ready_env_id_list]
+                    to_play = [to_play_dict[env_id] for env_id in ready_env_id_list]
+                    timestep = [timestep_dict[env_id] for env_id in ready_env_id_list]
 
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
@@ -302,10 +310,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     if self.task_id is None:
                         # Single-task setting
-                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep)
+                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id_list, timestep=timestep)
                     else:
                         # Multi-task setting
-                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, timestep=timestep, task_id=self.task_id)
+                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id_list, timestep=timestep, task_id=self.task_id)
 
                     # Unpack policy outputs.
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -322,7 +330,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     if self.policy_config.sampled_algo:
                         root_sampled_actions_dict = {}
 
-                    for index, env_id in enumerate(ready_env_id):
+                    for index, env_id in enumerate(ready_env_id_list):
                         actions[env_id] = actions_with_env_id.pop(env_id)
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
                         if self.policy_config.sampled_algo:
@@ -412,10 +420,65 @@ class MuZeroEvaluator(ISerialEvaluator):
                     save_ckpt_fn('WM_ckpt_best.pth.tar')
                 self._max_episode_return = mean_episode_return
             info = {
+                'train_iter': train_iter,
+                'ckpt_name': f'iteration_{train_iter}.pth.tar',
+                'episode_count': n_episode,
+                'envstep_count': envstep_count,
                 'avg_envstep_per_episode': envstep_count / n_episode if n_episode > 0 else 0,
+                'evaluate_time': duration,
+                'avg_envstep_per_sec': envstep_count / duration if duration > 0 else 0,
+                'avg_time_per_episode': n_episode / duration if duration > 0 else 0,
                 'reward_mean': np.mean(episode_return),
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
                 'reward_min': np.min(episode_return),
             }
-        return info
+            episode_info = eval_monitor.get_episode_info()
+            if episode_info is not None:
+                info.update(episode_info)
+
+            logging.info(f'rank {self._rank}, self.task_id: {self.task_id}')
+            self._logger.info(self._logger.get_tabulate_vars_hor(info))
+
+            # Log to TensorBoard and WandB.
+            for k, v in info.items():
+                if k in ['train_iter', 'ckpt_name', 'each_reward'] or not np.isscalar(v):
+                    continue
+                if self.task_id is None:
+                    self._tb_logger.add_scalar(f'{self._instance_name}_iter/{k}', v, train_iter)
+                    self._tb_logger.add_scalar(f'{self._instance_name}_step/{k}', v, envstep)
+                else:
+                    self._tb_logger.add_scalar(f'{self._instance_name}_iter_task{self.task_id}/{k}', v, train_iter)
+                    self._tb_logger.add_scalar(f'{self._instance_name}_step_task{self.task_id}/{k}', v, envstep)
+                if self.policy_config.use_wandb:
+                    wandb.log({f'{self._instance_name}_step/{k}': v}, step=envstep)
+
+            # Check for new best performance and save checkpoint.
+            mean_episode_return = np.mean(episode_return)
+            if mean_episode_return > self._max_episode_return:
+                if save_ckpt_fn:
+                    save_ckpt_fn('ckpt_best.pth.tar')
+                self._max_episode_return = mean_episode_return
+
+            # Check if the stop condition is met.
+            stop_flag = mean_episode_return >= self._stop_value and train_iter > 0
+            if stop_flag:
+                self._logger.info(
+                    f"[LightZero serial pipeline] Current episode_return: {mean_episode_return} is greater than "
+                    f"stop_value: {self._stop_value}. The agent is considered converged."
+                )
+
+        # NOTE: Only for usual DDP not for unizero_multitask pipeline.
+        # Finalize DDP synchronization for evaluation results. 
+        # if get_world_size() > 1:
+        #     objects = [stop_flag, episode_info]
+        #     print(f'rank {self._rank}, self.task_id: {self.task_id}')
+        #     print('before broadcast_object_list')
+        #     broadcast_object_list(objects, src=0)
+        #     print('evaluator after broadcast_object_list')
+        #     stop_flag, episode_info = objects
+
+        episode_info = to_item(episode_info)
+        if return_trajectory:
+            episode_info['trajectory'] = game_segments
+        return stop_flag, episode_info

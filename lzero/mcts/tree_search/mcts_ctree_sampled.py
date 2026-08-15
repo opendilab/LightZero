@@ -87,7 +87,7 @@ class SampledUniZeroMCTSCtree(object):
     ) -> None:
         """
         Overview:
-            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
+            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel.
             This method utilizes the C++ implementation of the tree search for efficiency.
 
         Arguments:
@@ -96,6 +96,7 @@ class SampledUniZeroMCTSCtree(object):
             - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
             - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
             - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
+            - task_id (:obj:`int`, optional): The global task ID for the current environments.
         """
         with torch.no_grad():
             model.eval()
@@ -160,9 +161,10 @@ class SampledUniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                                # search_depth is used for rope in UniZero
+                # search_depth is used for rope in UniZero
                 search_depth = results.get_search_len()
                 # for Sampled UniZero
+                # TODO: support RoPE
                 if task_id is not None:
                     # multi task setting
                     network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)

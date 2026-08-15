@@ -1,20 +1,18 @@
-import logging
 import os
-from typing import Optional
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
-from tensorboardX import SummaryWriter
-
 from ding.config import compile_config
-from ding.envs import DingEnvWrapper, BaseEnvManager
+from ding.envs import BaseEnvManager, DingEnvWrapper
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
+from ditk import logging
 from lzero.envs.get_wrapped_env import get_wrappered_env
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector, MuZeroEvaluator
+from tensorboardX import SummaryWriter
 
 
 def train_muzero_with_gym_env(

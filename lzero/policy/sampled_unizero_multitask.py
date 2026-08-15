@@ -1,38 +1,30 @@
 import copy
 import logging
-from collections import defaultdict
-from typing import List, Dict, Any, Tuple, Union
-
-import numpy as np
-import torch
-import wandb
-from ding.model import model_wrap
-from ding.utils import POLICY_REGISTRY, set_pkg_seed, get_rank, get_world_size
-
-from lzero.entry.utils import initialize_zeros_batch
-from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
-from lzero.model import ImageTransforms
-from lzero.policy import (
-    scalar_transform,
-    InverseScalarTransform,
-    phi_transform,
-    DiscreteSupport,
-    to_torch_float_tensor,
-    mz_network_output_unpack,
-    select_action,
-    prepare_obs,
-    prepare_obs_stack_for_unizero
-)
-from lzero.policy.unizero import UniZeroPolicy
-from .utils import configure_optimizers_nanogpt
-import torch.nn.functional as F
-import torch.distributed as dist
-
 # Please add the path to your LibMTL library.
 # For example: sys.path.append('/path/to/your/LibMTL/')
 import sys
+from collections import defaultdict
+from typing import Any, Dict, List, Tuple, Union
+
+import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
+import wandb
+from ding.model import model_wrap
+from ding.utils import POLICY_REGISTRY, get_rank, get_world_size, set_pkg_seed
 # sys.path.append('/path/to/your/LibMTL/') # Template path
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+from lzero.entry.utils import initialize_zeros_batch
+from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
+from lzero.model import ImageTransforms
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          mz_network_output_unpack, phi_transform, prepare_obs,
+                          prepare_obs_stack_for_unizero, scalar_transform,
+                          select_action, to_torch_float_tensor)
+from lzero.policy.unizero import UniZeroPolicy
+
+from .utils import configure_optimizers_nanogpt
 
 
 def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]], task_name_template: str, task_id: int) -> Dict[str, float]:
@@ -42,7 +34,7 @@ def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]],
     Arguments:
         - multi_task_losses (:obj:`List[Union[torch.Tensor, float]]`): A list containing the loss for each task.
         - task_name_template (:obj:`str`): A template for the task name, e.g., 'obs_loss_task{}'.
-        - task_id (:obj:`int`): The base task ID.
+        - task_id (:obj:`int`): The starting global task ID for the current rank. Used to offset task indices when generating task names.
     Returns:
         - (:obj:`Dict[str, float]`): A dictionary containing the loss for each task.
     """
@@ -329,11 +321,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self._learn_model = self._model
 
         # Initialize utilities for loss calculation and transformations.
-        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
+        
+        self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
+        self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
+        
+        self.inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
@@ -362,6 +355,10 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self.grad_correct.init_param()
             self.grad_correct.rep_grad = False
 
+
+        encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+        self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
+        
 
     def _forward_learn(self, data: Tuple[torch.Tensor], task_weights: Any = None, ignore_grad: bool = False) -> Dict[str, Union[float, int]]:
         """
@@ -664,7 +661,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             - epsilon (:obj:`float`): The exploration noise parameter.
             - ready_env_id (:obj:`np.ndarray`): An array of environment IDs that are ready for action.
             - timestep (:obj:`List[int]`): The current timestep for each environment.
-            - task_id (:obj:`int`): The ID of the task being executed.
+            - task_id (:obj:`int`): The global task ID for the current environments.
         Returns:
             - (:obj:`Dict[int, Dict[str, Any]]`): A dictionary mapping environment IDs to action selection results.
         """
@@ -687,7 +684,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
             # 2. Prepare MCTS roots.
             if not self._cfg.model.continuous_action_space:
-                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+                legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_collect_env_num)]
             else:
                 legal_actions = [[-1] * self._cfg.model.world_model_cfg.num_of_sampled_actions for _ in range(active_collect_env_num)]
 
@@ -778,7 +775,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             - to_play (:obj:`int`): The current player.
             - ready_env_id (:obj:`np.ndarray`): An array of environment IDs that are ready for action.
             - timestep (:obj:`List[int]`): The current timestep for each environment.
-            - task_id (:obj:`int`): The ID of the task being evaluated.
+            - task_id (:obj:`int`): The global task ID for the current environments.
         Returns:
             - (:obj:`Dict[int, Dict[str, Any]]`): A dictionary mapping environment IDs to action selection results.
         """
@@ -799,7 +796,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
             # 2. Prepare MCTS roots without noise for deterministic evaluation.
             if not self._cfg.model.continuous_action_space:
-                legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
+                legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_eval_env_num)]
             else:
                 legal_actions = [[-1] * self._cfg.model.world_model_cfg.num_of_sampled_actions for _ in range(active_eval_env_num)]
 
@@ -855,7 +852,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             - env_id (:obj:`int`, optional): The ID of the environment to reset. If None, applies to all.
             - current_steps (:obj:`int`): The current number of steps, used for periodic cache clearing.
             - reset_init_data (:obj:`bool`): Whether to reset the initial observation and action batches.
-            - task_id (:obj:`int`, optional): The task ID, used to determine observation shape.
+            - task_id (:obj:`int`, optional): The global task ID, used to determine observation shape.
         """
         if reset_init_data:
             obs_shape = self._cfg.model.observation_shape_list[task_id] if task_id is not None else self._cfg.model.observation_shape

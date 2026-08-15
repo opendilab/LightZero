@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <iostream>
+#include <vector>
 
 class Node : public std::enable_shared_from_this<Node> {
 public:
@@ -14,7 +15,7 @@ public:
 
     // Constructor
     Node(std::shared_ptr<Node> parent = nullptr, float prior_p = 1.0)
-        : parent(parent), prior_p(prior_p), visit_count(0), value_sum(0.0) {}
+        : parent(parent), prior_p(prior_p), visit_count(0), value_sum(0.0), is_expanded(false) {}
 
     // Default destructor
     ~Node() = default;
@@ -86,9 +87,27 @@ public:
         return children;
     }
 
-    float prior_p;        // The prior probability of the node
-    int visit_count;      // Visit count
-    float value_sum;      // Value sum
+    float prior_p;                          // The prior probability of the node
+    int visit_count;                        // Visit count
+    float value_sum;                        // Value sum
+    bool is_expanded;                       // Flag indicating if node has been expanded
+    std::vector<int> legal_actions;         // Cache of legal actions at this node
+
+    // Set legal actions for this node (called during expansion)
+    void set_legal_actions(const std::vector<int>& actions) {
+        legal_actions = actions;
+        is_expanded = true;
+    }
+
+    // Get cached legal actions
+    const std::vector<int>& get_legal_actions() const {
+        return legal_actions;
+    }
+
+    // Check if legal actions have been cached
+    bool has_legal_actions() const {
+        return is_expanded;
+    }
 };
 
 #endif // NODE_ALPHAZERO_H

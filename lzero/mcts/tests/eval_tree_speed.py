@@ -116,7 +116,7 @@ def ptree_func(policy_config, num_simulations):
         assert len(action_mask[0]) == action_space_size
 
         action_num = [int(np.array(action_mask[i]).sum()) for i in range(env_nums)]
-        legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
+        legal_actions_list = [np.nonzero(action_mask[j])[0].tolist() for j in range(env_nums)]
         to_play = [np.random.randint(1, 3) for i in range(env_nums)]
         assert len(to_play) == batch_size
         # ============================================ptree=====================================#
@@ -212,7 +212,7 @@ def ctree_func(policy_config, num_simulations):
         assert len(action_mask[0]) == action_space_size
 
         action_num = [int(np.array(action_mask[i]).sum()) for i in range(env_nums)]
-        legal_actions_list = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(env_nums)]
+        legal_actions_list = [np.nonzero(action_mask[j])[0].tolist() for j in range(env_nums)]
         to_play = [np.random.randint(1, 3) for i in range(env_nums)]
         assert len(to_play) == batch_size
         # ============================================ctree=====================================#

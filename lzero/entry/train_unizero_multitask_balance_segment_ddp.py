@@ -1,46 +1,38 @@
-import logging
+import concurrent.futures
+import math
 import os
+from collections import defaultdict
 from functools import partial
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-import torch
 import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+from ding.utils import EasyTimer, get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
-
-from lzero.entry.utils import log_buffer_memory_usage, TemperatureScheduler
+from ditk import logging
+from lzero.entry.utils import TemperatureScheduler, log_buffer_memory_usage
+from lzero.model.unizero_world_models.transformer import (CurriculumLoRALinear,
+                                                          set_curriculum_stage)
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
-from ding.utils import EasyTimer
-import torch.nn.functional as F
-import torch.distributed as dist
-import concurrent.futures
-from lzero.model.unizero_world_models.transformer import set_curriculum_stage, CurriculumLoRALinear
+from tensorboardX import SummaryWriter
 
-from collections import defaultdict
-import math
-from .utils import (
-    freeze_non_lora_parameters,
-    compute_task_weights,
-    log_module_trainable_status,
-    log_param_statistics,
-    tasks_per_stage,
-    compute_unizero_mt_normalized_stats,
-    allocate_batch_size
-)
+from .utils import (allocate_batch_size, compute_task_weights,
+                    compute_unizero_mt_normalized_stats,
+                    EVALUATION_TIMEOUT, safe_eval,
+                    freeze_non_lora_parameters, log_module_trainable_status,
+                    log_param_statistics, tasks_per_stage)
 
 # A global dictionary to store the most recent evaluation return for each task.
 # Format: {task_id: eval_episode_return_mean}
 GLOBAL_EVAL_RETURNS: Dict[int, float] = defaultdict(lambda: None)
-
-# Timeout for the evaluation process in seconds.
-EVALUATION_TIMEOUT = 12000  # 200 minutes
 
 
 class CurriculumController:
@@ -156,48 +148,6 @@ class CurriculumController:
         return False
 
 
-def safe_eval(
-        evaluator: Evaluator,
-        learner: BaseLearner,
-        collector: Collector,
-        rank: int,
-        world_size: int
-) -> Tuple[Optional[bool], Optional[Dict[str, Any]]]:
-    """
-    Overview:
-        Executes the evaluation process with a timeout to prevent the training from stalling.
-    Arguments:
-        - evaluator (:obj:`Evaluator`): The evaluator instance.
-        - learner (:obj:`BaseLearner`): The learner instance, used to save checkpoints.
-        - collector (:obj:`Collector`): The collector instance, used to get the current envstep.
-        - rank (:obj:`int`): The rank of the current process.
-        - world_size (:obj:`int`): The total number of processes.
-    Returns:
-        - Tuple[Optional[bool], Optional[Dict[str, Any]]]: A tuple containing the stop flag and the reward dictionary
-          if evaluation succeeds. Returns (None, None) on timeout or error.
-    """
-    try:
-        logging.info(f"========= Evaluation starting on Rank {rank}/{world_size} =========")
-        # Ensure the stop_event is clear before starting a new evaluation.
-        evaluator.stop_event.clear()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Submit the evaluation task.
-            future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
-            try:
-                stop_flag, reward_dict = future.result(timeout=EVALUATION_TIMEOUT)
-            except concurrent.futures.TimeoutError:
-                # Set the stop_event to terminate the stuck evaluation thread.
-                evaluator.stop_event.set()
-                logging.error(f"Evaluation timed out on Rank {rank}/{world_size} after {EVALUATION_TIMEOUT} seconds.")
-                return None, None
-
-        logging.info(f"====== Evaluation finished on Rank {rank}/{world_size} ======")
-        return stop_flag, reward_dict
-    except Exception as e:
-        logging.error(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}", exc_info=True)
-        return None, None
-
-
 def train_unizero_multitask_balance_segment_ddp(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
@@ -267,26 +217,32 @@ def train_unizero_multitask_balance_segment_ddp(
     end_idx = start_idx + tasks_per_rank + (1 if rank < remainder else 0)
     tasks_for_this_rank = input_cfg_list[start_idx:end_idx]
 
-    if not tasks_for_this_rank:
-        logging.warning(f"Rank {rank}: No tasks assigned. Process will idle but maintain DDP communication.")
-        # An idle process must still participate in collective communications.
-        # The main loop handles this by waiting at barriers.
-        while True:
-            dist.barrier()  # Wait for other processes
-            dist.barrier()  # Sync after potential training step
-            # A mechanism to terminate idle processes would be needed here,
-            # for now, they sync and wait.
-            # This part requires a robust termination signal from active processes.
-    
-    logging.info(f"Rank {rank}/{world_size} is handling tasks from index {start_idx} to {end_idx - 1}.")
+    # Ensure at least one task is assigned.
+    if len(tasks_for_this_rank) == 0:
+        logging.error(f"Rank {rank}: No tasks assigned, continuing execution.")
+    else:
+        logging.info(f"Rank {rank}/{world_size} processing tasks {start_idx} to {end_idx - 1}")
 
     # --- Environment, Policy, and Worker Initialization ---
     task_configs, replay_buffers, collectors, evaluators = [], [], [], []
-    
+
     # Use the first task's config to create the shared policy and learner
     _, [main_cfg, main_create_cfg] = tasks_for_this_rank[0]
     for _, [cfg, _] in tasks_for_this_rank:
         cfg.policy.task_num = len(tasks_for_this_rank)
+
+    # Ensure main_cfg has a valid exp_name before calling compile_config.
+    # If exp_name is missing, None, or too long, set a safe default.
+    if not hasattr(main_cfg, 'exp_name') or main_cfg.exp_name is None or len(str(main_cfg.exp_name)) > 200:
+        # Use a simplified experiment name for the main config
+        safe_exp_name = f'data_unizero_multitask_balance/multitask_seed{seed}'
+        logging.warning(
+            f"Rank {rank}: main_cfg.exp_name is missing, None, or too long. "
+            f"Setting to safe default: {safe_exp_name}"
+        )
+        main_cfg.exp_name = safe_exp_name
+    else:
+        logging.info(f"Rank {rank}: Using exp_name from config: {main_cfg.exp_name}")
 
     assert main_create_cfg.policy.type in ['unizero_multitask', 'sampled_unizero_multitask'], \
         "This entry only supports 'unizero_multitask' or 'sampled_unizero_multitask' policies."
@@ -299,12 +255,37 @@ def train_unizero_multitask_balance_segment_ddp(
 
     main_cfg.policy.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     compiled_cfg = compile_config(main_cfg, seed=seed, auto=True, create_cfg=main_create_cfg, save_cfg=True)
-    
+
     policy = create_policy(compiled_cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
+
+    # Log initial model architecture info BEFORE loading checkpoint
+    if rank == 0:
+        num_layers_config = compiled_cfg.policy.model.world_model_cfg.num_layers
+        initial_params = sum(p.numel() for p in policy._learn_model.world_model.parameters())
+        initial_trainable = sum(p.numel() for p in policy._learn_model.world_model.parameters() if p.requires_grad)
+        logging.info(f"=" * 80)
+        logging.info(f"Model Architecture Configuration:")
+        logging.info(f"  - num_layers from config: {num_layers_config}")
+        logging.info(f"  - Total parameters (before checkpoint load): {initial_params:,}")
+        logging.info(f"  - Trainable parameters (before checkpoint load): {initial_trainable:,}")
+        logging.info(f"=" * 80)
+
     if model_path:
         logging.info(f'Loading pre-trained model from: {model_path}')
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=compiled_cfg.policy.device))
         logging.info('Model loading complete.')
+        if rank == 0:
+            loaded_params = sum(p.numel() for p in policy._learn_model.world_model.parameters())
+            loaded_trainable = sum(p.numel() for p in policy._learn_model.world_model.parameters() if p.requires_grad)
+            logging.info(f"Model Parameters After Loading Checkpoint:")
+            logging.info(f"  - Total parameters (after checkpoint load): {loaded_params:,}")
+            logging.info(f"  - Trainable parameters (after checkpoint load): {loaded_trainable:,}")
+            if initial_params != loaded_params:
+                logging.warning(f"⚠️ WARNING: Parameter count mismatch!")
+                logging.warning(f"  Config specifies {initial_params:,} params, but loaded model has {loaded_params:,} params")
+                logging.warning(f"  This usually means the checkpoint was trained with different num_layers!")
+                logging.warning(f"  The loaded checkpoint architecture will override your config settings.")
+
 
     tb_logger = SummaryWriter(os.path.join(f'./{compiled_cfg.exp_name}/log', f'rank_{rank}'))
     learner = BaseLearner(compiled_cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=compiled_cfg.exp_name)
@@ -314,6 +295,19 @@ def train_unizero_multitask_balance_segment_ddp(
     for local_task_id, (task_id, [cfg, create_cfg]) in enumerate(tasks_for_this_rank):
         task_seed = seed + task_id
         cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
+
+        # ==================== START: Robust exp_name Fix for Task Config ====================
+        # Ensure each task config has a valid exp_name before calling compile_config
+        if not hasattr(cfg, 'exp_name') or cfg.exp_name is None:
+            # Extract env_id from config if available, otherwise use task_id
+            env_id = getattr(cfg.env, 'env_id', f'task{task_id}')
+            cfg.exp_name = f'data_unizero_mt_balance/task_{env_id}_seed{task_seed}'
+            logging.warning(
+                f"Rank {rank}: Task {task_id} config missing exp_name. "
+                f"Setting to: {cfg.exp_name}"
+            )
+        # ==================== END: Robust exp_name Fix for Task Config ====================
+
         compiled_task_cfg = compile_config(cfg, seed=task_seed, auto=True, create_cfg=create_cfg, save_cfg=True)
         
         env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(compiled_task_cfg.env)
@@ -324,8 +318,28 @@ def train_unizero_multitask_balance_segment_ddp(
         set_pkg_seed(task_seed, use_cuda=compiled_task_cfg.policy.cuda)
 
         replay_buffers.append(GameBuffer(compiled_task_cfg.policy))
-        collectors.append(Collector(collector_env, policy.collect_mode, tb_logger, compiled_task_cfg.exp_name, compiled_task_cfg.policy, task_id))
-        evaluators.append(Evaluator(compiled_task_cfg.policy.eval_freq, compiled_task_cfg.env.n_evaluator_episode, compiled_task_cfg.env.stop_value, evaluator_env, policy.eval_mode, tb_logger, compiled_task_cfg.exp_name, compiled_task_cfg.policy, task_id))
+        collectors.append(Collector(
+            collect_print_freq=100,
+            env=collector_env,
+            policy=policy.collect_mode,
+            tb_logger=tb_logger,
+            exp_name=compiled_task_cfg.exp_name,
+            instance_name=f'collector_task{task_id}',
+            policy_config=compiled_task_cfg.policy,
+            task_id=task_id
+        ))
+        evaluators.append(Evaluator(
+            eval_freq=compiled_task_cfg.policy.eval_freq,
+            n_evaluator_episode=compiled_task_cfg.env.n_evaluator_episode,
+            stop_value=compiled_task_cfg.env.stop_value,
+            env=evaluator_env,
+            policy=policy.eval_mode,
+            tb_logger=tb_logger,
+            exp_name=compiled_task_cfg.exp_name,
+            instance_name=f'evaluator_task{task_id}',
+            policy_config=compiled_task_cfg.policy,
+            task_id=task_id
+        ))
         task_configs.append(compiled_task_cfg)
 
     # --- Curriculum and Training Loop Initialization ---
@@ -348,8 +362,17 @@ def train_unizero_multitask_balance_segment_ddp(
             allocated_batch_sizes = allocate_batch_size(task_configs, replay_buffers, alpha=1.0, clip_scale=clip_scale)
             if rank == 0:
                 logging.info(f"Dynamically allocated batch sizes: {allocated_batch_sizes}")
+            # Assign the corresponding batch size to each task config
             for i, cfg in enumerate(task_configs):
-                cfg.policy.batch_size = allocated_batch_sizes
+                task_id = cfg.policy.task_id
+                if isinstance(allocated_batch_sizes, dict):
+                    cfg.policy.batch_size = allocated_batch_sizes.get(task_id, cfg.policy.batch_size)
+                elif isinstance(allocated_batch_sizes, list):
+                    # Use the index in the list or task_id as fallback
+                    cfg.policy.batch_size = allocated_batch_sizes[i] if i < len(allocated_batch_sizes) else cfg.policy.batch_size
+                else:
+                    logging.warning(f"Unexpected type for allocated_batch_sizes: {type(allocated_batch_sizes)}")
+            # Also update the policy config (use the full list for compatibility)
             policy._cfg.batch_size = allocated_batch_sizes
 
         # --- 2. Data Collection and Evaluation for each task on this rank ---
@@ -418,7 +441,12 @@ def train_unizero_multitask_balance_segment_ddp(
                     logging.info(f"Computed task weights: {task_weights}")
                 
                 # Log UniZero-MT normalized stats
-                mean_norm, median_norm = compute_unizero_mt_normalized_stats(GLOBAL_EVAL_RETURNS)
+                # Convert arrays to dictionaries with task_id as keys
+                human_scores_dict = {i: new_HUMAN_SCORES[i] for i in range(len(new_HUMAN_SCORES))}
+                random_scores_dict = {i: new_RANDOM_SCORES[i] for i in range(len(new_RANDOM_SCORES))}
+                mean_norm, median_norm = compute_unizero_mt_normalized_stats(
+                    GLOBAL_EVAL_RETURNS, human_scores_dict, random_scores_dict
+                )
                 if mean_norm is not None:
                     tb_logger.add_scalar('UniZero-MT/NormalizedMean', mean_norm, learner.train_iter)
                     tb_logger.add_scalar('UniZero-MT/NormalizedMedian', median_norm, learner.train_iter)
@@ -437,36 +465,25 @@ def train_unizero_multitask_balance_segment_ddp(
             tb_logger.add_scalar('Curriculum/Stage', curriculum_controller.stage, learner.train_iter)
             tb_logger.add_scalar('Curriculum/GlobalSolvedTasks', global_solved_count, learner.train_iter)
 
-            # TODO 遍历 transformer 中所有子模块，根据其名称查找 CurriculumLoRALinear 模块
-            # transformer = policy._learn_model.world_model.transformer
-            # for module_name, module in transformer.named_modules():
-            #     if isinstance(module, CurriculumLoRALinear) and module.adapters is not None:
-            #         for adapter_idx, scale_param in enumerate(module.adapter_scales):
-            #             tb_logger.add_scalar(
-            #                 f'Curriculum/adapter_scales/{module_name}/adapter_{adapter_idx}',
-            #                 scale_param().item(),
-            #                 global_step=learner.train_iter
-            #             )
-            
-            # 新增的 alpha 缩放因子日志记录
+            # Log alpha scaling factors for curriculum LoRA modules
             try:
                 transformer = policy._learn_model.world_model.transformer
                 for module_name, module in transformer.named_modules():
                     if isinstance(module, CurriculumLoRALinear):
-                        # 检查模块是否有 base_weight_scale 属性
+                        # Check if the module has base_weight_scale attribute
                         if hasattr(module, 'base_weight_scale') and module.base_weight_scale is not None:
-                            # 1. 记录基座权重的缩放因子 (alpha_0)
+                            # Log base weight scaling factor (alpha_0)
                             tb_logger.add_scalar(
                                 f'Curriculum/alpha_scales/{module_name}/alpha_0_base_weight',
                                 module.base_weight_scale().item(),
                                 global_step=learner.train_iter
                             )
 
-                        # 检查模块是否有 adapter_scales 属性
+                        # Check if the module has adapter_scales attribute
                         if hasattr(module, 'adapter_scales') and module.adapter_scales is not None:
-                            # 2. 遍历并记录所有适配器的缩放因子 (alpha_1, alpha_2, ...)
+                            # Iterate and log scaling factors for all adapters (alpha_1, alpha_2, ...)
                             for adapter_idx, scale_param in enumerate(module.adapter_scales):
-                                # adapter_idx 是从 0 开始的，对应 alpha_{idx+1}
+                                # adapter_idx starts from 0, corresponding to alpha_{idx+1}
                                 tb_logger.add_scalar(
                                     f'Curriculum/alpha_scales/{module_name}/alpha_{adapter_idx + 1}',
                                     scale_param().item(),
@@ -474,7 +491,6 @@ def train_unizero_multitask_balance_segment_ddp(
                                 )
             except Exception as e:
                 logging.warning(f"Failed to log alpha scales: {e}")
-                        
 
         # Ensure all processes are aware of a potential stage switch
         dist.barrier()
@@ -505,7 +521,15 @@ def train_unizero_multitask_balance_segment_ddp(
                 train_data_list = []
                 total_envstep = sum(c.envstep for c in collectors)
                 for cfg, replay_buffer in zip(unsolved_cfgs, unsolved_buffers):
-                    batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    # Handle batch_size whether it's an int, list, or dict
+                    if isinstance(cfg.policy.batch_size, (list, tuple)):
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    elif isinstance(cfg.policy.batch_size, dict):
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    else:
+                        # batch_size is already an integer
+                        batch_size = cfg.policy.batch_size
+
                     if replay_buffer.get_num_of_transitions() >= batch_size:
                         train_data = replay_buffer.sample(batch_size, policy)
                         train_data.append(cfg.policy.task_id)

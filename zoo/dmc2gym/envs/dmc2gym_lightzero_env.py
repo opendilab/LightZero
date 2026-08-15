@@ -271,7 +271,7 @@ class DMC2GymEnv(BaseEnv):
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_count = 0
         self._timestep = 0
-        self.max_episode_steps = cfg.max_episode_steps
+        self._max_episode_steps = cfg.max_episode_steps
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -414,10 +414,7 @@ class DMC2GymEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(image_obs)
         
-        if self._timestep > self.max_episode_steps:
-            done = True
-
-        if self._timestep > self._cfg.max_episode_steps:
+        if self._timestep > self._max_episode_steps:
             done = True
 
         if done:

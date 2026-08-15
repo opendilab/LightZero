@@ -214,7 +214,8 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - priorities (:obj:`Optional[np.ndarray]`): An array of priorities for the transitions. Returns None if priority is not used.
         """
-        if self.policy_config.use_priority:
+        use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+        if self.policy_config.use_priority and not use_max_priority:
             # Calculate priorities as the L1 loss between predicted values and search values.
             # 'reduction=none' ensures the loss is calculated for each element individually.
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
@@ -223,7 +224,8 @@ class MuZeroCollector(ISerialCollector):
             # A small epsilon is added to avoid zero priorities.
             priorities = L1Loss(reduction='none')(pred_values, search_values).detach().cpu().numpy() + 1e-6
         else:
-            # If priority is not used, return None. The replay buffer will use max priority for new data.
+            # ``None`` asks the replay buffer to assign its current maximum
+            # priority.  This is also the correct fast path when PER is off.
             priorities = None
 
         return priorities
@@ -399,10 +401,14 @@ class MuZeroCollector(ISerialCollector):
                 remain_episode -= min(len(new_available_env_id), remain_episode)
                 
                 # Prepare policy inputs.
-                stack_obs_list = [game_segments[env_id].get_obs() for env_id in ready_env_id]
-                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
-                to_play = [to_play_dict[env_id] for env_id in ready_env_id]
-                timestep = [timestep_dict[env_id] for env_id in ready_env_id]
+                # NOTE: build inputs from a sorted list (not the raw set) so batch rows stay aligned
+                # with the ready_env_id order used inside the policy (which sorts the ids); a raw
+                # set's iteration order can differ after envs are removed and re-added.
+                ready_env_id_list = sorted(ready_env_id)
+                stack_obs_list = [game_segments[env_id].get_obs() for env_id in ready_env_id_list]
+                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id_list]
+                to_play = [to_play_dict[env_id] for env_id in ready_env_id_list]
+                timestep = [timestep_dict[env_id] for env_id in ready_env_id_list]
                 
                 stack_obs_array = to_ndarray(stack_obs_list)
                 stack_obs_tensor = prepare_observation(stack_obs_array, self.policy_config.model.model_type)
@@ -417,7 +423,7 @@ class MuZeroCollector(ISerialCollector):
                     'temperature': temperature,
                     'to_play': to_play,
                     'epsilon': epsilon,
-                    'ready_env_id': ready_env_id,
+                    'ready_env_id': ready_env_id_list,
                     'timestep': timestep
                 }
                 if self.task_id is not None:
@@ -501,7 +507,8 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
                     
                     eps_steps_lst[env_id] += 1
-                    if self.policy_config.use_priority:
+                    use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+                    if self.policy_config.use_priority and not use_max_priority:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
 
@@ -537,6 +544,12 @@ class MuZeroCollector(ISerialCollector):
                 if done:
                     collected_episode += 1
                     reward = info['score']
+                    log_info = {'reward': reward, 'time': self._env_info[env_id]['time'], 'step': self._env_info[env_id]['step']}
+                
+                # --- Episode Termination Handling ---
+                if done:
+                    collected_episode += 1
+                    reward = info['eval_episode_return']
                     log_info = {'reward': reward, 'time': self._env_info[env_id]['time'], 'step': self._env_info[env_id]['step']}
                     if not collect_with_pure_policy:
                         log_info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id] if eps_steps_lst[env_id] > 0 else 0
@@ -606,11 +619,12 @@ class MuZeroCollector(ISerialCollector):
         # --- Finalize and Log ---
         collected_duration = sum([d['time'] for d in self._episode_info])
 
+        # NOTE: Only for usual DDP not for unizero_multitask pipeline.
         # In DDP, aggregate statistics across all processes.
-        if self._world_size > 1:
-            collected_step = allreduce_data(collected_step, 'sum')
-            collected_episode = allreduce_data(collected_episode, 'sum')
-            collected_duration = allreduce_data(collected_duration, 'sum')
+        # if self._world_size > 1:
+        #     collected_step = allreduce_data(collected_step, 'sum')
+        #     collected_episode = allreduce_data(collected_episode, 'sum')
+        #     collected_duration = allreduce_data(collected_duration, 'sum')
 
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode

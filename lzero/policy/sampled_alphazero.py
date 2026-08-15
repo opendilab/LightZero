@@ -459,52 +459,22 @@ class SampledAlphaZeroPolicy(Policy):
         return output
 
     def _get_simulation_env(self):
-        assert self._cfg.simulation_env_id in ['tictactoe', 'gomoku', 'go'], self._cfg.simulation_env_id
-        assert self._cfg.simulation_env_config_type in ['play_with_bot', 'self_play', 'league',
-                                                        'sampled_play_with_bot'], self._cfg.simulation_env_config_type
-        if self._cfg.simulation_env_id == 'tictactoe':
-            from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
-                    tictactoe_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_sp_mode_config import \
-                    tictactoe_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'league':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_league_config import \
-                    tictactoe_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
-                from zoo.board_games.tictactoe.config.tictactoe_sampled_alphazero_bot_mode_config import \
-                    tictactoe_sampled_alphazero_config as tictactoe_alphazero_config
+        """
+        Overview:
+            Create simulation environment for MCTS using registry-based approach.
+            Uses ENV_REGISTRY to instantiate environment based on simulation_env_id.
+        """
+        from ding.utils import import_module, ENV_REGISTRY
 
-            self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
+        # Import env modules to trigger registration
+        import_names = self._cfg.create_cfg.env.get('import_names', [])
+        import_module(import_names)
 
-        elif self._cfg.simulation_env_id == 'gomoku':
-            from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_sp_mode_config import gomoku_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'league':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_league_config import gomoku_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
-                from zoo.board_games.gomoku.config.gomoku_sampled_alphazero_bot_mode_config import \
-                    gomoku_sampled_alphazero_config as gomoku_alphazero_config
+        # Get env class from registry
+        env_cls = ENV_REGISTRY.get(self._cfg.simulation_env_id)
 
-            self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
-        elif self._cfg.simulation_env_id == 'go':
-            from zoo.board_games.go.envs.go_env import GoEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.go.config.go_alphazero_bot_mode_config import go_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.go.config.go_alphazero_sp_mode_config import go_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'league':
-                from zoo.board_games.go.config.go_alphazero_league_config import go_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'sampled_play_with_bot':
-                from zoo.board_games.go.config.go_sampled_alphazero_bot_mode_config import \
-                    go_sampled_alphazero_config as go_alphazero_config
-
-            self.simulate_env = GoEnv(go_alphazero_config.env)
+        # Create simulation env with config from main config
+        self.simulate_env = env_cls(self._cfg.full_cfg.env)
 
     @torch.no_grad()
     def _policy_value_func(self, environment: 'Environment') -> Tuple[Dict[int, np.ndarray], float]:

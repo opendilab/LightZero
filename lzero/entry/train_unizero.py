@@ -1,28 +1,26 @@
-import logging
 import os
 from functools import partial
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import torch
+import torch.distributed as dist
 import wandb
 from ding.config import compile_config
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
+from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import set_pkg_seed, get_rank
+from ding.utils import get_rank, get_world_size, set_pkg_seed
 from ding.worker import BaseLearner
-from tensorboardX import SummaryWriter
-from torch.utils.tensorboard import SummaryWriter
-
+from ditk import logging
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroCollector as Collector
-from .utils import random_collect, calculate_update_per_collect
-import torch.distributed as dist
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+from lzero.worker import MuZeroEvaluator as Evaluator
+from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+
+from .utils import calculate_update_per_collect, random_collect
 
 
 def train_unizero(
@@ -93,7 +91,7 @@ def train_unizero(
             save_code=True,
         )
         logging.info("wandb initialization completed!")
-
+    
     # Create policy
     logging.info("Creating policy...")
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
@@ -216,7 +214,11 @@ def train_unizero(
 
                 train_data.append(learner.train_iter)
 
+                if os.environ.get('DEBUG', '').lower() == 'true':
+                    import pudb; pudb.set_trace()
+
                 log_vars = learner.train(train_data, collector.envstep)
+                
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 

@@ -12,7 +12,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
 from .common import RepresentationNetwork, PredictionNetwork, EZNetworkOutput
-from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
+from .utils import renormalize, get_params_mean
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -567,9 +567,3 @@ class DynamicsNetwork(nn.Module):
         value_prefix = self.fc_reward_head(value_prefix)
 
         return next_latent_state, next_reward_hidden_state, value_prefix
-
-    def get_dynamic_mean(self) -> float:
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> Tuple[ndarray, float]:
-        return get_reward_mean(self)

@@ -10,7 +10,7 @@ from numpy import ndarray
 # The following imports are assumed to be from the same project directory.
 # To maintain API consistency, their internal logic is not modified.
 from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook
-from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
+from .utils import renormalize, get_params_mean
 
 
 @MODEL_REGISTRY.register('MuZeroMTModel')
@@ -529,21 +529,3 @@ class DynamicsNetwork(nn.Module):
         reward = self.fc_reward_head(reward_x)
 
         return next_latent_state, reward
-
-    def get_dynamic_mean(self) -> float:
-        """
-        Overview:
-            Computes the mean of parameters in the dynamics-related layers (conv and resblocks).
-        Returns:
-            - float: The mean value of dynamics parameters.
-        """
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> Tuple[ndarray, float]:
-        """
-        Overview:
-            Computes the mean of parameters and the last layer bias in the reward head.
-        Returns:
-            - Tuple[ndarray, float]: A tuple containing the mean of the last layer's weights and its bias.
-        """
-        return get_reward_mean(self)

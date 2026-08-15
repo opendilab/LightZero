@@ -1,22 +1,21 @@
 import copy
 import logging
 from collections import defaultdict
-from typing import List, Dict, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
 import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
-
 from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack_for_unizero
+from lzero.policy import (DiscreteSupport, InverseScalarTransform,
+                          mz_network_output_unpack, phi_transform, prepare_obs,
+                          prepare_obs_stack_for_unizero, scalar_transform,
+                          select_action, to_torch_float_tensor)
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
-from lzero.entry.utils import initialize_zeros_batch
 
 
 def get_action(roots_sampled_actions, i, action):
@@ -121,8 +120,17 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=5e-3,
-                # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
-                predict_latent_loss_type='group_kl',
+                # (str) The normalization type for the final layer in both the head and the encoder.
+                # This option must be the same for both 'final_norm_option_in_head' and 'final_norm_option_in_encoder'.
+                # Valid options are 'LayerNorm' and 'SimNorm'.
+                # When set to 'LayerNorm', the 'predict_latent_loss_type' should be 'mse'.
+                # When set to 'SimNorm', the 'predict_latent_loss_type' should be 'group_kl'.
+                final_norm_option_in_head="LayerNorm",
+                final_norm_option_in_encoder="LayerNorm",
+                # (str) The type of loss function for predicting latent variables.
+                # Options are 'mse' (Mean Squared Error) or 'group_kl' (Group Kullback-Leibler divergence).
+                # This choice is dependent on the normalization method selected above.
+                predict_latent_loss_type='mse',
                 # (str) The type of observation. Options are ['image', 'vector'].
                 obs_type='image',
                 # (float) The discount factor for future rewards.
@@ -324,6 +332,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
         if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
+
             # TODO: check the total training steps
             self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
 
@@ -360,8 +369,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        assert self.value_support.size == self._learn_model.value_support_size          # if these assertions fails, somebody introduced...
-        assert self.reward_support.size == self._learn_model.reward_support_size        # ...incoherence between policy and model
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
@@ -371,6 +378,23 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
 
+        if self._cfg.model.model_type == 'conv':
+            # for image-input env
+            self.pad_token_id = -1
+        else:
+            # for text-input env and vector-input env
+            # Retrieve the tokenizer from the encoder module if it exists
+            encoder_tokenizer = getattr(self._model.tokenizer.encoder, 'tokenizer', None)
+
+            # Extract the padding token ID from the tokenizer if available, otherwise use 0 as default. Used in _reset_collect()
+            # The pad_token_id is used to identify padding tokens in sequences, which is essential for:
+            # 1. Masking padded positions during attention computation to prevent them from affecting the output
+            # 2. Properly handling variable-length sequences in batch processing
+            # 3. Distinguishing between actual tokens and padding in loss calculation
+            # Default value 0 is a common convention when no specific padding token is defined
+            self.pad_token_id = encoder_tokenizer.pad_token_id if encoder_tokenizer is not None else 0
+        
+        
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -850,11 +874,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.model.continuous_action_space is True:
                 # when the action space of the environment is continuous, action_mask[:] is None.
@@ -885,8 +908,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):

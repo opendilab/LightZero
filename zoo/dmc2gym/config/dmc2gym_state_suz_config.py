@@ -62,6 +62,7 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
+            game_segment_length=game_segment_length,
             # TODO: only for debug
             # collect_max_episode_steps=int(20),
             # eval_max_episode_steps=int(20),
@@ -74,7 +75,9 @@ def main(env_id, seed):
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 model_type='mlp',
+                num_layers=num_layers,
                 world_model_cfg=dict(
+                    game_segment_length=game_segment_length,
                     policy_loss_type='kl',
                     obs_type='vector',
                     num_unroll_steps=num_unroll_steps,

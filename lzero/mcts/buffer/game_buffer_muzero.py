@@ -3,7 +3,6 @@ from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY, EasyTimer
-# from line_profiler import line_profiler
 
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
@@ -75,6 +74,18 @@ class MuZeroGameBuffer(GameBuffer):
             self.action_space_size = self._cfg.model.action_space_size
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
+
+    def _assign_target_policy_for_legal_actions(
+            self, policy_tmp: List[float], policy: List[float], legal_actions: List[int]
+    ) -> None:
+        """
+        Assign visit-count policy values into the target policy vector.
+
+        Non-sampled algorithms use a full action-space policy vector, so each legal action is the destination index.
+        Sampled algorithms override this method because their target policy vector is indexed by sampled-action slot.
+        """
+        for index, legal_action in enumerate(legal_actions):
+            policy_tmp[legal_action] = policy[index]
 
     def reset_runtime_metrics(self):
         """
@@ -487,12 +498,11 @@ class MuZeroGameBuffer(GameBuffer):
                     m_output = model.initial_inference(m_obs)
                 
 
-                # if not model.training:
                 # if not in training, obtain the scalars of the value/reward
                 [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                     [
                         m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        inverse_scalar_transform(m_output.value, self.value_support),
                         m_output.policy_logits
                     ]
                 )
@@ -599,7 +609,7 @@ class MuZeroGameBuffer(GameBuffer):
                 [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
 
         with torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
@@ -615,12 +625,11 @@ class MuZeroGameBuffer(GameBuffer):
                 else:
                     m_output = model.initial_inference(m_obs)
 
-                # if not model.training:
                 # if not in training, obtain the scalars of the value/reward
                 [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                     [
                         m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        inverse_scalar_transform(m_output.value, self.value_support),
                         m_output.policy_logits
                     ]
                 )
@@ -707,8 +716,9 @@ class MuZeroGameBuffer(GameBuffer):
                                 # to make sure target_policies have the same dimension
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
-                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                    policy_tmp[legal_action] = policy[index]
+                                self._assign_target_policy_for_legal_actions(
+                                    policy_tmp, policy, roots_legal_actions_list[policy_index]
+                                )
                                 target_policies.append(policy_tmp)
 
                     policy_index += 1
@@ -758,7 +768,7 @@ class MuZeroGameBuffer(GameBuffer):
                 [-1 for _ in range(self.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(transition_batch_size)]
             
         with torch.no_grad():
             policy_index = 0
@@ -800,9 +810,10 @@ class MuZeroGameBuffer(GameBuffer):
                         else:
                             # for board games that have two players or envs that have varied action space.
                             policy_tmp = [0 for _ in range(policy_shape)]
-                            for index, legal_action in enumerate(legal_actions[policy_index]):
-                                # only the action in ``legal_action`` the policy logits is nonzero
-                                policy_tmp[legal_action] = distributions[index]
+                            # only the action in ``legal_action`` the policy logits is nonzero
+                            self._assign_target_policy_for_legal_actions(
+                                policy_tmp, distributions, legal_actions[policy_index]
+                            )
                             target_policies.append(policy_tmp)
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0

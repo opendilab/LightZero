@@ -1,19 +1,17 @@
-import logging
 import os
 from functools import partial
 from typing import Optional, Tuple
 
 import torch
 from ding.config import compile_config
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
+from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner, create_buffer
-from tensorboardX import SummaryWriter
-
+from ditk import logging
 from lzero.policy import visit_count_temperature
 from lzero.worker import AlphaZeroCollector, AlphaZeroEvaluator
+from tensorboardX import SummaryWriter
 
 
 def train_alphazero(
@@ -58,6 +56,11 @@ def train_alphazero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+
+    # Pass full config to policy so it can access cfg.env and create_cfg for simulation env
+    cfg.policy.full_cfg = cfg
+    cfg.policy.create_cfg = create_cfg
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model

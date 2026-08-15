@@ -213,7 +213,8 @@ class MuZeroSegmentCollector(ISerialCollector):
         Returns:
             - priorities (:obj:`Optional[np.ndarray]`): An array of computed priorities, or None if priority is disabled.
         """
-        if self.policy_config.use_priority:
+        use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+        if self.policy_config.use_priority and not use_max_priority:
             # Calculate priorities as the L1 loss between predicted and search values.
             # The reduction is 'none' to get per-element losses.
             # A small epsilon (1e-6) is added to prevent zero priorities.
@@ -221,7 +222,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device).float().view(-1)
             priorities = L1Loss(reduction='none')(pred_values, search_values).detach().cpu().numpy() + 1e-6
         else:
-            # If not using priority, all new data will use the maximum priority in the replay buffer.
+            # ``None`` asks replay to assign the current maximum priority.
             priorities = None
 
         return priorities
@@ -384,7 +385,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 if len(ready_env_id) < self._env_num:
                     self._logger.debug(f'Only {len(ready_env_id)}/{self._env_num} envs are ready.')
 
-                # TODO(author): For UniZero, waiting for all environments to be ready can negatively impact performance.
+                # TODO: For UniZero, waiting for all environments to be ready can negatively impact performance.
                 # This wait loop is currently commented out, but its impact should be considered.
                 # while len(obs.keys()) != self._env_num:
                 #     time.sleep(retry_waiting_time)
@@ -476,13 +477,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                     append_kwargs = {'timestep': to_ndarray(obs.get('timestep', -1))}
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         append_kwargs['chance'] = self.chance_dict_tmp[env_id]
-
-                    if 'raw_obs_text' in obs:
-                        append_kwargs['raw_obs_text'] = obs['raw_obs_text']
-                    elif 'raw_obs_text' in info:
-                        # Fallback: also check info for compatibility
-                        append_kwargs['raw_obs_text'] = info['raw_obs_text']
-
+                    
                     game_segments[env_id].append(
                         actions[env_id], to_ndarray(obs['observation']), reward,
                         self.action_mask_dict_tmp[env_id], self.to_play_dict_tmp[env_id], **append_kwargs
@@ -508,7 +503,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
-                    if self.policy_config.use_priority:
+                    use_max_priority = getattr(self.policy_config, 'use_max_priority_for_new_data', False)
+                    if self.policy_config.use_priority and not use_max_priority:
                         pred_values_lst[env_id].append(pred_value_dict_with_env_id[env_id])
                         search_values_lst[env_id].append(value_dict_with_env_id[env_id])
                         if self.policy_config.gumbel_algo and not collect_with_pure_policy:
@@ -556,7 +552,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self._total_episode_count += 1
 
                     info = {
-                        'reward': episode_timestep.info['score'],
+                        'reward': episode_timestep.info['eval_episode_return'],
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }
@@ -622,7 +618,8 @@ class MuZeroSegmentCollector(ISerialCollector):
 
 
         collected_duration = sum([d['time'] for d in self._episode_info])
-        # TODO: for atari multitask new ddp pipeline
+
+        # NOTE: Only for usual DDP not for unizero_multitask pipeline.
         # reduce data when enables DDP
         # if self._world_size > 1:
         #     collected_step = allreduce_data(collected_step, 'sum')
@@ -644,9 +641,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): The current training iteration for logging context.
         """
-        # TODO(author): For multi-task DDP, logging might be restricted to rank 0.
-        # if self._rank != 0:
-        #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)

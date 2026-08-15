@@ -11,7 +11,6 @@ from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
-from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
@@ -71,7 +70,7 @@ class MuZeroPolicy(Policy):
             norm_type='BN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
-            # (bool) Whether to analyze dormant ratio.
+            # (bool) Whether to analyze dormant ratio. More details can be found in https://proceedings.mlr.press/v202/sokar23a/sokar23a.pdf.
             analysis_dormant_ratio=False,
             # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
             # More details can be found in https://arxiv.org/abs/2310.00344.
@@ -178,7 +177,9 @@ class MuZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_weight=0,
+        policy_entropy_weight=5e-3,
+        # (float) Policy-target label smoothing epsilon. Disabled by default.
+        policy_label_smoothing=0.0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -205,6 +206,11 @@ class MuZeroPolicy(Policy):
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=False,
+        # (bool) Whether newly collected transitions should enter replay with
+        # the current maximum priority.  This is especially useful in sparse-
+        # reward environments, where the collector-side value error can be
+        # nearly uniform before the first successful trajectories are learned.
+        use_max_priority_for_new_data=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -448,6 +454,14 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         # calculate policy and value loss for the first step.
         # ==============================================================
+        policy_label_smoothing = float(self._cfg.policy_label_smoothing)
+        if not 0.0 <= policy_label_smoothing < 1.0:
+            raise ValueError("policy_label_smoothing must be in [0, 1)")
+        if policy_label_smoothing > 0.0:
+            action_dim = target_policy.shape[-1]
+            target_policy = (
+                target_policy * (1.0 - policy_label_smoothing) + policy_label_smoothing / action_dim
+            )
         policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
@@ -743,7 +757,7 @@ class MuZeroPolicy(Policy):
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_collect_env_num)]
             if not self._cfg.collect_with_pure_policy:
                 # the only difference between collect and eval is the dirichlet noise
                 noises = [
@@ -896,7 +910,7 @@ class MuZeroPolicy(Policy):
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
+            legal_actions = [np.nonzero(action_mask[j])[0].tolist() for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
@@ -947,6 +961,7 @@ class MuZeroPolicy(Policy):
             Reset the observation and action for the collector environment.
         Arguments:
             - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -962,6 +977,7 @@ class MuZeroPolicy(Policy):
             Reset the observation and action for the evaluator environment.
         Arguments:
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+            - task_id (:obj:`int`): The task id. Default is None, which means MuZero is in the single-task mode.
         """
         if self._cfg.model.model_type in ["conv_context"]:
             self.last_batch_obs = initialize_zeros_batch(
@@ -1054,4 +1070,3 @@ class MuZeroPolicy(Policy):
     def _get_train_sample(self, data):
         # be compatible with DI-engine Policy class
         pass
-

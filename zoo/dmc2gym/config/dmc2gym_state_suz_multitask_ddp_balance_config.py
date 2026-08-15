@@ -7,22 +7,9 @@ Overview:
 """
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List
-
 from easydict import EasyDict
-
-# ==============================================================
-# Global setup: Logging
-# ==============================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    handlers=[
-        logging.FileHandler("output.log", encoding="utf-8"),  # Log to file
-        logging.StreamHandler()  # Log to console
-    ]
-)
+import copy
 
 
 def get_base_config(env_id_list: list[str], collector_env_num: int, evaluator_env_num: int,
@@ -58,8 +45,8 @@ def get_base_config(env_id_list: list[str], collector_env_num: int, evaluator_en
         ),
         # Policy-specific settings
         policy=dict(
-            multi_gpu=True,  # TODO(user): Enable multi-GPU for DDP.
-            # TODO(user): Configure MoCo settings.
+            multi_gpu=True,
+            # TODO: Configure MoCo settings.
             only_use_moco_stats=False,
             use_moco=False,
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
@@ -71,10 +58,14 @@ def get_base_config(env_id_list: list[str], collector_env_num: int, evaluator_en
             task_num=len(env_id_list),
             # Model configuration
             model=dict(
+                reward_support_range=(-50., 51., 1.),
+                value_support_range=(-50., 51., 1.),
                 continuous_action_space=True,
                 num_of_sampled_actions=20,
                 model_type='mlp',
                 world_model_cfg=dict(
+                    game_segment_length=100,
+                    
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse',  # TODO(user): Loss type for latent state with LayerNorm.
@@ -111,7 +102,6 @@ def get_base_config(env_id_list: list[str], collector_env_num: int, evaluator_en
                     # TODO(user): For debugging only. Use a smaller model.
                     # num_layers=1,
                     num_layers=4,
-                    # num_layers=8,
 
                     num_heads=24,
                     embed_dim=768,
@@ -193,6 +183,7 @@ def create_task_config(
         reanalyze_ratio: float,
         batch_size: int,
         num_unroll_steps: int,
+        infer_context_length: int,
         norm_type: str,
         buffer_reanalyze_freq: float,
         reanalyze_batch_size: int,
@@ -255,6 +246,7 @@ def create_task_config(
         action_space_size_list=action_space_size_list,
         num_unroll_steps=num_unroll_steps,
         norm_type=norm_type,
+        context_length=2 * infer_context_length, 
     ))
     
     # Update policy settings
@@ -313,11 +305,10 @@ def generate_experiment_name(num_tasks: int, curriculum_stage_num: int, buffer_r
     Returns:
         - (:obj:`str`): The generated experiment name prefix.
     """
-    # NOTE: This is a template for the experiment name.
-    # Users should customize it to reflect their specific experiment settings.
+
     return (
-        f'data_suz_dmc_mt_balance_20250625/dmc_{num_tasks}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}'
-        f'_stage0-10k-5k_fix-lora-update-stablescale_moe8-uselora_nlayer4_not-share-head'
+        f'data_suz_dmc_mt_balance/dmc_{num_tasks}tasks_frameskip4-pen-fs8_balance-stage-total-{curriculum_stage_num}'
+        f'_stage0-10k-5k_moe8_nlayer4'
         f'_brf{buffer_reanalyze_freq}_seed{seed}/'
     )
 
@@ -378,7 +369,7 @@ def generate_all_task_configs(
 
     for task_id, env_id in enumerate(env_id_list):
         task_specific_config = create_task_config(
-            base_config=base_config.clone(),  # Use a clone to avoid modifying the base config
+            base_config=copy.deepcopy(base_config),
             env_id=env_id,
             action_space_size_list=action_space_size_list,
             observation_shape_list=observation_shape_list,
@@ -414,15 +405,10 @@ def main():
         This script should be executed with <nproc_per_node> GPUs.
 
         Example launch commands:
-        1. Using `torch.distributed.launch`:
-           cd <PATH_TO_YOUR_PROJECT>/LightZero/
-           python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 \\
-               ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee \\
-               ./logs/uz_mt_dmc18_balance_moe8_seed0.log
 
-        2. Using `torchrun`:
-           cd <PATH_TO_YOUR_PROJECT>/LightZero/
-           torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py
+        cd <PATH_TO_YOUR_PROJECT>/LightZero/
+        torchrun --nproc_per_node=4 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_balance_config.py 2>&1 | tee \\
+            ./logs/uz_mt_dmc18_balance_moe8_seed0.log
     """
     from lzero.entry import train_unizero_multitask_balance_segment_ddp
     from ding.utils import DDPContext
@@ -471,7 +457,6 @@ def main():
     # batch_size = [3] * len(env_id_list)
     # max_env_step = int(1e3)
 
-    # Production settings
     curriculum_stage_num = 5
     collector_env_num = 8
     num_segments = 8

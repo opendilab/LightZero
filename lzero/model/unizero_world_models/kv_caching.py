@@ -98,15 +98,7 @@ class Cache:
         in a Transformer-like model. It handles dynamic updates and size management.
     """
 
-    def __init__(
-            self,
-            num_samples: int,
-            num_heads: int,
-            max_tokens: int,
-            embed_dim: int,
-            device: torch.device,
-            hidden_size: Optional[int] = None,
-    ) -> None:
+    def __init__(self, num_samples: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device) -> None:
         """
         Overview:
             Initializes the cache.
@@ -123,7 +115,7 @@ class Cache:
         self._num_samples = num_samples
         self._num_heads = num_heads
         self._max_tokens = max_tokens
-        self._head_dim = hidden_size if hidden_size is not None else embed_dim // num_heads
+        self._head_dim = embed_dim // num_heads
         self._device = device
 
         self._cache: torch.Tensor = self._create_cache_tensor(self._num_samples)
@@ -229,15 +221,7 @@ class KVCache:
         typically used in a single attention layer of a Transformer.
     """
 
-    def __init__(
-            self,
-            num_samples: int,
-            num_heads: int,
-            max_tokens: int,
-            embed_dim: int,
-            device: torch.device,
-            hidden_size: Optional[int] = None,
-    ) -> None:
+    def __init__(self, num_samples: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device) -> None:
         """
         Overview:
             Initializes the Key-Value cache pair.
@@ -248,8 +232,8 @@ class KVCache:
             - embed_dim (:obj:`int`): The total dimension of the embeddings.
             - device (:obj:`torch.device`): The device on which to store the cache tensors.
         """
-        self._k_cache = Cache(num_samples, num_heads, max_tokens, embed_dim, device, hidden_size)
-        self._v_cache = Cache(num_samples, num_heads, max_tokens, embed_dim, device, hidden_size)
+        self._k_cache = Cache(num_samples, num_heads, max_tokens, embed_dim, device)
+        self._v_cache = Cache(num_samples, num_heads, max_tokens, embed_dim, device)
 
     @property
     def shape(self) -> Tuple[int, int, int, int]:
@@ -316,8 +300,7 @@ class KeysValues:
             max_tokens: int,
             embed_dim: int,
             num_layers: int,
-            device: torch.device,
-            hidden_size: Optional[int] = None,
+            device: torch.device
     ) -> None:
         """
         Overview:
@@ -331,7 +314,7 @@ class KeysValues:
             - device (:obj:`torch.device`): The device for storing cache tensors.
         """
         self._keys_values = tuple([
-            KVCache(num_samples, num_heads, max_tokens, embed_dim, device, hidden_size) for _ in range(num_layers)
+            KVCache(num_samples, num_heads, max_tokens, embed_dim, device) for _ in range(num_layers)
         ])
 
     def __getitem__(self, layer_index: int) -> KVCache:
@@ -402,3 +385,48 @@ class KeysValues:
             # Decrement the size pointer for both K and V caches.
             kv_cache._k_cache._size = max(0, kv_cache._k_cache._size - register_token_num)
             kv_cache._v_cache._size = max(0, kv_cache._v_cache._size - register_token_num)
+
+    def clone(self) -> "KeysValues":
+        """
+        Overview:
+            Creates a deep copy of this KeysValues object.
+
+            This method is critical for preventing cache corruption. When a cached KeysValues object
+            is retrieved and used in transformer forward passes, the transformer modifies it in-place.
+            Without cloning, this would pollute the original cache, causing incorrect predictions.
+
+        Returns:
+            - cloned_kv (:obj:`KeysValues`): A new KeysValues object with copied data.
+        """
+        if not self._keys_values:
+            # Handle empty case
+            raise ValueError("Cannot clone an empty KeysValues object")
+
+        # Get parameters from the first layer's cache
+        first_kv_cache = self._keys_values[0]
+        num_samples, num_heads, _, head_dim = first_kv_cache.shape
+        max_tokens = first_kv_cache._k_cache._max_tokens
+        embed_dim = num_heads * head_dim
+        num_layers = len(self._keys_values)
+        device = first_kv_cache._k_cache._device
+
+        # Create a new KeysValues object with the same structure
+        cloned_kv = KeysValues(
+            num_samples=num_samples,
+            num_heads=num_heads,
+            max_tokens=max_tokens,
+            embed_dim=embed_dim,
+            num_layers=num_layers,
+            device=device
+        )
+
+        # Deep copy each layer's cache data
+        for src_layer, dst_layer in zip(self._keys_values, cloned_kv._keys_values):
+            # Copy the key and value cache tensors using torch.copy_() for efficient data transfer
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            # Copy the size information
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+
+        return cloned_kv

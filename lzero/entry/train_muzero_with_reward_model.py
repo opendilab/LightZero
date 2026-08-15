@@ -1,4 +1,4 @@
-import logging
+from ditk import logging
 import os
 from functools import partial
 from typing import Optional, Tuple
@@ -161,11 +161,11 @@ def train_muzero_with_reward_model(
         # update reward_model
         if reward_model.cfg.input_type == 'latent_state':
             # train reward_model with latent_state
-            if len(reward_model.train_latent_state) > reward_model.cfg.batch_size:
+            if len(reward_model.train_latent_state) >= reward_model.cfg.batch_size:
                 reward_model.train_with_data()
-        elif reward_model.cfg.input_type in ['obs', 'latent_state']:
+        elif reward_model.cfg.input_type in ['obs', 'obs_latent_state']:
             # train reward_model with obs
-            if len(reward_model.train_obs) > reward_model.cfg.batch_size:
+            if len(reward_model.train_obs) >= reward_model.cfg.batch_size:
                 reward_model.train_with_data()
         # clear old data in reward_model
         reward_model.clear_old_data()

@@ -132,37 +132,68 @@ class GameBuffer(ABC, object):
             # Sort the batch indices if reanalyze is enabled
             batch_index_list.sort()
         
-        # Calculate weights for the sampled transitions
-        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
-        weights_list /= weights_list.max()  # Normalize weights
-
         game_segment_list = []
         pos_in_game_segment_list = []
+        # The position resampling inside the loop below may move a sample to a different transition
+        # within the same game segment. Track the buffer flat index of the position actually used so
+        # that the IS weights and the later update_priority() refer to the trained transition rather
+        # than the originally drawn one. (look_up entries of one segment are contiguous flat indices
+        # ``segment_base + step_pos``, so the adjusted index is ``idx - orig_pos + new_pos``.)
+        adjusted_index_list = []
 
         for idx in batch_index_list:
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+            orig_pos_in_game_segment = pos_in_game_segment
             game_segment_idx -= self.base_idx  # Adjust index based on base index
             game_segment = self.game_segment_buffer[game_segment_idx]
 
             game_segment_list.append(game_segment)
             
             if self._cfg.action_type == 'varied_action_space':
-                # For some environments (e.g., Jericho), the action space size may be different.
-                # To ensure we can always unroll `num_unroll_steps` steps starting from the sampled position (without exceeding segment length),
-                # we avoid sampling from the last `num_unroll_steps` steps of the game segment. 
-                if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
-                    pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
-                
+                # For varied action space environments (e.g., board games with short game length like TicTacToe)
+                # We need to handle cases where game_segment_length might be smaller than num_unroll_steps + td_steps
+                # Strategy: progressively relax sampling constraints to accommodate short games
+
+                # Step 1: Calculate ideal sampling upper bound
+                # Ideally, reserve space for both num_unroll_steps and td_steps to ensure complete trajectories
+                ideal_bound = self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps
+
+                # Step 2: Handle different game length scenarios with graceful degradation
+                if ideal_bound > 0:
+                    # Case A: Normal/long games - enough space for full unroll + td steps
+                    # This is the standard case for most Atari games
+                    sampling_upper_bound = ideal_bound
+                else:
+                    # Case B: Short games - need to relax constraints
+                    # Try to at least reserve space for unroll steps (most critical for training)
+                    fallback_bound = self._cfg.game_segment_length - self._cfg.num_unroll_steps
+
+                    if fallback_bound > 0:
+                        # Can still accommodate unroll steps, though td_steps might need padding
+                        sampling_upper_bound = fallback_bound
+                    else:
+                        # Case C: Very short games (e.g., TicTacToe with 5-9 moves)
+                        # Allow sampling from entire segment length, padding will be applied during unrolling
+                        # This allows sampling from position 0 (beginning of game) when necessary
+                        sampling_upper_bound = self._cfg.game_segment_length
+
+                        # Ensure at least 1 to avoid np.random.choice errors
+                        if sampling_upper_bound <= 0:
+                            sampling_upper_bound = 1
+
+                # Step 3: Resample position if it exceeds calculated bound
+                if pos_in_game_segment >= sampling_upper_bound:
+                    pos_in_game_segment = np.random.choice(sampling_upper_bound, 1).item()
+
+                # Step 4: Further adjust based on actual segment length (runtime check)
                 segment_len = len(game_segment.action_segment)
                 if pos_in_game_segment >= segment_len - 1:
-                    # If the segment is very short (length 0 or 1), we can't randomly sample a position
-                    # before the last one. The only safe position is 0.
+                    # Position exceeds actual segment, resample within valid range
                     if segment_len > 1:
-                        # If the segment has at least 2 actions, we can safely sample from [0, len-2].
-                        # The upper bound for np.random.choice is exclusive, so (segment_len - 1) is correct.
+                        # Sample from [0, segment_len-1] to allow at least 1 step forward
                         pos_in_game_segment = np.random.choice(segment_len - 1, 1).item()
                     else:
-                        # If segment length is 0 or 1, the only valid/safe position is 0.
+                        # Segment has 0 or 1 actions, can only use position 0
                         pos_in_game_segment = 0
 
             else:
@@ -170,8 +201,14 @@ class GameBuffer(ABC, object):
                 # we can safely sample from the entire game segment range.
                 if pos_in_game_segment >= self._cfg.game_segment_length:
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
-                
-                segment_len = len(game_segment.action_segment)
+
+                # Compatibility handling for both GameSegment objects and list data (for unittests)
+                try:
+                    segment_len = len(game_segment.action_segment)
+                except (AttributeError, TypeError):
+                    # For unittest compatibility: when game_segment is a list instead of GameSegment object
+                    segment_len = len(game_segment)
+
                 if pos_in_game_segment >= segment_len - 1:
                     # If the segment is very short (length 0 or 1), we can't randomly sample a position
                     # before the last one. The only safe position is 0.
@@ -184,20 +221,27 @@ class GameBuffer(ABC, object):
                         pos_in_game_segment = 0
 
             pos_in_game_segment_list.append(pos_in_game_segment)
-            
+            adjusted_index_list.append(idx - orig_pos_in_game_segment + pos_in_game_segment)
 
-        # make_time = [time.time() for _ in range(len(batch_index_list))]
+        adjusted_index_list = np.asarray(adjusted_index_list)
 
-        # Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).
-        make_time = [0. for _ in range(len(batch_index_list))]
+        # Calculate the IS weights from the probabilities of the transitions actually used (which may
+        # differ from the originally sampled ones after the position resampling above).
+        weights_list = (num_of_transitions * probs[adjusted_index_list]) ** (-self._beta)
+        weights_list /= weights_list.max()  # Normalize weights
 
-        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
-        
+        # Record the actual sampling time: update_priority() only writes back priorities for samples
+        # whose make_time is newer than the last buffer reset (clear_time). Using placeholder zeros
+        # here would make that guard unconditionally False and silently drop ALL priority updates.
+        make_time = [time.time() for _ in range(len(adjusted_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, adjusted_index_list, weights_list, make_time)
+
         if print_priority_logs:
-            print(f"Sampled batch indices: {batch_index_list}")
-            print(f"Sampled priorities: {self.game_pos_priorities[batch_index_list]}")
+            print(f"Sampled batch indices: {adjusted_index_list}")
+            print(f"Sampled priorities: {self.game_pos_priorities[adjusted_index_list]}")
             print(f"Sampled weights: {weights_list}")
-            
+
         return orig_data
 
     def _sample_orig_reanalyze_batch(self, batch_size: int) -> Tuple:
@@ -304,7 +348,6 @@ class GameBuffer(ABC, object):
             game_segment_list = []
             pos_in_game_segment_list = []
             batch_index_list = []
-            print(f"selected_game_segments:{selected_game_segments}")
             for game_segment_idx in selected_game_segments:
                 # =========================================================================
                 # FIX: The line below is the source of the error and has been removed.

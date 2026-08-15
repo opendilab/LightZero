@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 from easydict import EasyDict
@@ -31,13 +31,15 @@ class GameSegment:
         - store_search_stats
     """
 
-    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None, task_id = None) -> None:
+    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None, task_id: Optional[int] = None) -> None:
         """
         Overview:
             Init the ``GameSegment`` according to the provided arguments.
         Arguments:
-             action_space (:obj:`int`): action space
+            - action_space (:obj:`int`): action space
             - game_segment_length (:obj:`int`): the transition number of one ``GameSegment`` block
+            - task_id (:obj:`Optional[int]`): The identifier for the task, used to select the correct obs and act space in multi-task settings. Defaults to None.
+
         """
         self.action_space = action_space
         self.game_segment_length = game_segment_length
@@ -46,6 +48,7 @@ class GameSegment:
         self.frame_stack_num = config.model.frame_stack_num
         self.discount_factor = config.discount_factor
         if not hasattr(config.model, "action_space_size_list"):
+            # for single-task setting or fixed action space in multi-task setting
             self.action_space_size = config.model.action_space_size
         self.gray_scale = config.gray_scale
         self.transform2string = config.transform2string
