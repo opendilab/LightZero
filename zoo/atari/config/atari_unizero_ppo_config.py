@@ -3,7 +3,14 @@ from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
-def main(env_id='PongNoFrameskip-v4', seed=0, max_env_step_override=int(5e5)):
+def main(
+        env_id='PongNoFrameskip-v4',
+        seed=0,
+        max_env_step_override=int(5e5),
+        stop_value_override=None,
+        evaluator_episode_override=None,
+        run_tag=None,
+):
     action_space_size = atari_env_action_space_map[env_id]
     collector_env_num = 8
     evaluator_env_num = 3
@@ -13,21 +20,29 @@ def main(env_id='PongNoFrameskip-v4', seed=0, max_env_step_override=int(5e5)):
     infer_context_length = 4
     num_layers = 2
     replay_ratio = 0.25
+    stop_value = int(1e6) if stop_value_override is None else float(stop_value_override)
+    n_evaluator_episode = (
+        evaluator_env_num if evaluator_episode_override is None else int(evaluator_episode_override)
+    )
+    if n_evaluator_episode <= 0:
+        raise ValueError('evaluator_episode_override must be positive')
+    run_suffix = '' if not run_tag else f'_{run_tag}'
 
     main_config = EasyDict(dict(
         exp_name=(
             f'data_lz/data_unizero_ppo/{env_id[:-14]}/{env_id[:-14]}_uz_ppo_'
             f'nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_'
             f'Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+            f'{run_suffix}'
         ),
         env=dict(
-            stop_value=int(1e6),
+            stop_value=stop_value,
             env_id=env_id,
             observation_shape=(3, 64, 64),
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
-            n_evaluator_episode=evaluator_env_num,
+            n_evaluator_episode=n_evaluator_episode,
             manager=dict(shared_memory=False),
         ),
         policy=dict(
@@ -102,5 +117,24 @@ if __name__ == '__main__':
     parser.add_argument('--env', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max-env-step', type=int, default=int(5e5))
+    parser.add_argument(
+        '--stop-value', type=float, default=None,
+        help='Optional evaluation-return threshold for early stopping.',
+    )
+    parser.add_argument(
+        '--n-evaluator-episode', type=int, default=None,
+        help='Optional number of episodes per evaluation.',
+    )
+    parser.add_argument(
+        '--run-tag', default=None,
+        help='Optional suffix used to keep validation artifacts distinct.',
+    )
     args = parser.parse_args()
-    main(args.env, args.seed, args.max_env_step)
+    main(
+        args.env,
+        args.seed,
+        args.max_env_step,
+        stop_value_override=args.stop_value,
+        evaluator_episode_override=args.n_evaluator_episode,
+        run_tag=args.run_tag,
+    )

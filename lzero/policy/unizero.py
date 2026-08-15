@@ -1248,17 +1248,20 @@ class UniZeroPolicy(MuZeroPolicy):
                 current_policy_label_eps = 0.0
         # ================================================================================
 
-        # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num > 1:
-            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
-        else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        # PPO updates the actor/critic heads from exact contextual features
+        # cached at collection time. Avoid preparing and transferring image
+        # observations that the actor-only loss deliberately bypasses.
+        if not ppo_batch:
+            if self._cfg.model.frame_stack_num > 1:
+                obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
+            else:
+                obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
-        # Apply augmentations if needed
-        if self._cfg.use_augmentation:
-            obs_batch = self.image_transforms.transform(obs_batch)
-            if self._cfg.model.self_supervised_learning_loss:
-                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+            # Apply augmentations if needed
+            if self._cfg.use_augmentation:
+                obs_batch = self.image_transforms.transform(obs_batch)
+                if self._cfg.model.self_supervised_learning_loss:
+                    obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
@@ -1287,34 +1290,36 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
-        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                actual_batch_size, -1, self._cfg.model.observation_shape)
-        elif len(self._cfg.model.observation_shape) == 3:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                actual_batch_size, -1, *self._cfg.model.observation_shape)
+        if not ppo_batch:
+            if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                    actual_batch_size, -1, self._cfg.model.observation_shape)
+            elif len(self._cfg.model.observation_shape) == 3:
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                    actual_batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
         batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
 
-        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
-        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
-        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
-                                            device=self._cfg.device)
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
+        if not ppo_batch:
+            batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
+            batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+            batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
+                                                device=self._cfg.device)
 
-        # ==================== Apply Policy Label Smoothing ====================
-        # This was previously computed but never applied. Now we actually smooth the target_policy.
-        smoothed_target_policy = target_policy[:, :-1]
-        if current_policy_label_eps > 0:
-            num_actions = smoothed_target_policy.shape[-1]
-            uniform_dist = torch.ones_like(smoothed_target_policy) / num_actions
-            smoothed_target_policy = (1.0 - current_policy_label_eps) * smoothed_target_policy + \
-                                    current_policy_label_eps * uniform_dist
-        batch_for_gpt['target_policy'] = smoothed_target_policy
-        # ===================================================================================
+            # ==================== Apply Policy Label Smoothing ====================
+            # This was previously computed but never applied. Now we actually smooth the target_policy.
+            smoothed_target_policy = target_policy[:, :-1]
+            if current_policy_label_eps > 0:
+                num_actions = smoothed_target_policy.shape[-1]
+                uniform_dist = torch.ones_like(smoothed_target_policy) / num_actions
+                smoothed_target_policy = (1.0 - current_policy_label_eps) * smoothed_target_policy + \
+                                        current_policy_label_eps * uniform_dist
+            batch_for_gpt['target_policy'] = smoothed_target_policy
+            # ===================================================================================
 
         batch_for_gpt['scalar_target_value'] = target_value
         if ppo_batch:
@@ -1342,12 +1347,17 @@ class UniZeroPolicy(MuZeroPolicy):
             batch_for_gpt['disable_value_loss'] = True
 
         # Extract valid target policy data and compute entropy
-        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-        if valid_target_policy.numel() == 0:
-            average_target_policy_entropy = batch_for_gpt['target_policy'].new_tensor(0.)
+        if ppo_batch:
+            average_target_policy_entropy = batch_for_gpt['target_value'].new_tensor(0.)
         else:
-            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-            average_target_policy_entropy = target_policy_entropy.mean()
+            valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+            if valid_target_policy.numel() == 0:
+                average_target_policy_entropy = batch_for_gpt['target_policy'].new_tensor(0.)
+            else:
+                target_policy_entropy = -torch.sum(
+                    valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
+                )
+                average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(

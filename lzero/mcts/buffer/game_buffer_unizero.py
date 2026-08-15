@@ -319,13 +319,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         """Return flat replay indices produced by exactly one collection policy version."""
         indices = []
         horizon = int(self._cfg.num_unroll_steps)
+        matching_segment_indices = {
+            self.base_idx + segment_index
+            for segment_index, segment in enumerate(self.game_segment_buffer)
+            if getattr(segment, 'collection_train_iter', None) == int(collection_train_iter)
+        }
         for flat_index, (global_segment_index, position) in enumerate(self.game_segment_game_pos_look_up):
-            segment_index = global_segment_index - self.base_idx
-            segment = self.game_segment_buffer[segment_index]
-            if (
-                position % horizon == 0
-                and getattr(segment, 'collection_train_iter', None) == int(collection_train_iter)
-            ):
+            if position % horizon == 0 and global_segment_index in matching_segment_indices:
                 indices.append(flat_index)
         return np.asarray(indices, dtype=np.int64)
 
@@ -359,7 +359,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             raise ValueError('Cannot build an empty PPO minibatch')
         orig_data = self._orig_data_from_indices(indices, collection_train_iter)
         _, _, _, current_batch = self._make_batch(
-            len(indices), reanalyze_ratio=0.0, orig_data=orig_data, include_ppo=True
+            len(indices), reanalyze_ratio=0.0, orig_data=orig_data, include_ppo=True,
+            prepare_observations=False, prepare_target_context=False,
         )
 
         horizon = int(self._cfg.num_unroll_steps)
@@ -386,16 +387,21 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         In PPO mode the actor and critic heads are frozen during this phase, so
         target-network value inference and policy reanalysis would be pure cost.
         """
-        reward_value_context, _, _, current_batch = self._make_batch(
-            batch_size, reanalyze_ratio=0.0
+        if self.sample_type == 'transition':
+            orig_data = self._sample_orig_data(batch_size)
+        elif self.sample_type == 'episode':
+            orig_data = self._sample_orig_data_episode(batch_size)
+        else:
+            raise ValueError(f'Unsupported sample_type: {self.sample_type!r}')
+        _, _, _, current_batch = self._make_batch(
+            batch_size, reanalyze_ratio=0.0, orig_data=orig_data,
+            prepare_target_context=False,
         )
-        positions = reward_value_context[2]
-        reward_segments = reward_value_context[3]
         horizon = int(self._cfg.num_unroll_steps)
         rewards = []
-        for position, reward_segment in zip(positions, reward_segments):
+        for game_segment, position in zip(orig_data[0], orig_data[1]):
             values = np.asarray(
-                reward_segment[position:position + horizon + 1], dtype=np.float32
+                game_segment.reward_segment[position:position + horizon + 1], dtype=np.float32
             ).reshape(-1).tolist()
             values += [0.0] * (horizon + 1 - len(values))
             rewards.append(values)
@@ -425,6 +431,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             reanalyze_ratio: float,
             orig_data: Optional[Tuple[Any]] = None,
             include_ppo: bool = False,
+            prepare_observations: bool = True,
+            prepare_target_context: bool = True,
     ) -> Tuple[Any]:
         """
         Overview:
@@ -479,11 +487,12 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             ]
 
             # obtain the current observations sequence
-            obs_list.append(
-                game_segment_list[i].get_unroll_obs(
-                    pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+            if prepare_observations:
+                obs_list.append(
+                    game_segment_list[i].get_unroll_obs(
+                        pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+                    )
                 )
-            )
             action_list.append(actions_tmp)
 
             mask_list.append(mask_tmp)
@@ -501,7 +510,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
 
         # formalize the input observations
-        obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
+        if prepare_observations:
+            obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
+        else:
+            # Actor/critic PPO updates consume the exact contextual features
+            # captured during collection. Materializing Atari image sequences
+            # here would only copy data that compute_ppo_loss never reads.
+            obs_list = np.empty((batch_size, 0), dtype=np.float32)
 
         # formalize the inputs of a batch
         current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
@@ -548,6 +563,9 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             ])
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
+
+        if not prepare_target_context:
+            return None, None, None, current_batch
 
         total_transitions = self.get_num_of_transitions()
 
