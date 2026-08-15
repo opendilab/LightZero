@@ -70,11 +70,24 @@ class DataProcessor:
       - samples -> Dataset/Dataloader（collate_fn 做 pack）
     """
 
-    def __init__(self, rank, world_size, vllm_engine, strategy, model_path, exp_name=None, instance_name="vllm_output"):
+    def __init__(
+        self,
+        rank,
+        world_size,
+        vllm_engine,
+        strategy,
+        model_path,
+        exp_name=None,
+        instance_name="vllm_output",
+        obs_type: str = "text",
+        prior_generator=None,
+    ):
         self.vllm_engine = vllm_engine
         self.strategy = strategy
         self.args = getattr(strategy, "args", None)
-        
+        self.obs_type = obs_type
+        self.prior_generator = prior_generator
+
         from transformers import AutoTokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True, padding_side="left"
@@ -281,6 +294,91 @@ class DataProcessor:
                 )
         return samples
 
+    def build_vl_samples(
+        self,
+        raw_obs_list: List[List[np.ndarray]],
+        history_obs_list: List[List[List[Any]]],
+        llm_prior_per_tok_list: List[List[Dict[str, Any]]],
+        pred_values: Optional[torch.Tensor] = None,
+        target_values: Optional[torch.Tensor] = None,
+        cot_prefix_list: Optional[List[List[str]]] = None,
+        llm_action_list: Optional[List[List[str]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Build VL samples in the same tensor format as the original text path."""
+        if self.prior_generator is None:
+            raise RuntimeError("prior_generator is required to build VL training samples")
+
+        samples: List[Dict[str, Any]] = []
+        batch_size = len(raw_obs_list)
+        if batch_size == 0:
+            return samples
+
+        trajectory_len = len(raw_obs_list[0])
+        for batch_index in range(batch_size):
+            for timestep in range(trajectory_len - 1):
+                token_data = llm_prior_per_tok_list[batch_index][timestep + 1]
+                true_action = llm_action_list[batch_index][timestep + 1]
+                if not isinstance(token_data, dict) or true_action is None:
+                    continue
+
+                action_logprobs = token_data.get('action_logprobs', {})
+                if true_action not in action_logprobs:
+                    continue
+
+                history = history_obs_list[batch_index][timestep]
+                action_candidates = token_data.get('action_candidates', list(action_logprobs))
+                user_prompt = self.prior_generator.get_user_prompt(
+                    action_candidates=action_candidates,
+                    history=history,
+                )
+                prompt = self.tokenizer.apply_chat_template(
+                    [
+                        {"role": "system", "content": self.prior_generator.get_system_prompt()},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+
+                prefix_cot = cot_prefix_list[batch_index][timestep + 1]
+                if self.use_cot:
+                    target_text = prefix_cot + " " + true_action + self.tokenizer.eos_token
+                else:
+                    target_text = "Action: " + true_action + self.tokenizer.eos_token
+
+                prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+                label_ids = self.tokenizer.encode(target_text, add_special_tokens=False)
+                prompt_ids = prompt_ids[-self.prompt_max_len:]
+                full_ids = prompt_ids + label_ids
+
+                selected_action_logprob = float(action_logprobs[true_action])
+                rollout_logprob = [
+                    selected_action_logprob / max(len(label_ids), 1)
+                    for _ in label_ids
+                ]
+
+                target_value = (
+                    float(target_values[batch_index][timestep].item())
+                    if target_values is not None else None
+                )
+                pred_value = (
+                    float(pred_values[batch_index][timestep].item())
+                    if pred_values is not None else None
+                )
+                samples.append({
+                    "instruction": user_prompt,
+                    "prompt": prompt,
+                    "target": true_action,
+                    "pred_value": pred_value,
+                    "target_value": target_value,
+                    "rollout_logprob": rollout_logprob,
+                    "prefix_cot": prefix_cot,
+                    "full_ids": full_ids,
+                    "label_ids": label_ids,
+                })
+
+        return samples
+
     def make_llm_train_samples(self, priorzero_batch, ddp: bool = False, max_samples: int = 32) -> List[Dict[str, Any]]:
         """
         Convert PriorZero batch to LLM training samples.
@@ -299,9 +397,16 @@ class DataProcessor:
                 target_value={len(target_value)}, pred_value={len(pred_value)}, cot_prefix={len(cot_prefix_list)}, llm_action={len(llm_action_list)}"
 
         # Build samples with CoT prefixes
-        samples = self.build_llm_samples(
-            raw_obs_list, history_obs_list, llm_prior_per_tok_list, pred_value, target_value, cot_prefix_list, llm_action_list
-        )
+        if self.obs_type == 'image':
+            samples = self.build_vl_samples(
+                raw_obs_list, history_obs_list, llm_prior_per_tok_list,
+                pred_value, target_value, cot_prefix_list, llm_action_list
+            )
+        else:
+            samples = self.build_llm_samples(
+                raw_obs_list, history_obs_list, llm_prior_per_tok_list,
+                pred_value, target_value, cot_prefix_list, llm_action_list
+            )
         random.Random(0).shuffle(samples)
         
         
@@ -783,9 +888,8 @@ class DataProcessor:
             self._logger.info(f"  {'<other>':30s} | unnorm={1-all_prob:.6f}")
         self.episode_output = []
 
-        
+
     def clear_statis(self):
         if self.value_normalizer is not None:
             self.value_normalizer.clear()
         self.global_batch_advantages.clear()
-        

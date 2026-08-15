@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 from pathlib import Path
 
 import asyncio
@@ -7,7 +8,7 @@ import os
 import sys
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import torch
 import torch.distributed as dist
@@ -37,6 +38,7 @@ from lzero.entry.utils import calculate_update_per_collect
 
 def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
     cfg = compile_config(cfg, seed=seed, auto=True, create_cfg=create_cfg)
+    obs_type = getattr(cfg.policy.model.world_model_cfg, 'obs_type', 'text')
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
@@ -74,6 +76,8 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
         policy_config=cfg.policy,
+        obs_type=obs_type,
+        env_id=cfg.env.env_id,
     )
     logger.info(f"[Rank {rank}] Collector created")
 
@@ -87,6 +91,8 @@ def prepare_unizero(rank, cfg, create_cfg, llm_cfg, seed):
         exp_name=cfg.exp_name,
         policy_config=cfg.policy,
         llm_config=llm_cfg,
+        obs_type=obs_type,
+        env_id=cfg.env.env_id,
     )
     logger.info(f"[Rank {rank}] Evaluator created")
     learner.call_hook('before_run')
@@ -109,6 +115,17 @@ def train_priorzero(
     max_env_step: Optional[int] = int(1e10),
     enable_profile: bool = False
 ):
+    requested_obs_type = getattr(cfg.policy.model.world_model_cfg, 'obs_type', 'text')
+    if requested_obs_type == 'image':
+        if hasattr(llm_cfg, 'validate'):
+            llm_cfg.validate()
+        if llm_cfg.enable_rft:
+            raise NotImplementedError(
+                "Image-mode RFT is not supported yet: the current PPO data path does not pass "
+                "pixel_values/image_grid_thw to the trainable VL model. Use --vl_fixed for "
+                "WM training with a frozen visual prior."
+            )
+
     rank = int(os.environ.get("RANK", "0"))
     print(f"DEBUG: Is dist initialized at start? {dist.is_initialized()}")
     if dist.is_initialized():
@@ -128,6 +145,7 @@ def train_priorzero(
                                                                         llm_cfg=llm_cfg, 
                                                                         seed=seed)
     batch_size = cfg.policy.batch_size
+    obs_type = getattr(cfg.policy.model.world_model_cfg, 'obs_type', 'text')
     logger.info(f"[Rank {rank}] World Model components initialized")
     if rank == 0:
         dump_dataclass_cfg_py(llm_cfg, path=f"{cfg.exp_name}/llm_cfg.py")
@@ -137,61 +155,96 @@ def train_priorzero(
     prof = Profiler(log_interval=10, stats_file=f'./{cfg.exp_name}/log/profiler.txt', enable_profile=enable_profile)
 
     
-    logger.info(f"[Rank {rank}] Initializing LLM Actor...")
+    logger.info(f"[Rank {rank}] Initializing prior actor (obs_type={obs_type})...")
     set_pkg_seed(seed + rank, use_cuda=True)
     
-    from models.actor import PolicyModel, ReferenceModel
-    if llm_cfg.rft_kl_coef > 0:
+    ref_model = None
+    if llm_cfg.enable_rft:
+        from models.actor import PolicyModel, ReferenceModel
+    if llm_cfg.enable_rft and llm_cfg.rft_kl_coef > 0:
         ref_model = ReferenceModel(
             strategy=strategy,
             pretrain=llm_cfg.model_name_or_path
         )
+    
+    prior_generator = None
+    if obs_type == 'image':
+        from vl_engine import create_vl_engine
+        vlm_image_mode = getattr(llm_cfg, 'vlm_image_mode', 'current_only')
+        image_limit = 1 if vlm_image_mode == 'current_only' else llm_cfg.history_length + 1
+        prior_engine = create_vl_engine(
+            model_name=llm_cfg.vl_model_type,
+            model_path=llm_cfg.model_name_or_path,
+            tensor_parallel_size=llm_cfg.tensor_parallel_size,
+            gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
+            max_model_len=llm_cfg.prompt_max_len + llm_cfg.generate_max_len,
+            limit_mm_per_prompt={'image': image_limit},
+            enable_sleep=llm_cfg.vllm_enable_sleep,
+        )
+        from prior_generator import VLPriorGenerator
+        prior_generator = VLPriorGenerator(
+            vl_engine=prior_engine,
+            model_name=llm_cfg.model_name_or_path,
+            use_cot=llm_cfg.use_cot,
+            game_description=getattr(llm_cfg, 'game_description', ''),
+            vlm_image_mode=vlm_image_mode,
+            prompt_style=getattr(llm_cfg, 'prompt_style', 'legacy'),
+            logprob_extraction_mode=getattr(llm_cfg, 'logprob_extraction_mode', 'approximate'),
+            max_new_tokens=getattr(llm_cfg, 'max_new_tokens', 128),
+        )
     else:
-        ref_model = None
-    
-    from vllm_utils.vllm_engine import create_vllm_engine
-    vllm_engine = create_vllm_engine(
-        tensor_parallel_size=llm_cfg.vllm_tensor_parallel_size,
-        pretrain=llm_cfg.model_name_or_path,
-        enable_prefix_caching=llm_cfg.enable_prefix_caching,
-        max_model_len=llm_cfg.prompt_max_len + llm_cfg.generate_max_len,
-        gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
-        vllm_enable_sleep=llm_cfg.vllm_enable_sleep,
-    )
+        from vllm_utils.vllm_engine import create_vllm_engine
+        prior_engine = create_vllm_engine(
+            tensor_parallel_size=llm_cfg.vllm_tensor_parallel_size,
+            pretrain=llm_cfg.model_name_or_path,
+            enable_prefix_caching=llm_cfg.enable_prefix_caching,
+            max_model_len=llm_cfg.prompt_max_len + llm_cfg.generate_max_len,
+            gpu_memory_utilization=llm_cfg.gpu_memory_utilization,
+            vllm_enable_sleep=llm_cfg.vllm_enable_sleep,
+        )
 
-    print(f'[Rank {rank}] Vllm engine successfully created!')
+    print(f'[Rank {rank}] Prior engine successfully created (obs_type={obs_type})!')
     
-    from priorzero_datafactory import DataProcessor
-    data_processor = DataProcessor(rank=rank, 
-                                   world_size=world_size,
-                                   vllm_engine=vllm_engine, 
-                                   strategy=strategy, 
-                                   model_path=llm_cfg.model_name_or_path,
-                                   exp_name=cfg.exp_name if rank == 0 else None,
-                                )
+    data_processor = None
+    if obs_type != 'image' or llm_cfg.enable_rft:
+        from priorzero_datafactory import DataProcessor
+        data_processor = DataProcessor(rank=rank,
+                                       world_size=world_size,
+                                       vllm_engine=prior_engine,
+                                       strategy=strategy,
+                                       model_path=llm_cfg.model_name_or_path,
+                                       exp_name=cfg.exp_name if rank == 0 else None,
+                                       obs_type=obs_type,
+                                       prior_generator=prior_generator,
+                                    )
     # 在collector中初始化data_processor 和prof对象
     collector.data_processor = data_processor
+    collector.prior_generator = prior_generator
     collector.prof = prof
     evaluator.data_processor = data_processor
+    evaluator.prior_generator = prior_generator
     
-    policy_model = PolicyModel(
-        strategy=strategy,
-        pretrain=llm_cfg.model_name_or_path,
-        vllm_engine=vllm_engine,
-        max_steps=llm_cfg.max_steps
-    )
-    from priorzero_trainer import PriorZeroLLMTrainer
-    trainer = PriorZeroLLMTrainer(
-        cfg=llm_cfg,
-        pretrain=llm_cfg.model_name_or_path,
-        strategy= strategy,
-        vllm_engine = vllm_engine,
-        policy_model=policy_model,
-        reference_model=ref_model,
-        exp_name=cfg.exp_name if rank == 0 else None,
-        tb_logger=tb_logger if rank == 0 else None,
-        llm_save_freq=llm_cfg.llm_save_freq
-    )
+    policy_model = None
+    trainer = None
+    if llm_cfg.enable_rft:
+        policy_model = PolicyModel(
+            strategy=strategy,
+            pretrain=llm_cfg.model_name_or_path,
+            vllm_engine=prior_engine,
+            max_steps=llm_cfg.max_steps
+        )
+        from priorzero_trainer import PriorZeroLLMTrainer
+        trainer = PriorZeroLLMTrainer(
+            cfg=llm_cfg,
+            pretrain=llm_cfg.model_name_or_path,
+            strategy=strategy,
+            vllm_engine=prior_engine,
+            policy_model=policy_model,
+            reference_model=ref_model,
+            exp_name=cfg.exp_name if rank == 0 else None,
+            tb_logger=tb_logger if rank == 0 else None,
+            llm_save_freq=getattr(llm_cfg, 'llm_save_freq', getattr(llm_cfg, 'vl_save_freq', 1000))
+        )
         
     torch_dist_barrier_and_cuda_sync()
     train_schedule = llm_cfg.train_schedule
@@ -202,31 +255,42 @@ def train_priorzero(
         current_phase = train_schedule["start_phase"]
         last_wm_train_iter = 0
         last_llm_train_iter = 0
-        llm_collect_mode = train_schedule["llm_collect_mode"]
+        llm_collect_mode = train_schedule.get("llm_collect_mode", "wm_llm_collect")
 
     while True:
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
         
+        llm_train_iter = policy_model.train_iter if policy_model is not None else 0
+
         # 1.评估阶段
-        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase):
+        if learner.train_iter != 0 and evaluator.should_eval(wm_train_iter=learner.train_iter, llm_train_iter=llm_train_iter, phase=current_phase):
             logger.info(f"[Evaluator][Rank {rank}: Iter {learner.train_iter}] Evaluating...")
-            if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                vllm_engine.wake_up()
-            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter, phase=current_phase)
-            if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                vllm_engine.sleep()
+            if llm_cfg.vllm_enable_sleep and prior_engine is not None:
+                prior_engine.wake_up()
+            evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=llm_train_iter, phase=current_phase)
+            if llm_cfg.vllm_enable_sleep and prior_engine is not None:
+                prior_engine.sleep()
         
         # 2.数据收集阶段         
         if not train_alternate or (train_alternate and current_phase == "wm") or (train_alternate and current_phase == "llm" and llm_collect_mode != "no_collect"):
-            if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                vllm_engine.wake_up()      
+            if llm_cfg.vllm_enable_sleep and prior_engine is not None:
+                prior_engine.wake_up()
             
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs={'temperature': 0.25, 'epsilon': 0.0}, phase=current_phase)
-            data_processor.get_llm_output_log(wm_train_iter=learner.train_iter, llm_train_iter=policy_model.train_iter)
+            if obs_type == 'image':
+                prior_generator.get_vl_output_log(
+                    wm_train_iter=learner.train_iter,
+                    vl_train_iter=llm_train_iter,
+                )
+            else:
+                data_processor.get_llm_output_log(
+                    wm_train_iter=learner.train_iter,
+                    llm_train_iter=llm_train_iter,
+                )
             
-            if llm_cfg.vllm_enable_sleep and vllm_engine is not None:
-                vllm_engine.sleep()
+            if llm_cfg.vllm_enable_sleep and prior_engine is not None:
+                prior_engine.sleep()
             
             replay_buffer.push_game_segments(new_data)
             replay_buffer.remove_oldest_data_to_fit()
@@ -309,24 +373,10 @@ def main():
     """
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='PriorZero Training with Auto Model Configuration',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Use default model (qwen2.5-1.5b)
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py
-
-  # Use specific model
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py --model qwen2.5-0.5b
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py --model qwen2.5-7b
-
-  # List all available models
-  python priorzero_entry_sync.py --list-models
-
-  # Different environment
-  torchrun --nproc_per_node 2 priorzero_entry_sync.py --env_id zork1.z5 --model qwen2.5-1.5b
-        """
+    parser = argparse.ArgumentParser(description='PriorZero training')
+    parser.add_argument(
+        '--input_type', choices=['text', 'image'], default='text',
+        help='Prior input type. This selects the minimal text/VL branch.'
     )
     parser.add_argument('--env_id', type=str, default='detective.z5', help='Jericho game ID')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
@@ -334,35 +384,86 @@ Examples:
     parser.add_argument('--quick_test', action='store_true', default=False, help='Use quick test config')
     # Model selection
     parser.add_argument('--model', type=str, default="qwen2.5-3b", choices=get_available_models())
+    parser.add_argument('--vl_model', type=str, default='Qwen2.5-VL-3b')
     parser.add_argument('--enable_profile', action='store_true', default=False)
-    parser.add_argument('--use_cot', action='store_true', default=False)
+    cot_group = parser.add_mutually_exclusive_group()
+    cot_group.add_argument('--use_cot', dest='use_cot', action='store_true')
+    cot_group.add_argument('--no_cot', dest='use_cot', action='store_false')
+    parser.set_defaults(use_cot=None)
+
+    parser.add_argument('--cot_weight', type=float, default=0.1)
+    parser.add_argument(
+        '--mcts_mode', choices=['llm_logits', 'wm_logits', 'llm_plus_wm_logits'],
+        default='llm_plus_wm_logits'
+    )
+    parser.add_argument(
+        '--vlm_image_mode', choices=['current_only', 'first_and_current', 'all_history'],
+        default='current_only'
+    )
+    parser.add_argument('--prompt_style', choices=['concise', 'legacy'], default='legacy')
+    parser.add_argument('--logprob_mode', choices=['exact', 'approximate'], default='approximate')
+    vl_fixed_group = parser.add_mutually_exclusive_group()
+    vl_fixed_group.add_argument(
+        '--vl_fixed', dest='vl_fixed', action='store_true',
+        help='Use the VL model as a frozen prior (currently required for image input).'
+    )
+    vl_fixed_group.add_argument(
+        '--no_vl_fixed', dest='vl_fixed', action='store_false',
+        help='Request VL RFT; rejected until multimodal PPO inputs are implemented.'
+    )
+    parser.set_defaults(vl_fixed=True)
     args = parser.parse_args()
 
-    model_key = args.model if args.model else "qwen2.5-1.5b"
+    model_key = args.model if args.input_type == 'text' else args.vl_model
     print(f"\n{'='*80}")
     print(f"PriorZero Training Configuration")
     print(f"{'='*80}")
     print(f"Environment: {args.env_id}")
+    print(f"Input type: {args.input_type}")
     print(f"Model: {model_key}")
     print(f"Seed: {args.seed}")
     print(f"Quick Test: {args.quick_test}")
-    print(f"use cot: {args.use_cot}")
+    print(f"use cot: {args.use_cot if args.use_cot is not None else 'config default'}")
     print(f"enable_profile: {args.enable_profile}")
     print(f"{'='*80}\n")
 
-    if args.quick_test:
-        logger.info("Using quick test configuration")
-        main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
-            args.env_id, args.seed, use_cot=args.use_cot,
-            exp_name=f'data_priorzero/priorzero_debug_{args.env_id}',
-            model_key=model_key,
+    if args.input_type == 'image':
+        from vl_config import get_priorzero_vl_config
+        main_cfg, create_cfg, llm_cfg = get_priorzero_vl_config(
+            env_id=args.env_id,
+            seed=args.seed,
+            vl_model_key=args.vl_model,
+            use_prior=True,
+            multi_gpu=int(os.environ.get('WORLD_SIZE', '1')) > 1,
+            quick_test=args.quick_test,
         )
+        if llm_cfg is None:
+            raise ValueError("Image mode requires use_prior=True")
+        if args.use_cot is not None:
+            llm_cfg.use_cot = args.use_cot
+        llm_cfg.cot_weight = args.cot_weight
+        llm_cfg.mcts_root_logits_dict.mode = args.mcts_mode
+        llm_cfg.vlm_image_mode = args.vlm_image_mode
+        llm_cfg.prompt_style = args.prompt_style
+        llm_cfg.logprob_extraction_mode = args.logprob_mode
+        llm_cfg.vl_fixed = args.vl_fixed
+        if args.vl_fixed:
+            llm_cfg.enable_rft = False
     else:
-        main_cfg, create_cfg, llm_cfg = get_priorzero_config(
-            args.env_id, args.seed, use_cot=args.use_cot,
-            model_key=model_key,
-            multi_gpu=True
-        )
+        text_use_cot = bool(args.use_cot)
+        if args.quick_test:
+            logger.info("Using quick test configuration")
+            main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
+                args.env_id, args.seed, use_cot=text_use_cot,
+                exp_name=f'data_priorzero/priorzero_debug_{args.env_id}',
+                model_key=args.model,
+            )
+        else:
+            main_cfg, create_cfg, llm_cfg = get_priorzero_config(
+                args.env_id, args.seed, use_cot=text_use_cot,
+                model_key=args.model,
+                multi_gpu=True
+            )
 
     train_priorzero(
         main_cfg,

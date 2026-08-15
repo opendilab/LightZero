@@ -299,7 +299,8 @@ class VLLMVLEngine(VLEngine):
                 if return_logprobs:
                     results.append({
                         'text': text,
-                        'prompt_logprobs': output.prompt_logprobs if hasattr(output, 'prompt_logprobs') else None
+                        'prompt_logprobs': output.prompt_logprobs if hasattr(output, 'prompt_logprobs') else None,
+                        'prompt_token_ids': output.prompt_token_ids if hasattr(output, 'prompt_token_ids') else None,
                     })
                 else:
                     results.append(text)

@@ -182,6 +182,7 @@ class VLPriorGenerator(PriorGenerator):
         vlm_image_mode: str = "current_only",
         prompt_style: str = "concise",
         logprob_extraction_mode: str = "exact",
+        max_new_tokens: int = 128,
         **kwargs
     ):
         """
@@ -193,7 +194,8 @@ class VLPriorGenerator(PriorGenerator):
             game_description: Game-specific description for prompts
             vlm_image_mode: Image mode - "current_only", "first_and_current", or "all_history"
             prompt_style: "concise" (shorter, better for small VLMs) or "legacy" (verbose, original)
-            logprob_extraction_mode: "exact" (LLM-aligned, default) or "approximate" (fallback with pseudo logprobs)
+            logprob_extraction_mode: "exact" (LLM-aligned) or "approximate" (parsed-action fallback)
+            max_new_tokens: Maximum number of tokens generated for the visual response
         """
         super().__init__(model_name, obs_type='image')
         self.vl_engine = vl_engine
@@ -203,6 +205,7 @@ class VLPriorGenerator(PriorGenerator):
         self.vlm_image_mode = vlm_image_mode
         self.prompt_style = prompt_style
         self.logprob_extraction_mode = logprob_extraction_mode
+        self.max_new_tokens = max_new_tokens
 
         # For logging VL outputs
         self.episode_output = []
@@ -211,6 +214,37 @@ class VLPriorGenerator(PriorGenerator):
         self.log_interval = 100  # Log every 100 calls
         self.call_count = 0
         self.batch_call_count = 0
+
+    def _get_tokenizer(self):
+        """Reuse the engine tokenizer instead of loading one for every environment step."""
+        if self.tokenizer is None:
+            engine_actor = getattr(self.vl_engine, 'model', None)
+            processor = getattr(engine_actor, 'processor', None)
+            self.tokenizer = getattr(processor, 'tokenizer', None)
+        if self.tokenizer is None:
+            from transformers import AutoTokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_name, trust_remote_code=True
+            )
+        return self.tokenizer
+
+    def _format_multimodal_prompt(self, prompt: str, num_images: int) -> str:
+        """Apply the same image-aware chat template used by the VL inference engine."""
+        engine_actor = getattr(self.vl_engine, 'model', None)
+        if getattr(engine_actor, 'processor', None) is None:
+            raise RuntimeError(
+                "Exact VL logprob extraction requires a loaded multimodal processor"
+            )
+        apply_template = getattr(engine_actor, '_apply_chat_template', None)
+        if not callable(apply_template):
+            raise RuntimeError(
+                "Exact VL logprob extraction requires an image-aware chat template"
+            )
+        return apply_template(
+            prompt,
+            system_prompt=self.get_system_prompt(),
+            num_images=num_images,
+        )
 
     def _convert_obs_to_pil_image(self, obs: np.ndarray) -> Image.Image:
         """
@@ -486,6 +520,10 @@ class VLPriorGenerator(PriorGenerator):
             num_images: Number of images being sent (for multi-image labelling)
         """
         prompt_parts = []
+        actions_str = ", ".join(action_candidates)
+        is_lunarlander = set(action_candidates) == {
+            "NOOP", "LEFT_ENGINE", "MAIN_ENGINE", "RIGHT_ENGINE"
+        }
 
         # Multi-image mode: label each image in the prompt
         if self.vlm_image_mode != "current_only" and num_images > 1:
@@ -530,9 +568,13 @@ class VLPriorGenerator(PriorGenerator):
             prompt_parts.append("=== CURRENT OBSERVATION ===")
             prompt_parts.append(f"[See image {num_images} above]")
             prompt_parts.append("\nLook at the image carefully and analyze:")
-            prompt_parts.append("- The lander's tilt angle (horizontal, tilted left, or tilted right?)")
-            prompt_parts.append("- The lander's horizontal position relative to the landing pad")
-            prompt_parts.append("- Visual indicators of descent speed")
+            if is_lunarlander:
+                prompt_parts.append("- The lander's tilt angle (horizontal, tilted left, or tilted right?)")
+                prompt_parts.append("- The lander's horizontal position relative to the landing pad")
+                prompt_parts.append("- Visual indicators of descent speed")
+            else:
+                prompt_parts.append("- The positions and motion of relevant game objects")
+                prompt_parts.append("- Immediate threats, targets, and likely consequences of each valid action")
 
         else:
             # Original single-image prompt (current_only mode or only 1 image)
@@ -550,19 +592,22 @@ class VLPriorGenerator(PriorGenerator):
             prompt_parts.append("=== CURRENT OBSERVATION ===")
             prompt_parts.append("[See the game screen image above]")
             prompt_parts.append("\nLook at the image carefully and analyze:")
-            prompt_parts.append("- The lander's tilt angle (horizontal, tilted left, or tilted right?)")
-            prompt_parts.append("- The lander's horizontal position relative to the landing pad")
-            prompt_parts.append("- Visual indicators of descent speed")
+            if is_lunarlander:
+                prompt_parts.append("- The lander's tilt angle (horizontal, tilted left, or tilted right?)")
+                prompt_parts.append("- The lander's horizontal position relative to the landing pad")
+                prompt_parts.append("- Visual indicators of descent speed")
+            else:
+                prompt_parts.append("- The positions and motion of relevant game objects")
+                prompt_parts.append("- Immediate threats, targets, and likely consequences of each valid action")
         if self.game_description:
             prompt_parts.append(self.game_description)
 
         if action_candidates and len(action_candidates) > 0:
-            actions_str = ", ".join(action_candidates)
             prompt_parts.append(f"\nValid actions: [{actions_str}]")
 
             # Add per-action descriptions for LunarLander
             # (For other games, the game_description already covers action semantics)
-            if set(action_candidates) == {"NOOP", "LEFT_ENGINE", "MAIN_ENGINE", "RIGHT_ENGINE"}:
+            if is_lunarlander:
                 prompt_parts.append(
                     "- NOOP: Do nothing (0 cost).\n"
                     "- LEFT_ENGINE: Fires the left thruster. Pushes the lander RIGHT and rotates it clockwise. (-0.03 cost)\n"
@@ -578,29 +623,37 @@ class VLPriorGenerator(PriorGenerator):
 
         prompt_parts.append("\n=== INSTRUCTION ===")
         if self.use_cot:
-            prompt_parts.append(
-                "Choose the best action. You MUST respond in EXACTLY this format:\n"
-                "Reasoning: <Sentence 1: Describe the lander's current tilt, vertical/horizontal speed, and position. "
-                "Sentence 2: Explain why the action is optimal based on the reward structure and physics.>\n"
-                "Action: <EXACTLY ONE word from: NOOP, LEFT_ENGINE, MAIN_ENGINE, RIGHT_ENGINE>\n"
-                "\n"
-                "CRITICAL RULES:\n"
-                "- Write ONLY the action name after 'Action:', nothing else.\n"
-                "- Do NOT add punctuation, arrows (->), or explanations after the action.\n"
-                "- Do NOT write 'NOPE' or 'NO_OP', only 'NOOP'.\n"
-                "\n"
-                "Example 1:\n"
-                "Reasoning: The lander is tilted left and drifting left of the pad; firing LEFT_ENGINE will rotate it clockwise back to horizontal and push it right toward the center at a low cost.\n"
-                "Action: LEFT_ENGINE\n"
-                "\n"
-                "Example 2:\n"
-                "Reasoning: The lander is horizontal and centered, but falling too rapidly; despite the high cost, MAIN_ENGINE is strictly necessary to slow the descent and prevent a -100 crash penalty.\n"
-                "Action: MAIN_ENGINE\n"
-                "\n"
-                "Example 3:\n"
-                "Reasoning: The lander is perfectly horizontal, aligned above the pad, and descending at a safe, slow speed; no thrust is needed, so doing nothing avoids point deductions.\n"
-                "Action: NOOP"
-            )
+            if is_lunarlander:
+                prompt_parts.append(
+                    "Choose the best action. You MUST respond in EXACTLY this format:\n"
+                    "Reasoning: <Sentence 1: Describe the lander's current tilt, vertical/horizontal speed, and position. "
+                    "Sentence 2: Explain why the action is optimal based on the reward structure and physics.>\n"
+                    "Action: <EXACTLY ONE word from: NOOP, LEFT_ENGINE, MAIN_ENGINE, RIGHT_ENGINE>\n"
+                    "\n"
+                    "CRITICAL RULES:\n"
+                    "- Write ONLY the action name after 'Action:', nothing else.\n"
+                    "- Do NOT add punctuation, arrows (->), or explanations after the action.\n"
+                    "- Do NOT write 'NOPE' or 'NO_OP', only 'NOOP'.\n"
+                    "\n"
+                    "Example 1:\n"
+                    "Reasoning: The lander is tilted left and drifting left of the pad; firing LEFT_ENGINE will rotate it clockwise back to horizontal and push it right toward the center at a low cost.\n"
+                    "Action: LEFT_ENGINE\n"
+                    "\n"
+                    "Example 2:\n"
+                    "Reasoning: The lander is horizontal and centered, but falling too rapidly; despite the high cost, MAIN_ENGINE is strictly necessary to slow the descent and prevent a -100 crash penalty.\n"
+                    "Action: MAIN_ENGINE\n"
+                    "\n"
+                    "Example 3:\n"
+                    "Reasoning: The lander is perfectly horizontal, aligned above the pad, and descending at a safe, slow speed; no thrust is needed, so doing nothing avoids point deductions.\n"
+                    "Action: NOOP"
+                )
+            else:
+                prompt_parts.append(
+                    "Choose the best action. You MUST respond in EXACTLY this format:\n"
+                    "Reasoning: <brief analysis in 1-3 sentences>\n"
+                    f"Action: <EXACTLY ONE action from: {actions_str}>\n\n"
+                    "Write only the exact action name after 'Action:' and do not add any trailing text."
+                )
         else:
             example_action = action_candidates[1] if len(action_candidates) >= 2 else (action_candidates[0] if action_candidates else "NOOP")
             prompt_parts.append(
@@ -648,10 +701,11 @@ class VLPriorGenerator(PriorGenerator):
                 if candidate.upper() == action_str.upper():
                     chosen_action = candidate
                     break
-            # If no exact match, try if candidate is contained in the extracted text
+            # If the model added an explanation, accept only a standalone action name.
             if chosen_action is None:
                 for candidate in action_candidates:
-                    if candidate.upper() in action_str.upper():
+                    pattern = rf'(?<![A-Za-z0-9_]){re.escape(candidate)}(?![A-Za-z0-9_])'
+                    if re.search(pattern, action_str, re.IGNORECASE):
                         chosen_action = candidate
                         break
 
@@ -660,8 +714,7 @@ class VLPriorGenerator(PriorGenerator):
             # Search for exact action name mentions in the output (prefer later mentions)
             last_found = None
             for candidate in action_candidates:
-                # Use word boundary to avoid partial matches
-                pattern = re.escape(candidate)
+                pattern = rf'(?<![A-Za-z0-9_]){re.escape(candidate)}(?![A-Za-z0-9_])'
                 matches = list(re.finditer(pattern, raw_output, re.IGNORECASE))
                 if matches:
                     pos = matches[-1].start()
@@ -705,41 +758,11 @@ class VLPriorGenerator(PriorGenerator):
         temperature: float = 1.0
     ) -> Tuple[Optional[np.ndarray], Dict[str, List], Dict[str, List], Dict[str, List]]:
         """
-        Approximate mode: Use fallback with pseudo token data.
-        Fast but less accurate.
+        Approximate mode: use the parsed action fallback without token-level data.
         """
-        import logging
-        logger = logging.getLogger(__name__)
-
-        try:
-            from transformers import AutoTokenizer
-            tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
-
-            rollout_action_logprob_dict = {}
-            full_ids_dict = {}
-            label_ids_dict = {}
-
-            for action in action_candidates:
-                if self.use_cot and cot_prefix:
-                    label_text = cot_prefix + " " + action
-                else:
-                    label_text = "Action: " + action
-
-                label_ids = tokenizer(label_text, add_special_tokens=False)["input_ids"]
-                full_prompt = prompt + "\n" + label_text
-                full_ids = tokenizer(full_prompt, add_special_tokens=False)["input_ids"]
-
-                pseudo_logprobs = [0.0] * len(label_ids)
-
-                rollout_action_logprob_dict[action] = pseudo_logprobs
-                full_ids_dict[action] = full_ids
-                label_ids_dict[action] = label_ids
-
-            return None, rollout_action_logprob_dict, full_ids_dict, label_ids_dict
-
-        except Exception as e:
-            logger.error(f"⚠️ Approximate mode failed: {e}", exc_info=True)
-
+        # Approximate mode deliberately falls back to the parsed action distribution.
+        # No token-level values are consumed by the frozen visual path, so avoid
+        # tokenizing every action candidate on every environment step.
         return None, {}, {}, {}
 
     def _extract_logprobs_exact_mode(
@@ -751,21 +774,22 @@ class VLPriorGenerator(PriorGenerator):
         temperature: float = 1.0
     ) -> Tuple[Optional[np.ndarray], Dict[str, List], Dict[str, List], Dict[str, List]]:
         """
-        Exact mode: Use token IDs like LLM (bypassing chat template).
+        Exact mode: use image-aware chat token IDs and score the appended label.
         """
         import logging
         import math
         logger = logging.getLogger(__name__)
 
         try:
-            from transformers import AutoTokenizer
-            tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
-
-            prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+            tokenizer = self._get_tokenizer()
+            formatted_prompt = self._format_multimodal_prompt(prompt, len(image_list))
+            prompt_ids = tokenizer(formatted_prompt, add_special_tokens=False)["input_ids"]
 
             if self.use_cot and cot_prefix:
-                label_texts = [cot_prefix + " " + action for action in action_candidates]
-                label_texts_no_cots = [" " + action for action in action_candidates]
+                label_texts = [
+                    f"Reasoning: {cot_prefix}\nAction: {action}" for action in action_candidates
+                ]
+                label_texts_no_cots = ["\nAction: " + action for action in action_candidates]
             else:
                 label_texts = ["Action: " + action for action in action_candidates]
                 label_texts_no_cots = label_texts
@@ -791,6 +815,9 @@ class VLPriorGenerator(PriorGenerator):
                 action_candidates, label_ids_list, label_ids_no_cots_list, full_ids_list, results
             ):
                 prompt_logprobs = result.get('prompt_logprobs') if isinstance(result, dict) else None
+                actual_prompt_ids = result.get('prompt_token_ids') if isinstance(result, dict) else None
+                if actual_prompt_ids is None:
+                    actual_prompt_ids = full_ids
 
                 if not prompt_logprobs or len(prompt_logprobs) == 0:
                     action_scores.append(float("-inf"))
@@ -800,8 +827,10 @@ class VLPriorGenerator(PriorGenerator):
                     continue
 
                 token_lps = []
-                for j in range(1, len(full_ids)):
-                    tok_id = full_ids[j]
+                end = min(len(actual_prompt_ids), len(prompt_logprobs))
+                start = max(1, end - len(label_ids))
+                for j in range(start, end):
+                    tok_id = actual_prompt_ids[j]
                     lp_dict = prompt_logprobs[j]
 
                     if lp_dict is None or tok_id not in lp_dict:
@@ -816,9 +845,8 @@ class VLPriorGenerator(PriorGenerator):
                     token_lps.append(logprob)
 
                 if len(token_lps) > 0:
-                    l_len = len(label_ids)
                     l_no_cots_len = len(label_ids_no_cot)
-                    label_lps = token_lps[-l_len:]
+                    label_lps = token_lps
 
                     if self.use_cot:
                         target_lps = label_lps
@@ -953,6 +981,7 @@ class VLPriorGenerator(PriorGenerator):
         Generate prior with LLM-aligned token-level data.
         """
         self.call_count += 1
+        kwargs.setdefault('max_new_tokens', self.max_new_tokens)
 
         # Assemble images
         image_list = self._assemble_images(observation, history)
@@ -984,6 +1013,14 @@ class VLPriorGenerator(PriorGenerator):
 
         action_probs = np.exp(action_log_probs)
 
+        self.episode_output.append({
+            'Instruction': prompt,
+            'Response': raw_output,
+            'vl_prior_per_seq': dict(zip(action_candidates, action_probs.tolist())),
+            'chosen_action': chosen_action,
+            'cot_prefix': cot_prefix,
+        })
+
         return {
             'action_probs': action_probs,
             'action_logits': action_log_probs,
@@ -1008,6 +1045,8 @@ class VLPriorGenerator(PriorGenerator):
         """
         if histories is None:
             histories = [None] * len(observations)
+        self.batch_call_count += 1
+        kwargs.setdefault('max_new_tokens', self.max_new_tokens)
 
         # Assemble images and prompts
         image_lists = []
@@ -1055,6 +1094,14 @@ class VLPriorGenerator(PriorGenerator):
                 label_ids_dict = {}
 
             action_probs = np.exp(action_log_probs)
+
+            self.episode_output.append({
+                'Instruction': prompt,
+                'Response': raw_output,
+                'vl_prior_per_seq': dict(zip(action_candidates, action_probs.tolist())),
+                'chosen_action': chosen_action,
+                'cot_prefix': cot_prefix,
+            })
 
             results.append({
                 'action_probs': action_probs,

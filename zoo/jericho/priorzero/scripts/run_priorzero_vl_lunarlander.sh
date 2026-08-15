@@ -8,18 +8,19 @@
 #   bash run_priorzero_vl_lunarlander.sh 4 Qwen2.5-VL-7b 0
 #   bash run_priorzero_vl_lunarlander.sh 2 Qwen3-VL-2b 42
 #   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test
-#   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test --no_cot --no_vl_fixed --mcts_mode wm_logits
+#   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test --no_cot --mcts_mode wm_logits
 #   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --cot_weight 0.05
 
 set -euo pipefail
 
 # ===================== Configurable Parameters =====================
-NUM_GPUS=${1:-4}
+NUM_GPUS=${1:-2}
 VL_MODEL=${2:-"Qwen2.5-VL-3b"}
 SEED=${3:-0}
 EXTRA_ARGS="${@:4}"
-# CUDA_DEVICES=${CUDA_DEVICES:-"0,1,2,3"}
-CUDA_DEVICES=${CUDA_DEVICES:-"0,1"}
+if [ -z "${CUDA_DEVICES:-}" ]; then
+    CUDA_DEVICES=$(seq -s, 0 $((NUM_GPUS - 1)))
+fi
 # MASTER_PORT=${MASTER_PORT:-29500}
 MASTER_PORT=${MASTER_PORT:-29501}
 
@@ -83,11 +84,11 @@ cd "${SCRIPT_DIR}"
 torchrun \
     --nproc_per_node "${NUM_GPUS}" \
     --master-port "${MASTER_PORT}" \
-    priorzero_entry_unified.py \
+    src/priorzero_entry_sync_ddp.py \
     --input_type image \
     --env_id "${ENV_ID}" \
     --vl_model "${VL_MODEL}" \
     --seed "${SEED}" \
-    --max_iter 1e6 \
+    --max_iter 1000000 \
     ${EXTRA_ARGS} \
     2>&1 | tee "${LOG_FILE}"

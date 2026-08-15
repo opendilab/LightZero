@@ -215,6 +215,7 @@ class PriorZeroVLConfig:
 
     # Prompt style: "concise" (shorter, better for small VLMs) or "legacy" (verbose, original)
     prompt_style: str = "legacy"
+    logprob_extraction_mode: str = "approximate"
 
     # Training settings
     colocate_all_models: bool = True
@@ -600,7 +601,7 @@ def get_priorzero_vl_config(
         ),
         collector=dict(
             type='priorzero_segment',
-            import_names=['zoo.jericho.priorzero.priorzero_collector_unified'],
+            import_names=['zoo.jericho.priorzero.src.priorzero_collector'],
         ),
         evaluator=dict(
             type='priorzero',
@@ -621,7 +622,7 @@ def get_priorzero_vl_config(
     # Auto-configure VL model
     if use_prior:
         if vl_model_key is None:
-            vl_model_key = "qwen-vl-chat"  # Default VL
+            vl_model_key = "Qwen2.5-VL-3b"
             print(f"[Config] Using default VL model: {vl_model_key}")
 
         vl_model_config = get_vl_model_config(vl_model_key)
@@ -651,7 +652,9 @@ def get_priorzero_vl_config(
                 "world_model": False,
                 "world_model_llm_prior": True,
                 "llm_prior": False,
-                "eval_freq": int(50),       # Reduced from 500
+                "wm_eval_freq": 50,
+                "llm_eval_freq": 20,
+                "eval_freq": int(50),
             })
     else:
         print(f"[Config] VL prior disabled (use_prior=False)")

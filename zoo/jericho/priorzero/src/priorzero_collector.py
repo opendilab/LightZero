@@ -65,6 +65,16 @@ def extract_raw_obs_text(obs_dict: Dict[str, Any]) -> str:
     # Fallback: return str representation
     return str(obs_dict)
 
+
+def extract_raw_obs_image(obs_dict: Dict[str, Any]) -> np.ndarray:
+    """Extract the unstacked image used by the VL prior."""
+    observation = obs_dict.get('observation')
+    if not isinstance(observation, np.ndarray):
+        raise TypeError(
+            f"Image observation must be a numpy array, got {type(observation).__name__}"
+        )
+    return observation
+
 # ==============================================================================
 # PriorZero Collector Class
 # ==============================================================================
@@ -85,7 +95,10 @@ class PriorZeroCollector(OriginalCollector):
         policy_config: Dict,
         llm_config: Dict,
         data_processor = None,
+        prior_generator = None,
         prof = None,
+        obs_type: Optional[str] = None,
+        env_id: Optional[str] = None,
         **kwargs
     ):
         """
@@ -102,17 +115,80 @@ class PriorZeroCollector(OriginalCollector):
         super().__init__(**kwargs)
 
         self.data_processor = data_processor
+        self.prior_generator = prior_generator
         self.prof = prof
         self.llm_cfg = llm_config
+        self.obs_type = obs_type or getattr(policy_config.model.world_model_cfg, 'obs_type', 'text')
+        self.env_id = env_id or ''
+        self.store_prior_metadata = self.obs_type != 'image' or bool(self.llm_cfg.enable_rft)
 
         self.history_buffers = defaultdict(
             lambda: deque(maxlen=self.llm_cfg.history_length)
         )
         self.llm_prior_temperature = llm_config.llm_prior_temperature
 
-        self._logger.info(f"[RANK {self._rank}] ✓ PriorZeroCollector initialized with vLLM engine")
+        self._logger.info(
+            f"[RANK {self._rank}] ✓ PriorZeroCollector initialized "
+            f"(obs_type={self.obs_type})"
+        )
         self._logger.info(f"[RANK {self._rank}]   - History length: {self.llm_cfg.history_length}")
         self._logger.info(f"[RANK {self._rank}]   - Generate max length: {self.llm_cfg.generate_max_len}")
+
+    def _extract_raw_obs(self, obs: Dict[str, Any]) -> Any:
+        if self.obs_type == 'image':
+            return extract_raw_obs_image(obs)
+        return extract_raw_obs_text(obs)
+
+    def _get_valid_actions(self, obs: Dict[str, Any]) -> List[str]:
+        valid_actions = obs.get('valid_actions', [])
+        if valid_actions or self.obs_type != 'image':
+            return list(valid_actions)
+
+        from zoo.jericho.priorzero.atari_action_meanings import get_action_meanings
+        action_space_size = self.policy_config.model.action_space_size
+        action_meanings = get_action_meanings(self.env_id, action_space_size)
+        return [action_meanings[i] for i in range(action_space_size)]
+
+    def _get_visual_priors(
+        self,
+        observations: List[np.ndarray],
+        valid_actions_list: List[List[str]],
+        histories_list: List[List[Any]],
+    ) -> Tuple[List[Dict[str, float]], List[Dict[str, Any]], List[Optional[str]]]:
+        """Adapt VLPriorGenerator results to the original PriorZero interfaces."""
+        if self.prior_generator is None:
+            raise RuntimeError("prior_generator is required when obs_type='image'")
+
+        results = self.prior_generator.batch_generate_prior(
+            observations=observations,
+            action_candidates_list=valid_actions_list,
+            histories=histories_list,
+            temperature=getattr(self.llm_cfg, 'temperature', 1.0),
+        )
+
+        prior_per_seq, prior_per_tok, cot_prefixes = [], [], []
+        for result, actions in zip(results, valid_actions_list):
+            logits = np.asarray(result['action_logits'], dtype=np.float32)
+            if logits.shape != (len(actions),):
+                raise ValueError(
+                    f"VL prior shape {logits.shape} does not match {len(actions)} actions"
+                )
+            action_logprobs = {
+                action: float(logits[index]) for index, action in enumerate(actions)
+            }
+            cot_reasoning = result.get('cot_prefix')
+            if self.llm_cfg.use_cot and cot_reasoning:
+                cot_prefix = f"Reasoning: {cot_reasoning}\nAction:"
+            else:
+                cot_prefix = "Action:"
+            prior_per_seq.append(action_logprobs)
+            prior_per_tok.append({
+                'action_logprobs': action_logprobs,
+                'action_candidates': actions,
+            })
+            cot_prefixes.append(cot_prefix)
+
+        return prior_per_seq, prior_per_tok, cot_prefixes
 
     def pad_and_save_last_trajectory(
             self, i: int, last_game_segments: List[GameSegment], last_game_priorities: List[np.ndarray],
@@ -261,8 +337,11 @@ class PriorZeroCollector(OriginalCollector):
                 for _ in range(self.policy_config.model.frame_stack_num)
             ]
             observation_window_stack[env_id].extend(initial_frames)
-            game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), 
-                                        init_history_obs=list(self.history_buffers[env_id]))
+            init_raw_obs = self._extract_raw_obs(init_obs[env_id]) if self.store_prior_metadata else None
+            init_history = list(self.history_buffers[env_id]) if self.store_prior_metadata else None
+            game_segments[env_id].reset(
+                observation_window_stack[env_id], init_raw_obs=init_raw_obs, init_history_obs=init_history
+            )
 
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
@@ -298,37 +377,45 @@ class PriorZeroCollector(OriginalCollector):
                     stack_obs_array,
                     self.policy_config.model.model_type
                 )
-                stack_obs_tensor = torch.from_numpy(stack_obs_tensor).to(self.policy_config.device)
+                stack_obs_tensor = torch.from_numpy(stack_obs_tensor).to(self.policy_config.device).float()
 
                 if collect_with_pure_policy:
                     continue
 
-                # Extract text observations and valid actions
+                # Extract observations and valid actions. Text remains the default path;
+                # image mode is selected by world_model_cfg.obs_type.
                 raw_obs_list = []
                 histories_list = []
                 valid_actions_list = [] 
                 ready_env_ids = sorted(list(ready_env_id))
                 for env_id in ready_env_ids:
-                    raw_obs_text = extract_raw_obs_text(obs[env_id])
-                    raw_obs_list.append(raw_obs_text)
+                    raw_obs_list.append(self._extract_raw_obs(obs[env_id]))
 
                     history = list(self.history_buffers[env_id])
                     histories_list.append(history)
 
-                    valid_actions = obs[env_id].get('valid_actions', [])
-                    valid_actions_list.append(valid_actions)
+                    valid_actions_list.append(self._get_valid_actions(obs[env_id]))
                 with self.prof.block("collect_step_get_llm_prior", rank=self._rank):
-                    # CoT reuse optimization: request CoT prefixes to store in game segments
-                    llm_prior_per_seq, llm_prior_per_tok, cot_prefixes = self.data_processor.get_llm_prior(
-                        states=raw_obs_list,
-                        valid_actions_list=valid_actions_list,  # [PRIORZERO] Pass valid actions
-                        histories=histories_list,
-                        return_cot=True  # Request CoT prefixes for reuse in training
-                    )
+                    if self.obs_type == 'image':
+                        llm_prior_per_seq, llm_prior_per_tok, cot_prefixes = self._get_visual_priors(
+                            observations=raw_obs_list,
+                            valid_actions_list=valid_actions_list,
+                            histories_list=histories_list,
+                        )
+                    else:
+                        # Original text PriorZero path.
+                        llm_prior_per_seq, llm_prior_per_tok, cot_prefixes = self.data_processor.get_llm_prior(
+                            states=raw_obs_list,
+                            valid_actions_list=valid_actions_list,
+                            histories=histories_list,
+                            return_cot=True
+                        )
                     assert len(llm_prior_per_seq) == len(ready_env_id) == len(valid_actions_list)
                     for idx, llm_prior in enumerate(llm_prior_per_seq):
                         scaled_llm_prior = self.apply_temperature_scaling(llm_prior, return_logprobs=True)
                         llm_prior_per_seq[idx] = scaled_llm_prior
+                        if self.obs_type == 'image':
+                            llm_prior_per_tok[idx]['action_logprobs'] = scaled_llm_prior
                         
                 llm_prior_per_seq_by_env = {
                     env_id: llm_prior_per_seq[idx] for idx, env_id in enumerate(ready_env_ids)
@@ -345,7 +432,7 @@ class PriorZeroCollector(OriginalCollector):
                     'valid_actions_list': valid_actions_list,
                     "current_env_step": self._total_envstep_count,
                     "phase": phase,
-                    "llm_collect_mode": self.llm_cfg.train_schedule['llm_collect_mode']
+                    "llm_collect_mode": self.llm_cfg.train_schedule.get('llm_collect_mode', 'wm_llm_collect')
                 }
 
                 if self.task_id is not None:
@@ -400,9 +487,29 @@ class PriorZeroCollector(OriginalCollector):
                     # ===========================================================
                     # [PRIORZERO-NEW] Update History Buffer
                     # ===========================================================
-                    raw_obs_text = extract_raw_obs_text(obs[env_id])
-                    action = info['action_str']
-                    self.history_buffers[env_id].append((raw_obs_text, action, float(reward)))
+                    raw_obs = self._extract_raw_obs(obs[env_id])
+                    if self.obs_type == 'image':
+                        from zoo.jericho.priorzero.atari_action_meanings import action_index_to_name
+                        action = action_index_to_name(
+                            self.env_id, actions[env_id], self.policy_config.model.action_space_size
+                        )
+                        history_item = (
+                            raw_obs, action, float(reward), int(np.asarray(self.timestep_dict[env_id]))
+                        )
+                    else:
+                        action = info['action_str']
+                        history_item = (raw_obs, action, float(reward))
+                    self.history_buffers[env_id].append(history_item)
+
+                    if self.store_prior_metadata:
+                        replay_raw_obs = self._extract_raw_obs(obs_new)
+                        replay_history = list(self.history_buffers[env_id])
+                        replay_prior = llm_prior_per_tok_by_env[env_id]
+                        replay_cot_prefix = cot_prefixes_by_env[env_id]
+                        replay_action = action
+                    else:
+                        replay_raw_obs = replay_history = replay_prior = None
+                        replay_cot_prefix = replay_action = None
                     
                     # Append transition to game segment (including CoT prefix for reuse optimization)
                     game_segments[env_id].append(
@@ -412,11 +519,11 @@ class PriorZeroCollector(OriginalCollector):
                         self.action_mask_dict[env_id],
                         self.to_play_dict[env_id],
                         timestep=to_ndarray(self.timestep_dict[env_id]),
-                        raw_obs_text=extract_raw_obs_text(obs_new),
-                        history_obs=list(self.history_buffers[env_id]),
-                        llm_prior_per_tok=llm_prior_per_tok_by_env[env_id],
-                        cot_prefix=cot_prefixes_by_env[env_id],
-                        llm_action=action
+                        raw_obs_text=replay_raw_obs,
+                        history_obs=replay_history,
+                        llm_prior_per_tok=replay_prior,
+                        cot_prefix=replay_cot_prefix,
+                        llm_action=replay_action
                     )
 
                     # Update state
@@ -470,7 +577,13 @@ class PriorZeroCollector(OriginalCollector):
                             config=self.policy_config,
                             task_id=self.task_id
                         )
-                        game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(obs_new), init_history_obs=list(self.history_buffers[env_id]))
+                        init_raw_obs = self._extract_raw_obs(obs_new) if self.store_prior_metadata else None
+                        init_history = list(self.history_buffers[env_id]) if self.store_prior_metadata else None
+                        game_segments[env_id].reset(
+                            observation_window_stack[env_id],
+                            init_raw_obs=init_raw_obs,
+                            init_history_obs=init_history,
+                        )
 
                     self._env_info[env_id]['step'] += 1
                     if llm_prior_per_seq is not None and llm_prior_per_seq_by_env[env_id] is not None:
@@ -490,7 +603,9 @@ class PriorZeroCollector(OriginalCollector):
                     self._logger.info(f'[RANK {self._rank}] ======== Env {env_id} episode finished! ========')
                     # Logging
                     info_log = {
-                        'reward': episode_timestep.info['score'],
+                        'reward': episode_timestep.info.get(
+                            'score', episode_timestep.info.get('eval_episode_return', float(reward))
+                        ),
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                         'llm_prior_entropy': sum(llm_prior_entropy[env_id])/len(llm_prior_entropy[env_id])}
@@ -548,7 +663,13 @@ class PriorZeroCollector(OriginalCollector):
                         config=self.policy_config,
                         task_id=self.task_id
                     )
-                    game_segments[env_id].reset(observation_window_stack[env_id], init_raw_obs=extract_raw_obs_text(init_obs[env_id]), init_history_obs=list(self.history_buffers[env_id]))
+                    init_raw_obs = self._extract_raw_obs(init_obs[env_id]) if self.store_prior_metadata else None
+                    init_history = list(self.history_buffers[env_id]) if self.store_prior_metadata else None
+                    game_segments[env_id].reset(
+                        observation_window_stack[env_id],
+                        init_raw_obs=init_raw_obs,
+                        init_history_obs=init_history,
+                    )
                     last_game_segments[env_id] = None
                     last_game_priorities[env_id] = None
             
