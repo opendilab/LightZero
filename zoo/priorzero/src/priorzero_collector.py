@@ -144,7 +144,7 @@ class PriorZeroCollector(OriginalCollector):
         if valid_actions or self.obs_type != 'image':
             return list(valid_actions)
 
-        from zoo.jericho.priorzero.atari_action_meanings import get_action_meanings
+        from zoo.priorzero.atari_action_meanings import get_action_meanings
         action_space_size = self.policy_config.model.action_space_size
         action_meanings = get_action_meanings(self.env_id, action_space_size)
         return [action_meanings[i] for i in range(action_space_size)]
@@ -489,7 +489,7 @@ class PriorZeroCollector(OriginalCollector):
                     # ===========================================================
                     raw_obs = self._extract_raw_obs(obs[env_id])
                     if self.obs_type == 'image':
-                        from zoo.jericho.priorzero.atari_action_meanings import action_index_to_name
+                        from zoo.priorzero.atari_action_meanings import action_index_to_name
                         action = action_index_to_name(
                             self.env_id, actions[env_id], self.policy_config.model.action_space_size
                         )

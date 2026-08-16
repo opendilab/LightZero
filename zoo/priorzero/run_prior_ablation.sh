@@ -4,7 +4,7 @@
 # Runs all parameter combinations and saves results to ablation_results.json
 #
 # Usage (on GPU worker):
-#   cd zoo/jericho/priorzero
+#   cd zoo/priorzero
 #   bash run_ablation.sh
 # =============================================================================
 set -euo pipefail

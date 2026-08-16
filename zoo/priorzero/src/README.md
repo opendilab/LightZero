@@ -177,7 +177,7 @@ cd /path/to/LightZero && pip install -e .
 
 **Standard PriorZero** (recommended for most users):
 ```bash
-cd /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/jericho/priorzero
+cd /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/priorzero
 
 # Quick test (reduced resources, 2 envs, 10 iters)
 python priorzero_entry.py --quick_test --env_id zork1.z5 --seed 0
@@ -188,7 +188,7 @@ python priorzero_entry.py --env_id zork1.z5 --seed 0 --max_iter 100000
 
 **ORZ Integration** (experimental, requires ORZ setup):
 ```bash
-cd /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/jericho/priorzero
+cd /mnt/nfs/zhangjinouwen/puyuan/LightZero/zoo/priorzero
 
 # Debug mode (minimal resources)
 DEBUG_MODE=True python priorzero_orz_complete.py

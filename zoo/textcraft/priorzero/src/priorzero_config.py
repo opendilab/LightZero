@@ -336,15 +336,15 @@ def get_priorzero_config(
         env_manager=dict(type="base"),
         policy=dict(
             type="priorzero",
-            import_names=["zoo.jericho.priorzero.src.priorzero_policy"],
+            import_names=["zoo.priorzero.src.priorzero_policy"],
         ),
         collector=dict(
             type="priorzero_segment",
-            import_names=["zoo.jericho.priorzero.src.priorzero_collector"],
+            import_names=["zoo.priorzero.src.priorzero_collector"],
         ),
         evaluator=dict(
             type="priorzero",
-            import_names=["zoo.jericho.priorzero.src.priorzero_evaluator"],
+            import_names=["zoo.priorzero.src.priorzero_evaluator"],
         ),
         replay_buffer=dict(
             type='game_buffer_muzero',

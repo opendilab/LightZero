@@ -5,7 +5,7 @@ Evaluate VLM prior quality by running episodes with different policies:
   - vlm:    VLM prior (greedy argmax from VL model output)
 
 Usage (on GPU worker):
-  cd zoo/jericho/priorzero
+  cd zoo/priorzero
   python scripts/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20
   python scripts/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20 --prompt_style legacy
   python scripts/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20 --vlm_image_mode first_and_current
@@ -87,10 +87,10 @@ else:
 
 
 # ── ensure project root is importable ──
-SCRIPT_DIR = Path(__file__).resolve().parent.parent  # zoo/jericho/priorzero
+SCRIPT_DIR = Path(__file__).resolve().parent.parent  # zoo/priorzero
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(SCRIPT_DIR / "src"))
-PROJECT_ROOT = SCRIPT_DIR.parent.parent.parent       # LightZero root
+PROJECT_ROOT = SCRIPT_DIR.parent.parent              # LightZero root
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # ── PLACEHOLDER_MORE_IMPORTS ──

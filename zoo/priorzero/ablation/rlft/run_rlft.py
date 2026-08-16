@@ -31,7 +31,7 @@ import torch.distributed as dist
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LIGHTZERO_ROOT = REPO_ROOT.parents[2]
+LIGHTZERO_ROOT = REPO_ROOT.parents[1]
 for path in (REPO_ROOT / "src", LIGHTZERO_ROOT):
     path_str = str(path)
     if path_str not in sys.path:

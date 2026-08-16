@@ -3,7 +3,7 @@ set -e
 set -x
 set -o pipefail
 
-PRIORZERO_DIR="/mnt/afs/niuyazhe/workspace/xiongjyu/LightZero/zoo/jericho/priorzero"
+PRIORZERO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 CUDA_DEVICES="${CUDA_DEVICES:-0}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"

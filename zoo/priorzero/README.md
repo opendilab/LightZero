@@ -1,6 +1,6 @@
 # PriorZero说明
 
-本文档面向 `zoo/jericho/priorzero` 分支代码，重点补充：
+本文档面向 `zoo/priorzero` 代码，重点补充：
 1. 主要文件说明；
 2. 主实验启动命令与修改点；
 3. 当前实验结论；
@@ -152,7 +152,7 @@
 主实验建议通过 DDP 脚本启动：
 
 ```bash
-cd zoo/jericho/priorzero
+cd zoo/priorzero
 bash scripts/run_priorzero_ddp.sh
 ```
 
