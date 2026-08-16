@@ -17,6 +17,7 @@ from ditk import logging
 from easydict import EasyDict
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+import threading
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -365,8 +366,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                         dones[env_id] = done
                         if episode_timestep.done:
                             self._policy.reset([env_id])
-                            reward = episode_timestep.info['eval_episode_return']
-                            saved_info = {'eval_episode_return': episode_timestep.info['eval_episode_return']}
+                            reward = episode_timestep.info['score']
+                            saved_info = {'eval_episode_return': episode_timestep.info['score']}
                             if 'episode_info' in episode_timestep.info:
                                 saved_info.update(episode_timestep.info['episode_info'])
                             eval_monitor.update_info(env_id, saved_info)
@@ -413,6 +414,11 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             duration = self._timer.value
             episode_return = eval_monitor.get_episode_return()
+            mean_episode_return = np.mean(episode_return)
+            if mean_episode_return >= self._max_episode_return:
+                if save_ckpt_fn:
+                    save_ckpt_fn('WM_ckpt_best.pth.tar')
+                self._max_episode_return = mean_episode_return
             info = {
                 'train_iter': train_iter,
                 'ckpt_name': f'iteration_{train_iter}.pth.tar',

@@ -19,9 +19,10 @@ rjob_logs/
 *.png
 !lzero/loss_landscape/images/**/*.png
 *.csv
+*.jsonl
+*.json
 zoo/atari/runs/rjob/
 pkg/
-src/
 
 ### CVS template
 /CVS/*

@@ -99,8 +99,9 @@ class UniZeroModel(nn.Module):
             logging.info(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             logging.info('==' * 20)
         elif world_model_cfg.obs_type == 'text':
-            if kwargs['encoder_option'] == 'legacy':
-                self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
+            # [FIX] Get encoder_option with default fallback
+            encoder_option = kwargs.get('encoder_option', 'BGE')
+            if encoder_option == 'legacy':
                 if world_model_cfg.decode_loss_mode is None or world_model_cfg.decode_loss_mode.lower() == 'none':
                     self.decoder_network = None
                     self.decoder_network_tokenizer = None
@@ -116,8 +117,18 @@ class UniZeroModel(nn.Module):
                         self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small")
                         self.decoder_network_tokenizer = T5Tokenizer.from_pretrained("t5-small")
                     projection = [world_model_cfg.embed_dim, self.decoder_network.config.d_model]
-            elif kwargs['encoder_option'] == 'qwen':
-                self.representation_network = QwenNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
+                # [FIX] Remove tokenizer=self.tokenizer because self.tokenizer is not yet created
+                # HFLanguageRepresentationNetwork will load its own tokenizer if not provided
+                encoder_url = kwargs.get('encoder_url', 'BAAI/bge-base-en-v1.5')
+                self.representation_network = HFLanguageRepresentationNetwork(
+                    model_path=encoder_url,
+                    embedding_size=world_model_cfg.embed_dim,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder
+                )
+
+            elif encoder_option == 'qwen':
+                encoder_url = kwargs.get('encoder_url', 'Qwen/Qwen2.5-0.5B-Instruct')
+                self.representation_network = QwenNetwork(model_path=encoder_url, embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
                 if world_model_cfg.decode_loss_mode is None or world_model_cfg.decode_loss_mode.lower() == 'none':
                     self.decoder_network = None
                     self.decoder_network_tokenizer = None

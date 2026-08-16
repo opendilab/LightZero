@@ -543,6 +543,12 @@ class MuZeroCollector(ISerialCollector):
                 # --- Episode Termination Handling ---
                 if done:
                     collected_episode += 1
+                    reward = info['score']
+                    log_info = {'reward': reward, 'time': self._env_info[env_id]['time'], 'step': self._env_info[env_id]['step']}
+                
+                # --- Episode Termination Handling ---
+                if done:
+                    collected_episode += 1
                     reward = info['eval_episode_return']
                     log_info = {'reward': reward, 'time': self._env_info[env_id]['time'], 'step': self._env_info[env_id]['step']}
                     if not collect_with_pure_policy:

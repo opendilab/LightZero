@@ -148,14 +148,6 @@ class GameBuffer(ABC, object):
             game_segment = self.game_segment_buffer[game_segment_idx]
 
             game_segment_list.append(game_segment)
-
-            # print(f'len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}')
-            # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
-
-            # In the reanalysis phase, `pos_in_game_segment` should be a multiple of `num_unroll_steps`.
-            # Indices exceeding `game_segment_length` are padded with the next segment and are not updated
-            # in the current implementation. Therefore, we need to sample `pos_in_game_segment` within
-            # [0, game_segment_length - num_unroll_steps] to avoid padded data.
             
             if self._cfg.action_type == 'varied_action_space':
                 # For varied action space environments (e.g., board games with short game length like TicTacToe)
