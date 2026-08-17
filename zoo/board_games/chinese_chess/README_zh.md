@@ -62,6 +62,7 @@ python -m zoo.board_games.chinese_chess.entry.train_random_bot --help
 - `envs/chinese_chess_env.py`：维护观测历史、视角规范化、动作掩码、bot/human 回合、奖励和终止逻辑。`board` 字段将棋盘、历史、回合计数和位置哈希压缩为 `int16`，供 CTree reset/clone 使用。
 - `config/*_bot_mode_config.py`：AlphaZero 和 MuZero 的默认实验配置。
 - `entry/train_random_bot.py`：统一训练入口；`entry/evaluate_random_bot.py`：多 seed checkpoint 评估；两个 `*_bot_human.py`：终端对战入口。
+- `entry/chinese_chess_random_bot_human.py`：最小终端示例，人类执红、内置随机 bot 执黑。
 
 ## 当前默认训练设置
 
@@ -111,6 +112,17 @@ python -m zoo.board_games.chinese_chess.entry.chinese_chess_muzero_bot_human \
 ```
 
 终端显示棋盘并等待人类输入 ICCS 坐标。列为 `a`–`i`，行为 `0`–`9`，例如 `h9g7` 表示从 h9 走到 g7。输入 `q`、`quit` 或 `exit` 退出。棋盘字符为：`K/k` 将、`A/a` 士、`E/e` 象、`H/h` 马、`R/r` 车、`C/c` 炮、`P/p` 兵/卒。若训练使用了非默认模型规模，请同步传入 `--num-res-blocks` 和 `--num-channels`。
+
+## 终端人类 vs 内置随机 bot
+
+如果只想了解环境接口而不加载 checkpoint，可以运行：
+
+```bash
+python -m zoo.board_games.chinese_chess.entry.chinese_chess_random_bot_human --seed 0
+```
+
+人类执红，在终端输入 ICCS 走法；每次人类走子后，`play_with_bot_mode`
+会自动让黑方执行一个均匀随机的合法动作。这是随机基线示例，不是 Xiangqi MCTS 引擎。
 
 ## 直接使用环境
 

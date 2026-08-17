@@ -62,6 +62,7 @@ Wrapping the bot reply inside one transition is convenient for single-agent trai
 - `envs/chinese_chess_env.py`: handles history planes, canonical views, masks, bot/human turns, rewards, termination, and CTree state serialization. The serialized `int16` payload contains board history, turn/clock metadata, and recent position hashes.
 - `config/*_bot_mode_config.py`: default AlphaZero and MuZero experiments.
 - `entry/train_random_bot.py`: common training CLI; `entry/evaluate_random_bot.py`: multi-seed checkpoint evaluation; `entry/*_bot_human.py`: terminal play.
+- `entry/chinese_chess_random_bot_human.py`: minimal terminal example for a human (Red) versus the built-in random bot (Black).
 
 ## Current presets
 
@@ -106,6 +107,18 @@ python -m zoo.board_games.chinese_chess.entry.chinese_chess_muzero_bot_human \
 ```
 
 The terminal prints the board and accepts ICCS coordinates: files `a`–`i`, ranks `0`–`9`; for example, `h9g7` moves from h9 to g7. Enter `q`, `quit`, or `exit` to leave. Pieces are rendered as `K/k` king, `A/a` advisor, `E/e` elephant, `H/h` horse, `R/r` rook, `C/c` cannon, and `P/p` pawn. If training used non-default model dimensions, pass the same `--num-res-blocks` and `--num-channels` overrides.
+
+## Terminal play against the built-in random bot
+
+To learn the environment API without a checkpoint, run:
+
+```bash
+python -m zoo.board_games.chinese_chess.entry.chinese_chess_random_bot_human --seed 0
+```
+
+You play Red and enter ICCS moves in the terminal; after each human move,
+`play_with_bot_mode` automatically applies one uniformly sampled legal Black
+move. This is a random baseline, not an Xiangqi MCTS engine.
 
 ## Direct environment use
 
