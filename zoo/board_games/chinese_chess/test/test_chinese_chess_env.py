@@ -15,10 +15,12 @@ def test_reset_contract_and_seeded_random_bot() -> None:
     assert obs['action_mask'].shape == (2086, )
     assert int(obs['action_mask'].sum()) == 44
     assert obs['to_play'] == -1
+    assert int(obs['timestep']) == 0
 
     timestep = env.step(env.random_action())
     assert env._state.ply == 2 or timestep.done
     assert timestep.obs['to_play'] == -1
+    assert int(timestep.obs['timestep']) == env._state.ply
     assert -1 <= float(timestep.reward) <= 1
 
 

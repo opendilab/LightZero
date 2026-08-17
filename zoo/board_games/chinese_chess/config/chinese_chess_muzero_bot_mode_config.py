@@ -37,8 +37,10 @@ chinese_chess_muzero_config = dict(
             reward_head_hidden_channels=[128],
             value_head_hidden_channels=[128],
             policy_head_hidden_channels=[256],
-            reward_support_range=(-1.0, 2.0, 1.0),
-            value_support_range=(-1.0, 2.0, 1.0),
+            # Xiangqi returns are exactly {-1, 0, +1}; do not allocate an
+            # unused +2 support bin, which weakens the value/reward targets.
+            reward_support_range=(-1.0, 1.0, 1.0),
+            value_support_range=(-1.0, 1.0, 1.0),
             discrete_action_encoding_type='not_one_hot',
         ),
         cuda=True,
@@ -58,7 +60,10 @@ chinese_chess_muzero_config = dict(
         td_steps=100,
         discount_factor=1.0,
         n_episode=n_episode,
-        eval_freq=int(5e3),
+        # Evaluations are deliberately less frequent for this long run.  The
+        # previous 200k run spent a disproportionate amount of wall time in
+        # evaluator and was stopped before a useful learning curve emerged.
+        eval_freq=int(1e4),
         replay_buffer_size=int(2e5),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

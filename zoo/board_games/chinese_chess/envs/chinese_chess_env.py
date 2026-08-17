@@ -246,6 +246,11 @@ class ChineseChessEnv(BaseEnv):
             'board': self._serialize(),
             'current_player_index': self.current_player_index,
             'to_play': to_play,
+            # MuZero's collector/evaluator use this to track the temporal
+            # position of each observation.  Keeping it in the environment
+            # observation avoids the fallback warning and remains exact when
+            # restoring a serialized CTree state.
+            'timestep': np.int64(self._state.ply),
         }
 
     def get_done_winner(self) -> Tuple[bool, int]:
