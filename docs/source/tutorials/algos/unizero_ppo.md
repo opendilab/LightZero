@@ -12,10 +12,11 @@ This branch is an experimental discrete-action implementation. The current valid
 | --- | --- | --- |
 | CartPole | Converged in the smoke/integration run | Seed 0 reached `200/200` in all three evaluation episodes after about 4,015 environment steps and repeated it through 23,142 steps. |
 | LunarLander-v3 | Functional, convergence not established | Collect → PPO → world-model replay smoke cycles complete; no multi-seed convergence result is reported. |
-| PongNoFrameskip-v4 | Functional, convergence not established | The pipeline completes smoke validation, but the available long-run evidence is insufficient to claim Pong convergence. |
+| PongNoFrameskip-v4 | Basic correctness validated; long-run convergence still open | In the current 500k-environment-step run, `eval-reward-mean` continues to rise and reaches approximately 10. This supports the correctness of the collect → PPO → replay pipeline, but is not yet a final convergence or benchmark claim. |
 
-Only CartPole currently has a positive convergence result. Longer runs should report raw evaluation curves and at
-least three seeds before being described as a benchmark.
+CartPole has a positive convergence result, and Pong now has encouraging long-run evidence for implementation
+correctness. Longer training and validation across more environments are still required. Report raw evaluation curves
+and at least three seeds before describing the result as a benchmark.
 
 ## How it works
 

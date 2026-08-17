@@ -11,10 +11,10 @@ UniZero + PPO 在 UniZero 的潜在表示和世界模型之上加入 on-policy P
 | --- | --- | --- |
 | CartPole | 已在集成 smoke run 中收敛 | seed 0 约 4,015 个环境步后，连续 3 个评估 episode 均达到 `200/200`，并在 23,142 步前的后续评估中保持。 |
 | LunarLander-v3 | 功能可运行，尚未证明收敛 | 已完成 collect → PPO → world-model replay smoke cycle，但还没有多 seed 收敛结果。 |
-| PongNoFrameskip-v4 | 功能可运行，尚未证明收敛 | 流程 smoke validation 已完成，但现有长跑证据不足以声称 Pong 收敛。 |
+| PongNoFrameskip-v4 | 基本正确性已验证，长期收敛仍待确认 | 当前运行已达到 500k environment steps，`eval-reward-mean` 持续上升并达到约 10。这基本验证了 collect → PPO → replay 流程的正确性，但还不能作为最终收敛或 benchmark 结论。 |
 
-目前只有 CartPole 有明确的收敛结果。长跑实验至少应提供 3 个 seed 的原始评估曲线，才能作为 benchmark
-结果描述。
+CartPole 已有明确的收敛结果，Pong 也出现了支持实现正确性的积极长跑信号；但仍需要更长期训练和更多环境
+验证。正式描述为 benchmark 前，至少应提供 3 个 seed 的原始评估曲线。
 
 ## 训练流程
 
