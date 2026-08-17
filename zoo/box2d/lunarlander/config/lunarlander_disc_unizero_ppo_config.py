@@ -9,6 +9,8 @@ from zoo.box2d.lunarlander.config.lunarlander_disc_unizero_config import (
 
 main_config = deepcopy(_unizero_main_config)
 create_config = deepcopy(_unizero_create_config)
+create_config.policy.type = 'unizero_ppo'
+create_config.policy.import_names = ['lzero.policy.unizero_ppo']
 main_config.exp_name = 'data_unizero_ppo/lunarlander_disc_unizero_ppo_seed0'
 # Gymnasium removed v2; v3 keeps the discrete observation/action interface.
 main_config.env.env_name = 'LunarLander-v3'

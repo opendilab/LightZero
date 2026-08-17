@@ -18,7 +18,6 @@ from lzero.policy import (DiscreteSupport, InverseScalarTransform,
 from lzero.policy.head_clip_manager import (HeadClipConfig, HeadClipManager,
                                             create_head_clip_manager_from_dict)
 from lzero.policy.muzero import MuZeroPolicy
-from lzero.policy.ppo_utils import masked_categorical
 from lzero.policy.utils import initialize_pad_batch
 from torch.nn.utils.convert_parameters import (parameters_to_vector,
                                                vector_to_parameters)
@@ -702,21 +701,6 @@ class UniZeroPolicy(MuZeroPolicy):
         analysis_sim_norm=False,
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
-        # (str) Strategy-improvement operator. ``mcts`` preserves UniZero; ``ppo``
-        # uses the same latent world model with strictly fresh on-policy updates.
-        policy_improvement='mcts',
-        ppo=dict(
-            gamma=0.997,
-            gae_lambda=0.95,
-            clip_ratio=0.2,
-            entropy_weight=0.01,
-            epochs=4,
-            minibatch_size=256,
-            normalize_advantage=True,
-            target_kl=0.03,
-            fresh_ratio_tolerance=1e-5,
-            world_model_update_per_collect=None,
-        ),
         # (int) The evaluation frequency.
         eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
@@ -964,22 +948,6 @@ class UniZeroPolicy(MuZeroPolicy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        self.policy_improvement = getattr(self._cfg, 'policy_improvement', 'mcts')
-        if self.policy_improvement not in {'mcts', 'ppo'}:
-            raise ValueError(
-                f"policy_improvement must be 'mcts' or 'ppo', got {self.policy_improvement!r}"
-            )
-        if self.policy_improvement == 'ppo':
-            if self._cfg.model.continuous_action_space:
-                raise NotImplementedError('UniZero+PPO currently supports discrete action spaces only')
-            if self._cfg.use_adaptive_entropy_weight:
-                raise ValueError('UniZero+PPO uses ppo.entropy_weight; adaptive MCTS entropy is unsupported')
-            if self._cfg.accumulation_steps != 1:
-                raise ValueError(
-                    'UniZero+PPO requires accumulation_steps=1 so actor/critic and '
-                    'world-model gradients cannot cross phase boundaries'
-                )
-
         if self._cfg.optim_type == 'SGD':
             # Configure SGD optimizer
             self._optimizer_world_model = torch.optim.SGD(
@@ -1199,39 +1167,9 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        if len(data) == 4:
-            current_batch, target_batch, train_iter, learn_context = data
-        else:
-            current_batch, target_batch, train_iter = data
-            learn_context = {'type': 'mcts'}
-        if isinstance(learn_context, str):
-            learn_context = {'type': learn_context}
-        learn_type = learn_context.get('type', 'mcts')
-
-        ppo_batch = learn_type == 'ppo'
-        if ppo_batch:
-            if len(current_batch) != 14:
-                raise RuntimeError(f'PPO current_batch must contain 14 fields, got {len(current_batch)}')
-            (
-                obs_batch_ori, action_batch, target_action_batch, mask_batch, indices,
-                weights, make_time, timestep_batch, advantage_batch, old_log_prob_batch,
-                return_batch, behavior_action_mask_batch, behavior_policy_feature_batch,
-                policy_version_batch,
-            ) = current_batch
-            expected_version = int(learn_context['collection_train_iter'])
-            if not np.all(np.asarray(policy_version_batch) == expected_version):
-                raise RuntimeError(
-                    f'PPO minibatch contains stale policy data; expected collection {expected_version}, '
-                    f'got {np.unique(policy_version_batch).tolist()}'
-                )
-        else:
-            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch[:8]
+        current_batch, target_batch, train_iter = data
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
-        if ppo_batch:
-            # The explicit rollout return is authoritative for PPO. Do not let
-            # replay reanalysis or a target-network path silently replace it.
-            target_value = np.asarray(return_batch, dtype=np.float32)
-        actual_batch_size = int(obs_batch_ori.shape[0])
 
         # Calculate current epsilon for policy label smoothing
         # ==================== Continuous Label Smoothing ====================
@@ -1248,20 +1186,17 @@ class UniZeroPolicy(MuZeroPolicy):
                 current_policy_label_eps = 0.0
         # ================================================================================
 
-        # PPO updates the actor/critic heads from exact contextual features
-        # cached at collection time. Avoid preparing and transferring image
-        # observations that the actor-only loss deliberately bypasses.
-        if not ppo_batch:
-            if self._cfg.model.frame_stack_num > 1:
-                obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
-            else:
-                obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        # Prepare observations based on frame stack number
+        if self._cfg.model.frame_stack_num > 1:
+            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
+        else:
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
-            # Apply augmentations if needed
-            if self._cfg.use_augmentation:
-                obs_batch = self.image_transforms.transform(obs_batch)
-                if self._cfg.model.self_supervised_learning_loss:
-                    obs_target_batch = self.image_transforms.transform(obs_target_batch)
+        # Apply augmentations if needed
+        if self._cfg.use_augmentation:
+            obs_batch = self.image_transforms.transform(obs_batch)
+            if self._cfg.model.self_supervised_learning_loss:
+                obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
@@ -1271,8 +1206,8 @@ class UniZeroPolicy(MuZeroPolicy):
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
-        target_reward = target_reward.view(actual_batch_size, -1)
-        target_value = target_value.view(actual_batch_size, -1)
+        target_reward = target_reward.view(self._cfg.batch_size, -1)
+        target_value = target_value.view(self._cfg.batch_size, -1)
 
         # Transform rewards and values to their scaled forms
         transformed_target_reward = scalar_transform(target_reward)
@@ -1280,84 +1215,48 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Convert to categorical distributions
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
-        target_value_categorical = phi_transform(
-            self.value_support,
-            transformed_target_value,
-            # PPO critic targets are Monte-Carlo/GAE returns rather than MCTS
-            # distributions; smoothing them biases the value baseline.
-            label_smoothing_eps=0.0 if ppo_batch else self._cfg.label_smoothing_eps,
-        )
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
-        if not ppo_batch:
-            if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
-                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    actual_batch_size, -1, self._cfg.model.observation_shape)
-            elif len(self._cfg.model.observation_shape) == 3:
-                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    actual_batch_size, -1, *self._cfg.model.observation_shape)
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                self._cfg.batch_size, -1, self._cfg.model.observation_shape)
+        elif len(self._cfg.model.observation_shape) == 3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
         batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
 
+        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
+                                            device=self._cfg.device)
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
-        if not ppo_batch:
-            batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
-            batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
-            batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
-                                                device=self._cfg.device)
 
-            # ==================== Apply Policy Label Smoothing ====================
-            # This was previously computed but never applied. Now we actually smooth the target_policy.
-            smoothed_target_policy = target_policy[:, :-1]
-            if current_policy_label_eps > 0:
-                num_actions = smoothed_target_policy.shape[-1]
-                uniform_dist = torch.ones_like(smoothed_target_policy) / num_actions
-                smoothed_target_policy = (1.0 - current_policy_label_eps) * smoothed_target_policy + \
-                                        current_policy_label_eps * uniform_dist
-            batch_for_gpt['target_policy'] = smoothed_target_policy
-            # ===================================================================================
+        # ==================== Apply Policy Label Smoothing ====================
+        # This was previously computed but never applied. Now we actually smooth the target_policy.
+        smoothed_target_policy = target_policy[:, :-1]
+        if current_policy_label_eps > 0:
+            num_actions = smoothed_target_policy.shape[-1]
+            uniform_dist = torch.ones_like(smoothed_target_policy) / num_actions
+            smoothed_target_policy = (1.0 - current_policy_label_eps) * smoothed_target_policy + \
+                                    current_policy_label_eps * uniform_dist
+        batch_for_gpt['target_policy'] = smoothed_target_policy
+        # ===================================================================================
 
         batch_for_gpt['scalar_target_value'] = target_value
-        if ppo_batch:
-            ppo_cfg = self._cfg.ppo
-            # PPO and replay optimize disjoint objectives in a fixed order.  In
-            # particular, large decoder/reward gradients must not dominate the
-            # global gradient clip applied to the actor and critic update.
-            batch_for_gpt['actor_critic_only'] = True
-            batch_for_gpt['ppo_advantages'] = torch.as_tensor(
-                advantage_batch, device=self._cfg.device, dtype=torch.float32
-            )[:, :batch_for_gpt['actions'].shape[1]]
-            batch_for_gpt['ppo_old_log_prob'] = torch.as_tensor(
-                old_log_prob_batch, device=self._cfg.device, dtype=torch.float32
-            )[:, :batch_for_gpt['actions'].shape[1]]
-            batch_for_gpt['ppo_action_mask'] = torch.as_tensor(
-                behavior_action_mask_batch, device=self._cfg.device, dtype=torch.bool
-            )[:, :batch_for_gpt['actions'].shape[1]]
-            batch_for_gpt['ppo_policy_features'] = torch.as_tensor(
-                behavior_policy_feature_batch, device=self._cfg.device, dtype=torch.float32
-            )[:, :batch_for_gpt['actions'].shape[1]]
-            batch_for_gpt['ppo_clip_ratio'] = float(ppo_cfg.clip_ratio)
-            batch_for_gpt['ppo_entropy_weight'] = float(ppo_cfg.entropy_weight)
-        elif learn_type == 'world_model':
-            batch_for_gpt['disable_policy_loss'] = True
-            batch_for_gpt['disable_value_loss'] = True
 
         # Extract valid target policy data and compute entropy
-        if ppo_batch:
-            average_target_policy_entropy = batch_for_gpt['target_value'].new_tensor(0.)
+        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+        if valid_target_policy.numel() == 0:
+            average_target_policy_entropy = batch_for_gpt['target_policy'].new_tensor(0.)
         else:
-            valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-            if valid_target_policy.numel() == 0:
-                average_target_policy_entropy = batch_for_gpt['target_policy'].new_tensor(0.)
-            else:
-                target_policy_entropy = -torch.sum(
-                    valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1
-                )
-                average_target_policy_entropy = target_policy_entropy.mean()
+            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+            average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -1539,11 +1438,6 @@ class UniZeroPolicy(MuZeroPolicy):
         temperature_value=self.intermediate_losses['temperature_value']
         temperature_reward=self.intermediate_losses['temperature_reward']
         temperature_policy=self.intermediate_losses['temperature_policy']
-        ppo_approx_kl = self.intermediate_losses.get('ppo_approx_kl', torch.tensor(0.))
-        ppo_clip_fraction = self.intermediate_losses.get('ppo_clip_fraction', torch.tensor(0.))
-        ppo_ratio_mean = self.intermediate_losses.get('ppo_ratio_mean', torch.tensor(1.))
-        ppo_ratio_min = self.intermediate_losses.get('ppo_ratio_min', torch.tensor(1.))
-        ppo_ratio_max = self.intermediate_losses.get('ppo_ratio_max', torch.tensor(1.))
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -1856,11 +1750,6 @@ class UniZeroPolicy(MuZeroPolicy):
             "temperature_policy":temperature_policy,
 
             "current_policy_label_eps":current_policy_label_eps,
-            'ppo/approx_kl': float(ppo_approx_kl.item()),
-            'ppo/clip_fraction': float(ppo_clip_fraction.item()),
-            'ppo/ratio_mean': float(ppo_ratio_mean.item()),
-            'ppo/ratio_min': float(ppo_ratio_min.item()),
-            'ppo/ratio_max': float(ppo_ratio_max.item()),
         }
         for metric_name in (
             'open_loop_latent_mse_mean',
@@ -2008,17 +1897,10 @@ class UniZeroPolicy(MuZeroPolicy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
-        self.policy_improvement = getattr(self._cfg, 'policy_improvement', 'mcts')
-        if self.policy_improvement not in {'mcts', 'ppo'}:
-            raise ValueError(
-                f"policy_improvement must be 'mcts' or 'ppo', got {self.policy_improvement!r}"
-            )
         # Create a configuration copy for collect MCTS and set specific simulation count
         mcts_collect_cfg = copy.deepcopy(self._cfg)
         mcts_collect_cfg.num_simulations = self._cfg.collect_num_simulations
-        if self.policy_improvement == 'ppo':
-            self._mcts_collect = None
-        elif self._cfg.mcts_ctree:
+        if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(mcts_collect_cfg)
         else:
             # NOTE: a python-tree MCTS variant for UniZero is not implemented in this fork.
@@ -2030,11 +1912,9 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs_collect = torch.zeros(
-                [self.collector_env_num, self._cfg.model.observation_shape],
-                dtype=torch.float32,
-                device=self._cfg.device,
-            )
+            self.last_batch_obs_collect = torch.full(
+                [self.collector_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+            ).to(self._cfg.device)
             self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
 
     @staticmethod
@@ -2044,19 +1924,6 @@ class UniZeroPolicy(MuZeroPolicy):
         if isinstance(ready_env_id, set):
             return sorted(int(env_id) for env_id in ready_env_id)
         return [int(env_id) for env_id in list(ready_env_id)]
-
-    def _initialize_inference_observations(self, observation_shape, batch_size: int) -> torch.Tensor:
-        observations = initialize_pad_batch(
-            observation_shape,
-            batch_size,
-            self._cfg.device,
-            pad_token_id=self.pad_token_id,
-        )
-        # Vector encoders are linear layers and require floating-point input;
-        # text observations intentionally retain integer token ids.
-        if self._cfg.model.model_type == 'mlp':
-            observations = observations.float()
-        return observations
 
     def _select_last_infer_inputs(self, last_obs: torch.Tensor, last_actions: List, ready_env_id: List[int],
                                   total_env_num: int) -> Tuple[torch.Tensor, List]:
@@ -2078,19 +1945,12 @@ class UniZeroPolicy(MuZeroPolicy):
         last_obs = getattr(self, obs_attr)
         last_actions = getattr(self, action_attr)
         if last_obs.shape[0] != total_env_num or len(last_actions) != total_env_num:
-            if self._cfg.model.model_type == 'mlp':
-                last_obs = torch.zeros(
-                    [total_env_num, self._cfg.model.observation_shape],
-                    dtype=torch.float32,
-                    device=self._cfg.device,
-                )
-            else:
-                last_obs = initialize_pad_batch(
-                    self._cfg.model.observation_shape,
-                    total_env_num,
-                    self._cfg.device,
-                    pad_token_id=self.pad_token_id,
-                )
+            last_obs = initialize_pad_batch(
+                self._cfg.model.observation_shape,
+                total_env_num,
+                self._cfg.device,
+                pad_token_id=self.pad_token_id
+            )
             last_actions = [-1 for _ in range(total_env_num)]
 
         for batch_idx, env_id in enumerate(ready_env_id):
@@ -2155,37 +2015,6 @@ class UniZeroPolicy(MuZeroPolicy):
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-            if self.policy_improvement == 'ppo' or self._cfg.collect_with_pure_policy:
-                action_mask_tensor = torch.as_tensor(
-                    np.asarray(action_mask), device=policy_logits.device, dtype=torch.bool
-                )
-                behavior_dist = masked_categorical(policy_logits, action_mask_tensor)
-                sampled_actions = behavior_dist.sample()
-                behavior_log_probs = behavior_dist.log_prob(sampled_actions)
-                behavior_entropies = behavior_dist.entropy()
-                batch_action = sampled_actions.detach().cpu().numpy().tolist()
-                policy_logits_list = policy_logits.detach().cpu().numpy().tolist()
-                policy_features = network_output.policy_features.detach().cpu().numpy()
-
-                for batch_index, env_id in enumerate(ready_env_id):
-                    output[env_id] = {
-                        'action': int(batch_action[batch_index]),
-                        'searched_value': pred_values[batch_index],
-                        'predicted_value': pred_values[batch_index],
-                        'predicted_policy_logits': policy_logits_list[batch_index],
-                        'behavior_log_prob': float(behavior_log_probs[batch_index].item()),
-                        'behavior_policy_features': policy_features[batch_index],
-                        'policy_entropy': float(behavior_entropies[batch_index].item()),
-                        'timestep': timestep[batch_index],
-                        'predicted_next_text': None,
-                    }
-
-                self._update_last_infer_inputs(
-                    'last_batch_obs_collect', 'last_batch_action_collect',
-                    data, batch_action, ready_env_id, self.collector_env_num
-                )
-                return output
-
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
@@ -2286,20 +2115,13 @@ class UniZeroPolicy(MuZeroPolicy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
-        self.policy_improvement = getattr(self._cfg, 'policy_improvement', 'mcts')
-        if self.policy_improvement not in {'mcts', 'ppo'}:
-            raise ValueError(
-                f"policy_improvement must be 'mcts' or 'ppo', got {self.policy_improvement!r}"
-            )
 
         # Create a configuration copy for eval MCTS and set specific simulation count
         mcts_eval_cfg = copy.deepcopy(self._cfg)
         mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
         mcts_eval_cfg.deterministic = True
 
-        if self.policy_improvement == 'ppo':
-            self._mcts_eval = None
-        elif self._cfg.mcts_ctree:
+        if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(mcts_eval_cfg)
         else:
             # NOTE: a python-tree MCTS variant for UniZero is not implemented in this fork.
@@ -2311,11 +2133,9 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action_eval = [-1 for i in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs_eval = torch.zeros(
-                [self.evaluator_env_num, self._cfg.model.observation_shape],
-                dtype=torch.float32,
-                device=self._cfg.device,
-            )
+            self.last_batch_obs_eval = torch.full(
+                [self.evaluator_env_num, self._cfg.model.observation_shape], fill_value=self.pad_token_id,
+            ).to(self._cfg.device)
             self.last_batch_action_eval = [-1 for i in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
@@ -2360,31 +2180,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # if not in training, obtain the scalars of the value/reward
             pred_values = self.value_inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-            if self.policy_improvement == 'ppo' or self._cfg.collect_with_pure_policy:
-                action_mask_tensor = torch.as_tensor(
-                    np.asarray(action_mask), device=policy_logits.device, dtype=torch.bool
-                )
-                eval_dist = masked_categorical(policy_logits, action_mask_tensor)
-                batch_action = eval_dist.probs.argmax(dim=-1).detach().cpu().numpy().tolist()
-                policy_logits_list = policy_logits.detach().cpu().numpy().tolist()
-                entropies = eval_dist.entropy()
-                for batch_index, env_id in enumerate(ready_env_id):
-                    output[env_id] = {
-                        'action': int(batch_action[batch_index]),
-                        'visit_count_distributions': eval_dist.probs[batch_index].detach().cpu().numpy().tolist(),
-                        'visit_count_distribution_entropy': float(entropies[batch_index].item()),
-                        'searched_value': pred_values[batch_index],
-                        'predicted_value': pred_values[batch_index],
-                        'predicted_policy_logits': policy_logits_list[batch_index],
-                        'timestep': timestep[batch_index],
-                        'predicted_next_text': None,
-                    }
-                self._update_last_infer_inputs(
-                    'last_batch_obs_eval', 'last_batch_action_eval',
-                    data, batch_action, ready_env_id, self.evaluator_env_num
-                )
-                return output
-
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
@@ -2469,15 +2264,19 @@ class UniZeroPolicy(MuZeroPolicy):
 
         if reset_init_data:
             if env_ids_to_reset is None:
-                self.last_batch_obs_collect = self._initialize_inference_observations(
+                self.last_batch_obs_collect = initialize_pad_batch(
                     self._cfg.model.observation_shape,
                     self._cfg.collector_env_num,
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
                 )
                 self.last_batch_action_collect = [-1 for _ in range(self._cfg.collector_env_num)]
             else:
-                reset_obs = self._initialize_inference_observations(
+                reset_obs = initialize_pad_batch(
                     self._cfg.model.observation_shape,
                     len(env_ids_to_reset),
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
                 )
                 for idx, eid in enumerate(env_ids_to_reset):
                     if 0 <= eid < self._cfg.collector_env_num:
@@ -2548,15 +2347,19 @@ class UniZeroPolicy(MuZeroPolicy):
 
         if reset_init_data:
             if task_id is not None:
-                reset_obs = self._initialize_inference_observations(
+                reset_obs = initialize_pad_batch(
                     self._cfg.model.observation_shape_list[task_id],
                     self._cfg.evaluator_env_num if env_ids_to_reset is None else len(env_ids_to_reset),
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
                 )
 
             else:
-                reset_obs = self._initialize_inference_observations(
+                reset_obs = initialize_pad_batch(
                     self._cfg.model.observation_shape,
                     self._cfg.evaluator_env_num if env_ids_to_reset is None else len(env_ids_to_reset),
+                    self._cfg.device,
+                    pad_token_id=self.pad_token_id
                 )
 
             if env_ids_to_reset is None:
@@ -2720,11 +2523,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # ==================== Training Configuration ====================
             'current_policy_label_eps',
-            'ppo/approx_kl',
-            'ppo/clip_fraction',
-            'ppo/ratio_mean',
-            'ppo/ratio_min',
-            'ppo/ratio_max',
             'adaptive_alpha',
             'adaptive_target_entropy_ratio',
             'alpha_loss',

@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from easydict import EasyDict
 
-from lzero.mcts.buffer.game_buffer_unizero import UniZeroGameBuffer
+from lzero.mcts.buffer.game_buffer_unizero_ppo import UniZeroPPOGameBuffer
 from lzero.policy.ppo_utils import compute_gae, normalize_advantages, ppo_policy_loss
 from lzero.worker.muzero_collector import MuZeroCollector
 
@@ -94,7 +94,7 @@ def test_collector_gae_keeps_interleaved_episode_segments_aligned():
 
 
 def test_on_policy_indices_are_fresh_and_non_overlapping_and_release_is_selective():
-    buffer = UniZeroGameBuffer.__new__(UniZeroGameBuffer)
+    buffer = UniZeroPPOGameBuffer.__new__(UniZeroPPOGameBuffer)
     buffer._cfg = EasyDict(num_unroll_steps=3)
     buffer.base_idx = 0
     fresh = SimpleNamespace(
@@ -126,7 +126,7 @@ def test_on_policy_indices_are_fresh_and_non_overlapping_and_release_is_selectiv
 
 
 def test_ppo_batch_skips_unused_observation_and_target_context_materialization():
-    buffer = UniZeroGameBuffer.__new__(UniZeroGameBuffer)
+    buffer = UniZeroPPOGameBuffer.__new__(UniZeroPPOGameBuffer)
     buffer._cfg = EasyDict(
         num_unroll_steps=2,
         td_steps=1,
@@ -171,7 +171,7 @@ def test_ppo_batch_skips_unused_observation_and_target_context_materialization()
 
 
 def test_world_model_batch_reuses_sample_and_preserves_reward_sequence():
-    buffer = UniZeroGameBuffer.__new__(UniZeroGameBuffer)
+    buffer = UniZeroPPOGameBuffer.__new__(UniZeroPPOGameBuffer)
     buffer._cfg = EasyDict(num_unroll_steps=2)
     buffer.action_space_size = 3
     buffer.sample_type = 'transition'

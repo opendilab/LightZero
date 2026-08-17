@@ -12,7 +12,6 @@ from lzero.model.common import SimNorm
 from lzero.model.utils import (calculate_dormant_ratio,
                                compute_average_weight_magnitude,
                                compute_effective_rank)
-from lzero.policy.ppo_utils import ppo_policy_loss
 from torch.distributions import (Categorical, Independent, Normal,
                                  TanhTransform, TransformedDistribution)
 
@@ -2473,144 +2472,8 @@ class WorldModel(
         )
 
 
-    def compute_ppo_loss(self, batch, inverse_scalar_transform_handle) -> LossWithIntermediateLosses:
-        """Compute PPO directly on cached contextual latents.
-
-        The encoder, Transformer, target tokenizer and reconstruction heads are
-        deliberately bypassed.  Besides preserving the exact behavior context,
-        this keeps Atari PPO minibatches proportional to two small heads instead
-        of a complete world-model training pass.
-        """
-        features = batch['ppo_policy_features'].detach()
-        valid_mask = batch['mask_padding'].bool()
-        actions = batch['actions']
-        batch_size, num_steps = actions.shape
-
-        policy_logits = self.head_policy.head_module(features)
-        if self.use_policy_logits_clip:
-            policy_logits = self._apply_policy_logits_control(policy_logits)
-        value_logits = self.head_value.head_module(features)
-        policy_surrogate, policy_entropy_steps, ppo_metrics = ppo_policy_loss(
-            policy_logits,
-            batch['ppo_action_mask'],
-            actions,
-            batch['ppo_old_log_prob'],
-            batch['ppo_advantages'],
-            valid_mask,
-            float(batch['ppo_clip_ratio']),
-        )
-        policy_loss_steps = (
-            policy_surrogate - float(batch['ppo_entropy_weight']) * policy_entropy_steps
-        )
-        value_loss_steps = -(batch['target_value'] * F.log_softmax(value_logits, dim=-1)).sum(dim=-1)
-
-        valid_float = valid_mask.float()
-        valid_count = valid_float.sum().clamp_min(1)
-        per_sample_count = valid_float.sum(dim=1).clamp_min(1)
-
-        def masked_average(values):
-            return (values * valid_float).sum() / valid_count
-
-        loss_policy = masked_average(policy_loss_steps)
-        orig_policy_loss = masked_average(policy_surrogate)
-        policy_entropy = masked_average(policy_entropy_steps)
-        loss_value = masked_average(value_loss_steps)
-        zero = loss_policy.new_zeros(())
-
-        per_sample_loss_policy = (policy_loss_steps * valid_float).sum(dim=1) / per_sample_count
-        per_sample_orig_policy = (policy_surrogate * valid_float).sum(dim=1) / per_sample_count
-        per_sample_entropy = (policy_entropy_steps * valid_float).sum(dim=1) / per_sample_count
-        per_sample_value = (value_loss_steps * valid_float).sum(dim=1) / per_sample_count
-        per_sample_zero = torch.zeros(batch_size, device=features.device, dtype=features.dtype)
-
-        def step_average(values, mask, index):
-            selected = values[:, index][mask[:, index]]
-            return selected.mean() if selected.numel() else zero
-
-        zero_obs_steps = torch.zeros(
-            batch_size, max(num_steps - 1, 1), device=features.device, dtype=features.dtype
-        )
-        obs_mask = valid_mask[:, 1:] if num_steps > 1 else valid_mask[:, :1]
-        zero_reward_steps = torch.zeros_like(valid_float)
-        step_losses = []
-        for index in (0, num_steps // 2, num_steps - 1):
-            obs_index = min(index, zero_obs_steps.shape[1] - 1)
-            step_losses.append({
-                'loss_obs': step_average(zero_obs_steps, obs_mask, obs_index),
-                'loss_rewards': step_average(zero_reward_steps, valid_mask, index),
-                'loss_value': step_average(value_loss_steps, valid_mask, index),
-                'loss_policy': step_average(policy_loss_steps, valid_mask, index),
-                'orig_policy_loss': step_average(policy_surrogate, valid_mask, index),
-                'policy_entropy': step_average(policy_entropy_steps, valid_mask, index),
-            })
-
-        with torch.no_grad():
-            if self.config.use_priority:
-                scalar_values = inverse_scalar_transform_handle(
-                    value_logits.reshape(batch_size * num_steps, -1)
-                ).reshape(batch_size, num_steps)
-                target_values = batch['scalar_target_value'][:, :num_steps]
-                value_priority = (
-                    (scalar_values - target_values).abs() * valid_float
-                ).sum(dim=1) / per_sample_count
-            else:
-                value_priority = per_sample_zero
-
-        open_loop_components = {
-            name: zero for name in ('latent', 'reward', 'value', 'policy', 'policy_ce', 'policy_entropy')
-        }
-        return LossWithIntermediateLosses(
-            latent_recon_loss_weight=self.latent_recon_loss_weight,
-            perceptual_loss_weight=self.perceptual_loss_weight,
-            open_loop_consistency_loss_weight=self.open_loop_consistency_loss_weight,
-            open_loop_recurrent_loss_weight=self.open_loop_recurrent_loss_weight,
-            continuous_action_space=False,
-            loss_obs=zero,
-            loss_rewards=zero,
-            loss_value=loss_value,
-            loss_policy=loss_policy,
-            latent_recon_loss=zero,
-            perceptual_loss=zero,
-            open_loop_consistency_loss=zero,
-            open_loop_recurrent_loss=zero,
-            open_loop_recurrent_latent_loss=open_loop_components['latent'],
-            open_loop_recurrent_reward_loss=open_loop_components['reward'],
-            open_loop_recurrent_value_loss=open_loop_components['value'],
-            open_loop_recurrent_policy_loss=open_loop_components['policy'],
-            open_loop_recurrent_policy_ce=open_loop_components['policy_ce'],
-            open_loop_recurrent_policy_entropy=open_loop_components['policy_entropy'],
-            orig_policy_loss=orig_policy_loss,
-            policy_entropy=policy_entropy,
-            first_step_losses=step_losses[0],
-            middle_step_losses=step_losses[1],
-            last_step_losses=step_losses[2],
-            dormant_ratio_encoder=zero,
-            dormant_ratio_transformer=zero,
-            dormant_ratio_head=zero,
-            avg_weight_mag_encoder=zero,
-            avg_weight_mag_transformer=zero,
-            avg_weight_mag_head=zero,
-            e_rank_last_linear=zero,
-            e_rank_sim_norm=zero,
-            latent_state_l2_norms=features.norm(p=2, dim=-1)[valid_mask].mean(),
-            value_priority=value_priority,
-            intermediate_tensor_x=features,
-            obs_embeddings=features,
-            logits_value=value_logits.detach(),
-            logits_policy=policy_logits.detach(),
-            per_sample_loss_obs=per_sample_zero,
-            per_sample_loss_rewards=per_sample_zero,
-            per_sample_loss_value=per_sample_value,
-            per_sample_loss_policy=per_sample_loss_policy,
-            per_sample_loss_orig_policy=per_sample_orig_policy,
-            per_sample_loss_policy_entropy=per_sample_entropy,
-            **ppo_metrics,
-        )
-
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
-        if batch.get('actor_critic_only', False):
-            return self.compute_ppo_loss(batch, inverse_scalar_transform_handle)
         start_pos = batch['timestep']
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
@@ -2926,74 +2789,12 @@ class WorldModel(
             loss_policy = orig_policy_loss + self.policy_entropy_weight * policy_entropy_loss
             policy_entropy = - policy_entropy_loss
 
-        ppo_metrics = {}
-        if 'ppo_advantages' in batch:
-            # Reuse the exact contextual Transformer features captured by the
-            # behavior policy. This makes the initial PPO ratio exactly one even
-            # when a sampled transition begins midway through a UniZero KV window.
-            # PPO updates the actor/critic heads; replay updates train the latent
-            # model after the on-policy epochs finish.
-            policy_features = batch['ppo_policy_features'].detach()
-            ppo_logits = self.head_policy.head_module(policy_features)
-            if self.use_policy_logits_clip:
-                ppo_logits = self._apply_policy_logits_control(ppo_logits)
-            outputs.logits_value = self.head_value.head_module(policy_features)
-            ppo_surrogate, ppo_entropy, ppo_metrics = ppo_policy_loss(
-                ppo_logits,
-                batch['ppo_action_mask'],
-                batch['actions'],
-                batch['ppo_old_log_prob'],
-                batch['ppo_advantages'],
-                batch['mask_padding'],
-                float(batch['ppo_clip_ratio']),
-            )
-            orig_policy_loss = ppo_surrogate.reshape(-1)
-            policy_entropy = ppo_entropy.reshape(-1)
-            loss_policy = (
-                ppo_surrogate - float(batch['ppo_entropy_weight']) * ppo_entropy
-            ).reshape(-1)
-            outputs.logits_policy = ppo_logits
-        elif batch.get('disable_policy_loss', False):
-            # Keep actor-head gradients at ``None`` so AdamW does not apply
-            # decoupled weight decay during replay-only world-model updates.
-            zero_policy = torch.zeros_like(outputs.logits_policy[..., 0]).reshape(-1)
-            loss_policy = zero_policy
-            orig_policy_loss = zero_policy
-            policy_entropy = zero_policy
-
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
-        if batch.get('disable_value_loss', False):
-            # PPO owns the critic target. Replay-only model updates must not pull
-            # the value head back toward stale behavior-policy bootstraps.
-            loss_value = torch.zeros_like(outputs.logits_value[..., 0]).reshape(-1)
-
-        if batch.get('actor_critic_only', False):
-            # PPO must not share a backward pass with the substantially larger
-            # reconstruction/reward gradients.  UniZero applies one global
-            # gradient clip; mixing these objectives can therefore shrink the
-            # actor update by orders of magnitude.  Replay trains all latent
-            # world-model objectives after the fresh PPO epochs have finished.
-            loss_obs = torch.zeros_like(loss_obs)
-            loss_rewards = torch.zeros_like(loss_rewards)
-            latent_recon_loss = torch.zeros_like(latent_recon_loss)
-            perceptual_loss = torch.zeros_like(perceptual_loss)
-            open_loop_consistency_loss = torch.zeros_like(open_loop_consistency_loss)
-            open_loop_recurrent_loss = torch.zeros_like(open_loop_recurrent_loss)
-            open_loop_recurrent_components = {
-                name: torch.zeros_like(value)
-                for name, value in open_loop_recurrent_components.items()
-            }
 
         # Compute timesteps
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
-        # GAE already performs temporal discounting. Applying UniZero's
-        # within-sequence discount a second time would make identical PPO
-        # transitions receive different weights solely because of chunk offset.
-        actor_critic_discounts = (
-            torch.ones_like(discounts) if 'ppo_advantages' in batch else discounts
-        )
         full_mask_count = batch['mask_padding'].sum()
         if full_mask_count == 0:
             raise ValueError("mask_padding is all zeros; cannot compute UniZero loss")
@@ -3046,10 +2847,10 @@ class WorldModel(
         # Calculate overall discounted loss
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).sum()/ obs_mask_count
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
-        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * actor_critic_discounts).sum()/ full_mask_count
-        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * actor_critic_discounts).sum()/ full_mask_count
-        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * actor_critic_discounts).sum()/ full_mask_count
-        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * actor_critic_discounts).sum()/ full_mask_count
+        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
+        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ full_mask_count
 
         # ==================== Per-sample losses for PER importance-sampling weights ====================
         # The ``discounted_*`` losses above are batch-level scalars, so multiplying them by per-sample
@@ -3065,10 +2866,10 @@ class WorldModel(
             per_sample_kwargs = dict(
                 per_sample_loss_obs=(loss_obs.view(-1, num_steps - 1) * discounts[1:]).sum(dim=1) / per_sample_obs_valid_count,
                 per_sample_loss_rewards=(loss_rewards.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
-                per_sample_loss_value=(loss_value.view(-1, num_steps) * actor_critic_discounts).sum(dim=1) / per_sample_valid_count,
-                per_sample_loss_policy=(loss_policy.view(-1, num_steps) * actor_critic_discounts).sum(dim=1) / per_sample_valid_count,
-                per_sample_loss_orig_policy=(orig_policy_loss.view(-1, num_steps) * actor_critic_discounts).sum(dim=1) / per_sample_valid_count,
-                per_sample_loss_policy_entropy=(policy_entropy.view(-1, num_steps) * actor_critic_discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_value=(loss_value.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy=(loss_policy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_orig_policy=(orig_policy_loss.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
+                per_sample_loss_policy_entropy=(policy_entropy.view(-1, num_steps) * discounts).sum(dim=1) / per_sample_valid_count,
             )
         # =================================================================================================
 
@@ -3165,7 +2966,6 @@ class WorldModel(
                 logits_reward=outputs.logits_rewards.detach(),
                 logits_policy=outputs.logits_policy.detach(),
                 **per_sample_kwargs,
-                **ppo_metrics,
                 **open_loop_kwargs,
             )
 

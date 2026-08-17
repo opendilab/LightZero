@@ -101,7 +101,7 @@ def main(
             import_names=['zoo.atari.envs.atari_lightzero_env'],
         ),
         env_manager=dict(type='subprocess'),
-        policy=dict(type='unizero', import_names=['lzero.policy.unizero']),
+        policy=dict(type='unizero_ppo', import_names=['lzero.policy.unizero_ppo']),
     ))
 
     from lzero.entry import train_unizero

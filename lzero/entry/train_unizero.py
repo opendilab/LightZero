@@ -56,11 +56,18 @@ def train_unizero(
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero only supports the following algorithms: 'unizero', 'sampled_unizero'"
+    supported_policy_types = ['unizero', 'sampled_unizero', 'unizero_ppo']
+    assert create_cfg.policy.type in supported_policy_types, (
+        f"train_unizero only supports the following algorithms: {supported_policy_types}"
+    )
     logging.info(f"Using policy type: {create_cfg.policy.type}")
 
     # Import the appropriate GameBuffer class based on the policy type
-    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
+    game_buffer_classes = {
+        'unizero': 'UniZeroGameBuffer',
+        'sampled_unizero': 'SampledUniZeroGameBuffer',
+        'unizero_ppo': 'UniZeroPPOGameBuffer',
+    }
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
 
@@ -70,6 +77,7 @@ def train_unizero(
 
     # Compile the configuration file
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    is_ppo = create_cfg.policy.type == 'unizero_ppo'
 
     # Create environment manager
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -125,7 +133,7 @@ def train_unizero(
         policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     # Randomly collect data if specified
-    if cfg.policy.policy_improvement == 'ppo' and cfg.policy.random_collect_episode_num > 0:
+    if is_ppo and cfg.policy.random_collect_episode_num > 0:
         raise ValueError(
             'UniZero+PPO does not accept random-policy warmup rollouts. Set '
             'random_collect_episode_num=0; world-model replay warmup can be added '
@@ -186,7 +194,7 @@ def train_unizero(
         new_data = collector.collect(
             train_iter=collection_train_iter,
             policy_kwargs=collect_kwargs,
-            collect_with_pure_policy=True if cfg.policy.policy_improvement == 'ppo' else None,
+            collect_with_pure_policy=True if is_ppo else None,
         )
         logging.info(f"Rank {rank}, Training iteration {learner.train_iter}: New data collection completed!")
 
@@ -200,7 +208,7 @@ def train_unizero(
         replay_buffer.remove_oldest_data_to_fit()
         on_policy_indices = (
             replay_buffer.get_on_policy_indices(collection_train_iter)
-            if cfg.policy.policy_improvement == 'ppo'
+            if is_ppo
             else None
         )
 
@@ -214,7 +222,7 @@ def train_unizero(
 
         # Check if there is sufficient data for training
         if collector.envstep > cfg.policy.train_start_after_envsteps:
-            if cfg.policy.policy_improvement == 'ppo':
+            if is_ppo:
                 data_sufficient = len(on_policy_indices) > 0
             elif cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
@@ -226,14 +234,14 @@ def train_unizero(
                     f'Rank {rank}: The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
                 )
-                if cfg.policy.policy_improvement == 'ppo':
+                if is_ppo:
                     # The transition/reward data remains available for replay;
                     # discard only bulky rollout tensors that will never be
                     # consumed after this policy version is skipped.
                     replay_buffer.release_on_policy_data(collection_train_iter)
                 continue
 
-            if cfg.policy.policy_improvement == 'ppo':
+            if is_ppo:
                 ppo_cfg = cfg.policy.ppo
                 minibatch_size = min(int(ppo_cfg.minibatch_size), len(on_policy_indices))
                 target_kl = float(ppo_cfg.target_kl)
@@ -313,7 +321,7 @@ def train_unizero(
                     if cfg.policy.use_priority:
                         replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-        elif cfg.policy.policy_improvement == 'ppo':
+        elif is_ppo:
             # Rollouts collected during replay warm-up are intentionally not
             # used by a later actor version.
             replay_buffer.release_on_policy_data(collection_train_iter)

@@ -11,6 +11,8 @@ from zoo.classic_control.cartpole.config.cartpole_unizero_config import (
 # environment settings cannot silently drift between MCTS and PPO comparisons.
 main_config = deepcopy(_unizero_main_config)
 create_config = deepcopy(_unizero_create_config)
+create_config.policy.type = 'unizero_ppo'
+create_config.policy.import_names = ['lzero.policy.unizero_ppo']
 main_config.exp_name = 'data_unizero_ppo/cartpole_unizero_ppo_seed0'
 main_config.policy.policy_improvement = 'ppo'
 main_config.policy.collect_with_pure_policy = True
