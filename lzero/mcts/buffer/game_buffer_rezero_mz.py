@@ -381,19 +381,17 @@ class ReZeroMZGameBuffer(MuZeroGameBuffer):
                                 # These target policies and root values are stored in the game segment, specifically in the ``child_visit_segment`` and ``root_value_segment``.
                                 # We replace the data at the corresponding locations with the latest search results to maintain the most up-to-date targets.
                                 sim_num = sum(distributions)
-                                child_visit[current_index] = [visit_count / sim_num for visit_count in distributions]
                                 root_value[current_index] = searched_value
-
                                 if self._cfg.action_type == 'fixed_action_space':
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    policy = [visit_count / sim_num for visit_count in distributions]
+                                    child_visit[current_index] = policy
                                     target_policies.append(policy)
                                 else:
                                     policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
-                                    sum_visits = sum(distributions)
-                                    policy = [visit_count / sum_visits for visit_count in distributions]
+                                    policy = [visit_count / sim_num for visit_count in distributions]
                                     for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
                                         policy_tmp[legal_action] = policy[index]
+                                    child_visit[current_index] = policy_tmp
                                     target_policies.append(policy_tmp)
 
                         policy_index += 1
