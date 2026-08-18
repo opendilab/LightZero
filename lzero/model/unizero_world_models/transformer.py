@@ -12,7 +12,7 @@ Key features:
 import math
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -349,6 +349,13 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
+        self.num_blocks=len(self.blocks)
+        self.num_experts=config.num_experts_of_moe_in_transformer
+
+        self.shared_expert = 0
+        if hasattr(config, "n_shared_experts") and config.n_shared_experts > 0:
+            self.shared_expert = config.n_shared_experts
+
         self.task_embed = task_embed
         self.task_embed_option = self.config.task_embed_option
         self.use_register_token = (self.task_embed_option == "register_task_embed")
@@ -443,10 +450,16 @@ class Transformer(nn.Module):
 
         x = self.drop(sequences)
 
+        # for i, block in enumerate(self.blocks):
+        #     kv_cache_layer = None if past_keys_values is None else past_keys_values[i]
+        #     x = block(x, kv_cache_layer, valid_context_lengths)
         for i, block in enumerate(self.blocks):
-            kv_cache_layer = None if past_keys_values is None else past_keys_values[i]
-            x = block(x, kv_cache_layer, valid_context_lengths)
+            is_last_block = (i == len(self.blocks) - 1)
+            x = block(x,
+                    None if past_keys_values is None else past_keys_values[i],
+                    valid_context_lengths, is_last_block=is_last_block, task_id=task_id)
 
+            
         x = self.ln_f(x)
 
         if self.use_register_token:
@@ -459,6 +472,147 @@ class Transformer(nn.Module):
             x = x[:, :-self.register_token_num, :]
 
         return x
+
+    def get_expert_selection_stats(self, task_id: int = None) -> dict:
+        """
+        Overview:
+            Retrieve MoE expert selection statistics from the last transformer block.
+        Arguments:
+            - task_id (:obj:`int`, optional): Task identifier for task-specific statistics. Default is None.
+        Returns:
+            - stats (:obj:`dict`): Dictionary containing expert selection statistics.
+        """
+        if len(self.blocks) == 0:
+            return {}
+        last_block = self.blocks[-1]
+        if not hasattr(last_block, 'feed_forward') or not hasattr(last_block.feed_forward, 'get_expert_selection_stats'):
+            return {}
+        return last_block.feed_forward.get_expert_selection_stats(task_id)
+
+    def reset_expert_selection_stats(self) -> None:
+        """
+        Overview:
+            Reset MoE expert selection statistics for the last transformer block.
+        """
+        if len(self.blocks) == 0:
+            return
+        last_block = self.blocks[-1]
+        if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'reset_expert_selection_stats'):
+            last_block.feed_forward.reset_expert_selection_stats()
+
+    def get_shared_expert_gradients_by_block_id(self, block_id: int) -> Dict[str, torch.Tensor]:
+        """
+        Overview:
+            Retrieve parameter gradients of shared experts from a specified transformer block.
+        Arguments:
+            - block_id (:obj:`int`): Block identifier (0 to num_layers-1).
+        Returns:
+            - gradients (:obj:`Dict[str, torch.Tensor]`): Dictionary of parameter names and gradients.
+        """
+        if block_id < 0 or block_id >= len(self.blocks):
+            raise ValueError(f"Block ID {block_id} out of range. Available blocks: 0-{len(self.blocks)-1}")
+        block = self.blocks[block_id]
+        if not hasattr(block, 'feed_forward'):
+            raise ValueError(f"Block {block_id} doesn't have feed_forward layer")
+        if not hasattr(block.feed_forward, 'shared_expert') or block.feed_forward.shared_expert is None:
+            raise ValueError(f"Block {block_id} doesn't have shared expert")
+        gradients = {}
+        shared_expert = block.feed_forward.shared_expert
+        for name, param in shared_expert.named_parameters():
+            if param.grad is not None:
+                gradients[f"shared_expert.{name}"] = param.grad.clone()
+            else:
+                gradients[f"shared_expert.{name}"] = None
+        return gradients
+
+    def get_expert_gradients_for_last_block(self) -> List[torch.Tensor]:
+        """
+        Overview:
+            Retrieve flattened parameter gradients of all experts from the last transformer block.
+            Used for per-expert gradient conflict analysis.
+
+        Returns:
+            - gradients (:obj:`List[torch.Tensor]`): List of flattened gradient tensors, one per expert.
+        """
+        if len(self.blocks) == 0:
+            return []
+        last_block = self.blocks[-1]
+        gradients = []
+        if not hasattr(last_block, 'feed_forward'):
+            return gradients
+        feed_forward = last_block.feed_forward
+        if hasattr(feed_forward, 'experts') and feed_forward.experts is not None:
+            for expert_idx, expert in enumerate(feed_forward.experts):
+                expert_gradients = []
+                for name, param in expert.named_parameters():
+                    if param.grad is not None:
+                        expert_gradients.append(param.grad.clone().view(-1))
+                    else:
+                        expert_gradients.append(torch.zeros_like(param, device=param.device).view(-1))
+                gradients.append(torch.cat(expert_gradients, dim=0))
+        return gradients
+
+    def get_block_before_moe_gradients(self) -> Optional[torch.Tensor]:
+        """
+        Overview:
+            Retrieve gradients of the layer before MoE (ln2 output) in the last transformer block.
+            Used for gradient conflict analysis in multi-task learning.
+
+        Returns:
+            - gradients (:obj:`Optional[torch.Tensor]`): Gradient tensor, or None if hook not registered.
+        """
+        if len(self.blocks) == 0:
+            return None
+        return getattr(self.blocks[-1], 'block_before_moe_grad', None)
+
+    def get_last_shared_expert_gradients(self) -> torch.Tensor:
+        """
+        Overview:
+            Retrieve flattened parameter gradients from the shared expert in the last transformer block.
+
+        Returns:
+            - gradients (:obj:`torch.Tensor`): Flattened tensor of all shared expert gradients; empty tensor if none.
+        """
+        if len(self.blocks) == 0:
+            return []
+        last_block = self.blocks[-1]
+        if not hasattr(last_block, 'feed_forward') or not hasattr(last_block.feed_forward, 'shared_expert'):
+            return []
+        shared_expert = last_block.feed_forward.shared_expert
+        if shared_expert is None:
+            return []
+        shared_expert_gradients = []
+        for name, param in shared_expert.named_parameters():
+            if param.grad is not None:
+                shared_expert_gradients.append(param.grad.clone().view(-1))
+            else:
+                shared_expert_gradients.append(torch.zeros_like(param, device=param.device).view(-1))
+        return torch.cat(shared_expert_gradients, dim=0)
+
+    def get_last_block_expert_selection_stats(self) -> dict:
+        """
+        Overview:
+            Retrieve MoE expert selection statistics from the last transformer block.
+        Returns:
+            - stats (:obj:`dict`): Dictionary containing expert selection statistics.
+        """
+        if len(self.blocks) == 0:
+            return {}
+        last_block = self.blocks[-1]
+        if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'get_expert_selection_stats'):
+            return last_block.feed_forward.get_expert_selection_stats()
+        return {}
+
+    def reset_last_block_expert_selection_stats(self) -> None:
+        """
+        Overview:
+            Reset MoE expert selection statistics for the last transformer block.
+        """
+        if len(self.blocks) == 0:
+            return
+        last_block = self.blocks[-1]
+        if hasattr(last_block, 'feed_forward') and hasattr(last_block.feed_forward, 'reset_expert_selection_stats'):
+            last_block.feed_forward.reset_expert_selection_stats()
 
 
 class Block(nn.Module):
@@ -529,16 +683,24 @@ class Block(nn.Module):
                 _maybe_wrap_linear(nn.Linear(4 * config.embed_dim, config.embed_dim), config, "feed_forward"),
                 nn.Dropout(config.resid_pdrop),
             )
+        self.config = config
+        self.block_before_moe_grad = None
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None,
+                is_last_block: bool = False, task_id: int = 0) -> torch.Tensor:
         """
         Overview:
             Performs the forward pass of the Transformer block.
+
         Arguments:
             - x (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
             - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation.
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking.
+            - is_last_block (:obj:`bool`): Whether this is the last block; only the last block registers
+                gradient hook for block-before-MoE and passes task_id to MoE for expert selection stats.
+            - task_id (:obj:`int`): Current task ID, passed to MoE forward for expert selection statistics.
+
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
@@ -548,8 +710,27 @@ class Block(nn.Module):
             ff_output = self.feed_forward(self.ln2(x))
             x = self.gate2(x, ff_output)
         else:
+            # x = x + attn_output
+            # x = x + self.feed_forward(self.ln2(x))
+            
+            
             x = x + attn_output
-            x = x + self.feed_forward(self.ln2(x))
+            block_before_moe = self.ln2(x)
+            # Register gradient hook on last block for gradient conflict analysis
+            if self.training and is_last_block:
+                self.block_before_moe_grad = None
+
+                def grad_hook(grad):
+                    self.block_before_moe_grad = grad.clone()
+                    return None
+
+                block_before_moe.register_hook(grad_hook)
+
+            if is_last_block and getattr(self.config, 'multiplication_moe_in_transformer', False) and hasattr(self.feed_forward, 'forward'):
+                x = x + self.feed_forward(block_before_moe, task_id=task_id)
+            else:
+                x = x + self.feed_forward(block_before_moe)
+            
         return x
 
 

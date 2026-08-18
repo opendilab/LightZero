@@ -167,8 +167,11 @@ def phi_transform(
 
     # --- 4. Stack indices / probs and scatter ------------------------------
     # Clamp high_idx to handle the edge case where x is exactly max_bound
-    idx   = torch.stack([low_idx_long,
-                         torch.clamp(high_idx, max=size - 1)], dim=-1)  # (*x, 2)
+   
+    low_idx_clamped  = torch.clamp(low_idx_long, min=0, max=size - 1)
+    high_idx_clamped = torch.clamp(high_idx, min=0, max=size - 1)
+    idx   = torch.stack([low_idx_clamped, high_idx_clamped], dim=-1)  # (*x, 2)    
+    
     prob  = torch.stack([p_low, p_high], dim=-1)                        # (*x, 2)
 
     target = torch.zeros(*x.shape, size,

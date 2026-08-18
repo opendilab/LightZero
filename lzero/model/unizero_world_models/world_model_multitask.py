@@ -255,6 +255,9 @@ class WorldModelMT(WorldModel):
 
         self.reanalyze_phase = False
         self._rank = get_rank()
+        
+        # For gradient conflict analysis: populated by obs_embeddings register_hook during backward
+        self.obs_embeddings_grad = None
 
     def _scale_grad(self, grad: torch.Tensor) -> torch.Tensor:
         """
@@ -799,7 +802,7 @@ class WorldModelMT(WorldModel):
             ]
             return torch.cat(x, dim=0)
         else:
-            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths,task_id=task_id)
 
     @torch.no_grad()
     def reset_for_initial_inference(self, obs_act_dict: dict, task_id: int = 0) -> Tuple[WorldModelOutput, torch.Tensor]:
@@ -1590,7 +1593,10 @@ class WorldModelMT(WorldModel):
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id = 0, **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], task_id=task_id)
-
+        
+        # Register hook to capture obs_embeddings gradients for gradient conflict analysis
+        obs_embeddings.register_hook(lambda grad: setattr(self, 'obs_embeddings_grad', grad))
+   
         if self.analysis_tsne:
             # =========== tsne analysis ===========
             if not obs_embeddings.is_cuda:
@@ -1605,7 +1611,7 @@ class WorldModelMT(WorldModel):
         if self.analysis_dormant_ratio_weight_rank:
             self._analysis_step_counter += 1
             self.do_analysis = (
-                self.analysis_dormant_ratio_weight_rank          # 总开关
+                self.analysis_dormant_ratio_weight_rank
                 and self._analysis_step_counter % self.analysis_dormant_ratio_interval == 0
             )
 

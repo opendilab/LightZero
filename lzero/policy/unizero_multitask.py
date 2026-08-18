@@ -15,7 +15,9 @@ from lzero.policy import (DiscreteSupport, InverseScalarTransform,
                           select_action, to_torch_float_tensor)
 from lzero.policy.unizero import UniZeroPolicy, scale_module_weights_vectorized
 
-from .utils import configure_optimizers_nanogpt, initialize_zeros_batch
+from .utils import configure_optimizers_nanogpt, initialize_zeros_batch, compute_gradient_conflict_distributed, log_gradient_conflict_heatmaps_distributed_fast
+# Gradient conflict monitoring: analyze encoder/MoE gradient conflicts in multi-task learning.
+# Imports: compute_gradient_conflict_distributed, log_gradient_conflict_heatmaps_distributed_fast
 
 # Please replace the path with the actual location of your LibMTL library.
 sys.path.append('/path/to/your/LibMTL')
@@ -24,7 +26,6 @@ import torch.distributed as dist
 from LibMTL.weighting.moco_fast_mem_eff import FastMoCoMemEff as FastMoCo
 from LibMTL.weighting.moco_fast_mem_eff import MoCoCfg
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
-
 
 def generate_task_loss_dict(multi_task_losses: List[Union[torch.Tensor, float]], task_name_template: str, task_id: int) -> Dict[str, float]:
     """
@@ -160,7 +161,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         by addressing the limitations of MuZero-style algorithms, particularly in environments requiring the
         capture of long-term dependencies. More details can be found at: https://arxiv.org/abs/2406.10667.
     """
-
+    
+    
+       
     # The default_config for UniZero multi-task policy.
     config = dict(
         type='unizero_multitask',
@@ -470,7 +473,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
             decay=int(1e5),
         ),
     )
-
+    def __init__(self, cfg, model = None, enable_field = None):
+        super().__init__(cfg, model, enable_field)
+        # Gradient conflict monitoring: global step counter for TensorBoard logging
+        self.step = 0
+        # Frequency (in train iters) to force log gradient conflict scalars
+        self.save_freq = 200
+        # Whether MoE is enabled in the model (affects gradient conflict collection)
+        self.use_moe = False
+        
     def default_model(self) -> Tuple[str, List[str]]:
         """
         Overview:
@@ -1086,6 +1097,123 @@ class UniZeroMTPolicy(UniZeroPolicy):
             e_rank_sim_norm_multi_task.append(e_rank_sim_norm)
 
 
+        
+        # ==================== Gradient Conflict Monitoring ====================
+        # Before main backward: run per-task backward to collect gradients from encoder,
+        # block-before-MoE, shared expert, and individual experts. Compute cosine-similarity-based
+        # conflict scores and log to TensorBoard. NOTE: obs_embeddings_grad, before_moe_grad may be None.
+        self._optimizer_world_model.zero_grad()
+        self._learn_model.world_model.tokenizer.encoder[0].grad = None
+        multi_gpu = dist.is_initialized() and self._cfg.multi_gpu
+        rank = dist.get_rank() if multi_gpu else 0
+
+        self.log_conflict_var = True
+        self.log_conflict_matrix = True
+        if self.step % self.save_freq == 0:
+            self.log_conflict_var = True
+
+        if self.log_conflict_var:
+            matrix_dict = {}
+            num_experts = self._learn_model.world_model.transformer.num_experts
+
+
+            local_task_num = len(losses_list)
+            local_encoder_grad_list = []
+            local_before_moe_grad_list = []
+            local_shared_expert_grad_list = []
+            local_last_block_expert_grad_list = [[] for _ in range(num_experts)] 
+            
+            print(f'Rank {rank} collecting gradients') 
+            gradient_conflict_log_dict = {}
+
+            for i in range(local_task_num):
+                # Clear gradients before each computation to ensure independence
+                self._optimizer_world_model.zero_grad()
+                # Per-task backward to collect gradients (retain_graph for later main backward)
+                losses_list[i].backward(retain_graph=True)
+                # obs_embeddings_grad is set by world_model register_hook; may be None before first backward
+                local_encoder_grad_list.append(self._learn_model.world_model.obs_embeddings_grad.view(-1).detach().clone())
+
+                # Gradients of ln2(x) before MoE in last transformer block (set by Block grad_hook)
+                before_moe_grad = self._learn_model.world_model.transformer.get_block_before_moe_gradients()
+                local_before_moe_grad_list.append(before_moe_grad.view(-1).detach().clone())
+
+                # Get gradients of the shared expert in the last block
+                if self._learn_model.world_model.transformer.shared_expert > 0:
+                    shared_expert_grad_for_last_task = self._learn_model.world_model.transformer.get_last_shared_expert_gradients()
+                    local_shared_expert_grad_list.append(shared_expert_grad_for_last_task)
+                    
+                # Compute gradient conflicts of experts in the last block
+                if num_experts>0:
+                    last_block_expert_grad_list = self._learn_model.world_model.transformer.get_expert_gradients_for_last_block()
+                    for j in range(num_experts):
+                        local_last_block_expert_grad_list[j].append(last_block_expert_grad_list[j])
+
+
+            
+            print(f'Rank {rank} computing gradient conflicts')
+                
+            # Clear shared parameter gradients to avoid accumulation
+            self._optimizer_world_model.zero_grad()
+            
+            print(f'Rank {rank} computing attention gradient conflicts')
+            # 1. Compute gradient conflicts after attention and before MOE
+            local_before_moe_grad_list = torch.stack(local_before_moe_grad_list, dim=0)  # (local_task_num, grad_dim)
+            before_moe_grad_conflict_ddp=compute_gradient_conflict_distributed(local_before_moe_grad_list, device=self._cfg.device)
+            gradient_conflict_log_dict['avg_before_moe_grad_conflict'] = before_moe_grad_conflict_ddp.avg_conflict_score if before_moe_grad_conflict_ddp is not None else 0
+            gradient_conflict_log_dict['max_before_moe_grad_conflict'] = before_moe_grad_conflict_ddp.max_conflict_score if before_moe_grad_conflict_ddp is not None else 0
+            if self.log_conflict_matrix and before_moe_grad_conflict_ddp is not None :
+                matrix_dict['before_moe_grad_conflict_matrix'] = before_moe_grad_conflict_ddp.cosine_similarity_matrix
+
+            print(f'Rank {rank} computing encoder gradient conflicts')
+            # 2. Compute gradient conflicts of encoder
+            local_encoder_grad_list = torch.stack(local_encoder_grad_list, dim=0)  # (local_task_num, grad_dim)
+            encoder_grad_conflict_ddp=compute_gradient_conflict_distributed(local_encoder_grad_list, device=self._cfg.device)
+            gradient_conflict_log_dict['avg_encoder_grad_conflict'] = encoder_grad_conflict_ddp.avg_conflict_score if encoder_grad_conflict_ddp is not None else 0
+            gradient_conflict_log_dict['max_encoder_grad_conflict'] = encoder_grad_conflict_ddp.max_conflict_score if encoder_grad_conflict_ddp is not None else 0
+            if self.log_conflict_matrix and encoder_grad_conflict_ddp is not None:
+                matrix_dict['encoder_grad_conflict_matrix']=encoder_grad_conflict_ddp.cosine_similarity_matrix 
+
+
+            print(f'Rank {rank} computing shared expert gradient conflicts')
+            # 3. If shared expert exists, compute gradient conflicts on shared expert
+            if self._learn_model.world_model.transformer.shared_expert > 0:
+                local_shared_expert_grad_list = torch.stack(local_shared_expert_grad_list, dim=0)
+                shared_expert_grad_conflict = compute_gradient_conflict_distributed(local_shared_expert_grad_list, device=self._cfg.device) if len(local_shared_expert_grad_list) > 0 else None
+                gradient_conflict_log_dict['avg_shared_expert_grad_conflict'] = shared_expert_grad_conflict.avg_conflict_score if shared_expert_grad_conflict is not None else 0
+                gradient_conflict_log_dict['max_shared_expert_grad_conflict'] = shared_expert_grad_conflict.max_conflict_score if shared_expert_grad_conflict is not None else 0
+
+               
+                if self.log_conflict_matrix and shared_expert_grad_conflict is not None:
+                    matrix_dict['shared_expert_grad_conflict_matrix'] = shared_expert_grad_conflict.cosine_similarity_matrix
+
+            # 4. Gradient conflicts of experts in the last block
+            last_block_expert_grad_conflict_ddp_list = []
+            if num_experts > 0:
+                for i in range(num_experts):
+                    # Stack gradients of the last block experts across tasks
+                    local_last_block_expert_grad_list[i] = torch.stack(local_last_block_expert_grad_list[i], dim=0)
+                    # Compute gradient conflicts of each expert
+                    expert_conflict = compute_gradient_conflict_distributed(local_last_block_expert_grad_list[i], device=self._cfg.device)
+                    last_block_expert_grad_conflict_ddp_list.append(expert_conflict)
+                    gradient_conflict_log_dict[f'avg_expert_{i}_grad_conflict'] = expert_conflict.avg_conflict_score if expert_conflict is not None else 0
+                    gradient_conflict_log_dict[f'max_expert_{i}_grad_conflict'] = expert_conflict.max_conflict_score if expert_conflict is not None else 0
+
+                    if self.log_conflict_matrix and expert_conflict is not None:
+                        matrix_dict[f'expert_{i}_grad_conflict_matrix'] = expert_conflict.cosine_similarity_matrix
+
+                all_moe_gradient = torch.cat(local_last_block_expert_grad_list, dim=1)
+                if self._learn_model.world_model.transformer.shared_expert > 0:
+                    all_moe_gradient = torch.cat((local_shared_expert_grad_list, all_moe_gradient), dim=1)
+                all_moe_gradient_ddp = compute_gradient_conflict_distributed(all_moe_gradient, device=self._cfg.device)
+
+                gradient_conflict_log_dict['avg_moe_layer_grad_conflict'] = all_moe_gradient_ddp.avg_conflict_score if all_moe_gradient_ddp is not None else 0
+                gradient_conflict_log_dict['max_moe_layer_grad_conflict'] = all_moe_gradient_ddp.max_conflict_score if all_moe_gradient_ddp is not None else 0
+                if self.log_conflict_matrix and all_moe_gradient_ddp is not None:
+                    matrix_dict['max_moe_layer_grad_conflict_matrix'] = all_moe_gradient_ddp.cosine_similarity_matrix
+
+        self._optimizer_world_model.zero_grad()
+
         # ==================== Integrate norm monitoring logic ====================
         norm_log_dict = {}
         # Check if monitoring frequency is reached
@@ -1282,6 +1410,20 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
+        # Get tb_logger from self.logger or config (cfg.policy.logger)
+        tb_logger = getattr(self, 'logger', None) or getattr(self._cfg, 'logger', None)
+        if self.log_conflict_matrix and tb_logger is not None:
+            # Log gradient conflict heatmaps to TensorBoard (converted to list for distributed processing)
+            matrix_list = list(matrix_dict.items())
+            log_gradient_conflict_heatmaps_distributed_fast(tb_logger, matrix_list, self.step)
+            
+        if self.log_conflict_var and tb_logger is not None:
+            # Log gradient conflict scalar metrics to TensorBoard
+            for key, value in gradient_conflict_log_dict.items():
+                tb_logger.add_scalar(f'gradient_conflict/{key}', value, self.step) 
+            
+        
+        
         # ==================== START: Add new log items ====================
         if self.use_adaptive_entropy_weight:
             return_log_dict['adaptive_alpha'] = current_alpha.item()
@@ -1333,7 +1475,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         if norm_log_dict:
             return_log_dict.update(norm_log_dict)
 
-        # Return the final loss dictionary.
+        # Increment step counter for gradient conflict logging
+        self.step += 1
         return return_log_dict
 
     def monitor_weights_and_grads(self, model: torch.nn.Module) -> None:
@@ -1399,7 +1542,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'cur_lr_world_model',
             'weighted_total_loss',
             'total_grad_norm_before_clip_wm',
-
+            'avg_encoder_grad_conflict',
+            'avg_before_moe_grad_conflict',
+            'avg_shared_expert_grad_conflict',
             'adaptive_alpha',
             "adaptive_target_entropy_ratio",
             'final_alpha_loss',
