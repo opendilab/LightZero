@@ -1,81 +1,143 @@
-## Position Encoding in UniZero World Model
+# UniZero World Model
 
-This section provides a detailed explanation of the position encoding strategies used in the UniZero world model and presents two configurable options based on the value of the configuration parameter `self.config.rotary_emb`.
+This package implements the latent Transformer world model used by UniZero. It
+encodes observations into latent tokens and predicts the next latent state,
+reward, policy, and value from an interleaved observation/action history.
 
-> **Configuration Options:**
-> - When `self.config.rotary_emb = False`, **Absolute Position Encoding** (based on `nn.Embedding`) is used.
-> - When `self.config.rotary_emb = True`, **Relative Position Encoding** (based on ROPE) is used.
+## Architecture
 
----
+For the standard Atari setup, one transition is represented by two tokens:
 
-### 1. Absolute Position Encoding (Based on `nn.Embedding`)
+```text
+[observation latent, action, observation latent, action, ...]
+```
 
-When the configuration parameter `self.config.rotary_emb` is set to **False**, the model uses `nn.Embedding` for position encoding. The implementation process involves the following steps:
+The main components are:
 
-#### 1.1 Embedding Layer Initialization
+- `Tokenizer`: encodes observations into latent observation tokens;
+- `Transformer`: applies causal attention to observation/action tokens;
+- prediction heads: produce next-latent, reward, policy, and value outputs;
+- KV caches: reuse Transformer history during collection, evaluation, and MCTS.
 
-- **Initialization:**  
-  An embedding layer is instantiated using `nn.Embedding`, which maps each position index in the sequence to a fixed-dimensional embedding vector.
+`world_model.py` contains the core model and inference lifecycle. Optional or
+specialized behavior is separated into:
 
-#### 1.2 Context Length Restriction
+- `cache_window.py`: exact KV-window rebuilding primitives;
+- `reanalysis_context.py`: replay-root context reconstruction and contextual
+  policy/value evaluation;
+- `open_loop.py`: open-loop diagnostics and auxiliary objectives;
+- `world_model_multitask.py`: multi-task extensions.
 
-- **kv_cache Management:**  
-  Due to the limitation of context length (`context_length`), the model retains only the most recent `<context_length>` steps when caching key-value pairs (kv_cache) to ensure computational efficiency and manageable memory consumption.
+## Training and Inference
 
-#### 1.3 Position Embedding Correction
+Training uses teacher-forced observation/action sequences. The target path
+for replay reanalysis evaluates all `H+1` observation roots, including the real
+bootstrap state `s[t+H]`; ordinary learner training keeps the legacy `H`-step
+computation because its final placeholder is discarded.
 
-When reusing the kv_cache, directly utilizing historical position vectors may lead to duplicated or erroneous indices, causing confusion in the model's interpretation of sequence positions. To address this problem, a position embedding correction mechanism is introduced:
+Online inference keeps a bounded context of `context_length` tokens. KV caches
+are isolated per environment, including asynchronous episode resets. Batches
+with different valid history lengths are left-padded and supplied with an
+attention mask so padding cannot affect predictions.
 
-- **Problem Description:**  
-  Suppose that during inference, the total number of steps is computed as `5 * 2 = 10`, yielding an initial kv_cache with position indices:  
-  `0, 1, 2, 3, 4, 5, 6, 7, 8, 9`  
-  
-  When new data arrives, removing the first 2 steps from the kv_cache leaves:  
-  `2, 3, 4, 5, 6, 7, 8, 9`  
-  
-  If these indices are concatenated directly, it might cause duplicate or incorrect indices, for example:  
-  `2, 3, 4, 5, 6, 7, 8, 9, 8, 9`
+## Position Encoding and KV Windows
 
-- **Correction Plan:**  
-  To prevent the above issue, the model resets the position indices in the kv_cache to a contiguous sequence, such as:  
-  `0, 1, 2, 3, 4, 5, 6, 7`
+Two position schemes are available:
 
-This mechanism effectively simulates the behavior of relative position encoding, ensuring that errors do not accumulate during kv_cache reuse.
+- `rotary_emb=False`: learned absolute position embeddings;
+- `rotary_emb=True`: RoPE applied to attention queries and keys using episode
+  positions.
 
----
+A learned-absolute KV window cannot be shifted exactly by adding projected
+position differences: cached K/V tensors depend nonlinearly on the full hidden
+context. Three window behaviors therefore exist:
 
-### 2. Relative Position Encoding (Based on ROPE)
+| Configuration | Behavior |
+| --- | --- |
+| `rebuild_kv_window_from_tokens=True` | Retain bounded raw embedded tokens and replay them to rebuild an exact rolling window. |
+| `exact_kv_window_reset=True` | Rebuild from the latest latent only; useful as a diagnostic but intentionally drops older history. |
+| both `False` | Use the legacy position-difference path for compatibility with older experiments. |
 
-When the configuration parameter `self.config.rotary_emb` is set to **True**, the model adopts ROPE (Rotary Position Embedding) for position encoding. The main features and implementation process of ROPE are as follows:
+The two rebuild options are mutually exclusive. Raw-token rebuilding is for
+learned absolute positions and is rejected with RoPE. Overflowing samples are
+rebuilt together in one Transformer call, then copied back to independent
+caches.
 
-#### 2.1 ROPE Initialization
+RoPE caches retain the rotations already attached to their keys when old tokens
+are trimmed, so they do not require learned-position rebasing. The multi-task
+world model currently rejects RoPE because its cache API does not yet propagate
+an episode position for every root.
 
-- **Precalculation of Frequency Components:**  
-  Frequency components are precalculated and applied to the query and key tensors through a rotational position embedding, directly incorporating positional information into the self-attention computation.
+## Replay Reanalysis
 
-#### 2.2 Episode Time Step-based Indexing
+UniZero replay roots are not self-contained: the current latent and its
+Transformer prefix jointly define the state. The implementation always:
 
-- **Indexing Approach:**  
-  Each position index is assigned based on the episode’s time step.  
-  For example, when states (`s`) and actions (`a`) alternate, each time step occupies two position indices.  
-  Suppose a game consists of 50 steps with states and actions in sequence:  
-  `(s₁, a₁, s₂, a₂, ..., s₅₀, a₅₀)`  
-  
-  The corresponding position indices would be:  
-  `1, 2, 3, 4, ..., 99, 100`
+- aligns value/policy targets with the real `H+1` observation roots;
+- splits C++ replay searches into batches no wider than the online environment
+  capacity, preventing the recurrent cache ring from overwriting live trees;
+- preserves root order and episode positions across search chunks.
 
-#### 2.3 Principles of ROPE
+Two history-conditioned target variants are available but disabled by default:
 
-- **Theoretical Basis:**  
-  The design of ROPE is inspired by the paper [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864).  
-  This method not only encodes absolute positions using a rotation matrix but also directly integrates relative positional information into the self-attention computation, thereby achieving:
-  - Greater flexibility (adjustable sequence length);
-  - A gradual decay in inter-token dependency with increasing relative distance;
-  - Compatibility with relative position encoding in linear self-attention architectures.
+- `contextual_reanalysis=True` reconstructs each replay root's bounded
+  observation/action prefix. The same prefix forward supplies both the root
+  policy prior and its recurrent KV cache.
+- `bootstrap_value_context=True` evaluates TD bootstrap values from the same
+  rolling replay context available to online planning.
 
+These options support task-specific tokenizers and heads when multi-task mode
+does not add task tokens. Context reconstruction with add/concat/register task
+tokens is rejected explicitly because its exact raw-token semantics are not yet
+implemented.
 
+## Optional Open-loop Analysis and Training
 
-#### 3 Performance and Applications
+All open-loop features are disabled by default.
 
-  In environments with shorter dependency relationships (such as Pong or DMC Cartpole-Swingup), the performance of absolute position encoding and ROPE is similar.  
-  However, in scenarios that involve longer dependencies, ROPE demonstrates enhanced flexibility and scalability, making it particularly suitable for managing long-range dependency issues in more complex environments.
+`open_loop_diagnostic_freq > 0` compares three dropout-free paths:
+
+- full teacher forcing;
+- rolling teacher forcing, which uses the online window but real future latents;
+- open-loop rolling, which feeds predicted latents back into the model.
+
+The main ratios separate rolling-context error from autoregressive exposure
+error:
+
+```text
+rolling_context_ratio   = rolling_teacher_mse / full_teacher_mse
+open_loop_exposure_ratio = open_loop_mse / rolling_teacher_mse
+open_loop_total_ratio    = open_loop_mse / full_teacher_mse
+```
+
+Two mutually exclusive auxiliary objectives can be enabled:
+
+- `open_loop_consistency_loss_weight > 0`: supervise predicted latents over a
+  short differentiable rollout;
+- `open_loop_recurrent_loss_weight > 0`: additionally supervise reward after
+  each action and policy/value after each predicted next state.
+
+`open_loop_consistency_batch_size`, `open_loop_consistency_horizon`, and
+`open_loop_prefix_transitions` control rollout cost and context. These paths
+currently require a single-task, discrete-action, one-observation-token model
+with learned absolute positions and `rebuild_kv_window_from_tokens=True`.
+
+## Default Behavior
+
+The UniZero policy defaults to:
+
+```python
+context_length = 8                 # four observation/action blocks
+rotary_emb = False
+exact_kv_window_reset = False
+rebuild_kv_window_from_tokens = False
+contextual_reanalysis = False
+bootstrap_value_context = False
+open_loop_consistency_loss_weight = 0.0
+open_loop_recurrent_loss_weight = 0.0
+open_loop_prefix_transitions = 0
+```
+
+Environment-specific configs may override these values for controlled
+experiments. Keep algorithmic options disabled when reproducing the default
+baseline, and change one mechanism at a time when evaluating them.

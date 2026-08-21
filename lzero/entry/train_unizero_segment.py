@@ -1,5 +1,7 @@
 import os
+import re
 from functools import partial
+from pathlib import Path
 from typing import Optional, Tuple
 
 import torch
@@ -22,6 +24,8 @@ from torch.utils.tensorboard import SummaryWriter
 from .utils import calculate_update_per_collect, random_collect
 
 timer = EasyTimer()
+
+_PERIODIC_CHECKPOINT_PATTERN = re.compile(r'^iteration_(\d+)\.pth\.tar$')
 
 
 def _restore_resume_counters(learner, collector, train_iter: int, envstep: int) -> None:
@@ -60,6 +64,53 @@ def _required_replay_transitions(
     if resume_train_iter <= 0:
         return one_full_batch
     return max(one_full_batch, resume_buffer_min_transitions)
+
+
+def _prune_periodic_checkpoints(exp_name: str, keep_last: int) -> list:
+    """Bound periodic checkpoint storage without touching evaluator best checkpoints.
+
+    ``iteration_0`` is retained as the reproducible initialization anchor. In addition, the newest
+    ``keep_last`` positive-iteration checkpoints are retained for preemption recovery. Files such as
+    ``ckpt_best.pth.tar`` and names that do not exactly match ``iteration_<int>.pth.tar`` are outside
+    this function's authority.
+    """
+    if keep_last < 0:
+        raise ValueError(f'periodic_ckpt_keep_last must be non-negative, got {keep_last}')
+    if keep_last == 0:
+        return []
+
+    checkpoint_dir = Path(exp_name) / 'ckpt'
+    if not checkpoint_dir.is_dir():
+        return []
+
+    periodic_checkpoints = []
+    for path in checkpoint_dir.iterdir():
+        match = _PERIODIC_CHECKPOINT_PATTERN.fullmatch(path.name)
+        if match is not None and path.is_file():
+            periodic_checkpoints.append((int(match.group(1)), path))
+
+    positive_checkpoints = sorted(
+        ((iteration, path) for iteration, path in periodic_checkpoints if iteration > 0),
+        key=lambda item: item[0],
+    )
+    stale_checkpoints = positive_checkpoints[:-keep_last]
+    removed = []
+    for iteration, path in stale_checkpoints:
+        try:
+            path.unlink()
+        except OSError as error:
+            # Retention is a storage safeguard; a transient filesystem failure must not terminate
+            # an otherwise healthy multi-hour training run.
+            logging.warning(
+                'Failed to remove stale periodic checkpoint iteration=%d (%s): %s',
+                iteration,
+                path,
+                error,
+            )
+            continue
+        removed.append(str(path))
+        logging.info('Removed stale periodic checkpoint iteration=%d: %s', iteration, path)
+    return removed
 
 
 def train_unizero_segment(
@@ -188,6 +239,11 @@ def train_unizero_segment(
     buffer_reanalyze_count = 0
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+    periodic_ckpt_keep_last = int(getattr(cfg.policy, 'periodic_ckpt_keep_last', 0))
+    if periodic_ckpt_keep_last < 0:
+        raise ValueError(
+            f'periodic_ckpt_keep_last must be non-negative, got {periodic_ckpt_keep_last}'
+        )
 
     if cfg.policy.multi_gpu:
         # Get current world size and rank
@@ -282,6 +338,11 @@ def train_unizero_segment(
                         logging.info(f'Buffer reanalyze time: {timer.value}')
 
                 train_data = replay_buffer.sample(batch_size, policy)
+                policy.set_replay_diagnostics(
+                    train_data[0][4],
+                    replay_buffer.get_num_of_transitions(),
+                    cfg.policy.replay_buffer_size,
+                )
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
@@ -293,6 +354,8 @@ def train_unizero_segment(
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
+        if periodic_ckpt_keep_last > 0 and rank == 0:
+            _prune_periodic_checkpoints(cfg.exp_name, periodic_ckpt_keep_last)
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

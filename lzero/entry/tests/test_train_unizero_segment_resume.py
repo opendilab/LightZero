@@ -1,6 +1,12 @@
+from pathlib import Path
+
 import pytest
 
-from lzero.entry.train_unizero_segment import _required_replay_transitions, _restore_resume_counters
+from lzero.entry.train_unizero_segment import (
+    _prune_periodic_checkpoints,
+    _required_replay_transitions,
+    _restore_resume_counters,
+)
 
 
 class _CountVar:
@@ -56,3 +62,57 @@ def test_resume_requires_replay_warmup_but_fresh_run_keeps_one_batch_threshold()
 def test_resume_replay_warmup_rejects_invalid_configuration():
     with pytest.raises(ValueError, match='non-negative'):
         _required_replay_transitions(10, batch_size=256, resume_buffer_min_transitions=-1)
+
+
+def test_periodic_checkpoint_retention_keeps_initial_latest_and_best(tmp_path):
+    checkpoint_dir = tmp_path / 'run' / 'ckpt'
+    checkpoint_dir.mkdir(parents=True)
+    for name in (
+        'iteration_0.pth.tar',
+        'iteration_20000.pth.tar',
+        'iteration_40000.pth.tar',
+        'iteration_60000.pth.tar',
+        'ckpt_best.pth.tar',
+        'iteration_invalid.pth.tar',
+    ):
+        (checkpoint_dir / name).write_bytes(b'checkpoint')
+
+    removed = _prune_periodic_checkpoints(str(tmp_path / 'run'), keep_last=2)
+
+    assert removed == [str(checkpoint_dir / 'iteration_20000.pth.tar')]
+    assert sorted(path.name for path in checkpoint_dir.iterdir()) == [
+        'ckpt_best.pth.tar',
+        'iteration_0.pth.tar',
+        'iteration_40000.pth.tar',
+        'iteration_60000.pth.tar',
+        'iteration_invalid.pth.tar',
+    ]
+
+
+def test_periodic_checkpoint_retention_disabled_and_rejects_negative(tmp_path):
+    assert _prune_periodic_checkpoints(str(tmp_path / 'missing'), keep_last=0) == []
+    with pytest.raises(ValueError, match='non-negative'):
+        _prune_periodic_checkpoints(str(tmp_path / 'missing'), keep_last=-1)
+
+
+def test_periodic_checkpoint_retention_does_not_crash_training_on_unlink_failure(
+        tmp_path, monkeypatch
+):
+    checkpoint_dir = tmp_path / 'run' / 'ckpt'
+    checkpoint_dir.mkdir(parents=True)
+    stale = checkpoint_dir / 'iteration_20000.pth.tar'
+    latest = checkpoint_dir / 'iteration_40000.pth.tar'
+    stale.write_bytes(b'stale')
+    latest.write_bytes(b'latest')
+    original_unlink = Path.unlink
+
+    def fail_stale_unlink(path, *args, **kwargs):
+        if path == stale:
+            raise OSError('synthetic shared-filesystem failure')
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'unlink', fail_stale_unlink)
+
+    assert _prune_periodic_checkpoints(str(tmp_path / 'run'), keep_last=1) == []
+    assert stale.exists()
+    assert latest.exists()

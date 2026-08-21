@@ -371,6 +371,24 @@ class MuZeroSegmentCollector(ISerialCollector):
 
         # Logging variables.
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
+        exploration_metric_names = (
+            'exploration/prior_entropy_nats',
+            'exploration/prior_effective_actions',
+            'exploration/prior_top1_probability',
+            'exploration/raw_visit_entropy_nats',
+            'exploration/raw_visit_effective_actions',
+            'exploration/raw_visit_top1_probability',
+            'exploration/sample_entropy_nats',
+            'exploration/sample_effective_actions',
+            'exploration/sample_top1_probability',
+            'exploration/prior_visit_js_divergence',
+        )
+        exploration_sums = {
+            metric_name: np.zeros(env_nums) for metric_name in exploration_metric_names
+        }
+        exploration_counts = {
+            metric_name: np.zeros(env_nums) for metric_name in exploration_metric_names
+        }
         if self.policy_config.gumbel_algo:
             completed_value_lst = np.zeros(env_nums)
 
@@ -425,6 +443,14 @@ class MuZeroSegmentCollector(ISerialCollector):
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                exploration_with_env_id = {
+                    metric_name: {
+                        env_id: output[metric_name]
+                        for env_id, output in policy_output.items()
+                        if metric_name in output
+                    }
+                    for metric_name in exploration_metric_names
+                }
 
                 if not collect_with_pure_policy:
                     distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -494,6 +520,10 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                     if not collect_with_pure_policy:
                         visit_entropies_lst[env_id] += visit_entropy_dict_with_env_id[env_id]
+                        for metric_name, values_by_env in exploration_with_env_id.items():
+                            if env_id in values_by_env:
+                                exploration_sums[metric_name][env_id] += values_by_env[env_id]
+                                exploration_counts[metric_name][env_id] += 1
                         if self.policy_config.gumbel_algo:
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_with_env_id[env_id]))
 
@@ -558,6 +588,12 @@ class MuZeroSegmentCollector(ISerialCollector):
                     }
                     if not collect_with_pure_policy:
                         info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id] if eps_steps_lst[env_id] > 0 else 0
+                        for metric_name in exploration_metric_names:
+                            if exploration_counts[metric_name][env_id] > 0:
+                                info[metric_name] = float(
+                                    exploration_sums[metric_name][env_id]
+                                    / exploration_counts[metric_name][env_id]
+                                )
                         if self.policy_config.gumbel_algo:
                             info['completed_value'] = completed_value_lst[env_id] / eps_steps_lst[env_id] if eps_steps_lst[env_id] > 0 else 0
                     collected_episode += 1
@@ -583,6 +619,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                     # Reset lists and stats for the new episode.
                     pred_values_lst[env_id], search_values_lst[env_id] = [], []
                     eps_steps_lst[env_id], visit_entropies_lst[env_id] = 0, 0
+                    for metric_name in exploration_metric_names:
+                        exploration_sums[metric_name][env_id] = 0.
+                        exploration_counts[metric_name][env_id] = 0.
 
                     # Environment reset is handled by the env_manager automatically.
                     # NOTE: Reset the policy state for the completed environment.
@@ -669,6 +708,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                 'total_duration': self._total_duration,
                 'visit_entropy_mean': np.mean(visit_entropy),
             }
+            for metric_name in (
+                    key for key in self._episode_info[0]
+                    if key.startswith('exploration/')
+            ):
+                info[metric_name] = np.mean([
+                    episode.get(metric_name, 0.) for episode in self._episode_info
+                ])
             if self.policy_config.gumbel_algo:
                 completed_value = [d.get('completed_value', 0.0) for d in self._episode_info]
                 info['completed_value_mean'] = np.mean(completed_value)

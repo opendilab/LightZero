@@ -9,7 +9,7 @@ import torch
 
 def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Optional[dict] = None,
                             valid_context_lengths: Optional[torch.Tensor] = None, layer_id: int = 0, head_id: int = 0,
-                            suffix='visual_match/attn_map'):
+                            suffix='visual_match/attn_map', start_pos=0):
     """
     Overview:
         Visualize the attention map for a specific layer and head in the Transformer model.
@@ -36,14 +36,18 @@ def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Opt
         model.eval()
         hidden_states = input_embeddings
         input_ids = torch.arange(T).expand(B, T)
+        freqs_cis = model._get_rotary_frequencies(input_embeddings, start_pos)
 
         for i, block in enumerate(model.blocks):
             if i < layer_id:
-                hidden_states = block(hidden_states, None if kv_cache is None else kv_cache[i], valid_context_lengths)
+                hidden_states = block(
+                    hidden_states, None if kv_cache is None else kv_cache[i],
+                    valid_context_lengths, freqs_cis
+                )
             elif i == layer_id:
                 attention_map = block.attn.get_attention_map(block.ln1(hidden_states),
                                                              None if kv_cache is None else kv_cache[i],
-                                                             valid_context_lengths)
+                                                             valid_context_lengths, freqs_cis)
                 break
 
     attention_map = attention_map[0, head_id].cpu().numpy()  # Select the attention map of the first sample
@@ -67,7 +71,8 @@ def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Opt
 
 def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Optional[dict] = None,
                              valid_context_lengths: Optional[torch.Tensor] = None,
-                             suffix='visual_match/attn_map_all_head_and_layer', nhead_each_row=4):
+                             suffix='visual_match/attn_map_all_head_and_layer', nhead_each_row=4,
+                             start_pos=0):
     """
     Overview:
         Visualize all attention maps for all layers and heads, arranging them in a single figure.
@@ -96,14 +101,15 @@ def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Op
         model.eval()
         hidden_states = input_embeddings
         input_ids = torch.arange(T).expand(B, T)
+        freqs_cis = model._get_rotary_frequencies(input_embeddings, start_pos)
 
         head_count = 0
         for layer_id, block in enumerate(model.blocks):
             hidden_states = block(hidden_states, None if kv_cache is None else kv_cache[layer_id],
-                                  valid_context_lengths)
+                                  valid_context_lengths, freqs_cis)
             attention_maps = block.attn.get_attention_map(block.ln1(hidden_states),
                                                           None if kv_cache is None else kv_cache[layer_id],
-                                                          valid_context_lengths)
+                                                          valid_context_lengths, freqs_cis)
 
             for head_id in range(num_heads):
                 row_id = head_count // num_cols

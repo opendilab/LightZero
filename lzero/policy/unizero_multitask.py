@@ -1869,8 +1869,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
         """
         # NOTE: This must be done for both the collect and target models.
         for model in [self._collect_model, self._target_model]:
-            model.world_model.precompute_pos_emb_diff_kv()
-            model.world_model.clear_caches()
+            world_model = model.world_model
+            if (
+                not self._cfg.model.world_model_cfg.rotary_emb
+                and not world_model.exact_kv_window_reset
+                and not world_model.rebuild_kv_window_from_tokens
+            ):
+                world_model.precompute_pos_emb_diff_kv()
+            world_model.clear_caches()
         torch.cuda.empty_cache()
 
     def _state_dict_learn(self) -> Dict[str, Any]:
