@@ -1,10 +1,12 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from lzero.entry.train_unizero_segment import (
     _prune_periodic_checkpoints,
     _required_replay_transitions,
+    _resolve_segment_reanalyze_settings,
     _restore_resume_counters,
 )
 
@@ -62,6 +64,35 @@ def test_resume_requires_replay_warmup_but_fresh_run_keeps_one_batch_threshold()
 def test_resume_replay_warmup_rejects_invalid_configuration():
     with pytest.raises(ValueError, match='non-negative'):
         _required_replay_transitions(10, batch_size=256, resume_buffer_min_transitions=-1)
+
+
+def test_segment_reanalyze_settings_support_minimal_and_explicit_configs():
+    assert _resolve_segment_reanalyze_settings(SimpleNamespace()) == (
+        1 / 100000,
+        160,
+        0.75,
+    )
+    assert _resolve_segment_reanalyze_settings(
+        SimpleNamespace(
+            buffer_reanalyze_freq=0.02,
+            reanalyze_batch_size=32,
+            reanalyze_partition=0.5,
+        )
+    ) == (0.02, 32, 0.5)
+
+
+@pytest.mark.parametrize(
+    ('config', 'message'),
+    [
+        (SimpleNamespace(buffer_reanalyze_freq=0), 'buffer_reanalyze_freq'),
+        (SimpleNamespace(reanalyze_batch_size=0), 'reanalyze_batch_size'),
+        (SimpleNamespace(reanalyze_partition=0), 'reanalyze_partition'),
+        (SimpleNamespace(reanalyze_partition=1.1), 'reanalyze_partition'),
+    ],
+)
+def test_segment_reanalyze_settings_reject_invalid_values(config, message):
+    with pytest.raises(ValueError, match=message):
+        _resolve_segment_reanalyze_settings(config)
 
 
 def test_periodic_checkpoint_retention_keeps_initial_latest_and_best(tmp_path):

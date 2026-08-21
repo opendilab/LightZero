@@ -47,6 +47,25 @@ def _make_buffer() -> MuZeroGameBuffer:
 @pytest.mark.unittest
 class TestSampleOrigDataIndexAlignment:
 
+    def test_partial_padded_segment_uses_real_transition_count_for_priorities(self):
+        buf = _make_buffer()
+        seg = SimpleNamespace(
+            action_segment=list(range(20)),
+            valid_transition_count=5,
+        )
+        meta = {
+            'done': False,
+            'unroll_plus_td_steps': 15,
+            'priorities': np.arange(5, dtype=np.float32) + 1,
+        }
+
+        buf.push_game_segments(([seg], [meta]))
+
+        assert buf.get_num_of_transitions() == 5
+        assert len(buf.game_pos_priorities) == 5
+        assert len(buf.game_segment_game_pos_look_up) == 5
+        assert np.all(buf.game_pos_priorities == 0)
+
     def test_index_and_weight_alignment_after_position_resampling(self):
         buf = _make_buffer()
         # One short done segment with 3 transitions and non-uniform priorities.
