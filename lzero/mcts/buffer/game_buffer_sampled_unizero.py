@@ -8,7 +8,7 @@ from ding.utils import BUFFER_REGISTRY
 from lzero.mcts.tree_search.mcts_ctree_sampled import SampledUniZeroMCTSCtree as MCTSCtree
 # from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
-from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, inverse_scalar_transform
+from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, inverse_scalar_transform
 from .game_buffer_unizero import UniZeroGameBuffer, _world_model_reanalysis_phase
 
 if TYPE_CHECKING:
@@ -526,41 +526,14 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         with _world_model_reanalysis_phase(model.world_model), torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
-            network_output = []
             batch_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
-
-            # =============== NOTE: The key difference with MuZero =================
-            # calculate the target value
-            # batch_action.shape (32, 10)
-            # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-
-            if self.task_id is not None:
-                m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
-            else:
-                m_output = model.initial_inference(
-                    batch_obs,
-                    batch_action[:self.reanalyze_num],
-                    start_pos=sequence_start_timesteps,
+            reward_pool, policy_logits_pool, latent_state_roots = (
+                self._prepare_reanalysis_root_inputs(
+                    model, batch_obs, batch_action, sequence_start_timesteps
                 )
-            # =======================================================================
-
-            # if not in training, obtain the scalars of the value/reward
-            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                [
-                    m_output.latent_state,
-                    inverse_scalar_transform(m_output.value, self.value_support),
-                    m_output.policy_logits
-                ]
             )
-
-            network_output.append(m_output)
-
-            _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
             root_token_contexts = None
-            if (
-                self._use_contextual_reanalysis()
-                and hasattr(model.world_model, 'build_reanalysis_root_token_contexts')
-            ):
+            if self._has_contextual_reanalysis_api(model):
                 history_latent_segment = self._encode_reanalysis_history_observations(
                     model, history_observation_segment
                 )
@@ -572,8 +545,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     history_action_segment=history_action_segment,
                     task_id=self.task_id,
                 )
-            reward_pool = reward_pool.squeeze().tolist()
-            policy_logits_pool = policy_logits_pool.tolist()
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)

@@ -19,6 +19,17 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 
 
+def balanced_episode_targets(env_num: int, n_episode: int) -> np.ndarray:
+    """Return the fixed per-environment quotas used by ``VectorEvalMonitor``."""
+    if env_num <= 0 or n_episode < env_num:
+        raise ValueError(
+            f'n_episode must be at least env_num, got n_episode={n_episode}, env_num={env_num}'
+        )
+    targets = np.full(env_num, n_episode // env_num, dtype=np.int64)
+    targets[:n_episode % env_num] += 1
+    return targets
+
+
 class MuZeroEvaluator(ISerialEvaluator):
     """
     Overview:
@@ -277,7 +288,12 @@ class MuZeroEvaluator(ISerialEvaluator):
                 )
 
             ready_env_id = set()
-            remain_episode = n_episode
+            # VectorEvalMonitor assigns a fixed quota to each env to avoid a
+            # short-episode bias. Reuse only envs whose own quota is unfinished;
+            # assigning an extra episode to a completed env merely overwrites its
+            # bounded deque and can leave evaluation stuck below n_episode.
+            target_episodes = balanced_episode_targets(env_nums, n_episode)
+            completed_episodes = np.zeros(env_nums, dtype=np.int64)
             eps_steps_lst = np.zeros(env_nums)
             with self._timer:
                 while not eval_monitor.is_finished():
@@ -290,8 +306,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # Get observations from ready environments.
                     obs = self._env.ready_obs
                     new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                    ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                    remain_episode -= min(len(new_available_env_id), remain_episode)
+                    ready_env_id.update(
+                        env_id for env_id in new_available_env_id
+                        if completed_episodes[env_id] < target_episodes[env_id]
+                    )
                     ready_env_id_list = sorted(ready_env_id)
 
                     # Prepare stacked observations and other inputs for the policy.
@@ -371,23 +389,26 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 saved_info.update(episode_timestep.info['episode_info'])
                             eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
+                            completed_episodes[env_id] += 1
                             self._logger.info(
                                 f"[EVALUATOR] env {env_id} finished episode, final reward: {eval_monitor.get_latest_reward(env_id)}, "
                                 f"current episode count: {eval_monitor.get_current_episode()}"
                             )
 
-                            # If there are more episodes to run than available environments, reset and reuse this one.
-                            if n_episode > self._env_num:
+                            # The finished env must leave the active set before
+                            # checking ready_obs; otherwise it cannot be observed
+                            # as newly available after an automatic reset.
+                            ready_env_id.remove(env_id)
+
+                            # Reuse this env only until its balanced monitor quota
+                            # is satisfied. Waiting for this env alone avoids being
+                            # blocked by unrelated envs that already finished.
+                            if completed_episodes[env_id] < target_episodes[env_id]:
                                 init_obs = self._env.ready_obs
-                                # Wait for the environment to be ready again.
-                                while len(init_obs.keys()) != self._env_num:
+                                while env_id not in init_obs:
                                     self._logger.info(f"Waiting for env {env_id} to reset. Current ready envs: {list(init_obs.keys())}")
                                     time.sleep(retry_waiting_time)
                                     init_obs = self._env.ready_obs
-
-                                new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
-                                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                                remain_episode -= min(len(new_available_env_id), remain_episode)
 
                                 # Re-initialize state for the new episode.
                                 action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
@@ -403,11 +424,11 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 game_segments[env_id].reset(
                                     [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)]
                                 )
+                                ready_env_id.add(env_id)
 
                             eps_steps_lst[env_id] = 0
                             # NOTE: Reset the policy state for this env_id. `reset_init_data` defaults to True.
                             self._policy.reset([env_id])
-                            ready_env_id.remove(env_id)
 
                         envstep_count += 1
 

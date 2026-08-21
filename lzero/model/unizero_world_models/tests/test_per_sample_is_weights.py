@@ -17,6 +17,7 @@ from easydict import EasyDict
 from lzero.model.common import RepresentationNetworkUniZero
 from lzero.model.unizero_world_models.tokenizer import Tokenizer
 from lzero.model.unizero_world_models.world_model import WorldModel
+from lzero.model.unizero_world_models.ppo_world_model import PPOWorldModel
 from lzero.policy import DiscreteSupport, InverseScalarTransform
 from lzero.policy.unizero import (
     apply_open_loop_recurrent_entropy_weight,
@@ -30,7 +31,7 @@ PS_KEYS = ['per_sample_loss_obs', 'per_sample_loss_rewards', 'per_sample_loss_va
            'per_sample_loss_policy', 'per_sample_loss_orig_policy', 'per_sample_loss_policy_entropy']
 
 
-def _build_world_model(rotary_emb: bool = False) -> WorldModel:
+def _build_world_model(rotary_emb: bool = False, world_model_cls=WorldModel) -> WorldModel:
     cfg = EasyDict(dict(
         tokens_per_block=2, max_blocks=T + 2, max_tokens=2 * (T + 2), attention='causal',
         num_layers=1, num_heads=2, embed_dim=EMBED_DIM,
@@ -68,7 +69,7 @@ def _build_world_model(rotary_emb: bool = False) -> WorldModel:
         norm_type='LN', embedding_dim=EMBED_DIM, group_size=GROUP_SIZE,
         final_norm_option_in_encoder='LayerNorm')
     tokenizer = Tokenizer(encoder=encoder, decoder=None, with_lpips=False, obs_type='image')
-    return WorldModel(cfg, tokenizer)
+    return world_model_cls(cfg, tokenizer)
 
 
 def _make_batch(mask_padding: torch.Tensor) -> dict:
@@ -556,6 +557,51 @@ class TestPerSampleISWeights:
         weighted.backward()
         grad_norms = [p.grad.norm().item() for p in wm.parameters() if p.grad is not None]
         assert len(grad_norms) > 0 and all(g == g for g in grad_norms)
+
+    def test_ppo_actor_critic_update_isolated_from_world_model_gradients(self):
+        """Large reconstruction gradients must not consume PPO's global clip budget."""
+        torch.manual_seed(41)
+        wm = _build_world_model(world_model_cls=PPOWorldModel)
+        handle = InverseScalarTransform(DiscreteSupport(-50, 51, 1), True)
+        batch = _make_batch(torch.ones(B, T, dtype=torch.bool))
+        features = torch.randn(B, T, EMBED_DIM)
+        actions = batch['actions']
+        action_mask = torch.ones(B, T, A, dtype=torch.bool)
+        with torch.no_grad():
+            behavior_logits = wm.head_policy.head_module(features)
+            old_log_prob = torch.distributions.Categorical(logits=behavior_logits).log_prob(actions)
+        batch.update(
+            actor_critic_only=True,
+            ppo_policy_features=features,
+            ppo_action_mask=action_mask,
+            ppo_old_log_prob=old_log_prob,
+            ppo_advantages=torch.randn(B, T),
+            ppo_clip_ratio=0.2,
+            ppo_entropy_weight=0.01,
+        )
+
+        def fail_if_encoded(*args, **kwargs):
+            raise AssertionError('PPO fast path must not rerun either tokenizer')
+
+        wm.tokenizer.encode_to_obs_embeddings = fail_if_encoded
+
+        losses = wm.compute_loss(batch, wm.tokenizer, handle, global_step=0)
+        assert losses.intermediate_losses['loss_obs'] == 0
+        assert losses.intermediate_losses['loss_rewards'] == 0
+        losses.loss_total.backward()
+
+        def has_nonzero_grad(module):
+            return any(
+                parameter.grad is not None and parameter.grad.abs().sum() > 0
+                for parameter in module.parameters()
+            )
+
+        assert has_nonzero_grad(wm.head_policy)
+        assert has_nonzero_grad(wm.head_value)
+        assert not has_nonzero_grad(wm.transformer)
+        assert not has_nonzero_grad(wm.tokenizer)
+        assert not has_nonzero_grad(wm.head_observations)
+        assert not has_nonzero_grad(wm.head_rewards)
 
     def test_per_sample_is_weights_discriminates_samples(self):
         """Stub container with strongly varied per-sample losses: only the per-sample path can

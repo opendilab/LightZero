@@ -2,6 +2,7 @@ import os
 from functools import partial
 from typing import Optional, Tuple
 
+import numpy as np
 import torch
 import torch.distributed as dist
 import wandb
@@ -55,11 +56,18 @@ def train_unizero(
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero only supports the following algorithms: 'unizero', 'sampled_unizero'"
+    supported_policy_types = ['unizero', 'sampled_unizero', 'unizero_ppo']
+    assert create_cfg.policy.type in supported_policy_types, (
+        f"train_unizero only supports the following algorithms: {supported_policy_types}"
+    )
     logging.info(f"Using policy type: {create_cfg.policy.type}")
 
     # Import the appropriate GameBuffer class based on the policy type
-    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
+    game_buffer_classes = {
+        'unizero': 'UniZeroGameBuffer',
+        'sampled_unizero': 'SampledUniZeroGameBuffer',
+        'unizero_ppo': 'UniZeroPPOGameBuffer',
+    }
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
 
@@ -69,6 +77,7 @@ def train_unizero(
 
     # Compile the configuration file
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    is_ppo = create_cfg.policy.type == 'unizero_ppo'
 
     # Create environment manager
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -115,11 +124,21 @@ def train_unizero(
 
     # Execute the learner's before_run hook
     learner.call_hook('before_run')
+    # Policy parameters may remain unchanged during replay warm-up, so learner
+    # train_iter is not a unique rollout identifier.  PPO freshness needs a
+    # monotonically increasing collection version of its own.
+    collection_version = 0
 
     if cfg.policy.use_wandb:
         policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     # Randomly collect data if specified
+    if is_ppo and cfg.policy.random_collect_episode_num > 0:
+        raise ValueError(
+            'UniZero+PPO does not accept random-policy warmup rollouts. Set '
+            'random_collect_episode_num=0; world-model replay warmup can be added '
+            'as an explicit pretraining phase without treating it as PPO data.'
+        )
     if cfg.policy.random_collect_episode_num > 0:
         logging.info("Collecting random data...")
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
@@ -170,7 +189,13 @@ def train_unizero(
                 break
 
         # Collect new data
-        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        collection_train_iter = collection_version
+        collection_version += 1
+        new_data = collector.collect(
+            train_iter=collection_train_iter,
+            policy_kwargs=collect_kwargs,
+            collect_with_pure_policy=True if is_ppo else None,
+        )
         logging.info(f"Rank {rank}, Training iteration {learner.train_iter}: New data collection completed!")
 
         # Determine updates per collection
@@ -181,6 +206,11 @@ def train_unizero(
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
+        on_policy_indices = (
+            replay_buffer.get_on_policy_indices(collection_train_iter)
+            if is_ppo
+            else None
+        )
 
         if world_size > 1:
             # Synchronize all ranks before training
@@ -192,7 +222,9 @@ def train_unizero(
 
         # Check if there is sufficient data for training
         if collector.envstep > cfg.policy.train_start_after_envsteps:
-            if cfg.policy.sample_type == 'episode':
+            if is_ppo:
+                data_sufficient = len(on_policy_indices) > 0
+            elif cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
@@ -202,26 +234,97 @@ def train_unizero(
                     f'Rank {rank}: The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
                 )
+                if is_ppo:
+                    # The transition/reward data remains available for replay;
+                    # discard only bulky rollout tensors that will never be
+                    # consumed after this policy version is skipped.
+                    replay_buffer.release_on_policy_data(collection_train_iter)
                 continue
 
-            # Execute multiple training rounds
-            for i in range(update_per_collect):
-                train_data = replay_buffer.sample(batch_size, policy)
-                if replay_buffer._cfg.reanalyze_ratio > 0 and i % 20 == 0:
-                    policy.recompute_pos_emb_diff_and_clear_cache()
-                
-                if cfg.policy.use_wandb:
-                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+            if is_ppo:
+                ppo_cfg = cfg.policy.ppo
+                minibatch_size = min(int(ppo_cfg.minibatch_size), len(on_policy_indices))
+                target_kl = float(ppo_cfg.target_kl)
+                stop_ppo = False
+                for epoch in range(int(ppo_cfg.epochs)):
+                    shuffled_indices = np.random.permutation(on_policy_indices)
+                    for start in range(0, len(shuffled_indices), minibatch_size):
+                        minibatch_indices = shuffled_indices[start:start + minibatch_size]
+                        train_data = replay_buffer.sample_on_policy(
+                            minibatch_indices, policy, collection_train_iter
+                        )
+                        if cfg.policy.use_wandb:
+                            policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+                        train_data.extend([
+                            learner.train_iter,
+                            {
+                                'type': 'ppo',
+                                'collection_train_iter': collection_train_iter,
+                                'epoch': epoch,
+                            },
+                        ])
+                        log_vars = learner.train(train_data, collector.envstep)
+                        approx_kl = float(log_vars[0].get('ppo/approx_kl', 0.0))
+                        if epoch == 0 and start == 0:
+                            initial_ratio_mean = float(log_vars[0].get('ppo/ratio_mean', 1.0))
+                            initial_ratio_min = float(log_vars[0].get('ppo/ratio_min', 1.0))
+                            initial_ratio_max = float(log_vars[0].get('ppo/ratio_max', 1.0))
+                            tolerance = float(ppo_cfg.fresh_ratio_tolerance)
+                            max_ratio_error = max(
+                                abs(initial_ratio_min - 1.0), abs(initial_ratio_max - 1.0)
+                            )
+                            if max_ratio_error > tolerance:
+                                raise RuntimeError(
+                                    'Fresh PPO rollout failed the ratio=1 invariant: '
+                                    f'mean/min/max={initial_ratio_mean:.8f}/'
+                                    f'{initial_ratio_min:.8f}/{initial_ratio_max:.8f}, '
+                                    f'tolerance={tolerance:.2e}'
+                                )
+                        if target_kl > 0 and approx_kl > target_kl:
+                            logging.info(
+                                'Stopping PPO epochs early at epoch %d: approx_kl %.6f > target_kl %.6f',
+                                epoch, approx_kl, target_kl,
+                            )
+                            stop_ppo = True
+                            break
+                    if stop_ppo:
+                        break
 
-                train_data.append(learner.train_iter)
+                replay_buffer.release_on_policy_data(collection_train_iter)
 
-                if os.environ.get('DEBUG', '').lower() == 'true':
-                    import pudb; pudb.set_trace()
+                # Replay-based latent model updates happen only after PPO has consumed
+                # the behavior-policy rollout, so the first PPO ratio starts at one.
+                wm_updates = ppo_cfg.world_model_update_per_collect
+                wm_updates = update_per_collect if wm_updates is None else int(wm_updates)
+                for _ in range(wm_updates):
+                    wm_batch_size = min(batch_size, replay_buffer.get_num_of_transitions())
+                    train_data = replay_buffer.sample_world_model(wm_batch_size)
+                    train_data.extend([learner.train_iter, {'type': 'world_model'}])
+                    learner.train(train_data, collector.envstep)
+            else:
+                # Original UniZero MCTS policy-improvement path.
+                for i in range(update_per_collect):
+                    train_data = replay_buffer.sample(batch_size, policy)
+                    if replay_buffer._cfg.reanalyze_ratio > 0 and i % 20 == 0:
+                        policy.recompute_pos_emb_diff_and_clear_cache()
 
-                log_vars = learner.train(train_data, collector.envstep)
-                
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                    if cfg.policy.use_wandb:
+                        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+
+                    train_data.append(learner.train_iter)
+
+                    if os.environ.get('DEBUG', '').lower() == 'true':
+                        import pudb; pudb.set_trace()
+
+                    log_vars = learner.train(train_data, collector.envstep)
+
+                    if cfg.policy.use_priority:
+                        replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+
+        elif is_ppo:
+            # Rollouts collected during replay warm-up are intentionally not
+            # used by a later actor version.
+            replay_buffer.release_on_policy_data(collection_train_iter)
 
         policy.recompute_pos_emb_diff_and_clear_cache()
 

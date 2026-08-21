@@ -35,6 +35,7 @@ def test_unizero_policy_defaults_disable_experimental_training_features():
     assert world_model_config['open_loop_consistency_loss_weight'] == 0.
     assert world_model_config['open_loop_recurrent_loss_weight'] == 0.
     assert world_model_config['open_loop_prefix_transitions'] == 0
+    assert config['gradient_diagnostic_freq'] == 0
     assert config['use_encoder_clip_annealing'] is False
     assert config['latent_norm_clip_threshold'] == 0.
 
@@ -48,6 +49,18 @@ def test_encoder_clip_diagnostics_are_registered_for_tensorboard():
         'encoder_clip/scale_factor',
         'encoder_clip/max_latent_norm',
         'encoder_clip/threshold',
+    } <= monitor_vars
+
+
+def test_optimization_diagnostics_are_registered_for_tensorboard():
+    monitor_vars = set(UniZeroPolicy._monitor_vars_learn(None))
+    assert {
+        'replay/sample_age_fraction_mean',
+        'value_calibration/bias',
+        'value_calibration/correlation',
+        'grad/clip_scale',
+        'grad_component/value/encoder',
+        'grad_component/policy/head_policy',
     } <= monitor_vars
 
 

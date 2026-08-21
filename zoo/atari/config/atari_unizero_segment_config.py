@@ -157,6 +157,9 @@ def main(
         use_new_cache_manager=False,
         evaluator_env_num_override=None,
         collect_num_simulations_override=None,
+        grad_clip_value_override=None,
+        replay_buffer_size_override=None,
+        gradient_diagnostic_freq_override=None,
         disable_adaptive_alpha=True,
         fixed_alpha=5e-3,
         disable_policy_label_smoothing=True,
@@ -203,6 +206,23 @@ def main(
     if collect_num_simulations is not None and collect_num_simulations <= 0:
         raise ValueError(
             f'collect_num_simulations must be positive, got {collect_num_simulations}'
+        )
+    grad_clip_value = 5.0 if grad_clip_value_override is None else float(grad_clip_value_override)
+    if grad_clip_value <= 0:
+        raise ValueError(f'grad_clip_value must be positive, got {grad_clip_value}')
+    replay_buffer_size = (
+        int(5e5) if replay_buffer_size_override is None
+        else int(replay_buffer_size_override)
+    )
+    if replay_buffer_size <= 0:
+        raise ValueError(f'replay_buffer_size must be positive, got {replay_buffer_size}')
+    gradient_diagnostic_freq = (
+        0 if gradient_diagnostic_freq_override is None
+        else int(gradient_diagnostic_freq_override)
+    )
+    if gradient_diagnostic_freq < 0:
+        raise ValueError(
+            f'gradient_diagnostic_freq must be non-negative, got {gradient_diagnostic_freq}'
         )
 
     # game_segment_length=20 makes only 20-(num_unroll_steps+td_steps)=5 of the 20 positions in each
@@ -362,7 +382,7 @@ def main(
             # game_segment_length, which wiped all MCTS kv caches after every single segment.
             kv_cache_clear_interval=2000,
             num_simulations=num_simulations,
-            grad_clip_value=5,
+            grad_clip_value=grad_clip_value,
             use_augmentation=False,
 
             # Adaptive target entropy settings from the 2025 Pong run.
@@ -381,6 +401,7 @@ def main(
             use_continuous_label_smoothing=stab_fix,
             continuous_ls_eps=0.05,
             monitor_norm_freq=10000,
+            gradient_diagnostic_freq=gradient_diagnostic_freq,
             # Always-on enhanced policy monitoring: without this flag the whitelisted
             # policy_logits/* and target_policy_entropy/{mean,min,max,std} log keys print
             # constant 0.0 (empty-record averaging), hiding real logits/entropy stats.
@@ -410,7 +431,7 @@ def main(
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             eval_freq=int(5e3),
-            replay_buffer_size=int(5e5),
+            replay_buffer_size=replay_buffer_size,
             # Policy checkpoints omit the ~25GB full Atari replay buffer. Refill a small diverse
             # on-policy window before updating a mature model after preemption.
             resume_buffer_min_transitions=resume_buffer_min_transitions,
@@ -549,6 +570,19 @@ if __name__ == "__main__":
         help='Override MCTS simulations per action during collection (policy default 25).'
     )
     parser.add_argument(
+        '--grad-clip-value', dest='grad_clip_value', type=float, default=None,
+        help='Override the global world-model gradient norm threshold (Atari default 5).'
+    )
+    parser.add_argument(
+        '--replay-buffer-size', dest='replay_buffer_size', type=int, default=None,
+        help='Override replay capacity in transitions (Atari default 500000).'
+    )
+    parser.add_argument(
+        '--gradient-diagnostic-freq', dest='gradient_diagnostic_freq', type=int, default=None,
+        help='Attribute gradient norms to each core loss and module every N learner iterations; '
+             '0/default disables the detached diagnostic.'
+    )
+    parser.add_argument(
         '--resume-buffer-min-transitions', dest='resume_buffer_min_transitions',
         type=int, default=None,
         help='Collect at least this many replay transitions before updating a resumed mature '
@@ -657,6 +691,9 @@ if __name__ == "__main__":
         use_new_cache_manager=args.use_new_cache_manager,
         evaluator_env_num_override=args.evaluator_env_num,
         collect_num_simulations_override=args.collect_num_simulations,
+        grad_clip_value_override=args.grad_clip_value,
+        replay_buffer_size_override=args.replay_buffer_size,
+        gradient_diagnostic_freq_override=args.gradient_diagnostic_freq,
         disable_adaptive_alpha=args.disable_adaptive_alpha,
         fixed_alpha=args.fixed_alpha,
         disable_policy_label_smoothing=args.disable_policy_label_smoothing,

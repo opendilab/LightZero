@@ -98,6 +98,17 @@ class GameSegment:
 
         self.reanalyze_time = 0
 
+        # PPO behavior data. These fields are populated only when UniZero uses
+        # policy-gradient improvement; the default MCTS path remains unchanged.
+        self.behavior_log_prob_segment = []
+        self.behavior_action_mask_segment = []
+        self.behavior_policy_feature_segment = []
+        self.advantage_segment = []
+        self.return_segment = []
+        self.valid_transition_count = 0
+        self.collection_train_iter = None
+        self.episode_id = None
+
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
         Overview:
@@ -317,6 +328,12 @@ class GameSegment:
         self.to_play_segment = np.array(self.to_play_segment)
         self.timestep_segment = np.array(self.timestep_segment)
 
+        self.behavior_log_prob_segment = np.asarray(self.behavior_log_prob_segment, dtype=np.float32)
+        self.behavior_action_mask_segment = np.asarray(self.behavior_action_mask_segment, dtype=np.bool_)
+        self.behavior_policy_feature_segment = np.asarray(self.behavior_policy_feature_segment, dtype=np.float32)
+        self.advantage_segment = np.asarray(self.advantage_segment, dtype=np.float32)
+        self.return_segment = np.asarray(self.return_segment, dtype=np.float32)
+
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = np.array(self.chance_segment)
 
@@ -338,6 +355,13 @@ class GameSegment:
         self.action_mask_segment = []
         self.to_play_segment = []
         self.timestep_segment = []
+
+        self.behavior_log_prob_segment = []
+        self.behavior_action_mask_segment = []
+        self.behavior_policy_feature_segment = []
+        self.advantage_segment = []
+        self.return_segment = []
+        self.valid_transition_count = 0
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
@@ -361,4 +385,3 @@ class GameSegment:
 
     def __len__(self):
         return len(self.action_segment)
-

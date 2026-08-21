@@ -15,6 +15,7 @@ import torch.distributed as dist
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from lzero.policy.ppo_utils import compute_gae, normalize_advantages
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -90,7 +91,16 @@ class MuZeroCollector(ISerialCollector):
             self._tb_logger = None
 
         self.policy_config = policy_config
-        self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
+        self.policy_improvement = getattr(self.policy_config, 'policy_improvement', 'mcts')
+        if self.policy_improvement not in {'mcts', 'ppo'}:
+            raise ValueError(f"policy_improvement must be 'mcts' or 'ppo', got {self.policy_improvement!r}")
+        ppo_cfg = getattr(self.policy_config, 'ppo', {})
+        self.collect_with_pure_policy = (
+            self.policy_improvement == 'ppo' or self.policy_config.collect_with_pure_policy
+        )
+        self.ppo_gamma = float(getattr(ppo_cfg, 'gamma', self.policy_config.discount_factor))
+        self.ppo_gae_lambda = float(getattr(ppo_cfg, 'gae_lambda', 0.95))
+        self.ppo_normalize_advantage = bool(getattr(ppo_cfg, 'normalize_advantage', True))
 
         self.reset(policy, env)
 
@@ -156,6 +166,99 @@ class MuZeroCollector(ISerialCollector):
         # A pool to store completed game segments, implemented using a deque.
         self.game_segment_pool = deque(maxlen=int(1e6))
         self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        self._next_episode_id = 0
+
+    def _new_game_segment(self, train_iter: int, episode_id: int) -> GameSegment:
+        segment = GameSegment(
+            self._env.action_space,
+            game_segment_length=self.policy_config.game_segment_length,
+            config=self.policy_config,
+        )
+        segment.collection_train_iter = int(train_iter)
+        segment.episode_id = int(episode_id)
+        return segment
+
+    def _finalize_ppo_rollout(self) -> None:
+        """Compute terminal GAE and normalize once over the complete fresh rollout."""
+        if self.policy_improvement != 'ppo' or not self.game_segment_pool:
+            return
+
+        episode_groups = {}
+        for pool_index, (segment, _, _) in enumerate(self.game_segment_pool):
+            if segment.episode_id is None:
+                raise RuntimeError('PPO segment is missing episode_id')
+            episode_groups.setdefault(segment.episode_id, []).append((pool_index, segment))
+
+        raw_by_pool = {}
+        return_by_pool = {}
+        log_prob_by_pool = {}
+        action_mask_by_pool = {}
+        policy_feature_by_pool = {}
+        all_raw_advantages = []
+        normalization_pool_order = []
+
+        for episode_segments in episode_groups.values():
+            rewards, values, log_probs, action_masks, policy_features, lengths = [], [], [], [], [], []
+            for _, segment in episode_segments:
+                valid_length = int(segment.valid_transition_count)
+                if valid_length <= 0:
+                    raise RuntimeError('PPO segment has no valid transitions')
+                lengths.append(valid_length)
+                rewards.extend(np.asarray(segment.reward_segment[:valid_length], dtype=np.float32).reshape(-1))
+                values.extend(np.asarray(segment.root_value_segment[:valid_length], dtype=np.float32).reshape(-1))
+                log_probs.extend(
+                    np.asarray(segment.behavior_log_prob_segment[:valid_length], dtype=np.float32).reshape(-1)
+                )
+                action_masks.extend(np.asarray(segment.behavior_action_mask_segment[:valid_length], dtype=np.bool_))
+                policy_features.extend(
+                    np.asarray(segment.behavior_policy_feature_segment[:valid_length], dtype=np.float32)
+                )
+
+            if not (len(rewards) == len(values) == len(log_probs) == len(action_masks) == len(policy_features)):
+                raise RuntimeError('PPO behavior data is not transition-aligned')
+            raw_advantages, returns = compute_gae(
+                rewards, values, self.ppo_gamma, self.ppo_gae_lambda, bootstrap_value=0.0
+            )
+
+            offset = 0
+            padding = int(self.policy_config.num_unroll_steps)
+            log_probs_np = np.asarray(log_probs, dtype=np.float32)
+            action_masks_np = np.asarray(action_masks, dtype=np.bool_)
+            policy_features_np = np.asarray(policy_features, dtype=np.float32)
+            for (pool_index, _), valid_length in zip(episode_segments, lengths):
+                padded_end = min(len(raw_advantages), offset + valid_length + padding)
+                raw_by_pool[pool_index] = raw_advantages[offset:padded_end].copy()
+                return_by_pool[pool_index] = returns[offset:padded_end].copy()
+                log_prob_by_pool[pool_index] = log_probs_np[offset:padded_end].copy()
+                action_mask_by_pool[pool_index] = action_masks_np[offset:padded_end].copy()
+                policy_feature_by_pool[pool_index] = policy_features_np[offset:padded_end].copy()
+                all_raw_advantages.append(raw_advantages[offset:offset + valid_length].copy())
+                normalization_pool_order.append(pool_index)
+                offset += valid_length
+
+        normalized_valid, advantage_mean, advantage_std = normalize_advantages(all_raw_advantages)
+        normalized_by_pool = dict(zip(normalization_pool_order, normalized_valid))
+        for pool_index, (segment, priorities, done_flag) in enumerate(self.game_segment_pool):
+            valid_normalized = normalized_by_pool[pool_index]
+            padded_raw = raw_by_pool[pool_index]
+            if len(padded_raw) > len(valid_normalized):
+                tail = (padded_raw[len(valid_normalized):] - advantage_mean) / max(advantage_std, 1e-8)
+                normalized = np.concatenate((valid_normalized, tail.astype(np.float32)))
+            else:
+                normalized = valid_normalized
+            if not self.ppo_normalize_advantage:
+                normalized = padded_raw
+            segment.advantage_segment = np.asarray(normalized, dtype=np.float32)
+            segment.return_segment = return_by_pool[pool_index]
+            segment.behavior_log_prob_segment = log_prob_by_pool[pool_index]
+            segment.behavior_action_mask_segment = action_mask_by_pool[pool_index]
+            segment.behavior_policy_feature_segment = policy_feature_by_pool[pool_index]
+            self.game_segment_pool[pool_index] = (segment, priorities, done_flag)
+
+        self._logger.info(
+            'PPO rollout finalized: transitions=%d, advantage_mean=%.6f, advantage_std=%.6f',
+            sum(len(item) for item in all_raw_advantages), advantage_mean, advantage_std,
+        )
 
     def _reset_stat(self, env_id: int) -> None:
         """
@@ -279,6 +382,9 @@ class MuZeroCollector(ISerialCollector):
             pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index_val:end_index_val]
 
         # --- Pad the last game segment and save it ---
+        last_game_segments[i].valid_transition_count = min(
+            len(last_game_segments[i].action_segment), self.policy_config.game_segment_length
+        )
         if self.policy_config.gumbel_algo:
             last_game_segments[i].pad_over(
                 pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
@@ -310,7 +416,7 @@ class MuZeroCollector(ISerialCollector):
             n_episode: Optional[int] = None,
             train_iter: int = 0,
             policy_kwargs: Optional[Dict] = None,
-            collect_with_pure_policy: bool = False
+            collect_with_pure_policy: Optional[bool] = None
     ) -> List[Any]:
         """
         Overview:
@@ -325,6 +431,11 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - return_data (:obj:`List[Any]`): A list containing the collected game segments and metadata.
         """
+        if collect_with_pure_policy is None:
+            collect_with_pure_policy = self.policy_improvement == 'ppo' or self.collect_with_pure_policy
+        if self.policy_improvement == 'ppo' and not collect_with_pure_policy:
+            raise ValueError('PPO policy improvement requires pure-policy collection without MCTS')
+
         # TODO(author): Consider implementing `collect_with_pure_policy` as a separate, more streamlined collector for clarity and modularity.
         if n_episode is None:
             if self._default_n_episode is None:
@@ -359,7 +470,9 @@ class MuZeroCollector(ISerialCollector):
             chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
         # Initialize game segments and observation stacks for each environment.
-        game_segments = [GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config) for _ in range(env_nums)]
+        episode_ids = list(range(self._next_episode_id, self._next_episode_id + env_nums))
+        self._next_episode_id += env_nums
+        game_segments = [self._new_game_segment(train_iter, episode_ids[env_id]) for env_id in range(env_nums)]
         observation_window_stack = [deque(maxlen=self.policy_config.model.frame_stack_num) for _ in range(env_nums)]
         for env_id in range(env_nums):
             for _ in range(self.policy_config.model.frame_stack_num):
@@ -431,6 +544,8 @@ class MuZeroCollector(ISerialCollector):
                 
                 # --- Unpack policy outputs ---
                 actions, value_dict, pred_value_dict = {}, {}, {}
+                behavior_log_prob_dict = {}
+                behavior_policy_feature_dict = {}
                 distributions_dict, visit_entropy_dict = {}, {}
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict = {}
@@ -442,6 +557,9 @@ class MuZeroCollector(ISerialCollector):
                     actions[env_id] = output['action']
                     value_dict[env_id] = output['searched_value']
                     pred_value_dict[env_id] = output['predicted_value']
+                    if collect_with_pure_policy:
+                        behavior_log_prob_dict[env_id] = output['behavior_log_prob']
+                        behavior_policy_feature_dict[env_id] = output['behavior_policy_features']
                     
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = output['visit_count_distributions']
@@ -473,7 +591,16 @@ class MuZeroCollector(ISerialCollector):
 
                     # Store MCTS search statistics.
                     if collect_with_pure_policy:
-                        game_segments[env_id].store_search_stats(temp_visit_list, 0)
+                        game_segments[env_id].store_search_stats(temp_visit_list, pred_value_dict[env_id])
+                        game_segments[env_id].behavior_log_prob_segment.append(
+                            float(behavior_log_prob_dict[env_id])
+                        )
+                        game_segments[env_id].behavior_action_mask_segment.append(
+                            np.asarray(action_mask_dict[env_id], dtype=np.bool_).copy()
+                        )
+                        game_segments[env_id].behavior_policy_feature_segment.append(
+                            np.asarray(behavior_policy_feature_dict[env_id], dtype=np.float32).copy()
+                        )
                     else:
                         if self.policy_config.sampled_algo:
                             game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id])
@@ -529,7 +656,7 @@ class MuZeroCollector(ISerialCollector):
                         last_game_priorities[env_id] = priorities
 
                         # Start a new game segment.
-                        game_segments[env_id] = GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config)
+                        game_segments[env_id] = self._new_game_segment(train_iter, episode_ids[env_id])
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
@@ -554,6 +681,9 @@ class MuZeroCollector(ISerialCollector):
                     
                     # Process and save the final segment of the episode.
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
+                    game_segments[env_id].valid_transition_count = min(
+                        len(game_segments[env_id].action_segment), self.policy_config.game_segment_length
+                    )
                     game_segments[env_id].game_segment_to_array()
                     if len(game_segments[env_id].reward_segment) > 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
@@ -574,7 +704,9 @@ class MuZeroCollector(ISerialCollector):
                            chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                         # Reset game segment and observation stack.
-                        game_segments[env_id] = GameSegment(self._env.action_space, game_segment_length=self.policy_config.game_segment_length, config=self.policy_config)
+                        episode_ids[env_id] = self._next_episode_id
+                        self._next_episode_id += 1
+                        game_segments[env_id] = self._new_game_segment(train_iter, episode_ids[env_id])
                         observation_window_stack[env_id].clear()
                         for _ in range(self.policy_config.model.frame_stack_num):
                             observation_window_stack[env_id].append(init_obs[env_id]['observation'])
@@ -595,6 +727,7 @@ class MuZeroCollector(ISerialCollector):
 
             # --- Check for Collection Completion ---
             if collected_episode >= n_episode:
+                self._finalize_ppo_rollout()
                 # Prepare data for returning.
                 return_data = [
                     [item[0] for item in self.game_segment_pool],

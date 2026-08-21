@@ -338,6 +338,11 @@ def train_unizero_segment(
                         logging.info(f'Buffer reanalyze time: {timer.value}')
 
                 train_data = replay_buffer.sample(batch_size, policy)
+                policy.set_replay_diagnostics(
+                    train_data[0][4],
+                    replay_buffer.get_num_of_transitions(),
+                    cfg.policy.replay_buffer_size,
+                )
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 

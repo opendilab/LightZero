@@ -75,6 +75,154 @@ def replay_distribution_metrics(weights: torch.Tensor, value_priority: torch.Ten
     }
 
 
+def replay_sample_age_metrics(
+        indices: np.ndarray, num_transitions: int, capacity: int
+) -> Dict[str, float]:
+    """Describe where a sampled minibatch lies in the oldest-to-newest replay order."""
+    num_transitions, capacity = int(num_transitions), int(capacity)
+    if num_transitions <= 0 or capacity <= 0:
+        raise ValueError('num_transitions and capacity must be positive')
+    positions = np.asarray(indices, dtype=np.float64).reshape(-1)
+    if positions.size == 0:
+        raise ValueError('indices must not be empty')
+    denominator = max(num_transitions - 1, 1)
+    relative_position = np.clip(positions / denominator, 0., 1.)
+    age_fraction = 1. - relative_position
+    return {
+        'replay/buffer_fill_fraction': float(min(num_transitions / capacity, 1.)),
+        'replay/sample_age_fraction_mean': float(age_fraction.mean()),
+        'replay/sample_age_fraction_std': float(age_fraction.std()),
+        'replay/sample_oldest_quarter_fraction': float((relative_position < 0.25).mean()),
+        'replay/sample_newest_quarter_fraction': float((relative_position >= 0.75).mean()),
+    }
+
+
+def value_calibration_metrics(
+        predictions: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor
+) -> Dict[str, float]:
+    """Return detached value-target calibration statistics over valid replay steps."""
+    valid = mask.bool()
+    predicted = predictions.detach().float()[valid]
+    target = targets.detach().float()[valid]
+    if predicted.numel() == 0:
+        return {
+            key: 0.0 for key in (
+                'value_calibration/pred_mean', 'value_calibration/pred_std',
+                'value_calibration/target_mean', 'value_calibration/target_std',
+                'value_calibration/bias', 'value_calibration/mae',
+                'value_calibration/rmse', 'value_calibration/correlation',
+            )
+        }
+    error = predicted - target
+    pred_centered = predicted - predicted.mean()
+    target_centered = target - target.mean()
+    denominator = pred_centered.square().sum().sqrt() * target_centered.square().sum().sqrt()
+    correlation = (
+        (pred_centered * target_centered).sum() / denominator
+        if denominator > 0 else predicted.new_tensor(0.)
+    )
+    return {
+        'value_calibration/pred_mean': predicted.mean().item(),
+        'value_calibration/pred_std': predicted.std(unbiased=False).item(),
+        'value_calibration/target_mean': target.mean().item(),
+        'value_calibration/target_std': target.std(unbiased=False).item(),
+        'value_calibration/bias': error.mean().item(),
+        'value_calibration/mae': error.abs().mean().item(),
+        'value_calibration/rmse': error.square().mean().sqrt().item(),
+        'value_calibration/correlation': correlation.item(),
+    }
+
+
+def gradient_clip_metrics(total_norm: float, max_norm: float) -> Dict[str, float]:
+    """Mirror ``clip_grad_norm_`` scaling as float-only learner diagnostics."""
+    total_norm, max_norm = float(total_norm), float(max_norm)
+    if max_norm <= 0:
+        raise ValueError('max_norm must be positive')
+    scale = min(1., max_norm / (total_norm + 1e-6))
+    return {
+        'grad/clip_threshold': max_norm,
+        'grad/clip_applied': float(total_norm > max_norm),
+        'grad/clip_scale': float(scale),
+        'grad/world_model_post_clip_norm': float(total_norm * scale),
+    }
+
+
+def search_exploration_metrics(
+        policy_logits: np.ndarray, visit_counts: np.ndarray, temperature: float
+) -> Dict[str, float]:
+    """Separate network-prior, raw-search, and action-sampling exploration."""
+    logits = np.asarray(policy_logits, dtype=np.float64).reshape(-1)
+    counts = np.asarray(visit_counts, dtype=np.float64).reshape(-1)
+    if logits.size == 0 or logits.shape != counts.shape:
+        raise ValueError('policy_logits and visit_counts must be non-empty with equal shape')
+    if temperature <= 0:
+        raise ValueError('temperature must be positive')
+
+    logits = logits - logits.max()
+    prior = np.exp(logits)
+    prior /= prior.sum()
+    raw_visit = counts / counts.sum() if counts.sum() > 0 else np.full_like(counts, 1. / counts.size)
+    tempered = np.power(np.maximum(counts, 0.), 1. / temperature)
+    tempered = tempered / tempered.sum() if tempered.sum() > 0 else np.full_like(counts, 1. / counts.size)
+
+    def summarize(prefix: str, probabilities: np.ndarray) -> Dict[str, float]:
+        entropy_nats = -np.sum(probabilities * np.log(np.maximum(probabilities, 1e-12)))
+        return {
+            f'exploration/{prefix}_entropy_nats': float(entropy_nats),
+            f'exploration/{prefix}_effective_actions': float(np.exp(entropy_nats)),
+            f'exploration/{prefix}_top1_probability': float(probabilities.max()),
+        }
+
+    metrics = {}
+    metrics.update(summarize('prior', prior))
+    metrics.update(summarize('raw_visit', raw_visit))
+    metrics.update(summarize('sample', tempered))
+    midpoint = 0.5 * (prior + raw_visit)
+    js_divergence = 0.5 * np.sum(prior * np.log(np.maximum(prior / midpoint, 1e-12)))
+    js_divergence += 0.5 * np.sum(raw_visit * np.log(np.maximum(raw_visit / midpoint, 1e-12)))
+    metrics['exploration/prior_visit_js_divergence'] = float(js_divergence)
+    return metrics
+
+
+def component_gradient_norms(
+        components: Dict[str, torch.Tensor], module_groups: Dict[str, torch.nn.Module]
+) -> Dict[str, float]:
+    """Measure loss-component gradient norms without mutating accumulated ``.grad`` tensors."""
+    group_parameters = {
+        name: [parameter for parameter in module.parameters() if parameter.requires_grad]
+        for name, module in module_groups.items()
+    }
+    parameters, parameter_owner = [], []
+    seen = set()
+    for group_name, group_params in group_parameters.items():
+        for parameter in group_params:
+            if id(parameter) not in seen:
+                seen.add(id(parameter))
+                parameters.append(parameter)
+                parameter_owner.append(group_name)
+
+    metrics = {}
+    for component_name, component in components.items():
+        if not component.requires_grad or not parameters:
+            for group_name in group_parameters:
+                metrics[f'grad_component/{component_name}/{group_name}'] = 0.
+            metrics[f'grad_component/{component_name}/_tracked_total_norm'] = 0.
+            continue
+        gradients = torch.autograd.grad(
+            component, parameters, retain_graph=True, allow_unused=True
+        )
+        squared_by_group = {name: 0. for name in group_parameters}
+        for group_name, gradient in zip(parameter_owner, gradients):
+            if gradient is not None:
+                squared_by_group[group_name] += gradient.detach().float().square().sum().item()
+        for group_name, squared_norm in squared_by_group.items():
+            metrics[f'grad_component/{component_name}/{group_name}'] = float(np.sqrt(squared_norm))
+        metrics[f'grad_component/{component_name}/_tracked_total_norm'] = float(
+            np.sqrt(sum(squared_by_group.values()))
+        )
+    return metrics
+
+
 def encoder_clip_metrics(
         threshold: float,
         applied: bool,
@@ -508,6 +656,8 @@ class UniZeroPolicy(MuZeroPolicy):
         # ==================== START: Monitoring Config ====================
         # (int) Frequency of monitoring model parameter and gradient norms (in training iterations). Set to 0 to disable.
         monitor_norm_freq=5000,
+        # (int) Frequency of loss-component x module gradient attribution. Zero disables it.
+        gradient_diagnostic_freq=0,
         # (bool) Whether to enable enhanced policy monitoring (logits statistics, target policy entropy, etc.)
         use_enhanced_policy_monitoring=False,
         # ===================== END: Monitoring Config =====================
@@ -697,6 +847,14 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return 'UniZeroModel', ['lzero.model.unizero_model']
 
+    def set_replay_diagnostics(
+            self, indices: np.ndarray, num_transitions: int, capacity: int
+    ) -> None:
+        """Attach detached replay-age diagnostics to the next learner log record."""
+        self._latest_replay_diagnostic_metrics = replay_sample_age_metrics(
+            indices, num_transitions, capacity
+        )
+
 
     # ==================== Model Norm Monitoring Function ====================
     def _monitor_model_norms(self) -> Dict[str, float]:
@@ -744,17 +902,9 @@ class UniZeroPolicy(MuZeroPolicy):
         Returns:
             - grad_metrics (:obj:`Dict[str, float]`): Dictionary containing all gradient norm metrics for logging.
         """
-        world_model = self._learn_model.world_model
         grad_metrics = {}
 
-        # Define module groups to monitor
-        module_groups = {
-            'encoder': world_model.tokenizer.encoder,
-            'transformer': world_model.transformer,
-            'head_value': world_model.head_value,
-            'head_reward': world_model.head_rewards,
-            'head_policy': world_model.head_policy,
-        }
+        module_groups = self._gradient_diagnostic_module_groups()
 
         for group_name, group_module in module_groups.items():
             total_grad_norm_sq = 0.0
@@ -778,6 +928,19 @@ class UniZeroPolicy(MuZeroPolicy):
                 grad_metrics[f'grad/{group_name}/_total_norm'] = 0.0
 
         return grad_metrics
+
+    def _gradient_diagnostic_module_groups(self) -> Dict[str, torch.nn.Module]:
+        """Return disjoint world-model modules used by periodic gradient attribution."""
+        world_model = self._learn_model.world_model
+        return {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'action_embedding': world_model.act_embedding_table,
+            'head_observation': world_model.head_observations,
+            'head_reward': world_model.head_rewards,
+            'head_value': world_model.head_value,
+            'head_policy': world_model.head_policy,
+        }
     # =================================================================
 
     def _init_learn(self) -> None:
@@ -866,6 +1029,8 @@ class UniZeroPolicy(MuZeroPolicy):
         # Cache the last real observation, and force a check on the first batch after resume.
         self._latest_norm_log_dict = {}
         self._last_norm_monitor_iter = -1
+        self._latest_replay_diagnostic_metrics = {}
+        self._last_gradient_diagnostic_iter = -1
 
         if self._cfg.model.model_type == 'conv':
             # for image-input env
@@ -1211,6 +1376,19 @@ class UniZeroPolicy(MuZeroPolicy):
         # Convert to numpy array for the replay buffer, adding a small epsilon.
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
         replay_log_dict = replay_distribution_metrics(weights, value_priority_tensor)
+        logits_value = losses.intermediate_losses.get('logits_value')
+        if logits_value is None:
+            value_calibration_log_dict = {}
+        else:
+            value_steps = logits_value.shape[1]
+            predicted_values = self.value_inverse_scalar_transform_handle(
+                logits_value.reshape(-1, logits_value.shape[-1])
+            ).reshape(logits_value.shape[0], value_steps)
+            value_calibration_log_dict = value_calibration_metrics(
+                predicted_values,
+                target_value[:, :value_steps],
+                batch_for_gpt['mask_padding'][:, :value_steps],
+            )
 
         # ==================== START: PER importance-sampling weighting ====================
         # NOTE: losses.loss_total is a batch-level scalar, so ``(weights * losses.loss_total).mean()``
@@ -1272,6 +1450,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: Target Entropy Regularization Update Logic ====================
         alpha_loss = None
+        per_sample_weighted_policy_loss = None
         current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight  # Default to fixed value
         if self.use_adaptive_entropy_weight:
             # Dynamically calculate target entropy (this logic is correct and preserved)
@@ -1347,6 +1526,41 @@ class UniZeroPolicy(MuZeroPolicy):
                 per_sample_weighted_policy_loss = None
             weighted_total_loss = apply_per_sample_is_weights(weights, losses, per_sample_weighted_policy_loss, total_loss)
         # ===================== END: Target Entropy Regularization Update Logic =====================
+
+        gradient_component_log_dict = {}
+        should_diagnose_gradients = should_run_periodic_monitor(
+            train_iter,
+            int(self._cfg.gradient_diagnostic_freq),
+            self._last_gradient_diagnostic_iter,
+        )
+        if should_diagnose_gradients:
+            per_sample_policy = (
+                per_sample_weighted_policy_loss
+                if per_sample_weighted_policy_loss is not None
+                else losses.intermediate_losses.get('per_sample_loss_policy')
+            )
+            per_sample_components = {
+                'obs': losses.intermediate_losses.get('per_sample_loss_obs'),
+                'reward': losses.intermediate_losses.get('per_sample_loss_rewards'),
+                'value': losses.intermediate_losses.get('per_sample_loss_value'),
+                'policy': per_sample_policy,
+            }
+            component_weights = {
+                'obs': losses.obs_loss_weight,
+                'reward': losses.reward_loss_weight,
+                'value': losses.value_loss_weight,
+                'policy': losses.policy_loss_weight,
+            }
+            loss_components = {
+                name: component_weights[name] * (weights.reshape(-1) * component).mean()
+                for name, component in per_sample_components.items()
+                if component is not None
+            }
+            gradient_component_log_dict = component_gradient_norms(
+                loss_components, self._gradient_diagnostic_module_groups()
+            )
+            gradient_component_log_dict['grad_component/last_check_iter'] = float(train_iter)
+            self._last_gradient_diagnostic_iter = train_iter
 
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
@@ -1439,6 +1653,18 @@ class UniZeroPolicy(MuZeroPolicy):
                 torch.cuda.empty_cache()
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+        grad_clip_log_dict = gradient_clip_metrics(
+            total_grad_norm_before_clip_wm.item(), self._cfg.grad_clip_value
+        )
+        if should_monitor_norms and total_grad_norm_before_clip_wm.item() > 0:
+            total_norm = total_grad_norm_before_clip_wm.item()
+            for group_name in self._gradient_diagnostic_module_groups():
+                group_norm = norm_log_dict.get(f'grad/{group_name}/_total_norm')
+                if group_norm is not None:
+                    norm_log_dict[f'grad/{group_name}/global_norm_fraction'] = float(
+                        group_norm / total_norm
+                    )
 
         # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
@@ -1571,6 +1797,10 @@ class UniZeroPolicy(MuZeroPolicy):
             'schedule/policy_label_eps': current_policy_label_eps,
         })
         return_log_dict.update(replay_log_dict)
+        return_log_dict.update(self._latest_replay_diagnostic_metrics)
+        return_log_dict.update(value_calibration_log_dict)
+        return_log_dict.update(grad_clip_log_dict)
+        return_log_dict.update(gradient_component_log_dict)
 
         if should_monitor_norms:
             norm_log_dict['stability/last_check_iter'] = float(train_iter)
@@ -1820,6 +2050,7 @@ class UniZeroPolicy(MuZeroPolicy):
                         distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
                     if np.random.rand() < self._collect_epsilon:
                         action = np.random.choice(legal_actions[i])
                 else:
@@ -1831,6 +2062,12 @@ class UniZeroPolicy(MuZeroPolicy):
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
+                exploration_metrics = search_exploration_metrics(
+                    np.asarray(policy_logits[i])[legal_actions[i]],
+                    np.asarray(distributions),
+                    self._collect_mcts_temperature,
+                )
 
                 next_latent_state = next_latent_state_with_env[i][action]
 
@@ -1849,6 +2086,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     'predicted_policy_logits': policy_logits[i],
                     'timestep': timestep[i],
                     'predicted_next_text': predicted_next,
+                    **exploration_metrics,
                 }
                 batch_action.append(action)
 
@@ -2306,6 +2544,27 @@ class UniZeroPolicy(MuZeroPolicy):
             'replay/value_priority_std',
             'replay/value_priority_min',
             'replay/value_priority_max',
+            'replay/buffer_fill_fraction',
+            'replay/sample_age_fraction_mean',
+            'replay/sample_age_fraction_std',
+            'replay/sample_oldest_quarter_fraction',
+            'replay/sample_newest_quarter_fraction',
+
+            # ==================== Gradient clipping diagnostics ====================
+            'grad/clip_threshold',
+            'grad/clip_applied',
+            'grad/clip_scale',
+            'grad/world_model_post_clip_norm',
+
+            # ==================== Value calibration diagnostics ====================
+            'value_calibration/pred_mean',
+            'value_calibration/pred_std',
+            'value_calibration/target_mean',
+            'value_calibration/target_std',
+            'value_calibration/bias',
+            'value_calibration/mae',
+            'value_calibration/rmse',
+            'value_calibration/correlation',
         ]
 
         # ==================== [NEW] Norm and Intermediate Tensor Monitoring Variables ====================
@@ -2323,6 +2582,8 @@ class UniZeroPolicy(MuZeroPolicy):
             'grad/head_value/_total_norm',
             'grad/head_reward/_total_norm',
             'grad/head_policy/_total_norm',
+            'grad/action_embedding/_total_norm',
+            'grad/head_observation/_total_norm',
 
             # Intermediate tensor x (Transformer output) statistics
             'norm/x_token/mean',
@@ -2390,7 +2651,24 @@ class UniZeroPolicy(MuZeroPolicy):
             'stability/last_check_iter',  # Iteration that produced the cached stability metrics
         ]
 
-        return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
+        gradient_groups = (
+            'encoder', 'transformer', 'action_embedding', 'head_observation',
+            'head_reward', 'head_value', 'head_policy'
+        )
+        gradient_component_vars = ['grad_component/last_check_iter']
+        gradient_component_vars.extend(
+            f'grad_component/{component}/{group}'
+            for component in ('obs', 'reward', 'value', 'policy')
+            for group in (*gradient_groups, '_tracked_total_norm')
+        )
+        norm_vars.extend(
+            f'grad/{group}/global_norm_fraction' for group in gradient_groups
+        )
+
+        return (
+            base_vars + norm_vars + head_clip_vars + enhanced_policy_vars
+            + stability_vars + gradient_component_vars
+        )
 
 
     def _state_dict_learn(self) -> Dict[str, Any]:

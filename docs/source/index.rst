@@ -22,6 +22,7 @@ Related research papers include:
     tutorials/installation/installation_and_quickstart
     tutorials/algos/customize_algos
     tutorials/algos/async_pipeline_muzero_unizero
+    tutorials/algos/unizero_ppo
     tutorials/envs/customize_envs
     tutorials/config/config
     tutorials/logs/logs
