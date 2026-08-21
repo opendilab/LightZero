@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniZero + PPO &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link href="../../_static/css/style.css" rel="stylesheet" type="text/css">
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unizero_ppo.html">UniZero + PPO</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/config.html">How to Set Configuration Files in LightZero</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">UniZero + PPO</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/algos/unizero_ppo_zh.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="unizero-ppo">
+<h1>UniZero + PPO<a class="headerlink" href="#unizero-ppo" title="Permalink to this heading"></a></h1>
+<p>UniZero + PPO 在 UniZero 的潜在表示和世界模型之上加入 on-policy PPO actor/critic 更新。原有的
+<code class="docutils literal notranslate"><span class="pre">unizero</span></code> policy 保持 MCTS 行为不变；只有显式使用 <code class="docutils literal notranslate"><span class="pre">unizero_ppo</span></code> policy 类型时才启用 PPO。</p>
+<section id="id1">
+<h2>当前状态<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<p>当前实现仍是离散动作空间的实验版本，验证结果如下：</p>
+<p>| 环境 | 状态 | 证据 |
+| — | — | — |
+| CartPole | 已在集成 smoke run 中收敛 | seed 0 约 4,015 个环境步后，连续 3 个评估 episode 均达到 <code class="docutils literal notranslate"><span class="pre">200/200</span></code>，并在 23,142 步前的后续评估中保持。 |
+| LunarLander-v3 | 功能可运行，尚未证明收敛 | 已完成 collect → PPO → world-model replay smoke cycle，但还没有多 seed 收敛结果。 |
+| PongNoFrameskip-v4 | 单 seed 长跑已完成，benchmark 验证仍待补齐 | seed 0 的 1,011,996 environment steps 训练正常结束。终止前最后一次三 episode 评估为 <code class="docutils literal notranslate"><span class="pre">19.67</span> <span class="pre">±</span> <span class="pre">0.47</span></code>（<code class="docutils literal notranslate"><span class="pre">[19,</span> <span class="pre">20,</span> <span class="pre">20]</span></code>），相对初始化时的 <code class="docutils literal notranslate"><span class="pre">-21</span></code> 明显提升。这是积极的单 seed 证据，但不是多 seed benchmark 结论。 |</p>
+<p>CartPole 已有明确的收敛结果，Pong 也已完成 1M steps 的单 seed 长跑；但仍需要更多环境和多 seed
+验证。正式描述为 benchmark 前，至少应提供 3 个 seed 的原始评估曲线。</p>
+</section>
+<section id="id2">
+<h2>训练流程<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<p>每个采集周期分为两个相互独立的训练阶段：</p>
+<ol class="simple">
+<li><p>当前 policy 采集新 episode，保存带 action mask 的 log-probability、GAE 数据以及实际执行动作时使用的
+contextual latent feature。</p></li>
+<li><p>PPO 只使用这批新数据更新 actor 和 critic，并检查第一个 minibatch 的 behavior-policy ratio 是否接近 1。</p></li>
+<li><p>PPO 消费完本批数据后，再通过 replay 更新 encoder、Transformer、reward 和 dynamics loss；旧 rollout 不会
+被用于 actor ratio。</p></li>
+</ol>
+<p>这种拆分既保持了原有 MCTS UniZero 路径兼容，也避免每个 PPO minibatch 重复运行图像 encoder 和 Transformer。</p>
+</section>
+<section id="id3">
+<h2>运行示例<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<p>先安装 LightZero 的常规依赖，然后运行示例配置：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>zoo/classic_control/cartpole/config/cartpole_unizero_ppo_config.py<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span>
+python<span class="w"> </span>zoo/box2d/lunarlander/config/lunarlander_disc_unizero_ppo_config.py<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span>
+python<span class="w"> </span>zoo/atari/config/atari_unizero_ppo_config.py<span class="w"> </span>--env<span class="w"> </span>PongNoFrameskip-v4<span class="w"> </span>--seed<span class="w"> </span><span class="m">0</span>
+</pre></div>
+</div>
+<p>Atari 示例还支持 <code class="docutils literal notranslate"><span class="pre">--max-env-step</span></code>、<code class="docutils literal notranslate"><span class="pre">--stop-value</span></code>、<code class="docutils literal notranslate"><span class="pre">--n-evaluator-episode</span></code> 和 <code class="docutils literal notranslate"><span class="pre">--run-tag</span></code> 参数。</p>
+</section>
+<section id="id4">
+<h2>配置<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<p>PPO 参数位于 <code class="docutils literal notranslate"><span class="pre">policy.ppo</span></code> 下，示例默认值如下：</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+    <span class="c1"># PPO 配置使用 create_config.policy.type = "unizero_ppo"。</span>
+    <span class="n">policy_improvement</span><span class="o">=</span><span class="s1">'ppo'</span><span class="p">,</span>
+    <span class="n">collect_with_pure_policy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+    <span class="n">ppo</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+        <span class="n">gamma</span><span class="o">=</span><span class="mf">0.997</span><span class="p">,</span>
+        <span class="n">gae_lambda</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span>
+        <span class="n">clip_ratio</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+        <span class="n">entropy_weight</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+        <span class="n">epochs</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+        <span class="n">minibatch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+        <span class="n">normalize_advantage</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">target_kl</span><span class="o">=</span><span class="mf">0.03</span><span class="p">,</span>
+        <span class="n">fresh_ratio_tolerance</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>
+        <span class="n">world_model_update_per_collect</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>当前 PPO 只支持离散动作空间。请保持 <code class="docutils literal notranslate"><span class="pre">accumulation_steps=1</span></code>，避免 actor/critic 阶段与 world-model 阶段之间
+发生梯度串联。</p>
+</section>
+<section id="id5">
+<h2>代码结构<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lzero/policy/unizero.py</span></code>：原有 UniZero MCTS policy。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lzero/policy/unizero_ppo.py</span></code>：PPO policy 子类及 PPO 学习/采集逻辑。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lzero/model/unizero_model.py</span></code>：共享 UniZero model 及 world-model 工厂扩展点。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lzero/model/unizero_ppo_model.py</span></code>：使用 PPO world model 的 model 子类。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lzero/model/unizero_world_models/ppo_world_model.py</span></code>：actor/critic 快速路径及 PPO loss。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lzero/mcts/buffer/game_buffer_unizero_ppo.py</span></code>：新 rollout 和 world-model replay 扩展。</p></li>
+</ul>
+<p>原有 policy、world model 和 replay buffer 不暴露 PPO 专用字段或方法，因此 PR 合入后原有 UniZero 配置仍保持
+兼容。</p>
+</section>
+<section id="id6">
+<h2>验证<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h2>
+<p>使用项目配置的 Python 环境运行聚焦回归测试：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>lzero/policy/tests/test_unizero_ppo.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>lzero/model/unizero_world_models/tests/test_per_sample_is_weights.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>lzero/mcts/tests/test_unizero_reanalysis_context.py
+</pre></div>
+</div>
+<p>当前分支聚焦回归测试为 45 项通过。正式实验建议记录环境步数对应的评估回报、PPO KL/clip 指标、advantage
+统计、模型 loss、吞吐以及全部随机种子。</p>
+</section>
+<section id="id7">
+<h2>相关链接<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference external" href="https://arxiv.org/abs/2406.10667">UniZero 论文</a></p></li>
+<li><p><a class="reference external" href="https://github.com/opendilab/LightZero/blob/feat/uz-ppo/lzero/policy/unizero_ppo.py">PPO policy 实现</a></p></li>
+<li><p><a class="reference external" href="https://github.com/opendilab/LightZero/pull/498">Pull request #498</a></p></li>
+</ul>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

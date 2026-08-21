@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -104,8 +105,8 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">renormalize</span><span class="p">,</span> <span class="n">get_params_mean</span>
 
 
-<span class="c1"># use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine&#39;s document.</span>
-<div class="viewcode-block" id="StochasticMuZeroModel"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel">[docs]</a><span class="nd">@MODEL_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;StochasticMuZeroModel&#39;</span><span class="p">)</span>
+<span class="c1"># use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.</span>
+<div class="viewcode-block" id="StochasticMuZeroModel"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel">[docs]</a><span class="nd">@MODEL_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'StochasticMuZeroModel'</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">StochasticMuZeroModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
 <div class="viewcode-block" id="StochasticMuZeroModel.__init__"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -136,7 +137,7 @@
             <span class="o">*</span><span class="n">args</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The definition of the neural network model used in Stochastic MuZero,</span>
 <span class="sd">            which is proposed in the paper https://openreview.net/pdf?id=X6D9bAHhBQ1.</span>
@@ -172,8 +173,8 @@
 <span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default set it to False.</span>
 <span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \</span>
 <span class="sd">                defaults to True. This option is often used in video games like Atari. In board games like go, \</span>
-<span class="sd">                we don&#39;t need this module.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">                we don't need this module.</span>
+<span class="sd">        """</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">StochasticMuZeroModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">categorical_distribution</span> <span class="o">=</span> <span class="n">categorical_distribution</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">categorical_distribution</span><span class="p">:</span>
@@ -293,7 +294,7 @@
             <span class="p">)</span></div>
 
 <div class="viewcode-block" id="StochasticMuZeroModel.initial_inference"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.initial_inference">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">initial_inference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MZNetworkOutput</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Initial inference of Stochastic MuZero model, which is the first step of the Stochastic MuZero model.</span>
 <span class="sd">            To perform the initial inference, we first use the representation network to obtain the ``latent_state``.</span>
@@ -313,7 +314,7 @@
 <span class="sd">            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.</span>
 <span class="sd">            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
-<span class="sd">         &quot;&quot;&quot;</span>
+<span class="sd">         """</span>
         <span class="n">batch_size</span> <span class="o">=</span> <span class="n">obs</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_representation</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
         <span class="n">policy_logits</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prediction</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
@@ -326,7 +327,7 @@
 
 <div class="viewcode-block" id="StochasticMuZeroModel.recurrent_inference"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.recurrent_inference">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">recurrent_inference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">option</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
                             <span class="n">afterstate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MZNetworkOutput</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Recurrent inference of Stochastic MuZero model, which is the rollout step of the Stochastic MuZero model.</span>
 <span class="sd">            To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,</span>
@@ -353,7 +354,7 @@
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
-<span class="sd">         &quot;&quot;&quot;</span>
+<span class="sd">         """</span>
 
         <span class="k">if</span> <span class="n">afterstate</span><span class="p">:</span>
             <span class="c1"># state is afterstate, option is chance</span>
@@ -367,7 +368,7 @@
             <span class="k">return</span> <span class="n">MZNetworkOutput</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">next_afterstate</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="StochasticMuZeroModel._representation"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._representation">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_representation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the representation network to encode the observations into latent state.</span>
 <span class="sd">        Arguments:</span>
@@ -378,7 +379,7 @@
 <span class="sd">            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.</span>
 <span class="sd">            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">representation_network</span><span class="p">(</span><span class="n">observation</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_norm</span><span class="p">:</span>
             <span class="n">latent_state</span> <span class="o">=</span> <span class="n">renormalize</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
@@ -389,7 +390,7 @@
         <span class="k">return</span> <span class="n">output</span></div>
 
 <div class="viewcode-block" id="StochasticMuZeroModel._prediction"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._prediction">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the prediction network to predict ``policy_logits`` and ``value``.</span>
 <span class="sd">        Arguments:</span>
@@ -402,11 +403,11 @@
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.</span>
 <span class="sd">            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">prediction_network</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="StochasticMuZeroModel._afterstate_prediction"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._afterstate_prediction">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_afterstate_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">afterstate</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the prediction network to predict ``policy_logits`` and ``value``.</span>
 <span class="sd">        Arguments:</span>
@@ -419,11 +420,11 @@
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.</span>
 <span class="sd">            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">afterstate_prediction_network</span><span class="p">(</span><span class="n">afterstate</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="StochasticMuZeroModel._dynamics"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._dynamics">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_dynamics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``</span>
 <span class="sd">            and ``reward``.</span>
@@ -440,7 +441,7 @@
 <span class="sd">            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># NOTE: the discrete action encoding type is important for some environments</span>
 
         <span class="c1"># discrete action space</span>
@@ -477,7 +478,7 @@
 
 <div class="viewcode-block" id="StochasticMuZeroModel._afterstate_dynamics"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._afterstate_dynamics">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_afterstate_dynamics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``</span>
 <span class="sd">            and ``reward``.</span>
@@ -494,7 +495,7 @@
 <span class="sd">            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># NOTE: the discrete action encoding type is important for some environments</span>
 
         <span class="c1"># discrete action space</span>
@@ -530,7 +531,7 @@
         <span class="k">return</span> <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward</span></div>
 
 <div class="viewcode-block" id="StochasticMuZeroModel.project"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.project">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">project</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">with_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Project the latent state to a lower dimension to calculate the self-supervised loss, which is involved in</span>
 <span class="sd">            in EfficientZero.</span>
@@ -558,7 +559,7 @@
 <span class="sd">            latent_state reshape: (256, 64, 6, 6) -&gt; (256,64*6*6) = (256, 2304)</span>
 <span class="sd">            # self.projection_input_dim = 64*6*6 = 2304</span>
 <span class="sd">            # self.projection_output_dim = 1024</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="n">latent_state</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">proj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
 
@@ -585,7 +586,7 @@
             <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
             <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The definition of dynamics network in Stochastic MuZero algorithm, which is used to predict next latent state and</span>
 <span class="sd">            reward given current latent state and action.</span>
@@ -601,7 +602,7 @@
 <span class="sd">                reward mlp, default set it to True.</span>
 <span class="sd">            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \</span>
 <span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span> <span class="o">=</span> <span class="n">num_channels</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_reward_head</span> <span class="o">=</span> <span class="n">flatten_input_size_for_reward_head</span>
@@ -611,7 +612,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
             <span class="p">[</span>
                 <span class="n">ResBlock</span><span class="p">(</span>
-                    <span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+                    <span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">'BN'</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">'basic'</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
                 <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_res_blocks</span><span class="p">)</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -624,7 +625,7 @@
             <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">reward_head_hidden_channels</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
             <span class="n">out_channels</span><span class="o">=</span><span class="n">output_support_size</span><span class="p">,</span>
             <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
-            <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="s1">'BN'</span><span class="p">,</span>
             <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
@@ -632,7 +633,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span></div>
 
 <div class="viewcode-block" id="DynamicsNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.DynamicsNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_action_encoding</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">         Overview:</span>
 <span class="sd">            Forward computation of the dynamics network. Predict next latent state given current latent state and action.</span>
 <span class="sd">         Arguments:</span>
@@ -642,7 +643,7 @@
 <span class="sd">             - next_latent_state (:obj:`torch.Tensor`): The next latent state, with shape (batch_size, num_channels, \</span>
 <span class="sd">                    height, width).</span>
 <span class="sd">            - reward (:obj:`torch.Tensor`): The predicted reward, with shape (batch_size, output_support_size).</span>
-<span class="sd">         &quot;&quot;&quot;</span>
+<span class="sd">         """</span>
         <span class="c1"># take the state encoding (latent_state),  state_action_encoding[:, -1, :, :] is action encoding</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="n">state_action_encoding</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv</span><span class="p">(</span><span class="n">state_action_encoding</span><span class="p">)</span>
@@ -687,7 +688,7 @@
             <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
             <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The definition of afterstate policy and value prediction network, which is used to predict value and policy by the</span>
 <span class="sd">            given afterstate.</span>
@@ -709,11 +710,11 @@
 <span class="sd">                dynamics/prediction mlp, default set it to True.</span>
 <span class="sd">            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \</span>
 <span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">AfterstatePredictionNetwork</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
             <span class="p">[</span>
-                <span class="n">ResBlock</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">ResBlock</span><span class="p">(</span><span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">'BN'</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">'basic'</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_res_blocks</span><span class="p">)</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -731,7 +732,7 @@
             <span class="n">out_channels</span><span class="o">=</span><span class="n">output_support_size</span><span class="p">,</span>
             <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">value_head_hidden_channels</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
             <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
-            <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="s1">'BN'</span><span class="p">,</span>
             <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
@@ -742,14 +743,14 @@
             <span class="n">out_channels</span><span class="o">=</span><span class="n">action_space_size</span><span class="p">,</span>
             <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">policy_head_hidden_channels</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
             <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
-            <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="s1">'BN'</span><span class="p">,</span>
             <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
         <span class="p">)</span></div>
 
 <div class="viewcode-block" id="AfterstatePredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">afterstate</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward computation of the afterstate prediction network.</span>
 <span class="sd">        Arguments:</span>
@@ -757,7 +758,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - afterstate_policy_logits (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).</span>
 <span class="sd">            - afterstate_value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">for</span> <span class="n">res_block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span><span class="p">:</span>
             <span class="n">afterstate</span> <span class="o">=</span> <span class="n">res_block</span><span class="p">(</span><span class="n">afterstate</span><span class="p">)</span>
 
@@ -778,14 +779,14 @@
 
 
 <div class="viewcode-block" id="ChanceEncoderBackbone"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ChanceEncoderBackbone</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The definition of chance encoder backbone network, \</span>
 <span class="sd">        which is used to encode the (image) observation into a latent space.</span>
 <span class="sd">    Arguments:</span>
 <span class="sd">        - input_dimensions (:obj:`tuple`): The dimension of observation space.</span>
 <span class="sd">        - chance_encoding_dim (:obj:`int`): The dimension of chance encoding.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="ChanceEncoderBackbone.__init__"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_dimensions</span><span class="p">,</span> <span class="n">chance_encoding_dim</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ChanceEncoderBackbone</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
@@ -806,14 +807,14 @@
 
 
 <div class="viewcode-block" id="ChanceEncoderBackboneMLP"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ChanceEncoderBackboneMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The definition of chance encoder backbone network, \</span>
 <span class="sd">        which is used to encode the (vector) observation into a latent space.</span>
 <span class="sd">    Arguments:</span>
 <span class="sd">        - input_dimensions (:obj:`tuple`): The dimension of observation space.</span>
 <span class="sd">        - chance_encoding_dim (:obj:`int`): The dimension of chance encoding.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="ChanceEncoderBackboneMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_dimensions</span><span class="p">,</span> <span class="n">chance_encoding_dim</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ChanceEncoderBackboneMLP</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
@@ -830,23 +831,23 @@
 
 <div class="viewcode-block" id="ChanceEncoder"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoder">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ChanceEncoder</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="ChanceEncoder.__init__"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoder.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_dimensions</span><span class="p">,</span> <span class="n">action_dimension</span><span class="p">,</span> <span class="n">encoder_backbone_type</span><span class="o">=</span><span class="s1">&#39;conv&#39;</span><span class="p">):</span>
+<div class="viewcode-block" id="ChanceEncoder.__init__"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoder.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_dimensions</span><span class="p">,</span> <span class="n">action_dimension</span><span class="p">,</span> <span class="n">encoder_backbone_type</span><span class="o">=</span><span class="s1">'conv'</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="c1"># Specify the action space for the model</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">action_space</span> <span class="o">=</span> <span class="n">action_dimension</span>
-        <span class="k">if</span> <span class="n">encoder_backbone_type</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">encoder_backbone_type</span> <span class="o">==</span> <span class="s1">'conv'</span><span class="p">:</span>
             <span class="c1"># Define the encoder, which transforms observations into a latent space</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span> <span class="o">=</span> <span class="n">ChanceEncoderBackbone</span><span class="p">(</span><span class="n">input_dimensions</span><span class="p">,</span> <span class="n">action_dimension</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">encoder_backbone_type</span> <span class="o">==</span> <span class="s1">&#39;mlp&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">encoder_backbone_type</span> <span class="o">==</span> <span class="s1">'mlp'</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span> <span class="o">=</span> <span class="n">ChanceEncoderBackboneMLP</span><span class="p">(</span><span class="n">input_dimensions</span><span class="p">,</span> <span class="n">action_dimension</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Encoder backbone type not supported&#39;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">'Encoder backbone type not supported'</span><span class="p">)</span>
 
         <span class="c1"># Using the Straight Through Estimator method for backpropagation</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">onehot_argmax</span> <span class="o">=</span> <span class="n">StraightThroughEstimator</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="ChanceEncoder.forward"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoder.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observations</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward method for the ChanceEncoder. This method takes an observation \</span>
 <span class="sd">            and applies the encoder to transform it to a latent space. Then applies the \</span>
@@ -859,7 +860,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - chance (:obj:`torch.Tensor`): Transformed tensor after applying one-hot argmax.</span>
 <span class="sd">            - chance_encoding (:obj:`torch.Tensor`): Encoding of the input observation tensor.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># Apply the encoder to the observation</span>
         <span class="n">chance_encoding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encoder</span><span class="p">(</span><span class="n">observations</span><span class="p">)</span>
         <span class="c1"># Apply one-hot argmax to the encoding</span>
@@ -872,7 +873,7 @@
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="StraightThroughEstimator.forward"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StraightThroughEstimator.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward method for the StraightThroughEstimator. This applies the one-hot argmax \</span>
 <span class="sd">            function to the input tensor.</span>
@@ -880,14 +881,14 @@
 <span class="sd">            - x (:obj:`torch.Tensor`): Input tensor.</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - (:obj:`torch.Tensor`): Transformed tensor after applying one-hot argmax.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># Apply one-hot argmax to the input</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">OnehotArgmax</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
 <div class="viewcode-block" id="OnehotArgmax"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.OnehotArgmax">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OnehotArgmax</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">autograd</span><span class="o">.</span><span class="n">Function</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        Custom PyTorch function for one-hot argmax. This function transforms the input tensor \</span>
 <span class="sd">        into a one-hot tensor where the index with the maximum value in the original tensor is \</span>
@@ -896,11 +897,11 @@
 
 <span class="sd">        For more information, refer to: \</span>
 <span class="sd">        https://pytorch.org/tutorials/beginner/examples_autograd/two_layer_net_custom_function.html</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="OnehotArgmax.forward"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.OnehotArgmax.forward">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="nb">input</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward method for the one-hot argmax function. This method transforms the input \</span>
 <span class="sd">            tensor into a one-hot tensor.</span>
@@ -910,13 +911,13 @@
 <span class="sd">            - input (:obj:`torch.Tensor`): Input tensor.</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - (:obj:`torch.Tensor`): One-hot tensor.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># Transform the input tensor to a one-hot tensor</span>
         <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span><span class="o">.</span><span class="n">scatter_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="nb">input</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="mf">1.</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="OnehotArgmax.backward"><a class="viewcode-back" href="../../../api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.OnehotArgmax.backward">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">grad_output</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Backward method for the one-hot argmax function. This method allows gradients \</span>
 <span class="sd">            to flow to the encoder during backpropagation.</span>
@@ -925,7 +926,7 @@
 <span class="sd">            - grad_output (:obj:`torch.Tensor`): The gradient of the output tensor.</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - (:obj:`torch.Tensor`): The gradient of the input tensor.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="n">grad_output</span></div></div>
 </pre></div>
 

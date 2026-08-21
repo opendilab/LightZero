@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html">安装和快速入门指南</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/async_pipeline_muzero_unizero_zh.html">MuZero / UniZero 异步训练流水线（Async Segment Pipeline）</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/algos/unizero_ppo_zh.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/envs/customize_envs_zh.html">LightZero 中如何自定义环境?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/config/config_zh.html">LightZero 中如何设置配置文件？</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/logs/logs_zh.html">LightZero的日志监控体系</a></li>
@@ -892,6 +893,8 @@
         <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.learn_function._fields">(lzero.policy.unizero.UniZeroPolicy.learn_function attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector._finalize_ppo_rollout">_finalize_ppo_rollout() (lzero.worker.muzero_collector.MuZeroCollector method)</a>
+</li>
       <li><a href="api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._forward_collect">_forward_collect() (lzero.policy.alphazero.AlphaZeroPolicy method)</a>
 
       <ul>
@@ -1558,6 +1561,8 @@
         <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._get_train_sample">(lzero.policy.unizero.UniZeroPolicy method)</a>
 </li>
       </ul></li>
+      <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._gradient_diagnostic_module_groups">_gradient_diagnostic_module_groups() (lzero.policy.unizero.UniZeroPolicy method)</a>
+</li>
       <li><a href="api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._init_collect">_init_collect() (lzero.policy.alphazero.AlphaZeroPolicy method)</a>
 
       <ul>
@@ -2220,6 +2225,8 @@
         <li><a href="api_doc/model/stochastic_muzero_model_mlp.html#lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP._named_members">(lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP method)</a>
 </li>
       </ul></li>
+      <li><a href="api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector._new_game_segment">_new_game_segment() (lzero.worker.muzero_collector.MuZeroCollector method)</a>
+</li>
       <li><a href="api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel._non_persistent_buffers_set">_non_persistent_buffers_set (lzero.model.alphazero_model.AlphaZeroModel attribute)</a>
 
       <ul>
@@ -7037,6 +7044,8 @@
 </li>
       </ul></li>
       <li><a href="api_doc/model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.OnehotArgmax.set_materialize_grads">set_materialize_grads() (lzero.model.stochastic_muzero_model.OnehotArgmax method)</a>
+</li>
+      <li><a href="api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.set_replay_diagnostics">set_replay_diagnostics() (lzero.policy.unizero.UniZeroPolicy method)</a>
 </li>
       <li><a href="api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.set_submodule">set_submodule() (lzero.model.alphazero_model.AlphaZeroModel method)</a>
 

@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -106,17 +107,17 @@
     <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroPolicy</span><span class="p">,</span> <span class="n">EfficientZeroPolicy</span><span class="p">,</span> <span class="n">SampledEfficientZeroPolicy</span><span class="p">,</span> <span class="n">GumbelMuZeroPolicy</span>
 
 
-<div class="viewcode-block" id="GameBuffer"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer">[docs]</a><span class="nd">@BUFFER_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;game_buffer&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="GameBuffer"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer">[docs]</a><span class="nd">@BUFFER_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'game_buffer'</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">GameBuffer</span><span class="p">(</span><span class="n">ABC</span><span class="p">,</span> <span class="nb">object</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumbelMuZeroPolicy.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="GameBuffer.default_config"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.default_config">[docs]</a>    <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">EasyDict</span><span class="p">(</span><span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">config</span><span class="p">))</span>
-        <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;Dict&#39;</span>
+        <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">'Dict'</span>
         <span class="k">return</span> <span class="n">cfg</span></div>
 
     <span class="c1"># Default configuration for GameBuffer.</span>
@@ -132,24 +133,24 @@
         <span class="n">use_root_value</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (int) The number of samples required for mini inference.</span>
         <span class="n">mini_infer_size</span><span class="o">=</span><span class="mi">10240</span><span class="p">,</span>
-        <span class="c1"># (str) The type of sampled data. The default is &#39;transition&#39;. Options: &#39;transition&#39;, &#39;episode&#39;.</span>
-        <span class="n">sample_type</span><span class="o">=</span><span class="s1">&#39;transition&#39;</span><span class="p">,</span>
+        <span class="c1"># (str) The type of sampled data. The default is 'transition'. Options: 'transition', 'episode'.</span>
+        <span class="n">sample_type</span><span class="o">=</span><span class="s1">'transition'</span><span class="p">,</span>
     <span class="p">)</span>
 
 <div class="viewcode-block" id="GameBuffer.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key</span>
 <span class="sd">            in the default configuration, the user-provided value will override the default configuration. Otherwise,</span>
 <span class="sd">            the default configuration will be used.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">default_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_config</span><span class="p">()</span>
         <span class="n">default_config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span> <span class="o">=</span> <span class="n">default_config</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span> <span class="o">=</span> <span class="n">cfg</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">env_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;not_board_games&#39;</span><span class="p">,</span> <span class="s1">&#39;board_games&#39;</span><span class="p">]</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;fixed_action_space&#39;</span><span class="p">,</span> <span class="s1">&#39;varied_action_space&#39;</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">env_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">'not_board_games'</span><span class="p">,</span> <span class="s1">'board_games'</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">'fixed_action_space'</span><span class="p">,</span> <span class="s1">'varied_action_space'</span><span class="p">]</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">replay_buffer_size</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span>
@@ -167,21 +168,21 @@
 
 <div class="viewcode-block" id="GameBuffer.sample"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.sample">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">sample</span><span class="p">(</span>
-            <span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;MuZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;EfficientZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;SampledEfficientZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;GumbelMuZeroPolicy&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">"MuZeroPolicy"</span><span class="p">,</span> <span class="s2">"EfficientZeroPolicy"</span><span class="p">,</span> <span class="s2">"SampledEfficientZeroPolicy"</span><span class="p">,</span> <span class="s2">"GumbelMuZeroPolicy"</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            sample data from ``GameBuffer`` and prepare the current and target batch for training.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - batch_size (:obj:`int`): batch size.</span>
-<span class="sd">            - policy (:obj:`Union[&quot;MuZeroPolicy&quot;, &quot;EfficientZeroPolicy&quot;, &quot;SampledEfficientZeroPolicy&quot;, &quot;GumbelMuZeroPolicy&quot;]`): policy.</span>
+<span class="sd">            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumbelMuZeroPolicy"]`): policy.</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.</span>
-<span class="sd">        &quot;&quot;&quot;</span></div>
+<span class="sd">        """</span></div>
 
 <div class="viewcode-block" id="GameBuffer._make_batch"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._make_batch">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_make_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">orig_data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">reanalyze_ratio</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare the context of a batch</span>
 <span class="sd">            reward_value_context:        the context of reanalyzed value targets</span>
@@ -193,11 +194,11 @@
 <span class="sd">            reanalyze_ratio: float ratio of reanalyzed policy (value is 100% reanalyzed)</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer._sample_orig_data"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_orig_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">print_priority_logs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Sample original data which includes:</span>
 <span class="sd">                - game_segment_list: A list of game segments.</span>
@@ -208,8 +209,8 @@
 <span class="sd">        Arguments:</span>
 <span class="sd">            - batch_size (:obj:`int`): The size of the batch.</span>
 <span class="sd">            - print_priority_logs (:obj:`bool`): Whether to print logs related to priority statistics, defaults to False.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Beta should be greater than 0&quot;</span>
+<span class="sd">        """</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"Beta should be greater than 0"</span>
         <span class="n">num_of_transitions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
             <span class="c1"># If priority is not used, set all priorities to 1</span>
@@ -243,15 +244,15 @@
 
             <span class="n">game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
 
-            <span class="c1"># print(f&#39;len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}&#39;)</span>
-            <span class="c1"># print(f&#39;len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}&#39;)</span>
+            <span class="c1"># print(f'len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}')</span>
+            <span class="c1"># print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')</span>
 
             <span class="c1"># In the reanalysis phase, `pos_in_game_segment` should be a multiple of `num_unroll_steps`.</span>
             <span class="c1"># Indices exceeding `game_segment_length` are padded with the next segment and are not updated</span>
             <span class="c1"># in the current implementation. Therefore, we need to sample `pos_in_game_segment` within</span>
             <span class="c1"># [0, game_segment_length - num_unroll_steps] to avoid padded data.</span>
             
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">&#39;varied_action_space&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">'varied_action_space'</span><span class="p">:</span>
                 <span class="c1"># For varied action space environments (e.g., board games with short game length like TicTacToe)</span>
                 <span class="c1"># We need to handle cases where game_segment_length might be smaller than num_unroll_steps + td_steps</span>
                 <span class="c1"># Strategy: progressively relax sampling constraints to accommodate short games</span>
@@ -312,7 +313,7 @@
                     <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
 
                 <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
-                    <span class="c1"># If the segment is very short (length 0 or 1), we can&#39;t randomly sample a position</span>
+                    <span class="c1"># If the segment is very short (length 0 or 1), we can't randomly sample a position</span>
                     <span class="c1"># before the last one. The only safe position is 0.</span>
                     <span class="k">if</span> <span class="n">segment_len</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
                         <span class="c1"># If the segment has at least 2 actions, we can safely sample from [0, len-2].</span>
@@ -340,14 +341,14 @@
         <span class="n">orig_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">adjusted_index_list</span><span class="p">,</span> <span class="n">weights_list</span><span class="p">,</span> <span class="n">make_time</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">print_priority_logs</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled batch indices: </span><span class="si">{</span><span class="n">adjusted_index_list</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled priorities: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sampled weights: </span><span class="si">{</span><span class="n">weights_list</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sampled batch indices: </span><span class="si">{</span><span class="n">adjusted_index_list</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sampled priorities: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sampled weights: </span><span class="si">{</span><span class="n">weights_list</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">orig_data</span></div>
 
 <div class="viewcode-block" id="GameBuffer._sample_orig_reanalyze_batch"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_batch">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_orig_reanalyze_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">            </span><span class="sd">"""</span>
 <span class="sd">            Overview:</span>
 <span class="sd">                This function samples a batch of game segments for reanalysis from the replay buffer.</span>
 <span class="sd">                It uses priority sampling based on the `reanalyze_time` of each game segment, with segments</span>
@@ -387,9 +388,9 @@
 <span class="sd">            Raises:</span>
 <span class="sd">                - ValueError:</span>
 <span class="sd">                    If the `game_segment_length` is too small to accommodate the `num_unroll_steps`.</span>
-<span class="sd">            &quot;&quot;&quot;</span>
+<span class="sd">            """</span>
             <span class="n">train_sample_num</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">)</span>
-            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span> <span class="o">&lt;=</span> <span class="mf">0.75</span><span class="p">,</span> <span class="s2">&quot;The reanalyze partition should be less than 0.75.&quot;</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span> <span class="o">&lt;=</span> <span class="mf">0.75</span><span class="p">,</span> <span class="s2">"The reanalyze partition should be less than 0.75."</span>
             <span class="n">valid_sample_num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">train_sample_num</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span><span class="p">)</span>
 
             <span class="c1"># Calculate the number of samples per segment</span>
@@ -397,7 +398,7 @@
 
             <span class="c1"># Make sure that the batch size can be divided by the number of samples per segment</span>
             <span class="k">if</span> <span class="n">samples_per_segment</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The game segment length is too small for num_unroll_steps.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The game segment length is too small for num_unroll_steps."</span><span class="p">)</span>
 
             <span class="c1"># Calculate the number of samples per segment</span>
             <span class="n">batch_size_per_segment</span> <span class="o">=</span> <span class="n">batch_size</span> <span class="o">//</span> <span class="n">samples_per_segment</span>
@@ -434,7 +435,7 @@
             <span class="k">if</span> <span class="n">extra_samples</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="c1"># We need to handle the case where we might sample the same segment again.</span>
                 <span class="c1"># A simple way is to allow replacement for extra samples or sample from remaining ones.</span>
-                <span class="c1"># For simplicity, let&#39;s stick to the original logic but ensure it&#39;s safe.</span>
+                <span class="c1"># For simplicity, let's stick to the original logic but ensure it's safe.</span>
                 <span class="n">remaining_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">setdiff1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">valid_sample_num</span><span class="p">),</span> <span class="n">selected_game_segments</span><span class="p">)</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">remaining_segments</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">extra_samples</span><span class="p">:</span>
                     <span class="c1"># If not enough unique segments left, sample with replacement from all valid segments</span>
@@ -478,7 +479,7 @@
             <span class="k">return</span> <span class="n">orig_data</span></div>
 
 <div class="viewcode-block" id="GameBuffer._sample_orig_reanalyze_data"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_data">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_orig_reanalyze_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            sample orig_data that contains:</span>
 <span class="sd">                game_segment_list: a list of game segments</span>
@@ -489,7 +490,7 @@
 <span class="sd">        Arguments:</span>
 <span class="sd">            - batch_size (:obj:`int`): batch size</span>
 <span class="sd">            - beta: float the parameter in PER for calculating the priority</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">segment_length</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span><span class="o">//</span><span class="mi">2000</span><span class="p">)</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">&gt;</span> <span class="mi">0</span>
         <span class="n">num_of_transitions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span>
@@ -519,7 +520,7 @@
         <span class="k">return</span> <span class="n">orig_data</span></div>
 
 <div class="viewcode-block" id="GameBuffer._sample_orig_data_episode"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data_episode">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_orig_data_episode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Sample original data for a training batch, which includes:</span>
 <span class="sd">                - game_segment_list: A list of game segments.</span>
@@ -530,8 +531,8 @@
 <span class="sd">        Arguments:</span>
 <span class="sd">            - batch_size (:obj:`int`): The number of samples to draw for the batch.</span>
 <span class="sd">            - beta (:obj:`float`): Parameter for Prioritized Experience Replay (PER) that adjusts the importance of samples.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Beta must be greater than zero.&quot;</span>
+<span class="sd">        """</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"Beta must be greater than zero."</span>
 
         <span class="n">num_of_transitions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span>
 
@@ -574,12 +575,12 @@
 <div class="viewcode-block" id="GameBuffer._preprocess_to_play_and_action_mask"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._preprocess_to_play_and_action_mask">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_preprocess_to_play_and_action_mask</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">game_segment_batch_size</span><span class="p">,</span> <span class="n">to_play_segment</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">unroll_steps</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare the to_play and action_mask for the target obs in ``value_obs_list``</span>
 <span class="sd">                - to_play: {list: game_segment_batch_size * (num_unroll_steps+1)}</span>
 <span class="sd">                - action_mask: {list: game_segment_batch_size * (num_unroll_steps+1)}</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">unroll_steps</span> <span class="o">=</span> <span class="n">unroll_steps</span> <span class="k">if</span> <span class="n">unroll_steps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span>
 
         <span class="n">to_play</span> <span class="o">=</span> <span class="p">[]</span>
@@ -620,7 +621,7 @@
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
             <span class="n">total_transitions</span><span class="p">:</span> <span class="nb">int</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare the context of rewards and values for calculating TD value target in reanalyzing part.</span>
 <span class="sd">        Arguments:</span>
@@ -631,14 +632,14 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - reward_value_context (:obj:`list`): value_obs_lst, value_mask, state_index_lst, rewards_lst, game_segment_lens,</span>
 <span class="sd">              td_steps_lst, action_mask_segment, to_play_segment</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer._prepare_policy_non_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._prepare_policy_non_reanalyzed_context">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_policy_non_reanalyzed_context</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play</span>
 <span class="sd">        Arguments:</span>
@@ -647,57 +648,57 @@
 <span class="sd">            - pos_in_game_segment_list (:obj:`list`): list transition index in game</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - policy_non_re_context (:obj:`list`): state_index_lst, child_visits, game_segment_lens, action_mask_segment, to_play_segment</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer._prepare_policy_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._prepare_policy_reanalyzed_context">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_policy_reanalyzed_context</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare the context of policies for calculating policy target in reanalyzing part.</span>
 <span class="sd">        Arguments:</span>
-<span class="sd">            - batch_index_list (:obj:&#39;list&#39;): start transition index in the replay buffer</span>
-<span class="sd">            - game_segment_list (:obj:&#39;list&#39;): list of game segments</span>
-<span class="sd">            - pos_in_game_segment_list (:obj:&#39;list&#39;): position of transition index in one game history</span>
+<span class="sd">            - batch_index_list (:obj:'list'): start transition index in the replay buffer</span>
+<span class="sd">            - game_segment_list (:obj:'list'): list of game segments</span>
+<span class="sd">            - pos_in_game_segment_list (:obj:'list'): position of transition index in one game history</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - policy_re_context (:obj:`list`): policy_obs_lst, policy_mask, state_index_lst, indices,</span>
 <span class="sd">              child_visits, game_segment_lens, action_mask_segment, to_play_segment</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer._compute_target_reward_value"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_reward_value">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_reward_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reward_value_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare reward and value targets from the context of rewards and values.</span>
 <span class="sd">        Arguments:</span>
-<span class="sd">            - reward_value_context (:obj:&#39;list&#39;): the reward value context</span>
-<span class="sd">            - model (:obj:&#39;torch.tensor&#39;):model of the target model</span>
+<span class="sd">            - reward_value_context (:obj:'list'): the reward value context</span>
+<span class="sd">            - model (:obj:'torch.tensor'):model of the target model</span>
 <span class="sd">        Returns:</span>
-<span class="sd">            - batch_value_prefixs (:obj:&#39;np.ndarray): batch of value prefix</span>
-<span class="sd">            - batch_target_values (:obj:&#39;np.ndarray): batch of value estimation</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix</span>
+<span class="sd">            - batch_target_values (:obj:'np.ndarray): batch of value estimation</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer._compute_target_policy_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_policy_reanalyzed">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_policy_reanalyzed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare policy targets from the reanalyzed context of policies</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - policy_re_context (:obj:`List`): List of policy context to reanalyzed</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - batch_target_policies_re</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer._compute_target_policy_non_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_policy_non_reanalyzed">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_policy_non_reanalyzed</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">policy_non_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">policy_shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare policy targets from the non-reanalyzed context of policies</span>
 <span class="sd">        Arguments:</span>
@@ -709,40 +710,40 @@
 <span class="sd">                - to_play_segment</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - batch_target_policies_non_re</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer.update_priority"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.update_priority">[docs]</a>    <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">update_priority</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">train_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]],</span> <span class="n">batch_priorities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Update the priority of training data.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - train_data (:obj:`Optional[List[Optional[np.ndarray]]]`): training data to be updated priority.</span>
 <span class="sd">            - batch_priorities (:obj:`batch_priorities`): priorities to update to.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="GameBuffer.push_game_segments"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.push_game_segments">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">push_game_segments</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_and_meta</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
-<span class="sd">            Push game_segments data and it&#39;s meta information into buffer.</span>
+<span class="sd">            Push game_segments data and it's meta information into buffer.</span>
 <span class="sd">            Save a game segment</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - data_and_meta</span>
 <span class="sd">                - data (:obj:`Any`): The data (game segments) which will be pushed into buffer.</span>
 <span class="sd">                - meta (:obj:`dict`): Meta information, e.g. priority, count, staleness.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">data</span><span class="p">,</span> <span class="n">meta</span> <span class="o">=</span> <span class="n">data_and_meta</span>
         <span class="k">for</span> <span class="p">(</span><span class="n">data_game</span><span class="p">,</span> <span class="n">meta_game</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">meta</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_push_game_segment</span><span class="p">(</span><span class="n">data_game</span><span class="p">,</span> <span class="n">meta_game</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="GameBuffer._push_game_segment"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._push_game_segment">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_push_game_segment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">meta</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
-<span class="sd">            Push data and it&#39;s meta information in buffer.</span>
+<span class="sd">            Push data and it's meta information in buffer.</span>
 <span class="sd">            Save a game segment.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - data (:obj:`Any`): The data (a game segment) which will be pushed into buffer.</span>
@@ -752,7 +753,7 @@
 <span class="sd">                - priorities (:obj:`list`): the priorities corresponding to the transitions in the game history</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - buffered_data (:obj:`BufferedData`): The pushed data.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">data_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -760,24 +761,24 @@
             <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="n">data_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;done&#39;</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'done'</span><span class="p">]:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="n">valid_len</span> <span class="o">=</span> <span class="n">data_length</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">valid_len</span> <span class="o">=</span> <span class="n">data_length</span> <span class="o">-</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;unroll_plus_td_steps&#39;</span><span class="p">]</span>
-            <span class="c1"># print(f&#39;valid_len is {valid_len}&#39;)</span>
+            <span class="n">valid_len</span> <span class="o">=</span> <span class="n">data_length</span> <span class="o">-</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'unroll_plus_td_steps'</span><span class="p">]</span>
+            <span class="c1"># print(f'valid_len is {valid_len}')</span>
 
-        <span class="k">if</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;priorities&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">:</span>
                 <span class="n">max_prio</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">max_prio</span> <span class="o">=</span> <span class="mi">1</span>
             
-            <span class="c1"># if no &#39;priorities&#39; provided, set the valid part of the new-added game history the max_prio</span>
+            <span class="c1"># if no 'priorities' provided, set the valid part of the new-added game history the max_prio</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">,</span> <span class="p">[</span><span class="n">max_prio</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">valid_len</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">valid_len</span><span class="p">,</span> <span class="n">data_length</span><span class="p">)]))</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="n">data_length</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;priorities&#39;</span><span class="p">]),</span> <span class="s2">&quot; priorities should be of same length as the game steps&quot;</span>
-            <span class="n">priorities</span> <span class="o">=</span> <span class="n">meta</span><span class="p">[</span><span class="s1">&#39;priorities&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">data_length</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]),</span> <span class="s2">" priorities should be of same length as the game steps"</span>
+            <span class="n">priorities</span> <span class="o">=</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">priorities</span><span class="p">[</span><span class="n">valid_len</span><span class="p">:</span><span class="n">data_length</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">,</span> <span class="n">priorities</span><span class="p">))</span>
 
@@ -785,16 +786,16 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span> <span class="o">+=</span> <span class="p">[</span>
             <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_idx</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">step_pos</span><span class="p">)</span> <span class="k">for</span> <span class="n">step_pos</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">data_length</span><span class="p">)</span>
         <span class="p">]</span></div>
-        <span class="c1"># print(f&#39;potioritys is {self.game_pos_priorities}&#39;)</span>
-        <span class="c1"># print(f&#39;num of transitions is {len(self.game_segment_game_pos_look_up)}&#39;)</span>
+        <span class="c1"># print(f'potioritys is {self.game_pos_priorities}')</span>
+        <span class="c1"># print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')</span>
 
 <div class="viewcode-block" id="GameBuffer.remove_oldest_data_to_fit"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.remove_oldest_data_to_fit">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">remove_oldest_data_to_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            remove some oldest data if the replay buffer is full.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="s2">&quot;replay buffer size should be larger than batch size&quot;</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="s2">"replay buffer size should be larger than batch size"</span>
         <span class="n">nums_of_game_segments</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_game_segments</span><span class="p">()</span>
         <span class="n">total_transition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">total_transition</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span><span class="p">:</span>
@@ -817,12 +818,12 @@
                     <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="GameBuffer._remove"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._remove">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">excess_game_segment_index</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            delete game segments in index [0: excess_game_segment_index]</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - excess_game_segment_index (:obj:`List[str]`): Index of data.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">excess_game_positions</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
             <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span> <span class="k">for</span> <span class="n">game_segment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[:</span><span class="n">excess_game_segment_index</span><span class="p">]]</span>
         <span class="p">)</span>
@@ -845,7 +846,7 @@
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span><span class="p">)</span></div>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;current buffer statistics is: num_of_all_collected_episodes: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span><span class="si">}</span><span class="s1">, num of game segments: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">)</span><span class="si">}</span><span class="s1">, number of transitions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s1">'current buffer statistics is: num_of_all_collected_episodes: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span><span class="si">}</span><span class="s1">, num of game segments: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">)</span><span class="si">}</span><span class="s1">, number of transitions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span><span class="p">)</span><span class="si">}</span><span class="s1">'</span></div>
 </pre></div>
 
 

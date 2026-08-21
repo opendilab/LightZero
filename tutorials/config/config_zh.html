@@ -50,6 +50,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -230,8 +231,8 @@
 <section id="id1">
 <h3>2.1 <code class="docutils literal notranslate"><span class="pre">env</span></code>部分的设置<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">env</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
-    <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;atari_lightzero&#39;</span><span class="p">,</span>
-    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;zoo.atari.envs.atari_lightzero_env&#39;</span><span class="p">],</span>
+    <span class="nb">type</span><span class="o">=</span><span class="s1">'atari_lightzero'</span><span class="p">,</span>
+    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">'zoo.atari.envs.atari_lightzero_env'</span><span class="p">],</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -240,8 +241,8 @@
 <section id="id2">
 <h3>2.2 <code class="docutils literal notranslate"><span class="pre">policy</span></code>部分的设置<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
-    <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;muzero&#39;</span><span class="p">,</span>
-    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;lzero.policy.muzero&#39;</span><span class="p">],</span>
+    <span class="nb">type</span><span class="o">=</span><span class="s1">'muzero'</span><span class="p">,</span>
+    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">'lzero.policy.muzero'</span><span class="p">],</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -251,7 +252,7 @@
 <section id="id3">
 <h2>3. 运行算法<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
 <p>配置完成后，在<code class="docutils literal notranslate"><span class="pre">main</span></code>函数中调用:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span> 
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span> 
     <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry</span><span class="w"> </span><span class="kn">import</span> <span class="n">train_muzero</span>
     <span class="n">train_muzero</span><span class="p">([</span><span class="n">main_config</span><span class="p">,</span> <span class="n">create_config</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_env_step</span><span class="o">=</span><span class="n">max_env_step</span><span class="p">)</span>
 </pre></div>

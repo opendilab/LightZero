@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -109,12 +110,12 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_optimizers</span>
 
 
-<div class="viewcode-block" id="AlphaZeroPolicy"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy">[docs]</a><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;alphazero&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AlphaZeroPolicy"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy">[docs]</a><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'alphazero'</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">AlphaZeroPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The policy class for AlphaZero.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="c1"># The default_config for AlphaZero policy.</span>
     <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
@@ -139,8 +140,8 @@
         <span class="n">multi_gpu</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to use cuda for network.</span>
         <span class="n">cuda</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-        <span class="c1"># (int) How many updates(iterations) to train after collector&#39;s one collection.</span>
-        <span class="c1"># Bigger &quot;update_per_collect&quot; means bigger off-policy.</span>
+        <span class="c1"># (int) How many updates(iterations) to train after collector's one collection.</span>
+        <span class="c1"># Bigger "update_per_collect" means bigger off-policy.</span>
         <span class="c1"># collect data -&gt; update policy-&gt; collect data -&gt; ...</span>
         <span class="c1"># For different env, we have different episode_length,</span>
         <span class="c1"># we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.</span>
@@ -150,8 +151,8 @@
         <span class="n">replay_ratio</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (int) Minibatch size for one gradient descent.</span>
         <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
-        <span class="c1"># (str) Optimizer for training policy network. [&#39;SGD&#39;, &#39;Adam&#39;, &#39;AdamW&#39;]</span>
-        <span class="n">optim_type</span><span class="o">=</span><span class="s1">&#39;SGD&#39;</span><span class="p">,</span>
+        <span class="c1"># (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']</span>
+        <span class="n">optim_type</span><span class="o">=</span><span class="s1">'SGD'</span><span class="p">,</span>
         <span class="c1"># (float) Learning rate for training policy network. Initial lr for manually decay schedule.</span>
         <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
         <span class="c1"># (float) Weight decay for training policy network.</span>
@@ -200,29 +201,29 @@
     <span class="p">)</span>
 
 <div class="viewcode-block" id="AlphaZeroPolicy.default_model"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy.default_model">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Return this algorithm default model setting for demonstration.</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.</span>
 <span class="sd">            - import_names (:obj:`List[str]`): The model class path list used in this algorithm.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="s1">&#39;AlphaZeroModel&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;lzero.model.alphazero_model&#39;</span><span class="p">]</span></div>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="s1">'AlphaZeroModel'</span><span class="p">,</span> <span class="p">[</span><span class="s1">'lzero.model.alphazero_model'</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._init_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._init_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;SGD&#39;</span><span class="p">,</span> <span class="s1">&#39;Adam&#39;</span><span class="p">,</span> <span class="s1">&#39;AdamW&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="o">==</span> <span class="s1">&#39;SGD&#39;</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">'SGD'</span><span class="p">,</span> <span class="s1">'Adam'</span><span class="p">,</span> <span class="s1">'AdamW'</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="o">==</span> <span class="s1">'SGD'</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span>
                 <span class="n">lr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span>
                 <span class="n">momentum</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">momentum</span><span class="p">,</span>
                 <span class="n">weight_decay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">weight_decay</span><span class="p">,</span>
             <span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="o">==</span> <span class="s1">&#39;Adam&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="o">==</span> <span class="s1">'Adam'</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">weight_decay</span>
             <span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="o">==</span> <span class="s1">&#39;AdamW&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">optim_type</span> <span class="o">==</span> <span class="s1">'AdamW'</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span> <span class="o">=</span> <span class="n">configure_optimizers</span><span class="p">(</span>
                 <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span>
                 <span class="n">weight_decay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">weight_decay</span><span class="p">,</span>
@@ -253,9 +254,9 @@
             <span class="n">inputs</span> <span class="o">=</span> <span class="n">to_device</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_device</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
 
-        <span class="n">state_batch</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">&#39;obs&#39;</span><span class="p">][</span><span class="s1">&#39;observation&#39;</span><span class="p">]</span>
-        <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">&#39;probs&#39;</span><span class="p">]</span>
-        <span class="n">reward</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">&#39;reward&#39;</span><span class="p">]</span>
+        <span class="n">state_batch</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">'obs'</span><span class="p">][</span><span class="s1">'observation'</span><span class="p">]</span>
+        <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">'probs'</span><span class="p">]</span>
+        <span class="n">reward</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">'reward'</span><span class="p">]</span>
 
         <span class="n">state_batch</span> <span class="o">=</span> <span class="n">state_batch</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float</span><span class="p">)</span>
         <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">mcts_probs</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float</span><span class="p">)</span>
@@ -296,26 +297,26 @@
         <span class="c1"># after update</span>
         <span class="c1"># =============</span>
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s1">&#39;cur_lr&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span><span class="o">.</span><span class="n">param_groups</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;lr&#39;</span><span class="p">],</span>
-            <span class="s1">&#39;total_loss&#39;</span><span class="p">:</span> <span class="n">total_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;policy_loss&#39;</span><span class="p">:</span> <span class="n">policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;value_loss&#39;</span><span class="p">:</span> <span class="n">value_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;entropy_loss&#39;</span><span class="p">:</span> <span class="n">entropy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;total_grad_norm_before_clip&#39;</span><span class="p">:</span> <span class="n">total_grad_norm_before_clip</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;collect_mcts_temperature&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">collect_mcts_temperature</span><span class="p">,</span>
+            <span class="s1">'cur_lr'</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span><span class="o">.</span><span class="n">param_groups</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">'lr'</span><span class="p">],</span>
+            <span class="s1">'total_loss'</span><span class="p">:</span> <span class="n">total_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">'policy_loss'</span><span class="p">:</span> <span class="n">policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">'value_loss'</span><span class="p">:</span> <span class="n">value_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">'entropy_loss'</span><span class="p">:</span> <span class="n">entropy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">'total_grad_norm_before_clip'</span><span class="p">:</span> <span class="n">total_grad_norm_before_clip</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">'collect_mcts_temperature'</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">collect_mcts_temperature</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._init_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._init_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_get_simulation_env</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span>
 
         <span class="c1"># Create multiple independent simulate_env instances for batch processing</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">import_module</span><span class="p">,</span> <span class="n">ENV_REGISTRY</span>
-        <span class="n">import_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">create_cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;import_names&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">import_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">create_cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'import_names'</span><span class="p">,</span> <span class="p">[])</span>
         <span class="n">import_module</span><span class="p">(</span><span class="n">import_names</span><span class="p">)</span>
         <span class="n">env_cls</span> <span class="o">=</span> <span class="n">ENV_REGISTRY</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">simulation_env_id</span><span class="p">)</span>
 
@@ -328,7 +329,7 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_and_add_to_sys_path</span>
             <span class="c1"># Use the function to add the desired path to sys.path</span>
-            <span class="n">find_and_add_to_sys_path</span><span class="p">(</span><span class="s2">&quot;lzero/mcts/ctree/ctree_alphazero/build&quot;</span><span class="p">)</span>
+            <span class="n">find_and_add_to_sys_path</span><span class="p">(</span><span class="s2">"lzero/mcts/ctree/ctree_alphazero/build"</span><span class="p">)</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">mcts_alphazero</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts</span> <span class="o">=</span> <span class="n">mcts_alphazero</span><span class="o">.</span><span class="n">MCTS</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts</span><span class="o">.</span><span class="n">max_moves</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts</span><span class="o">.</span><span class="n">num_simulations</span><span class="p">,</span>
                                                      <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts</span><span class="o">.</span><span class="n">pb_c_base</span><span class="p">,</span>
@@ -345,7 +346,7 @@
 
 <div class="viewcode-block" id="AlphaZeroPolicy._forward_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._forward_collect">[docs]</a>    <span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_forward_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">temperature</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The forward function for collecting data in collect mode. Use real env to execute MCTS search.</span>
 <span class="sd">        Arguments:</span>
@@ -355,15 +356,15 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \</span>
 <span class="sd">                the corresponding policy output in this timestep, including action, probs and so on.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">collect_mcts_temperature</span> <span class="o">=</span> <span class="n">temperature</span>
         <span class="n">ready_env_id</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-        <span class="n">init_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;board&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
-        <span class="c1"># If &#39;katago_game_state&#39; is in the observation of the given environment ID, it&#39;s value is used.</span>
-        <span class="c1"># If it&#39;s not present (which will raise a KeyError), None is used instead.</span>
-        <span class="c1"># This approach is taken to maintain compatibility with the handling of &#39;katago&#39; related parts of &#39;alphazero_mcts_ctree&#39; in Go.</span>
-        <span class="n">katago_game_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;katago_game_state&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
-        <span class="n">start_player_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;current_player_index&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="n">init_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">'board'</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="c1"># If 'katago_game_state' is in the observation of the given environment ID, it's value is used.</span>
+        <span class="c1"># If it's not present (which will raise a KeyError), None is used instead.</span>
+        <span class="c1"># This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.</span>
+        <span class="n">katago_game_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'katago_game_state'</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="n">start_player_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">'current_player_index'</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_policy_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span>
 
@@ -402,22 +403,22 @@
                 <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">result</span>
 
             <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
-                <span class="s1">&#39;probs&#39;</span><span class="p">:</span> <span class="n">mcts_probs</span><span class="p">,</span>
+                <span class="s1">'action'</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                <span class="s1">'probs'</span><span class="p">:</span> <span class="n">mcts_probs</span><span class="p">,</span>
             <span class="p">}</span>
 
         <span class="k">return</span> <span class="n">output</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._init_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._init_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_get_simulation_env</span><span class="p">()</span>
 
         <span class="c1"># Create multiple independent simulate_env instances for batch processing</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">import_module</span><span class="p">,</span> <span class="n">ENV_REGISTRY</span>
-        <span class="n">import_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">create_cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;import_names&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">import_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">create_cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'import_names'</span><span class="p">,</span> <span class="p">[])</span>
         <span class="n">import_module</span><span class="p">(</span><span class="n">import_names</span><span class="p">)</span>
         <span class="n">env_cls</span> <span class="o">=</span> <span class="n">ENV_REGISTRY</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">simulation_env_id</span><span class="p">)</span>
 
@@ -430,7 +431,7 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_and_add_to_sys_path</span>
             <span class="c1"># Use the function to add the desired path to sys.path</span>
-            <span class="n">find_and_add_to_sys_path</span><span class="p">(</span><span class="s2">&quot;lzero/mcts/ctree/ctree_alphazero/build&quot;</span><span class="p">)</span>
+            <span class="n">find_and_add_to_sys_path</span><span class="p">(</span><span class="s2">"lzero/mcts/ctree/ctree_alphazero/build"</span><span class="p">)</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">mcts_alphazero</span>
 
             <span class="c1"># TODO(pu): how to set proper num_simulations for evaluation</span>
@@ -452,7 +453,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._forward_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._forward_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The forward function for evaluating the current policy in eval mode, similar to ``self._forward_collect``.</span>
 <span class="sd">        Arguments:</span>
@@ -461,14 +462,14 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \</span>
 <span class="sd">                the corresponding policy output in this timestep, including action, probs and so on.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">ready_env_id</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-        <span class="n">init_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;board&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
-        <span class="c1"># If &#39;katago_game_state&#39; is in the observation of the given environment ID, it&#39;s value is used.</span>
-        <span class="c1"># If it&#39;s not present (which will raise a KeyError), None is used instead.</span>
-        <span class="c1"># This approach is taken to maintain compatibility with the handling of &#39;katago&#39; related parts of &#39;alphazero_mcts_ctree&#39; in Go.</span>
-        <span class="n">katago_game_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;katago_game_state&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
-        <span class="n">start_player_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;current_player_index&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="n">init_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">'board'</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="c1"># If 'katago_game_state' is in the observation of the given environment ID, it's value is used.</span>
+        <span class="c1"># If it's not present (which will raise a KeyError), None is used instead.</span>
+        <span class="c1"># This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.</span>
+        <span class="n">katago_game_state</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'katago_game_state'</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="n">start_player_index</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">'current_player_index'</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_policy_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span>
 
@@ -507,22 +508,22 @@
                 <span class="n">action</span><span class="p">,</span> <span class="n">mcts_probs</span> <span class="o">=</span> <span class="n">result</span>
 
             <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
-                <span class="s1">&#39;probs&#39;</span><span class="p">:</span> <span class="n">mcts_probs</span><span class="p">,</span>
+                <span class="s1">'action'</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                <span class="s1">'probs'</span><span class="p">:</span> <span class="n">mcts_probs</span><span class="p">,</span>
             <span class="p">}</span>
 
         <span class="k">return</span> <span class="n">output</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._get_simulation_env"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._get_simulation_env">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_simulation_env</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Create simulation environment for MCTS using registry-based approach.</span>
 <span class="sd">            Uses ENV_REGISTRY to instantiate environment based on simulation_env_id.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">import_module</span><span class="p">,</span> <span class="n">ENV_REGISTRY</span>
 
         <span class="c1"># Import env modules to trigger registration</span>
-        <span class="n">import_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">create_cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;import_names&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">import_names</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">create_cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'import_names'</span><span class="p">,</span> <span class="p">[])</span>
         <span class="n">import_module</span><span class="p">(</span><span class="n">import_names</span><span class="p">)</span>
 
         <span class="c1"># Get env class from registry</span>
@@ -532,8 +533,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">simulate_env</span> <span class="o">=</span> <span class="n">env_cls</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">full_cfg</span><span class="o">.</span><span class="n">env</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._policy_value_fn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn">[docs]</a>    <span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_policy_value_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="s1">&#39;Env&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">]:</span>  <span class="c1"># noqa</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_policy_value_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="s1">'Env'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">]:</span>  <span class="c1"># noqa</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Compute policy and value for a single environment. Provides backward compatibility</span>
 <span class="sd">            with single-environment inference interface.</span>
@@ -547,7 +548,7 @@
 
 <span class="sd">        Shapes:</span>
 <span class="sd">            - current_state_scale (:obj:`torch.Tensor`): :math:`(1, C, H, W)` after unsqueeze.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">legal_actions</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">legal_actions</span>
         <span class="n">current_state</span><span class="p">,</span> <span class="n">current_state_scale</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">current_state</span><span class="p">()</span>
         <span class="n">current_state_scale</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">current_state_scale</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
@@ -559,8 +560,8 @@
         <span class="k">return</span> <span class="n">action_probs_dict</span><span class="p">,</span> <span class="n">value</span><span class="o">.</span><span class="n">item</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._policy_value_fn_batch"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._policy_value_fn_batch">[docs]</a>    <span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_policy_value_fn_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s1">&#39;Env&#39;</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">]]:</span>  <span class="c1"># noqa</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_policy_value_fn_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s1">'Env'</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">float</span><span class="p">]]:</span>  <span class="c1"># noqa</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Batch inference for multiple environments to improve GPU utilization.</span>
 <span class="sd">            Processes multiple game states in a single forward pass instead of iterating individually.</span>
@@ -576,7 +577,7 @@
 <span class="sd">            - state_batch (:obj:`torch.Tensor`): :math:`(B, C, H, W)` where B is batch size.</span>
 <span class="sd">            - action_probs_batch (:obj:`torch.Tensor`): :math:`(B, A)` where A is action space size.</span>
 <span class="sd">            - value_batch (:obj:`torch.Tensor`): :math:`(B,)`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">env_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[]</span>
 
@@ -617,28 +618,28 @@
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._monitor_vars_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._monitor_vars_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_monitor_vars_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Register the variables to be monitored in learn mode. The registered variables will be logged in</span>
 <span class="sd">            tensorboard according to the return value ``_forward_learn``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_monitor_vars_learn</span><span class="p">()</span> <span class="o">+</span> <span class="p">[</span>
-            <span class="s1">&#39;cur_lr&#39;</span><span class="p">,</span> <span class="s1">&#39;total_loss&#39;</span><span class="p">,</span> <span class="s1">&#39;policy_loss&#39;</span><span class="p">,</span> <span class="s1">&#39;value_loss&#39;</span><span class="p">,</span> <span class="s1">&#39;entropy_loss&#39;</span><span class="p">,</span> <span class="s1">&#39;total_grad_norm_before_clip&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;collect_mcts_temperature&#39;</span>
+            <span class="s1">'cur_lr'</span><span class="p">,</span> <span class="s1">'total_loss'</span><span class="p">,</span> <span class="s1">'policy_loss'</span><span class="p">,</span> <span class="s1">'value_loss'</span><span class="p">,</span> <span class="s1">'entropy_loss'</span><span class="p">,</span> <span class="s1">'total_grad_norm_before_clip'</span><span class="p">,</span>
+            <span class="s1">'collect_mcts_temperature'</span>
         <span class="p">]</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._process_transition"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._process_transition">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_transition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">model_output</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">timestep</span><span class="p">:</span> <span class="n">namedtuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Generate the dict type transition (one timestep) data from policy learning.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s1">&#39;obs&#39;</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span>
-            <span class="s1">&#39;next_obs&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="o">.</span><span class="n">obs</span><span class="p">,</span>
-            <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">model_output</span><span class="p">[</span><span class="s1">&#39;action&#39;</span><span class="p">],</span>
-            <span class="s1">&#39;probs&#39;</span><span class="p">:</span> <span class="n">model_output</span><span class="p">[</span><span class="s1">&#39;probs&#39;</span><span class="p">],</span>
-            <span class="s1">&#39;reward&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="o">.</span><span class="n">reward</span><span class="p">,</span>
-            <span class="s1">&#39;done&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="o">.</span><span class="n">done</span><span class="p">,</span>
+            <span class="s1">'obs'</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span>
+            <span class="s1">'next_obs'</span><span class="p">:</span> <span class="n">timestep</span><span class="o">.</span><span class="n">obs</span><span class="p">,</span>
+            <span class="s1">'action'</span><span class="p">:</span> <span class="n">model_output</span><span class="p">[</span><span class="s1">'action'</span><span class="p">],</span>
+            <span class="s1">'probs'</span><span class="p">:</span> <span class="n">model_output</span><span class="p">[</span><span class="s1">'probs'</span><span class="p">],</span>
+            <span class="s1">'reward'</span><span class="p">:</span> <span class="n">timestep</span><span class="o">.</span><span class="n">reward</span><span class="p">,</span>
+            <span class="s1">'done'</span><span class="p">:</span> <span class="n">timestep</span><span class="o">.</span><span class="n">done</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 <div class="viewcode-block" id="AlphaZeroPolicy._get_train_sample"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy._get_train_sample">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_train_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>

@@ -23,7 +23,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="How to Set Configuration Files in LightZero" href="../config/config.html" />
-    <link rel="prev" title="MuZero / UniZero Async Segment Pipeline" href="../algos/async_pipeline_muzero_unizero.html" />
+    <link rel="prev" title="UniZero + PPO" href="../algos/unizero_ppo.html" />
     <link href="../../_static/css/style.css" rel="stylesheet" type="text/css">
 
 </head>
@@ -52,6 +52,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">How to Customize Your Environments in LightZero?</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#major-differences-from-baseenv">Major Differences from BaseEnv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#basic-steps">Basic Steps</a><ul>
@@ -167,7 +168,7 @@
     <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="c1"># get the action_mask according to the legal action</span>
     <span class="o">...</span>
-    <span class="n">lightzero_obs_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;observation&#39;</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span> <span class="s1">&#39;action_mask&#39;</span><span class="p">:</span> <span class="n">action_mask</span><span class="p">,</span> <span class="s1">&#39;to_play&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">}</span>
+    <span class="n">lightzero_obs_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'observation'</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span> <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">action_mask</span><span class="p">,</span> <span class="s1">'to_play'</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">}</span>
     <span class="k">return</span> <span class="n">lightzero_obs_dict</span>
 </pre></div>
 </div>
@@ -183,13 +184,13 @@
         <span class="n">action_mask</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="c1"># get the action_mask according to the legal action</span>
-        <span class="n">action_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="s1">&#39;int8&#39;</span><span class="p">)</span>
+        <span class="n">action_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="s1">'int8'</span><span class="p">)</span>
     
-    <span class="n">lightzero_obs_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;observation&#39;</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span> <span class="s1">&#39;action_mask&#39;</span><span class="p">:</span> <span class="n">action_mask</span><span class="p">,</span> <span class="s1">&#39;to_play&#39;</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">}</span>
+    <span class="n">lightzero_obs_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'observation'</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span> <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">action_mask</span><span class="p">,</span> <span class="s1">'to_play'</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">}</span>
     
     <span class="bp">self</span><span class="o">.</span><span class="n">_eval_episode_return</span> <span class="o">+=</span> <span class="n">rew</span>
     <span class="k">if</span> <span class="n">done</span><span class="p">:</span>
-        <span class="n">info</span><span class="p">[</span><span class="s1">&#39;eval_episode_return&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_episode_return</span>
+        <span class="n">info</span><span class="p">[</span><span class="s1">'eval_episode_return'</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_episode_return</span>
     
     <span class="k">return</span> <span class="n">BaseEnvTimestep</span><span class="p">(</span><span class="n">lightzero_obs_dict</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span><span class="p">)</span>
 </pre></div>
@@ -216,26 +217,26 @@
 <section id="render-method-br">
 <h3>6. <strong>Render Method</strong><br><a class="headerlink" href="#render-method-br" title="Permalink to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">render</span></code> method displays the gameplay of the game for users to observe. For environments that have implemented the <code class="docutils literal notranslate"><span class="pre">render</span></code> method, users can choose whether to call <code class="docutils literal notranslate"><span class="pre">render</span></code> during the execution of the <code class="docutils literal notranslate"><span class="pre">step</span></code> function to render the game state at each step.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;image_savefile_mode&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'image_savefile_mode'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Renders the game environment.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - mode (:obj:`str`): The rendering mode. Options are </span>
-<span class="sd">            &#39;state_realtime_mode&#39;, </span>
-<span class="sd">            &#39;image_realtime_mode&#39;, </span>
-<span class="sd">            or &#39;image_savefile_mode&#39;.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># In &#39;state_realtime_mode&#39; mode, print the current game board for rendering.</span>
-        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;state_realtime_mode&quot;</span><span class="p">:</span>
+<span class="sd">            'state_realtime_mode', </span>
+<span class="sd">            'image_realtime_mode', </span>
+<span class="sd">            or 'image_savefile_mode'.</span>
+<span class="sd">        """</span>
+        <span class="c1"># In 'state_realtime_mode' mode, print the current game board for rendering.</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">"state_realtime_mode"</span><span class="p">:</span>
             <span class="o">...</span>
         <span class="c1"># In other two modes, use a screen for rendering. </span>
         <span class="c1"># Draw the screen.</span>
         <span class="o">...</span>
-        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;image_realtime_mode&quot;</span><span class="p">:</span>
-            <span class="c1"># Render the picture to user&#39;s window.</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">"image_realtime_mode"</span><span class="p">:</span>
+            <span class="c1"># Render the picture to user's window.</span>
             <span class="o">...</span>
-        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;image_savefile_mode&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">"image_savefile_mode"</span><span class="p">:</span>
             <span class="c1"># Save the picture to frames.</span>
             <span class="o">...</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">screen</span><span class="p">)</span>
@@ -259,7 +260,7 @@
 <p>Lastly, you need to use the <code class="docutils literal notranslate"><span class="pre">ENV_REGISTRY.register</span></code> decorator to register your new environment so that it can be used in the configuration file. For example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENV_REGISTRY</span>
 
-<span class="nd">@ENV_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_custom_env&#39;</span><span class="p">)</span>
+<span class="nd">@ENV_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'my_custom_env'</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
     <span class="c1"># ...</span>
 </pre></div>
@@ -267,8 +268,8 @@
 <p>Once the environment is registered, you can specify the creation of the corresponding environment in the <code class="docutils literal notranslate"><span class="pre">create_config</span></code> section of the configuration file:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">create_config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
     <span class="n">env</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
-        <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;my_custom_env&#39;</span><span class="p">,</span>
-        <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;zoo.board_games.my_custom_env.envs.my_custom_env&#39;</span><span class="p">],</span>
+        <span class="nb">type</span><span class="o">=</span><span class="s1">'my_custom_env'</span><span class="p">,</span>
+        <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">'zoo.board_games.my_custom_env.envs.my_custom_env'</span><span class="p">],</span>
     <span class="p">),</span>
     <span class="o">...</span>
 <span class="p">)</span>
@@ -303,9 +304,9 @@
     <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_random_action_in_bot</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_action</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bot_action_type</span> <span class="o">==</span> <span class="s1">&#39;rule&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bot_action_type</span> <span class="o">==</span> <span class="s1">'rule'</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">rule_bot</span><span class="o">.</span><span class="n">get_rule_bot_action</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_player</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">bot_action_type</span> <span class="o">==</span> <span class="s1">&#39;mcts&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">bot_action_type</span> <span class="o">==</span> <span class="s1">'mcts'</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mcts_bot</span><span class="o">.</span><span class="n">get_actions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="p">,</span> <span class="n">player_index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">current_player_index</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -329,7 +330,7 @@
         <span class="k">return</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">DingEnvWrapper</span><span class="p">(</span>
             <span class="n">gym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="n">env_id</span><span class="p">),</span>
             <span class="n">cfg</span><span class="o">=</span><span class="p">{</span>
-                <span class="s1">&#39;env_wrapper&#39;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s1">'env_wrapper'</span><span class="p">:</span> <span class="p">[</span>
                     <span class="k">lambda</span> <span class="n">env</span><span class="p">:</span> <span class="n">ActionDiscretizationEnvWrapper</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">wrapper_cfg</span><span class="p">),</span> <span class="k">lambda</span> <span class="n">env</span><span class="p">:</span>
                     <span class="n">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">wrapper_cfg</span><span class="p">)</span>
                 <span class="p">]</span>
@@ -337,17 +338,17 @@
         <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">return</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">DingEnvWrapper</span><span class="p">(</span>
-            <span class="n">gym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="n">env_id</span><span class="p">),</span> <span class="n">cfg</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;env_wrapper&#39;</span><span class="p">:</span> <span class="p">[</span><span class="k">lambda</span> <span class="n">env</span><span class="p">:</span> <span class="n">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">wrapper_cfg</span><span class="p">)]}</span>
+            <span class="n">gym</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="n">env_id</span><span class="p">),</span> <span class="n">cfg</span><span class="o">=</span><span class="p">{</span><span class="s1">'env_wrapper'</span><span class="p">:</span> <span class="p">[</span><span class="k">lambda</span> <span class="n">env</span><span class="p">:</span> <span class="n">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="n">wrapper_cfg</span><span class="p">)]}</span>
         <span class="p">)</span>
 </pre></div>
 </div>
 <p>Then call the <code class="docutils literal notranslate"><span class="pre">train_muzero_with_gym_env</span></code> method in the main entry point of the algorithm, and you can use the wrapped env for training:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The ``train_muzero_with_gym_env`` entry means that the environment used in the training process is generated by wrapping the original gym environment with LightZeroEnvWrapper.</span>
 <span class="sd">        Users can refer to lzero/envs/wrappers for more details.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry</span><span class="w"> </span><span class="kn">import</span> <span class="n">train_muzero_with_gym_env</span>
     <span class="n">train_muzero_with_gym_env</span><span class="p">([</span><span class="n">main_config</span><span class="p">,</span> <span class="n">create_config</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_env_step</span><span class="o">=</span><span class="n">max_env_step</span><span class="p">)</span>
 </pre></div>
@@ -368,7 +369,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="../algos/async_pipeline_muzero_unizero.html" class="btn btn-neutral float-left" title="MuZero / UniZero Async Segment Pipeline" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../algos/unizero_ppo.html" class="btn btn-neutral float-left" title="UniZero + PPO" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="../config/config.html" class="btn btn-neutral float-right" title="How to Set Configuration Files in LightZero" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

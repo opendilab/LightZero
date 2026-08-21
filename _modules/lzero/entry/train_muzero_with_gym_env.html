@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -116,8 +117,8 @@
         <span class="n">model_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">max_train_iter</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e10</span><span class="p">),</span>
         <span class="n">max_env_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e10</span><span class="p">),</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;Policy&#39;</span><span class="p">:</span>  <span class="c1"># noqa</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">'Policy'</span><span class="p">:</span>  <span class="c1"># noqa</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.</span>
 <span class="sd">        We create a gym environment using env_id parameter, and then convert it to the format required by LightZero using LightZeroEnvWrapper class.</span>
@@ -134,23 +135,23 @@
 <span class="sd">        - max_env_step (:obj:`Optional[int]`): Maximum collected environment interaction steps.</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        - policy (:obj:`Policy`): Converged policy.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">cfg</span><span class="p">,</span> <span class="n">create_cfg</span> <span class="o">=</span> <span class="n">input_cfg</span>
-    <span class="k">assert</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;efficientzero&#39;</span><span class="p">,</span> <span class="s1">&#39;muzero&#39;</span><span class="p">,</span> <span class="s1">&#39;sampled_efficientzero&#39;</span><span class="p">],</span> \
-        <span class="s2">&quot;train_muzero entry now only support the following algo.: &#39;efficientzero&#39;, &#39;muzero&#39;, &#39;sampled_efficientzero&#39;&quot;</span>
+    <span class="k">assert</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">'efficientzero'</span><span class="p">,</span> <span class="s1">'muzero'</span><span class="p">,</span> <span class="s1">'sampled_efficientzero'</span><span class="p">],</span> \
+        <span class="s2">"train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero'"</span>
 
-    <span class="k">if</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">&#39;muzero&#39;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">'muzero'</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroGameBuffer</span> <span class="k">as</span> <span class="n">GameBuffer</span>
-    <span class="k">elif</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">&#39;efficientzero&#39;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">'efficientzero'</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">EfficientZeroGameBuffer</span> <span class="k">as</span> <span class="n">GameBuffer</span>
-    <span class="k">elif</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">&#39;sampled_efficientzero&#39;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">'sampled_efficientzero'</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">SampledEfficientZeroGameBuffer</span> <span class="k">as</span> <span class="n">GameBuffer</span>
 
     <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
-        <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s1">&#39;cuda&#39;</span>
+        <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s1">'cuda'</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s1">&#39;cpu&#39;</span>
+        <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s1">'cpu'</span>
 
     <span class="n">cfg</span> <span class="o">=</span> <span class="n">compile_config</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span> <span class="n">env</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">auto</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">create_cfg</span><span class="o">=</span><span class="n">create_cfg</span><span class="p">,</span> <span class="n">save_cfg</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
@@ -167,14 +168,14 @@
     <span class="n">evaluator_env</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span> <span class="n">dynamic_seed</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">set_pkg_seed</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
 
-    <span class="n">policy</span> <span class="o">=</span> <span class="n">create_policy</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">enable_field</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;learn&#39;</span><span class="p">,</span> <span class="s1">&#39;collect&#39;</span><span class="p">,</span> <span class="s1">&#39;eval&#39;</span><span class="p">])</span>
+    <span class="n">policy</span> <span class="o">=</span> <span class="n">create_policy</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">enable_field</span><span class="o">=</span><span class="p">[</span><span class="s1">'learn'</span><span class="p">,</span> <span class="s1">'collect'</span><span class="p">,</span> <span class="s1">'eval'</span><span class="p">])</span>
 
     <span class="c1"># load pretrained model</span>
     <span class="k">if</span> <span class="n">model_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">policy</span><span class="o">.</span><span class="n">learn_mode</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">model_path</span><span class="p">,</span> <span class="n">map_location</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span><span class="p">))</span>
 
     <span class="c1"># Create worker components: learner, collector, evaluator, replay buffer, commander.</span>
-    <span class="n">tb_logger</span> <span class="o">=</span> <span class="n">SummaryWriter</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;./</span><span class="si">{}</span><span class="s1">/log/&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">),</span> <span class="s1">&#39;serial&#39;</span><span class="p">))</span>
+    <span class="n">tb_logger</span> <span class="o">=</span> <span class="n">SummaryWriter</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">'./</span><span class="si">{}</span><span class="s1">/log/'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">),</span> <span class="s1">'serial'</span><span class="p">))</span>
     <span class="n">learner</span> <span class="o">=</span> <span class="n">BaseLearner</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">learn</span><span class="o">.</span><span class="n">learner</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">learn_mode</span><span class="p">,</span> <span class="n">tb_logger</span><span class="p">,</span> <span class="n">exp_name</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">)</span>
 
     <span class="c1"># ==============================================================</span>
@@ -205,15 +206,15 @@
     <span class="c1"># ==============================================================</span>
     <span class="c1"># Main loop</span>
     <span class="c1"># ==============================================================</span>
-    <span class="c1"># Learner&#39;s before_run hook.</span>
-    <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">&#39;before_run&#39;</span><span class="p">)</span>
+    <span class="c1"># Learner's before_run hook.</span>
+    <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">'before_run'</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">update_per_collect</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">update_per_collect</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">update_per_collect</span>
     <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
         <span class="n">collect_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="c1"># set temperature for visit count distributions according to the train_iter,</span>
         <span class="c1"># please refer to Appendix D in MuZero paper for details.</span>
-        <span class="n">collect_kwargs</span><span class="p">[</span><span class="s1">&#39;temperature&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">visit_count_temperature</span><span class="p">(</span>
+        <span class="n">collect_kwargs</span><span class="p">[</span><span class="s1">'temperature'</span><span class="p">]</span> <span class="o">=</span> <span class="n">visit_count_temperature</span><span class="p">(</span>
             <span class="n">policy_config</span><span class="o">.</span><span class="n">manual_temperature_decay</span><span class="p">,</span>
             <span class="n">policy_config</span><span class="o">.</span><span class="n">fixed_temperature_value</span><span class="p">,</span>
             <span class="n">policy_config</span><span class="o">.</span><span class="n">threshold_training_steps_for_final_temperature</span><span class="p">,</span>
@@ -227,9 +228,9 @@
                 <span class="n">decay</span><span class="o">=</span><span class="n">policy_config</span><span class="o">.</span><span class="n">eps</span><span class="o">.</span><span class="n">decay</span><span class="p">,</span>
                 <span class="n">type_</span><span class="o">=</span><span class="n">policy_config</span><span class="o">.</span><span class="n">eps</span><span class="o">.</span><span class="n">type</span>
             <span class="p">)</span>
-            <span class="n">collect_kwargs</span><span class="p">[</span><span class="s1">&#39;epsilon&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epsilon_greedy_fn</span><span class="p">(</span><span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
+            <span class="n">collect_kwargs</span><span class="p">[</span><span class="s1">'epsilon'</span><span class="p">]</span> <span class="o">=</span> <span class="n">epsilon_greedy_fn</span><span class="p">(</span><span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">collect_kwargs</span><span class="p">[</span><span class="s1">&#39;epsilon&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="n">collect_kwargs</span><span class="p">[</span><span class="s1">'epsilon'</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
 
         <span class="c1"># Evaluate policy performance.</span>
         <span class="k">if</span> <span class="n">evaluator</span><span class="o">.</span><span class="n">should_eval</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">):</span>
@@ -258,10 +259,10 @@
                 <span class="n">train_data</span> <span class="o">=</span> <span class="n">replay_buffer</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">policy</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s1">&#39;The data in replay_buffer is not sufficient to sample a mini-batch: &#39;</span>
-                    <span class="sa">f</span><span class="s1">&#39;batch_size: </span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s1">, &#39;</span>
-                    <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">replay_buffer</span><span class="si">}</span><span class="s1"> &#39;</span>
-                    <span class="sa">f</span><span class="s1">&#39;continue to collect now ....&#39;</span>
+                    <span class="sa">f</span><span class="s1">'The data in replay_buffer is not sufficient to sample a mini-batch: '</span>
+                    <span class="sa">f</span><span class="s1">'batch_size: </span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s1">, '</span>
+                    <span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">replay_buffer</span><span class="si">}</span><span class="s1"> '</span>
+                    <span class="sa">f</span><span class="s1">'continue to collect now ....'</span>
                 <span class="p">)</span>
                 <span class="k">break</span>
 
@@ -269,13 +270,13 @@
             <span class="n">log_vars</span> <span class="o">=</span> <span class="n">learner</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">train_data</span><span class="p">,</span> <span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
-                <span class="n">replay_buffer</span><span class="o">.</span><span class="n">update_priority</span><span class="p">(</span><span class="n">train_data</span><span class="p">,</span> <span class="n">log_vars</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;value_priority_orig&#39;</span><span class="p">])</span>
+                <span class="n">replay_buffer</span><span class="o">.</span><span class="n">update_priority</span><span class="p">(</span><span class="n">train_data</span><span class="p">,</span> <span class="n">log_vars</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">'value_priority_orig'</span><span class="p">])</span>
 
         <span class="k">if</span> <span class="n">collector</span><span class="o">.</span><span class="n">envstep</span> <span class="o">&gt;=</span> <span class="n">max_env_step</span> <span class="ow">or</span> <span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span> <span class="o">&gt;=</span> <span class="n">max_train_iter</span><span class="p">:</span>
             <span class="k">break</span>
 
-    <span class="c1"># Learner&#39;s after_run hook.</span>
-    <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">&#39;after_run&#39;</span><span class="p">)</span>
+    <span class="c1"># Learner's after_run hook.</span>
+    <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">'after_run'</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">policy</span></div>
 </pre></div>
 

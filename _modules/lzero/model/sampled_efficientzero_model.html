@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -106,8 +107,8 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">renormalize</span><span class="p">,</span> <span class="n">get_params_mean</span>
 
 
-<span class="c1"># use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine&#39;s document.</span>
-<span class="nd">@MODEL_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;SampledEfficientZeroModel&#39;</span><span class="p">)</span>
+<span class="c1"># use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.</span>
+<span class="nd">@MODEL_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'SampledEfficientZeroModel'</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">SampledEfficientZeroModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -131,7 +132,7 @@
             <span class="n">pred_out</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
             <span class="n">self_supervised_learning_loss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
             <span class="n">categorical_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-            <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">),</span>
+            <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">'tanh'</span><span class="p">),</span>
             <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
             <span class="n">state_norm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
             <span class="n">downsample</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -140,16 +141,16 @@
             <span class="c1"># ==============================================================</span>
             <span class="n">continuous_action_space</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
             <span class="n">num_of_sampled_actions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
-            <span class="n">sigma_type</span><span class="o">=</span><span class="s1">&#39;conditioned&#39;</span><span class="p">,</span>
+            <span class="n">sigma_type</span><span class="o">=</span><span class="s1">'conditioned'</span><span class="p">,</span>
             <span class="n">fixed_sigma_value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
             <span class="n">bound_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-            <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;LN&#39;</span><span class="p">,</span>
-            <span class="n">discrete_action_encoding_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'LN'</span><span class="p">,</span>
+            <span class="n">discrete_action_encoding_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'one_hot'</span><span class="p">,</span>
             <span class="n">use_sim_norm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
             <span class="o">*</span><span class="n">args</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The definition of the network model of Sampled EfficientZero, which is a generalization version for 2D image obs.</span>
 <span class="sd">            The networks are mainly built on convolution residual blocks and fully connected layers.</span>
@@ -186,19 +187,19 @@
 <span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to True.</span>
 <span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \</span>
 <span class="sd">                defaults to True. This option is often used in video games like Atari. In board games like go, \</span>
-<span class="sd">                we don&#39;t need this module.</span>
+<span class="sd">                we don't need this module.</span>
 <span class="sd">            # ==============================================================</span>
 <span class="sd">            # specific sampled related config</span>
 <span class="sd">            # ==============================================================</span>
 <span class="sd">            - continuous_action_space (:obj:`bool`): The type of action space. default set it to False.</span>
 <span class="sd">            - num_of_sampled_actions (:obj:`int`): the number of sampled actions, i.e. the K in original Sampled MuZero paper.</span>
 <span class="sd">            # Please see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about the following arguments.</span>
-<span class="sd">            - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={&#39;conditioned&#39;, &#39;fixed&#39;}.</span>
+<span class="sd">            - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.</span>
 <span class="sd">            - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,</span>
 <span class="sd">            - bound_type (:obj:`str`): The type of bound in networks, default set it to None.</span>
-<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks, default sets it to &#39;BN&#39;.</span>
-<span class="sd">            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default sets it to &#39;one_hot&#39;. options = {&#39;one_hot&#39;, &#39;not_one_hot&#39;}</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks, default sets it to 'BN'.</span>
+<span class="sd">            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}</span>
+<span class="sd">        """</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">SampledEfficientZeroModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="c1"># for vector obs input, e.g. classical control and box2d environments</span>
@@ -214,17 +215,17 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="o">=</span> <span class="n">continuous_action_space</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">action_space_size</span> <span class="o">=</span> <span class="n">action_space_size</span>
-        <span class="c1"># The dim of action space. For discrete action space, it&#39;s 1.</span>
+        <span class="c1"># The dim of action space. For discrete action space, it's 1.</span>
         <span class="c1"># For continuous action space, it is the dim of action.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">action_space_dim</span> <span class="o">=</span> <span class="n">action_space_size</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="k">else</span> <span class="mi">1</span>
-        <span class="k">assert</span> <span class="n">discrete_action_encoding_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;one_hot&#39;</span><span class="p">,</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">],</span> <span class="n">discrete_action_encoding_type</span>
+        <span class="k">assert</span> <span class="n">discrete_action_encoding_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">'one_hot'</span><span class="p">,</span> <span class="s1">'not_one_hot'</span><span class="p">],</span> <span class="n">discrete_action_encoding_type</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">=</span> <span class="n">discrete_action_encoding_type</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span> <span class="o">=</span> <span class="n">action_space_size</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">'one_hot'</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span> <span class="o">=</span> <span class="n">action_space_size</span>
-            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">'not_one_hot'</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span> <span class="o">=</span> <span class="mi">1</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">lstm_hidden_size</span> <span class="o">=</span> <span class="n">lstm_hidden_size</span>
@@ -251,7 +252,7 @@
         <span class="k">elif</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">64</span><span class="p">:</span>
             <span class="n">latent_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid observation shape, only support 64, 84, 96 for now.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Invalid observation shape, only support 64, 84, 96 for now."</span><span class="p">)</span>
 
         <span class="n">flatten_input_size_for_reward_head</span> <span class="o">=</span> <span class="p">(</span>
             <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
@@ -336,11 +337,11 @@
             <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">initial_inference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EZNetworkOutput</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">         Overview:</span>
 <span class="sd">            Initial inference of SampledEfficientZero model, which is the first step of the SampledEfficientZero model.</span>
-<span class="sd">             To perform the initial inference, we first use the representation network to obtain the &quot;latent_state&quot; of the observation.</span>
-<span class="sd">             Then we use the prediction network to predict the &quot;value&quot; and &quot;policy_logits&quot; of the &quot;latent_state&quot;, and</span>
+<span class="sd">             To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.</span>
+<span class="sd">             Then we use the prediction network to predict the "value" and "policy_logits" of the "latent_state", and</span>
 <span class="sd">            also prepare the zeros-like ``reward_hidden_state`` for the next step of the SampledEfficientZero model.</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - obs (:obj:`torch.Tensor`): The 2D image observation data.</span>
@@ -360,7 +361,7 @@
 <span class="sd">            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, lstm_hidden_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">batch_size</span> <span class="o">=</span> <span class="n">obs</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_representation</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
         <span class="n">policy_logits</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prediction</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
@@ -376,7 +377,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">recurrent_inference</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">reward_hidden_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EZNetworkOutput</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Recurrent inference of Sampled EfficientZero model, which is the rollout step of the Sampled EfficientZero model.</span>
 <span class="sd">            To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,</span>
@@ -404,13 +405,13 @@
 <span class="sd">            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, lstm_hidden_size)`, where B is batch_size.</span>
-<span class="sd">         &quot;&quot;&quot;</span>
+<span class="sd">         """</span>
         <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward_hidden_state</span><span class="p">,</span> <span class="n">value_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dynamics</span><span class="p">(</span><span class="n">latent_state</span><span class="p">,</span> <span class="n">reward_hidden_state</span><span class="p">,</span> <span class="n">action</span><span class="p">)</span>
         <span class="n">policy_logits</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prediction</span><span class="p">(</span><span class="n">next_latent_state</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">EZNetworkOutput</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">value_prefix</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward_hidden_state</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_representation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the representation network to encode the observations into latent state.</span>
 <span class="sd">        Arguments:</span>
@@ -421,16 +422,16 @@
 <span class="sd">            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.</span>
 <span class="sd">            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">representation_network</span><span class="p">(</span><span class="n">observation</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_norm</span><span class="p">:</span>
             <span class="n">latent_state</span> <span class="o">=</span> <span class="n">renormalize</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">latent_state</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_prediction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
-<span class="sd">             use the prediction network to predict the &quot;value&quot; and &quot;policy_logits&quot; of the &quot;latent_state&quot;.</span>
+<span class="sd">             use the prediction network to predict the "value" and "policy_logits" of the "latent_state".</span>
 <span class="sd">        Arguments:</span>
 <span class="sd">            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input obs.</span>
 <span class="sd">        Returns:</span>
@@ -441,12 +442,12 @@
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.</span>
 <span class="sd">            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">prediction_network</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_dynamics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">reward_hidden_state</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
                   <span class="n">action</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``</span>
 <span class="sd">            ``value_prefix`` and ``next_reward_hidden_state``.</span>
@@ -465,12 +466,12 @@
 <span class="sd">            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \</span>
 <span class="sd">                latent state, W_ is the width of latent state.</span>
 <span class="sd">            - value_prefix (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># NOTE: the discrete action encoding type is important for some environments</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span><span class="p">:</span>
             <span class="c1"># discrete action space</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">'one_hot'</span><span class="p">:</span>
                 <span class="c1"># Stack latent_state with the one hot encoded action.</span>
                 <span class="c1"># The final action_encoding shape is (batch_size, action_space_size, latent_state[2], latent_state[3]), e.g. (8, 2, 4, 1).</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -490,7 +491,7 @@
                     <span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">,</span> <span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
                 <span class="p">)</span>
 
-            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">'not_one_hot'</span><span class="p">:</span>
                 <span class="c1"># Stack latent_state with the normalized encoded action.</span>
                 <span class="c1"># The final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
@@ -539,7 +540,7 @@
             <span class="k">return</span> <span class="n">next_latent_state_normalized</span><span class="p">,</span> <span class="n">next_reward_hidden_state</span><span class="p">,</span> <span class="n">value_prefix</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">project</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">with_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.</span>
 <span class="sd">            For more details, please refer to paper ``Exploring Simple Siamese Representation Learning``.</span>
@@ -566,7 +567,7 @@
 <span class="sd">            latent_state reshape: (256, 64, 6, 6) -&gt; (256,64*6*6) = (256, 2304)</span>
 <span class="sd">            # self.projection_input_dim = 64*6*6 = 2304</span>
 <span class="sd">            # self.projection_output_dim = 1024</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="n">latent_state</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">latent_state</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="n">proj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
@@ -599,16 +600,16 @@
             <span class="n">flatten_input_size_for_policy_head</span><span class="p">,</span>
             <span class="n">downsample</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-            <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">),</span>
+            <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">'tanh'</span><span class="p">),</span>
             <span class="c1"># ==============================================================</span>
             <span class="c1"># specific sampled related config</span>
             <span class="c1"># ==============================================================</span>
-            <span class="n">sigma_type</span><span class="o">=</span><span class="s1">&#39;conditioned&#39;</span><span class="p">,</span>
+            <span class="n">sigma_type</span><span class="o">=</span><span class="s1">'conditioned'</span><span class="p">,</span>
             <span class="n">fixed_sigma_value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
             <span class="n">bound_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-            <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;LN&#39;</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'LN'</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The definition of policy and value prediction network, which is used to predict value and policy by the</span>
 <span class="sd">            given latent state.</span>
@@ -634,11 +635,11 @@
 <span class="sd">            # specific sampled related config</span>
 <span class="sd">            # ==============================================================</span>
 <span class="sd">            # see ``ReparameterizationHead`` in ``ding.model.common.head`` for more details about the following arguments.</span>
-<span class="sd">            - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={&#39;conditioned&#39;, &#39;fixed&#39;}.</span>
+<span class="sd">            - sigma_type (:obj:`str`): the type of sigma in policy head of prediction network, options={'conditioned', 'fixed'}.</span>
 <span class="sd">            - fixed_sigma_value (:obj:`float`): the fixed sigma value in policy head of prediction network,</span>
 <span class="sd">            - bound_type (:obj:`str`): The type of bound in networks.  Default sets it to None.</span>
-<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. Default sets it to &#39;BN&#39;.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. Default sets it to 'BN'.</span>
+<span class="sd">        """</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="o">=</span> <span class="n">continuous_action_space</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_value_head</span> <span class="o">=</span> <span class="n">flatten_input_size_for_value_head</span>
@@ -655,7 +656,7 @@
                     <span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span><span class="p">,</span>
                     <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
                     <span class="n">norm_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">norm_type</span><span class="p">,</span>
-                    <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span>
+                    <span class="n">res_type</span><span class="o">=</span><span class="s1">'basic'</span><span class="p">,</span>
                     <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
                 <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_res_blocks</span><span class="p">)</span>
             <span class="p">]</span>
@@ -664,10 +665,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">value_head_channels</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">policy_head_channels</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;BN&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">'BN'</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">norm_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">value_head_channels</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">policy_head_channels</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;LN&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">'LN'</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">downsample</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">norm_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span>
                     <span class="p">[</span><span class="n">value_head_channels</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">),</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)])</span>
@@ -717,7 +718,7 @@
             <span class="p">)</span></div>
 
 <div class="viewcode-block" id="PredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/sampled_efficientzero_model.html#lzero.model.sampled_efficientzero_model.PredictionNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward computation of the prediction network.</span>
 <span class="sd">        Arguments:</span>
@@ -726,7 +727,7 @@
 <span class="sd">             - policy (:obj:`torch.Tensor`): policy tensor. If action space is discrete, shape is (B, action_space_size).</span>
 <span class="sd">                If action space is continuous, shape is (B, action_space_size * 2).</span>
 <span class="sd">            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">for</span> <span class="n">res_block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span><span class="p">:</span>
             <span class="n">latent_state</span> <span class="o">=</span> <span class="n">res_block</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
@@ -746,7 +747,7 @@
         <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy_head</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span><span class="p">:</span>
-            <span class="n">policy</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;mu&#39;</span><span class="p">],</span> <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;sigma&#39;</span><span class="p">]],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">policy</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">policy</span><span class="p">[</span><span class="s1">'mu'</span><span class="p">],</span> <span class="n">policy</span><span class="p">[</span><span class="s1">'sigma'</span><span class="p">]],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">policy</span><span class="p">,</span> <span class="n">value</span></div></div>
 </pre></div>

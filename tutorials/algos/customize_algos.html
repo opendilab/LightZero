@@ -71,6 +71,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="async_pipeline_muzero_unizero.html">MuZero / UniZero Async Segment Pipeline</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unizero_ppo.html">UniZero + PPO</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../config/config.html">How to Set Configuration Files in LightZero</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
@@ -138,12 +139,12 @@
 <section id="implement-your-policy">
 <h3>3. Implement Your Policy<a class="headerlink" href="#implement-your-policy" title="Permalink to this heading"></a></h3>
 <p>Within your policy file, you need to define a class to implement your strategy. This class should inherit from the <code class="docutils literal notranslate"><span class="pre">Policy</span></code> class in DI-engine and implement required methods. Below is a basic framework for a policy class:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_algorithm&#39;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'my_algorithm'</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">MyAlgorithmPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The policy class for MyAlgorithm.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     
     <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
         <span class="c1"># Add your config here</span>
@@ -198,8 +199,8 @@
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="n">create_config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
     <span class="o">...</span>
     <span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
-        <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;my_algorithm&#39;</span><span class="p">,</span>
-        <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;lzero.policy.my_algorithm&#39;</span><span class="p">],</span>
+        <span class="nb">type</span><span class="o">=</span><span class="s1">'my_algorithm'</span><span class="p">,</span>
+        <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">'lzero.policy.my_algorithm'</span><span class="p">],</span>
     <span class="p">),</span>
     <span class="o">...</span>
 <span class="p">)</span>
@@ -238,11 +239,11 @@
     <span class="n">discrete_support</span> <span class="o">=</span> <span class="n">DiscreteSupport</span><span class="p">(</span><span class="o">-</span><span class="mf">300.</span><span class="p">,</span> <span class="mf">301.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">output_1</span> <span class="o">=</span> <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="n">discrete_support</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;t1&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">'t1'</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
     <span class="n">handle</span> <span class="o">=</span> <span class="n">InverseScalarTransform</span><span class="p">(</span><span class="n">discrete_support</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">output_2</span> <span class="o">=</span> <span class="n">handle</span><span class="p">(</span><span class="n">logit</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;t2&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">'t2'</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
     <span class="k">assert</span> <span class="n">output_1</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">output_2</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">assert</span> <span class="p">(</span><span class="n">output_1</span> <span class="o">==</span> <span class="n">output_2</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
 </pre></div>
