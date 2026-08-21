@@ -66,6 +66,29 @@ def _required_replay_transitions(
     return max(one_full_batch, resume_buffer_min_transitions)
 
 
+def _resolve_segment_reanalyze_settings(policy_config) -> Tuple[float, int, float]:
+    """Resolve segment-only reanalysis settings for minimal and legacy configs."""
+    buffer_reanalyze_freq = float(
+        getattr(policy_config, 'buffer_reanalyze_freq', 1 / 100000)
+    )
+    reanalyze_batch_size = int(getattr(policy_config, 'reanalyze_batch_size', 160))
+    reanalyze_partition = float(getattr(policy_config, 'reanalyze_partition', 0.75))
+
+    if buffer_reanalyze_freq <= 0:
+        raise ValueError(
+            f'buffer_reanalyze_freq must be positive, got {buffer_reanalyze_freq}'
+        )
+    if reanalyze_batch_size <= 0:
+        raise ValueError(
+            f'reanalyze_batch_size must be positive, got {reanalyze_batch_size}'
+        )
+    if not 0 < reanalyze_partition <= 1:
+        raise ValueError(
+            f'reanalyze_partition must be in (0, 1], got {reanalyze_partition}'
+        )
+    return buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition
+
+
 def _prune_periodic_checkpoints(exp_name: str, keep_last: int) -> list:
     """Bound periodic checkpoint storage without touching evaluator best checkpoints.
 
@@ -238,7 +261,9 @@ def train_unizero_segment(
     
     buffer_reanalyze_count = 0
     train_epoch = 0
-    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+    buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition = (
+        _resolve_segment_reanalyze_settings(cfg.policy)
+    )
     periodic_ckpt_keep_last = int(getattr(cfg.policy, 'periodic_ckpt_keep_last', 0))
     if periodic_ckpt_keep_last < 0:
         raise ValueError(
@@ -296,12 +321,18 @@ def train_unizero_segment(
         replay_buffer.remove_oldest_data_to_fit()
 
         # Periodically reanalyze buffer
-        if cfg.policy.buffer_reanalyze_freq >= 1:
+        if buffer_reanalyze_freq >= 1:
             # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+            reanalyze_interval = update_per_collect // buffer_reanalyze_freq
         else:
             # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+            should_reanalyze = (
+                train_epoch > 0
+                and train_epoch % int(1 / buffer_reanalyze_freq) == 0
+                and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps
+                > int(reanalyze_batch_size / reanalyze_partition)
+            )
+            if should_reanalyze:
                 with timer:
                     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
@@ -327,9 +358,14 @@ def train_unizero_segment(
                 continue
 
             for i in range(update_per_collect):
-                if cfg.policy.buffer_reanalyze_freq >= 1:
+                if buffer_reanalyze_freq >= 1:
                     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                    should_reanalyze = (
+                        i % reanalyze_interval == 0
+                        and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps
+                        > int(reanalyze_batch_size / reanalyze_partition)
+                    )
+                    if should_reanalyze:
                         with timer:
                             # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                             replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)

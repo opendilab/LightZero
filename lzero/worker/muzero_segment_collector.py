@@ -268,6 +268,13 @@ class MuZeroSegmentCollector(ISerialCollector):
         if self.policy_config.gumbel_algo:
             pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index:end_index]
 
+        # Record the real transition count before bootstrap data from the next
+        # segment is appended. This is required for partial segments stashed at
+        # a collect boundary.
+        last_game_segments[i].valid_transition_count = min(
+            len(last_game_segments[i].action_segment), self.policy_config.game_segment_length
+        )
+
         # Pad and finalize the last game segment.
         if self.policy_config.gumbel_algo:
             last_game_segments[i].pad_over(
@@ -287,12 +294,50 @@ class MuZeroSegmentCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
-        # Add the completed game segment to the pool.
-        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
+        # ``last_game_segments[i]`` always precedes ``game_segments[i]`` and is
+        # therefore non-terminal, even when the current segment ended the episode.
+        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], False))
 
         # Reset placeholders for the next collection cycle.
         last_game_segments[i] = None
         last_game_priorities[i] = None
+
+    def _stash_inflight_segments(
+            self,
+            game_segments: List[GameSegment],
+            pred_values_lst: List[List[float]],
+            search_values_lst: List[List[float]],
+    ) -> int:
+        """Preserve every non-empty per-env segment across ``collect`` calls.
+
+        The segment collector returns as soon as the shared pool reaches its
+        target. Other environments can still have partial trajectories. Pair
+        each such trajectory with priorities computed from the same steps so
+        it can be padded and emitted during the next collection call.
+        """
+        stashed_transitions = 0
+        for env_id, segment in enumerate(game_segments):
+            transition_count = len(segment.action_segment)
+            if transition_count == 0:
+                continue
+
+            if self.last_game_segments[env_id] is not None:
+                self.pad_and_save_last_trajectory(
+                    env_id,
+                    self.last_game_segments,
+                    self.last_game_priorities,
+                    game_segments,
+                    self.dones,
+                )
+
+            segment.valid_transition_count = transition_count
+            self.last_game_segments[env_id] = segment
+            self.last_game_priorities[env_id] = self._compute_priorities(
+                env_id, pred_values_lst, search_values_lst
+            )
+            pred_values_lst[env_id], search_values_lst[env_id] = [], []
+            stashed_transitions += transition_count
+        return stashed_transitions
 
     def collect(
             self,
@@ -612,6 +657,10 @@ class MuZeroSegmentCollector(ISerialCollector):
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
                     # NOTE: Store the final game segment of the episode.
+                    game_segments[env_id].valid_transition_count = min(
+                        len(game_segments[env_id].action_segment),
+                        self.policy_config.game_segment_length,
+                    )
                     game_segments[env_id].game_segment_to_array()
                     if len(game_segments[env_id].reward_segment) > 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, self.dones[env_id]))
@@ -640,6 +689,10 @@ class MuZeroSegmentCollector(ISerialCollector):
             # Check if the required number of segments has been collected.
             if len(self.game_segment_pool) >= self._default_num_segments:
                 self._logger.info(f'Collected {len(self.game_segment_pool)} segments, reaching the target of {self._default_num_segments}.')
+
+                self._stash_inflight_segments(
+                    game_segments, pred_values_lst, search_values_lst
+                )
 
                 # Format data for returning: [game_segments, metadata_list]
                 return_data = [

@@ -194,7 +194,7 @@ class GameBuffer(ABC, object):
                     pos_in_game_segment = np.random.choice(sampling_upper_bound, 1).item()
 
                 # Step 4: Further adjust based on actual segment length (runtime check)
-                segment_len = len(game_segment.action_segment)
+                segment_len = self._game_segment_transition_count(game_segment)
                 if pos_in_game_segment >= segment_len - 1:
                     # Position exceeds actual segment, resample within valid range
                     if segment_len > 1:
@@ -211,11 +211,7 @@ class GameBuffer(ABC, object):
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
                 # Compatibility handling for both GameSegment objects and list data (for unittests)
-                try:
-                    segment_len = len(game_segment.action_segment)
-                except (AttributeError, TypeError):
-                    # For unittest compatibility: when game_segment is a list instead of GameSegment object
-                    segment_len = len(game_segment)
+                segment_len = self._game_segment_transition_count(game_segment)
 
                 if pos_in_game_segment >= segment_len - 1:
                     # If the segment is very short (length 0 or 1), we can't randomly sample a position
@@ -645,6 +641,16 @@ class GameBuffer(ABC, object):
         for (data_game, meta_game) in zip(data, meta):
             self._push_game_segment(data_game, meta_game)
 
+    def _game_segment_transition_count(self, data: Any) -> int:
+        """Return real transitions, excluding bootstrap padding."""
+        valid_transition_count = int(getattr(data, 'valid_transition_count', 0))
+        if valid_transition_count <= 0:
+            try:
+                valid_transition_count = len(data.action_segment)
+            except (AttributeError, TypeError):
+                valid_transition_count = len(data)
+        return min(valid_transition_count, self._cfg.game_segment_length)
+
     def _push_game_segment(self, data: Any, meta: Optional[dict] = None) -> None:
         """
         Overview:
@@ -659,18 +665,13 @@ class GameBuffer(ABC, object):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        try:
-            data_length = len(data.action_segment) if len(data.action_segment) < self._cfg.game_segment_length else self._cfg.game_segment_length
-        except Exception as e:
-            # to be compatible with unittest
-            print(e)
-            data_length = len(data)
+        data_length = self._game_segment_transition_count(data)
 
         if meta['done']:
             self.num_of_collected_episodes += 1
             valid_len = data_length
         else:
-            valid_len = data_length - meta['unroll_plus_td_steps']
+            valid_len = max(0, data_length - meta['unroll_plus_td_steps'])
             # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
@@ -682,7 +683,12 @@ class GameBuffer(ABC, object):
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]))
         else:
-            assert data_length == len(meta['priorities']), " priorities should be of same length as the game steps"
+            assert data_length == len(meta['priorities']), (
+                'priorities must match real game transitions: '
+                f'data_length={data_length}, priorities_length={len(meta["priorities"])}, '
+                f'action_length={len(data.action_segment)}, '
+                f'valid_transition_count={getattr(data, "valid_transition_count", None)}'
+            )
             priorities = meta['priorities'].copy().reshape(-1)
             priorities[valid_len:data_length] = 0.
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
@@ -706,7 +712,7 @@ class GameBuffer(ABC, object):
         if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_segments):
-                length_data = len(self.game_segment_buffer[i].action_segment) if len(self.game_segment_buffer[i].action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+                length_data = self._game_segment_transition_count(self.game_segment_buffer[i])
                 total_transition -= length_data
                 if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     # find the max game_segment index to keep in the buffer
@@ -730,7 +736,8 @@ class GameBuffer(ABC, object):
             - excess_game_segment_index (:obj:`List[str]`): Index of data.
         """
         excess_game_positions = sum(
-            [len(game_segment) for game_segment in self.game_segment_buffer[:excess_game_segment_index]]
+            self._game_segment_transition_count(game_segment)
+            for game_segment in self.game_segment_buffer[:excess_game_segment_index]
         )
         del self.game_segment_buffer[:excess_game_segment_index]
         self.game_pos_priorities = self.game_pos_priorities[excess_game_positions:]
