@@ -339,6 +339,23 @@ class MuZeroSegmentCollector(ISerialCollector):
             stashed_transitions += transition_count
         return stashed_transitions
 
+    def _attach_segment_context(
+            self, segment: GameSegment, previous_segment: Optional[GameSegment], train_iter: int
+    ) -> GameSegment:
+        """Carry exact short history across storage segments for contextual UniZero targets."""
+        segment.collection_train_iter = int(train_iter)
+        if previous_segment is None:
+            return segment
+        if not (
+            getattr(self.policy_config, 'contextual_reanalysis', False)
+            or getattr(self.policy_config, 'bootstrap_value_context', False)
+        ):
+            return segment
+        world_model_cfg = getattr(self.policy_config.model, 'world_model_cfg', None)
+        context_length = int(getattr(world_model_cfg, 'context_length', 2))
+        segment.set_context_prefix(previous_segment, max(context_length // 2, 0))
+        return segment
+
     def collect(
             self,
             num_segments: Optional[int] = None,
@@ -393,12 +410,12 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
         game_segments = [
-            GameSegment(
+            self._attach_segment_context(GameSegment(
                 self._env.action_space,
                 game_segment_length=self.policy_config.game_segment_length,
                 config=self.policy_config,
                 task_id=self.task_id
-            ) for _ in range(env_nums)
+            ), self.last_game_segments[env_id], train_iter) for env_id in range(env_nums)
         ]
 
         # Stacked observation windows for initializing game segments.
@@ -417,6 +434,9 @@ class MuZeroSegmentCollector(ISerialCollector):
         # Logging variables.
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
         exploration_metric_names = (
+            'simulation/depth_mean',
+            'simulation/value_mean',
+            'simulation/policy_entropy',
             'exploration/prior_entropy_nats',
             'exploration/prior_effective_actions',
             'exploration/prior_top1_probability',
@@ -610,12 +630,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                         self.last_game_priorities[env_id] = priorities
 
                         # Create a new game segment to continue collection.
-                        game_segments[env_id] = GameSegment(
+                        previous_segment = game_segments[env_id]
+                        game_segments[env_id] = self._attach_segment_context(GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
                             config=self.policy_config,
                             task_id=self.task_id
-                        )
+                        ), previous_segment, train_iter)
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
@@ -678,12 +699,12 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self._reset_stat(env_id)
 
                     # NOTE: If an episode finishes but collection continues, re-initialize its game segment.
-                    game_segments[env_id] = GameSegment(
+                    game_segments[env_id] = self._attach_segment_context(GameSegment(
                         self._env.action_space,
                         game_segment_length=self.policy_config.game_segment_length,
                         config=self.policy_config,
                         task_id=self.task_id
-                    )
+                    ), None, train_iter)
                     game_segments[env_id].reset(observation_window_stack[env_id])
 
             # Check if the required number of segments has been collected.

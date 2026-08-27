@@ -11,6 +11,7 @@ baseline in ``atari_unizero_segment_config.py`` free of these overrides.
 """
 
 import json
+import logging
 import os
 import socket
 import sys
@@ -20,6 +21,19 @@ from datetime import datetime
 from easydict import EasyDict
 from zoo.atari.config._atari_unizero_segment_utils import _Tee, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+
+
+_CORE_TB_METRIC_FILTER = {
+    metric_name: True for metric_name in (
+        'loss/total', 'loss/policy', 'loss/value', 'loss/reward',
+        'priority/mean', 'priority/max', 'priority/valid_ratio',
+        'reanalyze/count', 'reanalyze/freq_actual', 'reanalyze/target_age_mean',
+        'simulation/depth_mean', 'simulation/value_mean', 'simulation/policy_entropy',
+        'segment/length_actual', 'segment/valid_ratio', 'segment/bootstrap_context_len',
+        'grad_norm', 'lr', 'param_norm', 'weight_decay',
+        'eval/mean_return', 'eval/max_return', 'eval/episode_length',
+    )
+}
 
 
 def _atari_game_name(env_id):
@@ -232,6 +246,8 @@ def main(
         open_loop_consistency_horizon_override=None,
         open_loop_prefix_transitions_override=None,
         legacy_resume_alpha=None,
+        log_metric=True,
+        tb_log_all=False,
 ):
     action_space_size = atari_env_action_space_map[env_id]
     # ==============================================================
@@ -314,13 +330,14 @@ def main(
             f'gradient_diagnostic_freq must be non-negative, got {gradient_diagnostic_freq}'
         )
 
+    td_steps = 5
     # With Htrain=10 and td_steps=5, game_segment_length=20 leaves only five complete
     # non-terminal roots. GSL200 avoids that structural replay waste for both H5 and H10 variants.
     game_segment_length = 200 if game_segment_length_override is None else int(game_segment_length_override)
-    if game_segment_length <= num_unroll_steps + 5:
+    if game_segment_length <= num_unroll_steps + td_steps:
         raise ValueError(
-            'game_segment_length must exceed num_unroll_steps + td_steps (5), got '
-            f'{game_segment_length} <= {num_unroll_steps + 5}'
+            'game_segment_length must exceed num_unroll_steps + td_steps, got '
+            f'{game_segment_length} <= {num_unroll_steps + td_steps}'
         )
     save_ckpt_after_iter = (
         50000 if save_ckpt_after_iter_override is None else int(save_ckpt_after_iter_override)
@@ -361,6 +378,15 @@ def main(
         open_loop_prefix_transitions_override = 3
     if legacy_resume_alpha is not None and legacy_resume_alpha <= 0:
         raise ValueError(f'legacy_resume_alpha must be positive, got {legacy_resume_alpha}')
+    if buffer_reanalyze_freq_override is not None and not contextual_reanalysis:
+        # Legacy UniZero reanalysis starts each replay MCTS root without its online Transformer
+        # history. An explicitly enabled refresh must therefore use the contextual path.
+        contextual_reanalysis = True
+        logging.warning(
+            'Explicit buffer reanalysis requires information-state-aligned targets; '
+            'enabling contextual_reanalysis automatically.'
+        )
+
     policy_experiment_overrides, world_model_experiment_overrides = (
         _experimental_config_overrides(
             infer_context_length=infer_context_length_override,
@@ -485,6 +511,7 @@ def main(
             num_unroll_steps=num_unroll_steps,
             num_segments=num_segments,
             game_segment_length=game_segment_length,
+            td_steps=td_steps,
             # Full learner checkpoints are ~530MB each; save every 50k train iters instead of
             # the default 10k to bound disk usage. ckpt_best (on new best eval) is unaffected.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=save_ckpt_after_iter))),
@@ -517,14 +544,18 @@ def main(
             policy_ls_eps_end=0.0 if disable_policy_label_smoothing else 0.01,
             policy_ls_eps_decay_steps=50000,
             label_smoothing_eps=0.1,
-            use_continuous_label_smoothing=stab_fix,
+            # Numerical stability and target regularization are separate interventions. Permanent
+            # 0.05 smoothing biases a sharp improved policy even after the instability is gone.
+            use_continuous_label_smoothing=False,
             continuous_ls_eps=0.05,
             monitor_norm_freq=10000,
             gradient_diagnostic_freq=gradient_diagnostic_freq,
-            # Always-on enhanced policy monitoring: without this flag the whitelisted
-            # policy_logits/* and target_policy_entropy/{mean,min,max,std} log keys print
-            # constant 0.0 (empty-record averaging), hiding real logits/entropy stats.
-            use_enhanced_policy_monitoring=True,
+            # Detailed logits statistics are debug-only; core losses, priorities, and health
+            # signals remain available through the compact whitelist below.
+            use_enhanced_policy_monitoring=bool(tb_log_all),
+            log_metric=bool(log_metric),
+            tb_log_all=bool(tb_log_all),
+            tb_metric_filter=_CORE_TB_METRIC_FILTER.copy(),
 
             # Priority settings.
             # Default OFF: uniform replay won the 2026-08 MsPacman 3M matrix (v3 arm).
@@ -790,8 +821,7 @@ if __name__ == "__main__":
     stab_fix_group = parser.add_mutually_exclusive_group()
     stab_fix_group.add_argument(
         '--stab-fix', dest='stab_fix', action='store_true',
-        help='Enable policy-stability protections (soft_tanh policy-logits clip +-10 + '
-             'continuous label smoothing eps=0.05) from the 500K-crash fix bundle (default).'
+        help='Enable the differentiable soft_tanh policy-logits stability guard (default).'
     )
     stab_fix_group.add_argument(
         '--no-stab-fix', dest='stab_fix', action='store_false',
@@ -844,6 +874,10 @@ if __name__ == "__main__":
         '--buffer-reanalyze-freq', type=float, default=None,
         help='Override periodic replay-buffer policy-target reanalysis frequency '
              '(e.g. 0.02 means once every 50 collect/train epochs).'
+    )
+    parser.add_argument(
+        '--tb-log-all', action='store_true',
+        help='Restore the full historical TensorBoard scalar surface for deep debugging.'
     )
     parser.add_argument(
         '--reanalyze-batch-size', type=int, default=None,
@@ -952,6 +986,7 @@ if __name__ == "__main__":
         reanalyze_batch_size_override=args.reanalyze_batch_size,
         save_ckpt_after_iter_override=args.save_ckpt_after_iter,
         periodic_ckpt_keep_last_override=args.periodic_ckpt_keep_last,
+        tb_log_all=args.tb_log_all,
         ignore_checkpoint_save_errors=args.ignore_checkpoint_save_errors,
         save_ckpt_in_eval=args.save_ckpt_in_eval,
         open_loop_diagnostic_freq_override=args.open_loop_diagnostic_freq,

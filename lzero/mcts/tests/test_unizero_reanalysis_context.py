@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from easydict import EasyDict
 
 import lzero.mcts.buffer.game_buffer_unizero as unizero_buffer_module
 import lzero.mcts.buffer.game_buffer_sampled_unizero as sampled_unizero_buffer_module
@@ -15,6 +16,7 @@ from lzero.mcts.buffer.game_buffer_unizero import (
 from lzero.mcts.buffer.game_buffer_sampled_unizero import (
     SampledUniZeroGameBuffer,
 )
+from lzero.mcts.buffer.game_segment import GameSegment
 
 
 class _TargetModelStub:
@@ -24,6 +26,48 @@ class _TargetModelStub:
 
     def eval(self):
         return self
+
+
+def _context_segment(frame_values, action_values):
+    cfg = EasyDict(dict(
+        num_unroll_steps=2,
+        td_steps=1,
+        discount_factor=0.997,
+        gray_scale=False,
+        transform2string=False,
+        sampled_algo=False,
+        gumbel_algo=False,
+        use_ture_chance_label_in_chance_encoder=False,
+        model=dict(
+            frame_stack_num=2,
+            action_space_size=4,
+            observation_shape=(2, 1, 1),
+            image_channel=1,
+        ),
+    ))
+    segment = GameSegment(4, game_segment_length=8, config=cfg)
+    segment.obs_segment = [np.array([value], dtype=np.float32) for value in frame_values]
+    segment.action_segment = np.asarray(action_values, dtype=np.int64)
+    segment.valid_transition_count = len(action_values)
+    return segment
+
+
+def test_segment_context_prefix_preserves_information_state_across_boundary():
+    previous = _context_segment(range(5), [0, 1, 2, 3])
+    current = _context_segment(range(10, 14), [10, 11, 12])
+    current.set_context_prefix(previous, max_history_transitions=3)
+
+    observations, actions = current.get_context_history(0, 3)
+    assert actions == [1, 2, 3]
+    assert [[float(frame[0]) for frame in stack] for stack in observations] == [
+        [1., 2.], [2., 3.], [3., 4.]
+    ]
+
+    observations, actions = current.get_context_history(1, 3)
+    assert actions == [2, 3, 10]
+    assert [[float(frame[0]) for frame in stack] for stack in observations] == [
+        [2., 3.], [3., 4.], [10., 11.]
+    ]
 
 
 def test_unizero_sample_uses_current_reanalysis_policy_api():

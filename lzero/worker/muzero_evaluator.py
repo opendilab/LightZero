@@ -447,6 +447,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                 'reward_std': np.std(episode_return),
                 'reward_max': np.max(episode_return),
                 'reward_min': np.min(episode_return),
+                'eval/mean_return': np.mean(episode_return),
+                'eval/max_return': np.max(episode_return),
+                'eval/episode_length': envstep_count / n_episode if n_episode > 0 else 0,
             }
             episode_info = eval_monitor.get_episode_info()
             if episode_info is not None:

@@ -221,6 +221,20 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             int(valid_lengths.max()),
         )
 
+    def _get_segment_context_history(self, game_segment, state_index, max_history_transitions):
+        """Read context from modern segments while remaining compatible with legacy replay objects."""
+        if hasattr(game_segment, 'get_context_history'):
+            return game_segment.get_context_history(state_index, max_history_transitions)
+        history_start = max(0, int(state_index) - int(max_history_transitions))
+        history_len = int(state_index) - history_start
+        history_game_obs = game_segment.get_unroll_obs(history_start, history_len)
+        observations = [
+            history_game_obs[offset:offset + self._cfg.model.frame_stack_num]
+            for offset in range(history_len)
+        ]
+        actions = list(game_segment.action_segment[history_start:state_index])
+        return observations, actions
+
     def _prepare_reward_value_context(
             self, batch_index_list, game_segment_list, pos_in_game_segment_list,
             total_transitions
@@ -252,16 +266,17 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         )):
             td_steps = int(td_steps_list[sequence_index * roots_per_sequence])
             bootstrap_start = int(state_index) + td_steps
-            history_start = max(0, bootstrap_start - max_history_transitions)
-            history_len = bootstrap_start - history_start
-            history_game_obs = game_segment.get_unroll_obs(history_start, history_len)
-            history_observation_segment.append([
-                history_game_obs[offset:offset + self._cfg.model.frame_stack_num]
-                for offset in range(history_len)
-            ])
-            history_action_segment.append(
-                game_segment.action_segment[history_start:bootstrap_start].tolist()
+            history_observations, history_actions = self._get_segment_context_history(
+                game_segment,
+                bootstrap_start, max_history_transitions
             )
+            history_observation_segment.append(history_observations)
+            history_action_segment.append(history_actions)
+
+        context_lengths = [len(actions) for actions in history_action_segment]
+        self._latest_bootstrap_context_len = (
+            float(np.mean(context_lengths)) if context_lengths else 0.0
+        )
 
         return [*context, history_observation_segment, history_action_segment]
 
@@ -436,8 +451,9 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         return context
 
     def reanalyze_buffer(
-            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
-    ) -> List[Any]:
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"],
+            train_iter: Optional[int] = None,
+    ) -> dict:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training.
@@ -449,11 +465,18 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
-
-        # obtain the current_batch and prepare target context
-        policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size)
-        # target policy
-        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+        self._current_reanalyze_train_iter = train_iter
+        try:
+            # obtain the current_batch and prepare target context
+            policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size)
+            # target policy
+            self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+            return dict(getattr(self, '_latest_reanalysis_diagnostics', {
+                'reanalyze/target_age_mean': 0.0,
+                'reanalyze/roots_refreshed': 0.0,
+            }))
+        finally:
+            self._current_reanalyze_train_iter = None
 
     def _make_batch_for_reanalyze(self, batch_size: int) -> Tuple[Any]:
         """
@@ -593,18 +616,12 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 timestep_segment.append(game_segment.timestep_segment)
                 child_visits.append(game_segment.child_visit_segment)
                 if max_history_transitions > 0:
-                    history_start = max(0, state_index - max_history_transitions)
-                    history_len = state_index - history_start
-                    history_game_obs = game_segment.get_unroll_obs(
-                        history_start, history_len
+                    history_observations, history_actions = self._get_segment_context_history(
+                        game_segment,
+                        state_index, max_history_transitions
                     )
-                    history_observation_segment.append([
-                        history_game_obs[offset:offset + self._cfg.model.frame_stack_num]
-                        for offset in range(history_len)
-                    ])
-                    history_action_segment.append(
-                        game_segment.action_segment[history_start:state_index].tolist()
-                    )
+                    history_observation_segment.append(history_observations)
+                    history_action_segment.append(history_actions)
                 else:
                     history_observation_segment.append([])
                     history_action_segment.append([])
@@ -1085,7 +1102,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             if first_transition_time > self.clear_time:
                 # Handle IndexError by converting the float index to an integer before use.
                 idx = int(indices[i])
-                prio = metas['batch_priorities'][i]
+                prio = float(metas['batch_priorities'][i])
+
+                if idx < 0 or idx >= len(self.game_pos_priorities):
+                    raise IndexError(
+                        f'Priority update index {idx} is outside replay size {len(self.game_pos_priorities)}'
+                    )
+                if not np.isfinite(prio) or prio <= 0:
+                    raise ValueError(f'Priority updates must be finite and positive, got {prio}')
 
                 # Now, idx is a valid integer index.
                 self.game_pos_priorities[idx] = prio

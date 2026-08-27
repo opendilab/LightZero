@@ -4,10 +4,12 @@ from types import SimpleNamespace
 import pytest
 
 from lzero.entry.train_unizero_segment import (
+    _MetricFilteredWriter,
     _make_checkpoint_errors_nonfatal,
     _prune_periodic_checkpoints,
     _required_replay_transitions,
     _resolve_segment_reanalyze_settings,
+    _should_reanalyze_update,
     _restore_resume_counters,
     _should_evaluate_at_train_iter,
 )
@@ -20,6 +22,40 @@ class _CountVar:
 
     def update(self, value):
         self.value = value
+
+
+class _ScalarWriter:
+
+    def __init__(self):
+        self.calls = []
+
+    def add_scalar(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+
+
+def test_tensorboard_writer_logs_only_canonical_whitelist_by_default():
+    raw_writer = _ScalarWriter()
+    writer = _MetricFilteredWriter(
+        raw_writer,
+        enabled=True,
+        metric_filter={'loss/total': True, 'eval/mean_return': True},
+        log_all=False,
+    )
+
+    writer.add_scalar('learner_iter/loss/total_avg', 1.0, 3)
+    writer.add_scalar('learner_iter/analysis/unused_avg', 2.0, 3)
+    writer.add_scalar('evaluator_step/eval/mean_return', 10.0, 100)
+
+    assert [call[0][0] for call in raw_writer.calls] == [
+        'learner_iter/loss/total_avg', 'evaluator_step/eval/mean_return'
+    ]
+
+
+def test_tensorboard_writer_can_restore_all_scalar_metrics():
+    raw_writer = _ScalarWriter()
+    writer = _MetricFilteredWriter(raw_writer, enabled=True, metric_filter={}, log_all=True)
+    writer.add_scalar('learner_iter/debug/value_avg', 1.0, 2)
+    assert len(raw_writer.calls) == 1
 
 
 class _Learner:
@@ -151,6 +187,22 @@ def test_segment_reanalyze_settings_support_minimal_and_explicit_configs():
             reanalyze_partition=0.5,
         )
     ) == (0.02, 32, 0.5)
+
+
+def test_integer_reanalysis_events_are_evenly_scheduled_without_zero_interval():
+    assert [
+        index for index in range(8) if _should_reanalyze_update(index, 8, 2)
+    ] == [3, 7]
+    assert [
+        index for index in range(3) if _should_reanalyze_update(index, 3, 8)
+    ] == [0, 1, 2]
+
+
+def test_non_integer_per_epoch_reanalysis_frequency_is_rejected():
+    with pytest.raises(ValueError, match='integer number of events'):
+        _resolve_segment_reanalyze_settings(
+            SimpleNamespace(buffer_reanalyze_freq=1.5)
+        )
 
 
 @pytest.mark.parametrize(

@@ -823,5 +823,11 @@ class MuZeroGameBuffer(GameBuffer):
         # only update the priorities for data still in replay buffer
         for i in range(len(indices)):
             if metas['make_time'][i] > self.clear_time:
-                idx, prio = indices[i], metas['batch_priorities'][i]
+                idx, prio = int(indices[i]), float(metas['batch_priorities'][i])
+                if idx < 0 or idx >= len(self.game_pos_priorities):
+                    raise IndexError(
+                        f'Priority update index {idx} is outside replay size {len(self.game_pos_priorities)}'
+                    )
+                if not np.isfinite(prio) or prio <= 0:
+                    raise ValueError(f'Priority updates must be finite and positive, got {prio}')
                 self.game_pos_priorities[idx] = prio

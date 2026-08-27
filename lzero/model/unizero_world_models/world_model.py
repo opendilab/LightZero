@@ -961,7 +961,7 @@ class WorldModel(
         configurable decimal quantization makes those harmless differences
         equivalent while retaining the legacy exact behavior at ``0``.
         """
-        decimals = int(getattr(self.config, 'root_cache_key_round_decimals', 0))
+        decimals = int(getattr(getattr(self, 'config', None), 'root_cache_key_round_decimals', 0))
         array = np.asarray(state, dtype=np.float32)
         if decimals > 0:
             array = np.round(array, decimals=decimals).astype(np.float32, copy=False)

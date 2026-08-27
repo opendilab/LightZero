@@ -25,6 +25,19 @@ from torch.nn.utils.convert_parameters import (parameters_to_vector,
 from .utils import configure_optimizers_nanogpt
 
 
+DEFAULT_TB_METRIC_FILTER = {
+    metric_name: True for metric_name in (
+        'loss/total', 'loss/policy', 'loss/value', 'loss/reward',
+        'priority/mean', 'priority/max', 'priority/valid_ratio',
+        'reanalyze/count', 'reanalyze/freq_actual', 'reanalyze/target_age_mean',
+        'simulation/depth_mean', 'simulation/value_mean', 'simulation/policy_entropy',
+        'segment/length_actual', 'segment/valid_ratio', 'segment/bootstrap_context_len',
+        'grad_norm', 'lr', 'param_norm', 'weight_decay',
+        'eval/mean_return', 'eval/max_return', 'eval/episode_length',
+    )
+}
+
+
 def representation_health_metrics(x: torch.Tensor, near_constant_threshold: float = 1e-3) -> Dict[str, float]:
     """Measure representation diversity across samples/tokens, per feature.
 
@@ -699,6 +712,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # ===================== END: Learning Rate Scheduler Config =====================
 
         # ==================== START: Monitoring Config ====================
+        log_metric=False,
+        tb_log_all=False,
+        tb_metric_filter=DEFAULT_TB_METRIC_FILTER,
         # (int) Frequency of monitoring model parameter and gradient norms (in training iterations). Set to 0 to disable.
         monitor_norm_freq=5000,
         # (int) Frequency of loss-component x module gradient attribution. Zero disables it.
@@ -907,6 +923,14 @@ class UniZeroPolicy(MuZeroPolicy):
             indices, num_transitions, capacity
         )
 
+    def set_training_pipeline_diagnostics(self, metrics: Dict[str, float]) -> None:
+        """Attach finite, detached replay/segment/reanalysis signals to the next learner record."""
+        detached_metrics = {name: float(value) for name, value in metrics.items()}
+        for name, value in detached_metrics.items():
+            if not np.isfinite(value):
+                raise ValueError(f'Training diagnostic {name} must be finite, got {value}')
+        self._latest_training_pipeline_metrics = detached_metrics
+
 
     # ==================== Model Norm Monitoring Function ====================
     def _monitor_model_norms(self) -> Dict[str, float]:
@@ -1086,6 +1110,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self._latest_norm_log_dict = {}
         self._last_norm_monitor_iter = -1
         self._latest_replay_diagnostic_metrics = {}
+        self._latest_training_pipeline_metrics = {}
         self._last_gradient_diagnostic_iter = -1
 
         if self._cfg.model.model_type == 'conv':
@@ -1838,6 +1863,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     else float(metric_value)
                 )
         return_log_dict.update({
+            'loss/total': weighted_total_loss.item(),
             'loss/weighted_total': weighted_total_loss.item(),
             'loss/obs': obs_loss.item(),
             'loss/reward': reward_loss.item(),
@@ -1853,8 +1879,19 @@ class UniZeroPolicy(MuZeroPolicy):
             'target/transformed_reward': transformed_target_reward.mean().item(),
             'target/transformed_value': transformed_target_value.mean().item(),
             'priority/value': value_priority_np.mean().item(),
+            'priority/mean': float(np.mean(value_priority_np)),
+            'priority/max': float(np.max(value_priority_np)),
+            'priority/valid_ratio': float(
+                np.mean(np.isfinite(value_priority_np) & (value_priority_np > 0))
+            ),
             'lr/world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'lr': self._optimizer_world_model.param_groups[0]['lr'],
             'grad/world_model_total_norm': total_grad_norm_before_clip_wm.item(),
+            'grad_norm': total_grad_norm_before_clip_wm.item(),
+            'weight_decay': max(
+                float(group.get('weight_decay', 0.0))
+                for group in self._optimizer_world_model.param_groups
+            ),
             'memory/current_gpu_gb': current_memory_allocated_gb,
             'memory/max_gpu_gb': max_memory_allocated_gb,
             'collect/epsilon': self._collect_epsilon,
@@ -1873,6 +1910,13 @@ class UniZeroPolicy(MuZeroPolicy):
             self._last_norm_monitor_iter = train_iter
         if self._latest_norm_log_dict:
             return_log_dict.update(self._latest_norm_log_dict)
+        parameter_group_norms = [
+            float(value) for name, value in self._latest_norm_log_dict.items()
+            if name.startswith('norm/') and name.endswith('/_total_norm')
+        ]
+        if parameter_group_norms:
+            return_log_dict['param_norm'] = float(np.sqrt(np.square(parameter_group_norms).sum()))
+        return_log_dict.update(self._latest_training_pipeline_metrics)
 
         use_enhanced_policy_monitoring = self._cfg.use_enhanced_policy_monitoring
         if use_enhanced_policy_monitoring:
@@ -2151,6 +2195,9 @@ class UniZeroPolicy(MuZeroPolicy):
                     'predicted_policy_logits': policy_logits[i],
                     'timestep': timestep[i],
                     'predicted_next_text': predicted_next,
+                    'simulation/depth_mean': float(self._mcts_collect.last_search_depth_mean[i]),
+                    'simulation/value_mean': float(value),
+                    'simulation/policy_entropy': float(visit_count_distribution_entropy),
                     **exploration_metrics,
                 }
                 batch_action.append(action)
@@ -2772,10 +2819,22 @@ class UniZeroPolicy(MuZeroPolicy):
             f'grad/{group}/global_norm_fraction' for group in gradient_groups
         )
 
-        return (
+        core_metric_vars = list(DEFAULT_TB_METRIC_FILTER)
+
+        all_vars = (
             base_vars + norm_vars + head_clip_vars + enhanced_policy_vars
-            + stability_vars + gradient_component_vars
+            + stability_vars + gradient_component_vars + core_metric_vars
         )
+        # Preserve order while removing aliases that already occur in the legacy surface.
+        all_vars = list(dict.fromkeys(all_vars))
+        if not hasattr(self._cfg, 'log_metric') and not hasattr(self._cfg, 'tb_metric_filter'):
+            return all_vars
+        if not getattr(self._cfg, 'log_metric', False):
+            return []
+        if getattr(self._cfg, 'tb_log_all', False):
+            return all_vars
+        metric_filter = dict(getattr(self._cfg, 'tb_metric_filter', DEFAULT_TB_METRIC_FILTER))
+        return [name for name in all_vars if metric_filter.get(name, False)]
 
 
     def _state_dict_learn(self) -> Dict[str, Any]:
