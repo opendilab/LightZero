@@ -1,10 +1,13 @@
 """UniZero Atari segment experiment launcher.
 
-Defaults reproduce the best MsPacman recipe (the winning ``v3`` arm of the
-2026-08 3M experiment matrix). This module intentionally contains the
-performance, diagnostics, recovery, and ablation controls used by iterative
-experiments. Keep the stable baseline in ``atari_unizero_segment_config.py``
-free of these overrides.
+Defaults reproduce the baseline arm of the 2026-08 MsPacman 3M matrix: no
+reanalysis, no prioritized replay, no augmentation, and the experimental
+mechanisms (raw-token KV rebuild, contextual value bootstrap, open-loop
+consistency loss) off. Pass ``--rebuild-kv-window-from-tokens
+--bootstrap-value-context --open-loop-consistency-weight 1.0`` for the full v3
+recipe. This module intentionally contains the performance, diagnostics,
+recovery, and ablation controls used by iterative experiments. Keep the stable
+baseline in ``atari_unizero_segment_config.py`` free of these overrides.
 """
 
 import json
@@ -21,6 +24,40 @@ from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_m
 
 def _atari_game_name(env_id):
     return env_id.split('/')[-1].split('-')[0]
+
+
+def _default_run_name(
+        game_name, seed, timestamp, *,
+        num_unroll_steps, infer_context_length, game_segment_length, batch_size,
+        replay_ratio, collect_temperature, obs_loss_weight, value_loss_weight,
+        open_loop_consistency_weight, use_priority, use_augmentation,
+        bootstrap_value_context, rebuild_kv_window_from_tokens, stab_fix, max_env_step,
+):
+    """Build a self-describing run name from the resolved key config settings."""
+    parts = [
+        'uz',
+        f'h{num_unroll_steps}',
+        f'ctx{infer_context_length}',
+        f'gsl{game_segment_length}',
+        f'bs{batch_size}',
+        f'rr{replay_ratio:g}',
+        f'temp{collect_temperature:g}',
+        f'obs{obs_loss_weight:g}',
+        f'value{value_loss_weight:g}',
+        f'olc{open_loop_consistency_weight:g}',
+        'per' if use_priority else 'noper',
+        'aug' if use_augmentation else 'noaug',
+    ]
+    if bootstrap_value_context:
+        parts.append('bootctx')
+    if rebuild_kv_window_from_tokens:
+        parts.append('rebuildkv')
+    if not stab_fix:
+        parts.append('nostabfix')
+    parts.append(f'seed{seed}')
+    parts.append(f'{max_env_step / 1e6:g}m')
+    parts.append(timestamp)
+    return f'{game_name.lower()}/{"_".join(parts)}'
 
 
 def _prepare_run_directory(run_dir, resume_from=None, resume_in_place=False):
@@ -147,7 +184,7 @@ def _experimental_config_overrides(
 def main(
         env_id,
         seed,
-        output_root='data_unizero',
+        output_root='data_unizero_segment',
         run_name=None,
         use_new_cache_manager=False,
         use_augmentation_override=None,
@@ -178,9 +215,9 @@ def main(
         game_segment_length_override=None,
         infer_context_length_override=None,
         exact_kv_window_reset=False,
-        rebuild_kv_window_from_tokens=True,
+        rebuild_kv_window_from_tokens=False,
         contextual_reanalysis=False,
-        bootstrap_value_context=True,
+        bootstrap_value_context=False,
         resume_buffer_min_transitions_override=None,
         buffer_reanalyze_freq_override=None,
         reanalyze_batch_size_override=None,
@@ -314,10 +351,8 @@ def main(
         raise ValueError(
             f'open_loop_diagnostic_freq must be non-negative, got {open_loop_diagnostic_freq}'
         )
-    # The best MsPacman recipe enables the short open-loop consistency loss; pass
-    # --open-loop-consistency-weight 0 to disable it explicitly.
-    if open_loop_consistency_weight_override is None:
-        open_loop_consistency_weight_override = 1.0
+    # The open-loop consistency loss is off by default. Enabling it via
+    # --open-loop-consistency-weight uses the v3 recipe geometry below.
     if open_loop_consistency_batch_size_override is None:
         open_loop_consistency_batch_size_override = 8
     if open_loop_consistency_horizon_override is None:
@@ -547,7 +582,24 @@ def main(
     game_name = _atari_game_name(env_id)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     if run_name is None:
-        run_name = f'{game_name.lower()}/{game_name.lower()}_sync_seed{seed}_{timestamp}'
+        run_name = _default_run_name(
+            game_name, seed, timestamp,
+            num_unroll_steps=num_unroll_steps,
+            infer_context_length=infer_context_length_override,
+            game_segment_length=game_segment_length,
+            batch_size=batch_size,
+            replay_ratio=replay_ratio,
+            collect_temperature=collect_temperature,
+            obs_loss_weight=obs_loss_weight,
+            value_loss_weight=value_loss_weight,
+            open_loop_consistency_weight=open_loop_consistency_weight_override or 0,
+            use_priority=False if use_priority is None else use_priority,
+            use_augmentation=use_augmentation,
+            bootstrap_value_context=bootstrap_value_context,
+            rebuild_kv_window_from_tokens=rebuild_kv_window_from_tokens,
+            stab_fix=stab_fix,
+            max_env_step=max_env_step,
+        )
     run_name = _safe_run_name(run_name)
 
     # LightZero internally prefixes exp_name with "./", so keep it relative to
@@ -585,12 +637,13 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, help='The environment to use', default='ALE/MsPacman-v5')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     parser.add_argument(
-        '--output-root', type=str, default='data_unizero',
+        '--output-root', type=str, default='data_unizero_segment',
         help='Root directory containing one self-contained folder per run.'
     )
     parser.add_argument(
         '--run-name', type=str, default=None,
-        help='Optional unique run folder name; defaults to env/variant/seed/timestamp.'
+        help='Optional unique run folder name; defaults to a self-describing name built from '
+             'the key config settings plus seed/budget/timestamp.'
     )
     parser.add_argument(
         '--use-new-cache-manager', action='store_true',
@@ -763,13 +816,13 @@ if __name__ == "__main__":
     bootstrap_group.add_argument(
         '--bootstrap-value-context', dest='bootstrap_value_context', action='store_true',
         help='Compute TD bootstrap values from the same exact rolling replay history available '
-             'to online UniZero planning instead of the longer training-only sequence context (default).'
+             'to online UniZero planning instead of the longer training-only sequence context.'
     )
     bootstrap_group.add_argument(
         '--no-bootstrap-value-context', dest='bootstrap_value_context', action='store_false',
-        help='Use the longer training-only sequence context for TD bootstrap values.'
+        help='Use the longer training-only sequence context for TD bootstrap values (default).'
     )
-    parser.set_defaults(bootstrap_value_context=True)
+    parser.set_defaults(bootstrap_value_context=False)
     parser.add_argument(
         '--contextual-reanalysis', action='store_true',
         help='Opt in to rebuilding replay MCTS root priors and KV caches from the same short '
@@ -779,14 +832,14 @@ if __name__ == "__main__":
         '--rebuild-kv-window-from-tokens', dest='rebuild_kv_window_from_tokens', action='store_true',
         help=(
             'Exactly rebuild a full learned-absolute-position KV window from retained raw '
-            'observation/action embeddings whenever the window advances (default).'
+            'observation/action embeddings whenever the window advances.'
         ),
     )
     kv_window_group.add_argument(
         '--no-rebuild-kv-window-from-tokens', dest='rebuild_kv_window_from_tokens', action='store_false',
-        help='Keep the legacy KV window update path for ablations.'
+        help='Keep the legacy KV window update path (default).'
     )
-    parser.set_defaults(rebuild_kv_window_from_tokens=True)
+    parser.set_defaults(rebuild_kv_window_from_tokens=False)
     parser.add_argument(
         '--buffer-reanalyze-freq', type=float, default=None,
         help='Override periodic replay-buffer policy-target reanalysis frequency '
@@ -829,7 +882,8 @@ if __name__ == "__main__":
     parser.add_argument(
         '--open-loop-consistency-weight', dest='open_loop_consistency_weight', type=float, default=None,
         help='Weight for the short differentiable MCTS-style latent rollout consistency loss; '
-             'default 1.0 (best MsPacman recipe), pass 0 to disable it.'
+             '0/default disables it, pass 1.0 for the v3 recipe (geometry defaults to batch 8, '
+             'horizon 4, prefix 3).'
     )
     parser.add_argument(
         '--open-loop-recurrent-weight', dest='open_loop_recurrent_weight', type=float, default=None,

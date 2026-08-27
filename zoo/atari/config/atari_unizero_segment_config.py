@@ -129,7 +129,9 @@ def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
                 obs_loss_weight=10.0,
                 value_loss_weight=0.5,
                 grad_clip_value=5.0,
-                use_augmentation=False,
+                # use_augmentation=False,
+                use_augmentation=True,
+
                 use_adaptive_entropy_weight=False,
                 # Policy label smoothing disabled; value/reward smoothing is unchanged.
                 policy_ls_eps_start=0.0,
@@ -183,7 +185,7 @@ def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
         f'data_unizero_segment/{game_name}/'
         f'{game_name}_uz_nlayer{num_layers}_gsl{game_segment_length}'
         f'_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}'
-        f'_bs{batch_size}_seed{seed}'
+        f'_bs{batch_size}_seed{seed}_fix-aug'
     )
     return main_config, create_config, max_env_step
 

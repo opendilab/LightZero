@@ -11,8 +11,8 @@ RJOB_DRY_RUN=${UZ_RJOB_DRY_RUN:-false}
 MODE=${1:-submit}
 
 # The 2026-08 matrix concluded: v3 (historical best recipe + value_loss_weight=0.5) is the
-# canonical arm. Its defaults live in atari_unizero_segment_experimental_config.py, so each
-# run is one seed of that module. Seeds are assigned to GPUs in batches of four.
+# canonical arm. The module defaults are the baseline arm, so run_seed passes the three v3
+# feature flags explicitly. Seeds are assigned to GPUs in batches of four.
 # Default: seed 0 only. To queue replication seeds:
 # UZ_SEED_QUEUE=0,1,2 bash scripts/launch_unizero_mspacman_3M.sh worker
 SEED_QUEUE=${UZ_SEED_QUEUE:-0}
@@ -95,6 +95,8 @@ run_seed() {
     CUDA_VISIBLE_DEVICES="$gpu" "$PYTHON" -m "$MODULE" \
       --env ALE/MsPacman-v5 --seed "$seed" \
       --output-root "$OUTPUT_ROOT" --run-name "$run_name" \
+      --rebuild-kv-window-from-tokens --bootstrap-value-context \
+      --open-loop-consistency-weight 1.0 \
       "${resume_args[@]}" "${batch_args[@]}" >>"$log" 2>&1 &
     local train_pid=$!
     monitor_startup_health "$train_pid" "$log" "$run_dir" "$seed" &
