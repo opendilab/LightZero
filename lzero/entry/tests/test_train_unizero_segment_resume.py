@@ -4,10 +4,12 @@ from types import SimpleNamespace
 import pytest
 
 from lzero.entry.train_unizero_segment import (
+    _make_checkpoint_errors_nonfatal,
     _prune_periodic_checkpoints,
     _required_replay_transitions,
     _resolve_segment_reanalyze_settings,
     _restore_resume_counters,
+    _should_evaluate_at_train_iter,
 )
 
 
@@ -33,6 +35,39 @@ class _Collector:
         self._total_envstep_count = 0
 
 
+class _Evaluator:
+
+    def __init__(self, due_iters):
+        self.due_iters = set(due_iters)
+        self.calls = []
+
+    def should_eval(self, train_iter):
+        self.calls.append(train_iter)
+        return train_iter in self.due_iters
+
+
+class _CheckpointHook:
+
+    def __init__(self, name, error=None):
+        self.name = name
+        self.error = error
+        self.calls = 0
+
+    def __call__(self, learner):
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+
+
+class _HookLearner:
+
+    def __init__(self, hooks):
+        self._hooks = hooks
+        self.train_iter = 123
+        self.collector_envstep = 456
+        self.ckpt_name = 'iteration_123.pth.tar'
+
+
 def test_restore_resume_counters_updates_collector_and_checkpoint_owner():
     learner = _Learner()
     collector = _Collector()
@@ -42,6 +77,32 @@ def test_restore_resume_counters_updates_collector_and_checkpoint_owner():
     assert learner._last_iter.value == 10023
     assert collector._total_envstep_count == 101278
     assert learner.collector_envstep == 101278
+
+
+@pytest.mark.parametrize(
+    'error',
+    [OSError('disk quota exceeded'), RuntimeError('PytorchStreamWriter failed writing file')],
+)
+def test_nonfatal_checkpoint_hooks_ignore_only_checkpoint_write_errors(error):
+    save_hook = _CheckpointHook('save_ckpt_after_iter', error)
+    unrelated_hook = _CheckpointHook('log_show')
+    learner = _HookLearner({'after_iter': [save_hook, unrelated_hook]})
+
+    assert _make_checkpoint_errors_nonfatal(learner) == 1
+    for hook in learner._hooks['after_iter']:
+        hook(learner)
+
+    assert save_hook.calls == 1
+    assert unrelated_hook.calls == 1
+
+
+def test_nonfatal_checkpoint_hooks_do_not_hide_unexpected_errors():
+    save_hook = _CheckpointHook('save_ckpt_after_run', ValueError('bad checkpoint state'))
+    learner = _HookLearner({'after_run': [save_hook]})
+    _make_checkpoint_errors_nonfatal(learner)
+
+    with pytest.raises(ValueError, match='bad checkpoint state'):
+        learner._hooks['after_run'][0](learner)
 
 
 def test_restore_resume_counters_keeps_fresh_run_at_zero():
@@ -64,6 +125,17 @@ def test_resume_requires_replay_warmup_but_fresh_run_keeps_one_batch_threshold()
 def test_resume_replay_warmup_rejects_invalid_configuration():
     with pytest.raises(ValueError, match='non-negative'):
         _required_replay_transitions(10, batch_size=256, resume_buffer_min_transitions=-1)
+
+
+def test_initial_evaluation_is_not_repeated_during_replay_warmup():
+    evaluator = _Evaluator(due_iters={5000})
+
+    assert _should_evaluate_at_train_iter(0, None, evaluator)
+    assert not _should_evaluate_at_train_iter(0, 0, evaluator)
+    assert evaluator.calls == []
+
+    assert _should_evaluate_at_train_iter(5000, 0, evaluator)
+    assert evaluator.calls == [5000]
 
 
 def test_segment_reanalyze_settings_support_minimal_and_explicit_configs():

@@ -11,31 +11,49 @@ def _unizero_policy():
     return UniZeroPolicy
 
 
-def test_stable_segment_config_is_small_baseline_without_experimental_overrides():
+def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_features():
     config, create_config, max_env_step = atari_unizero_segment_config.build_config(
-        env_id='ALE/Pong-v5', seed=0
+        env_id='ALE/MsPacman-v5', seed=0
     )
 
     policy_config = config.policy
     world_model_config = policy_config.model.world_model_cfg
-    assert max_env_step == int(5e5)
+    assert max_env_step == int(3e6)
+    assert config.env.collector_env_num == 8
+    assert config.env.evaluator_env_num == 8
     assert policy_config.num_segments == 8
-    assert policy_config.game_segment_length == 20
-    assert policy_config.batch_size == 64
-    assert policy_config.replay_ratio == 0.25
-    assert policy_config.buffer_reanalyze_freq == 1 / 100000
+    assert policy_config.game_segment_length == 200
+    assert policy_config.batch_size == 256
+    assert policy_config.replay_ratio == 0.1
+    assert policy_config.num_unroll_steps == 10
+    assert policy_config.num_simulations == 50
+    assert policy_config.collect_num_simulations == 25
+    assert policy_config.fixed_temperature_value == 0.25
+    assert policy_config.obs_loss_weight == 10.0
+    assert policy_config.value_loss_weight == 0.5
+    assert policy_config.use_priority is False
+    assert policy_config.use_augmentation is False
+    assert policy_config.use_adaptive_entropy_weight is False
+    assert policy_config.bootstrap_value_context is False
+    assert policy_config.buffer_reanalyze_freq == 2e-10
     assert policy_config.reanalyze_batch_size == 160
     assert policy_config.reanalyze_partition == 0.75
-    assert world_model_config.context_length == 8
+    assert policy_config.replay_buffer_size == int(5e5)
+    assert world_model_config.context_length == 10
+    assert world_model_config.rebuild_kv_window_from_tokens is False
+    assert world_model_config.open_loop_consistency_loss_weight == 0
+    assert world_model_config.open_loop_consistency_batch_size == 8
+    assert world_model_config.open_loop_consistency_horizon == 4
+    assert world_model_config.open_loop_prefix_transitions == 3
+    assert world_model_config.policy_entropy_weight == 0.005
     assert create_config.policy.type == 'unizero'
 
-    assert 'bootstrap_value_context' not in policy_config
-    assert 'contextual_reanalysis' not in policy_config
+    # Diagnostics, cache-isolation ablations, and resume tooling stay out of the
+    # stable config; they belong to the experimental launcher.
     assert 'gradient_diagnostic_freq' not in policy_config
-    assert 'use_adaptive_entropy_weight' not in policy_config
-    assert 'open_loop_consistency_loss_weight' not in world_model_config
-    assert 'open_loop_recurrent_loss_weight' not in world_model_config
-    assert 'rebuild_kv_window_from_tokens' not in world_model_config
+    assert 'open_loop_diagnostic_freq' not in world_model_config
+    assert 'contextual_reanalysis' not in policy_config
+    assert 'isolate_eval_cache' not in policy_config
 
 
 def test_stable_segment_config_allows_max_env_step_override():
@@ -74,6 +92,12 @@ def test_experimental_collect_temperature_is_explicit_and_validated():
     assert atari_unizero_segment_experimental_config._resolve_collect_temperature(0.5) == 0.5
     with pytest.raises(ValueError, match='collect_temperature must be positive'):
         atari_unizero_segment_experimental_config._resolve_collect_temperature(0)
+
+
+def test_experimental_cache_namespace_preserves_legacy_and_isolated_modes():
+    resolver = atari_unizero_segment_experimental_config._resolve_inference_env_num
+    assert resolver(8, 8, False) == 8
+    assert resolver(8, 8, True) == 16
 
 
 def test_unizero_policy_defaults_disable_experimental_training_features():

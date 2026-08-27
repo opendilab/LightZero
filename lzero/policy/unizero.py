@@ -327,6 +327,47 @@ def apply_per_sample_is_weights(weights, losses, per_sample_policy_loss, scalar_
     return (weights.reshape(-1) * per_sample_total_loss).mean() + auxiliary_loss
 
 
+def augment_unizero_observation_sequence(image_transforms, obs_batch, obs_target_batch):
+    """Apply one coherent image augmentation to the complete replay sequence.
+
+    ``prepare_obs_stack_for_unizero`` separates the root observation from the
+    following H target observations along the channel dimension. Applying the
+    random crop/intensity transform to those tensors independently creates an
+    artificial discontinuity on the first model transition. Concatenating
+    before augmentation makes the root and every target frame share the same
+    sampled transform while preserving the original tensor layout.
+    """
+    if obs_target_batch is None:
+        return image_transforms.transform(obs_batch), None
+    if obs_batch.ndim != obs_target_batch.ndim or obs_batch.shape[0] != obs_target_batch.shape[0]:
+        raise ValueError(
+            'UniZero augmentation requires root and target observations with '
+            f'matching batch/rank, got {tuple(obs_batch.shape)} and {tuple(obs_target_batch.shape)}.'
+        )
+    root_channels = obs_batch.shape[1]
+    augmented = image_transforms.transform(torch.cat((obs_batch, obs_target_batch), dim=1))
+    return augmented[:, :root_channels], augmented[:, root_channels:]
+
+
+def resolve_eval_cache_env_offset(
+        world_model_env_num: int,
+        collector_env_num: int,
+        evaluator_env_num: int,
+        isolate_eval_cache: bool,
+) -> int:
+    """Validate cache capacity and return the evaluator namespace offset."""
+    if not isolate_eval_cache:
+        return 0
+    required_env_num = int(collector_env_num) + int(evaluator_env_num)
+    if int(world_model_env_num) < required_env_num:
+        raise ValueError(
+            'isolate_eval_cache=True requires world_model.env_num >= '
+            f'collector_env_num + evaluator_env_num ({required_env_num}), '
+            f'got {world_model_env_num}.'
+        )
+    return int(collector_env_num)
+
+
 def apply_open_loop_recurrent_entropy_weight(
         recurrent_loss, fixed_policy_loss, policy_ce, policy_entropy, entropy_weight
 ):
@@ -470,6 +511,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 support_size=101,
                 # (int) The maximum size of the cache.
                 max_cache_size=5000,
+                # Decimal precision used for root-cache keys.  Zero keeps
+                # exact-byte hashing; positive values absorb harmless
+                # float32 re-encoding noise across variable-width batches.
+                root_cache_key_round_decimals=0,
                 # (bool) Whether to use the structured KVCacheManager instead of legacy dict pools.
                 use_new_cache_manager=False,
                 # (bool) Exact absolute-position cache repair modes. Both are opt-in because
@@ -679,6 +724,10 @@ class UniZeroPolicy(MuZeroPolicy):
         collector_env_num=8,
         # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
+        # Keep collector/evaluator root-cache pools disjoint while sharing
+        # model weights. This prevents a long eval episode from evicting an
+        # in-flight collector root.
+        isolate_eval_cache=False,
         # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
         # (str) The type of action space. Options are ['fixed_action_space', 'varied_action_space'].
@@ -763,6 +812,9 @@ class UniZeroPolicy(MuZeroPolicy):
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=10,
+        # (float) The weight of observation/reconstruction loss.  This used
+        # to be hard-coded inside LossWithIntermediateLosses.
+        obs_loss_weight=10,
         # (float) The weight of reward loss.
         reward_loss_weight=1,
         # (float) The weight of value loss.
@@ -1008,6 +1060,10 @@ class UniZeroPolicy(MuZeroPolicy):
             update_type='momentum',
             update_kwargs={'theta': self._cfg.target_update_theta}
         )
+        # Target predictions are labels, not trainable activations. Keeping
+        # dropout active here injects fresh noise into every TD/observation
+        # target batch.
+        self._target_model.eval()
         self._learn_model = self._model
 
         if self._cfg.use_augmentation:
@@ -1165,7 +1221,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 current learning loss and learning statistics.
         """
         self._learn_model.train()
-        self._target_model.train()
+        # Keep the target network deterministic; it supplies bootstrap and
+        # teacher targets and must not enable dropout per learner batch.
+        self._target_model.eval()
 
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
@@ -1194,9 +1252,9 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
-            obs_batch = self.image_transforms.transform(obs_batch)
-            if self._cfg.model.self_supervised_learning_loss:
-                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+            obs_batch, obs_target_batch = augment_unizero_observation_sequence(
+                self.image_transforms, obs_batch, obs_target_batch
+            )
 
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
@@ -1262,6 +1320,13 @@ class UniZeroPolicy(MuZeroPolicy):
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )
+        if hasattr(losses, 'set_loss_weights'):
+            losses.set_loss_weights(
+                obs_loss_weight=getattr(self._cfg, 'obs_loss_weight', None),
+                reward_loss_weight=getattr(self._cfg, 'reward_loss_weight', None),
+                value_loss_weight=getattr(self._cfg, 'value_loss_weight', None),
+                policy_loss_weight=getattr(self._cfg, 'policy_loss_weight', None),
+            )
 
         # ==================== Integrate norm monitoring logic ====================
         norm_log_dict = {}
@@ -2128,6 +2193,12 @@ class UniZeroPolicy(MuZeroPolicy):
             raise NotImplementedError('UniZero policy only supports mcts_ctree=True (C++ tree MCTS).')
 
         self.evaluator_env_num = self._cfg.evaluator_env_num
+        self._eval_cache_env_offset = resolve_eval_cache_env_offset(
+            self._eval_model.world_model.env_num,
+            self.collector_env_num,
+            self.evaluator_env_num,
+            bool(getattr(self._cfg, 'isolate_eval_cache', False)),
+        )
 
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
@@ -2173,8 +2244,9 @@ class UniZeroPolicy(MuZeroPolicy):
             last_obs_batch, last_action_batch = self._select_last_infer_inputs(
                 self.last_batch_obs_eval, self.last_batch_action_eval, ready_env_id, self.evaluator_env_num
             )
+            cache_ready_env_id = [env_id + self._eval_cache_env_offset for env_id in ready_env_id]
             network_output = self._eval_model.initial_inference(
-                last_obs_batch, last_action_batch, data, timestep, ready_env_id=ready_env_id
+                last_obs_batch, last_action_batch, data, timestep, ready_env_id=cache_ready_env_id
             )
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
@@ -2241,6 +2313,57 @@ class UniZeroPolicy(MuZeroPolicy):
 
         return output
 
+    @staticmethod
+    def _interval_env_ids(env_id, current_steps, env_num: int, interval: int) -> List[int]:
+        """Return only environments whose own step counter reached ``interval``.
+
+        The collector invokes ``reset`` after every transition and supplies a
+        per-environment counter.  A global ``world_model.clear_caches()`` here
+        therefore incorrectly discarded the root histories of all other
+        in-flight episodes.
+        """
+        if current_steps is None or interval <= 0:
+            return []
+        if env_id is None:
+            env_ids = list(range(env_num))
+        elif isinstance(env_id, (int, np.integer)):
+            env_ids = [int(env_id)]
+        else:
+            env_ids = [int(value) for value in env_id]
+        if isinstance(current_steps, (list, tuple, np.ndarray, torch.Tensor)):
+            steps = list(current_steps)
+        else:
+            steps = [current_steps] * len(env_ids)
+        if len(steps) == 1 and len(env_ids) > 1:
+            steps *= len(env_ids)
+        return [
+            env_ids[index]
+            for index, step in enumerate(steps[:len(env_ids)])
+            if int(step) > 0 and int(step) % interval == 0
+        ]
+
+    @staticmethod
+    def _clear_env_root_caches(world_model, env_ids: List[int], label: str) -> None:
+        """Clear root/raw-token caches for selected environments only."""
+        if not env_ids:
+            return
+        valid_ids = sorted({int(eid) for eid in env_ids if int(eid) >= 0})
+        if getattr(world_model, 'use_new_cache_manager', False):
+            pools = getattr(getattr(world_model, 'kv_cache_manager', None), 'init_pools', [])
+            for eid in valid_ids:
+                if eid < len(pools):
+                    pools[eid].clear()
+        else:
+            root_pools = getattr(world_model, 'past_kv_cache_init_infer_envs', [])
+            for eid in valid_ids:
+                if eid < len(root_pools):
+                    root_pools[eid].clear()
+        token_pools = getattr(world_model, 'past_token_context_init_infer_envs', [])
+        for eid in valid_ids:
+            if eid < len(token_pools):
+                token_pools[eid].clear()
+        logging.debug('[%s] cleared root KV/raw-token caches for envs=%s', label, valid_ids)
+
     def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
@@ -2255,7 +2378,7 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         # We must handle both single int and list of ints for env_id.
         if env_id is not None:
-            if isinstance(env_id, int):
+            if isinstance(env_id, (int, np.integer)):
                 env_ids_to_reset = [env_id]
             else: # Assumes it's a list
                 env_ids_to_reset = [int(eid) for eid in env_id]
@@ -2304,26 +2427,16 @@ class UniZeroPolicy(MuZeroPolicy):
                         world_model.past_token_context_init_infer_envs[eid].clear()
                     # =============================================================================
 
-        # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
-        # Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after
-        # every single collected/evaluated segment and making cross-segment cache reuse impossible.
+        # Clear only the selected environment's root cache at its interval.
         clear_interval = int(getattr(self._cfg, 'kv_cache_clear_interval', 2000))
-
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps is not None and clear_interval > 0 and current_steps % clear_interval == 0:
-            logging.debug(f'clear_interval: {clear_interval}')
-
-            # Clear various caches in the collect model's world model
+        envs_to_clear = self._interval_env_ids(
+            env_id, current_steps, self.collector_env_num, clear_interval
+        )
+        if envs_to_clear:
             world_model = self._collect_model.world_model
-            # ==================== Phase 1.5: Use unified clear_caches() method ====================
-            # This automatically handles both old and new cache systems
-            world_model.clear_caches()
-            # ======================================================================================
-
+            self._clear_env_root_caches(world_model, envs_to_clear, 'Collector interval')
             if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-            logging.debug(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
@@ -2338,7 +2451,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if env_id is not None:
-            if isinstance(env_id, int):
+            if isinstance(env_id, (int, np.integer)):
                 env_ids_to_reset = [env_id]
             else: # Assumes it's a list
                 env_ids_to_reset = [int(eid) for eid in env_id]
@@ -2378,7 +2491,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
             if current_steps is None:
                 world_model = self._eval_model.world_model
-                for eid in env_ids_to_reset:
+                cache_env_ids = [eid + getattr(self, '_eval_cache_env_offset', 0) for eid in env_ids_to_reset]
+                for eid in cache_env_ids:
                     # ==================== BUG FIX: Refactored Cache Clearing ====================
                     # Clear the specific environment's initial inference cache.
                     if hasattr(world_model, 'use_new_cache_manager') and world_model.use_new_cache_manager:
@@ -2410,26 +2524,19 @@ class UniZeroPolicy(MuZeroPolicy):
                     torch.cuda.empty_cache()
                 return
 
-        # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
-        # Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after
-        # every single collected/evaluated segment and making cross-segment cache reuse impossible.
+        # Clear only the selected environment's root cache at its interval.
         clear_interval = int(getattr(self._cfg, 'kv_cache_clear_interval', 2000))
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps is not None and clear_interval > 0 and current_steps % clear_interval == 0:
-            logging.debug(f'clear_interval: {clear_interval}')
-
-            # Clear various caches in the eval model's world model
+        envs_to_clear = self._interval_env_ids(
+            env_id, current_steps, self.evaluator_env_num, clear_interval
+        )
+        if envs_to_clear:
             world_model = self._eval_model.world_model
-            # ==================== Phase 1.5: Use unified clear_caches() method ====================
-            # This automatically handles both old and new cache systems
-            world_model.clear_caches()
-            # ======================================================================================
-
+            cache_envs_to_clear = [
+                eid + getattr(self, '_eval_cache_env_offset', 0) for eid in envs_to_clear
+            ]
+            self._clear_env_root_caches(world_model, cache_envs_to_clear, 'Evaluator interval')
             if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-            logging.debug('evaluator: eval_model clear()')
-            logging.debug(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """

@@ -3,8 +3,13 @@
 from types import SimpleNamespace
 
 import pytest
+import torch
 
-from lzero.policy.unizero import UniZeroPolicy
+from lzero.policy.unizero import (
+    UniZeroPolicy,
+    augment_unizero_observation_sequence,
+    resolve_eval_cache_env_offset,
+)
 
 
 class _FakeCacheManager:
@@ -72,6 +77,69 @@ def test_finished_eval_env_does_not_clear_other_root_caches(use_new_cache_manage
     else:
         assert world_model.past_kv_cache_recurrent_infer == {}
     assert world_model.keys_values_wm_list == []
+
+
+@pytest.mark.unittest
+def test_interval_clear_is_per_environment():
+    assert UniZeroPolicy._interval_env_ids(2, 2000, 8, 2000) == [2]
+    assert UniZeroPolicy._interval_env_ids([1, 3], [1999, 2000], 8, 2000) == [3]
+    assert UniZeroPolicy._interval_env_ids(2, 0, 8, 2000) == []
+
+
+@pytest.mark.unittest
+def test_eval_cache_namespace_is_offset_when_enabled():
+    assert resolve_eval_cache_env_offset(11, 8, 3, True) == 8
+    assert resolve_eval_cache_env_offset(8, 8, 3, False) == 0
+
+
+@pytest.mark.unittest
+def test_eval_cache_namespace_rejects_undersized_world_model_pool():
+    with pytest.raises(ValueError, match='world_model.env_num'):
+        resolve_eval_cache_env_offset(8, 8, 3, True)
+
+
+@pytest.mark.unittest
+def test_sequence_augmentation_uses_one_transform_for_root_and_targets():
+    class _Transform:
+
+        def __init__(self):
+            self.inputs = []
+
+        def transform(self, value):
+            self.inputs.append(value.clone())
+            channel_offset = torch.arange(value.shape[1], dtype=value.dtype).view(1, -1, 1, 1)
+            return value + channel_offset
+
+    transform = _Transform()
+    root = torch.zeros(2, 3, 2, 2)
+    targets = torch.ones(2, 6, 2, 2)
+    augmented_root, augmented_targets = augment_unizero_observation_sequence(
+        transform, root, targets
+    )
+
+    assert len(transform.inputs) == 1
+    assert transform.inputs[0].shape == (2, 9, 2, 2)
+    assert torch.equal(augmented_root[:, 0], torch.zeros(2, 2, 2))
+    assert torch.equal(augmented_targets[:, 0], torch.full((2, 2, 2), 4.0))
+
+
+@pytest.mark.unittest
+def test_loss_weight_override_recomputes_scalar_objective():
+    from lzero.model.unizero_world_models.utils import LossWithIntermediateLosses
+
+    losses = LossWithIntermediateLosses(
+        loss_obs=torch.tensor(2.0),
+        loss_rewards=torch.tensor(3.0),
+        loss_value=torch.tensor(4.0),
+        loss_policy=torch.tensor(5.0),
+    )
+    losses.set_loss_weights(
+        obs_loss_weight=1.0,
+        reward_loss_weight=2.0,
+        value_loss_weight=3.0,
+        policy_loss_weight=4.0,
+    )
+    assert losses.loss_total.item() == pytest.approx(40.0)
 
 
 @pytest.mark.unittest

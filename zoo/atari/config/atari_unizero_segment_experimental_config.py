@@ -1,8 +1,10 @@
 """UniZero Atari segment experiment launcher.
 
-This module intentionally contains the performance, diagnostics, recovery, and
-ablation controls used by iterative experiments. Keep the stable baseline in
-``atari_unizero_segment_config.py`` free of these overrides.
+Defaults reproduce the best MsPacman recipe (the winning ``v3`` arm of the
+2026-08 3M experiment matrix). This module intentionally contains the
+performance, diagnostics, recovery, and ablation controls used by iterative
+experiments. Keep the stable baseline in ``atari_unizero_segment_config.py``
+free of these overrides.
 """
 
 import json
@@ -45,6 +47,11 @@ def _resolve_collect_temperature(value):
             f'collect_temperature must be positive, got {collect_temperature}'
         )
     return collect_temperature
+
+
+def _resolve_inference_env_num(collector_env_num, evaluator_env_num, isolate_eval_cache):
+    """Size root-cache namespaces without changing legacy shared-cache experiments."""
+    return collector_env_num + evaluator_env_num if isolate_eval_cache else collector_env_num
 
 
 def _experimental_config_overrides(
@@ -143,6 +150,16 @@ def main(
         output_root='data_unizero',
         run_name=None,
         use_new_cache_manager=False,
+        use_augmentation_override=None,
+        replay_ratio_override=None,
+        batch_size_override=None,
+        num_unroll_steps_override=None,
+        obs_loss_weight_override=None,
+        value_loss_weight_override=None,
+        root_cache_key_round_decimals_override=None,
+        kv_cache_clear_interval_override=None,
+        empty_cuda_cache_on_cache_reset_override=None,
+        isolate_eval_cache=False,
         evaluator_env_num_override=None,
         collect_num_simulations_override=None,
         collect_temperature_override=None,
@@ -157,17 +174,20 @@ def main(
         resume_in_place=False,
         max_env_step_override=None,
         use_priority=None,
-        stab_fix=False,
+        stab_fix=True,
         game_segment_length_override=None,
         infer_context_length_override=None,
         exact_kv_window_reset=False,
-        rebuild_kv_window_from_tokens=False,
+        rebuild_kv_window_from_tokens=True,
         contextual_reanalysis=False,
-        bootstrap_value_context=False,
+        bootstrap_value_context=True,
         resume_buffer_min_transitions_override=None,
         buffer_reanalyze_freq_override=None,
+        reanalyze_batch_size_override=None,
         save_ckpt_after_iter_override=None,
         periodic_ckpt_keep_last_override=None,
+        ignore_checkpoint_save_errors=False,
+        save_ckpt_in_eval=True,
         open_loop_diagnostic_freq_override=None,
         open_loop_consistency_weight_override=None,
         open_loop_recurrent_weight_override=None,
@@ -183,20 +203,62 @@ def main(
     collector_env_num = 8
     num_segments = 8
     evaluator_env_num = (
-        3 if evaluator_env_num_override is None else int(evaluator_env_num_override)
+        8 if evaluator_env_num_override is None else int(evaluator_env_num_override)
     )
     if evaluator_env_num <= 0:
         raise ValueError(f'evaluator_env_num must be positive, got {evaluator_env_num}')
     collect_num_simulations = (
-        None
+        25
         if collect_num_simulations_override is None
         else int(collect_num_simulations_override)
     )
-    if collect_num_simulations is not None and collect_num_simulations <= 0:
+    if collect_num_simulations <= 0:
         raise ValueError(
             f'collect_num_simulations must be positive, got {collect_num_simulations}'
         )
     collect_temperature = _resolve_collect_temperature(collect_temperature_override)
+    use_augmentation = (
+        False if use_augmentation_override is None else bool(use_augmentation_override)
+    )
+    replay_ratio = 0.1 if replay_ratio_override is None else float(replay_ratio_override)
+    if replay_ratio <= 0:
+        raise ValueError(f'replay_ratio must be positive, got {replay_ratio}')
+    batch_size = 256 if batch_size_override is None else int(batch_size_override)
+    if batch_size <= 0:
+        raise ValueError(f'batch_size must be positive, got {batch_size}')
+    num_unroll_steps = 10 if num_unroll_steps_override is None else int(num_unroll_steps_override)
+    if num_unroll_steps <= 0:
+        raise ValueError(f'num_unroll_steps must be positive, got {num_unroll_steps}')
+    if infer_context_length_override is None:
+        # The best MsPacman recipe retains 5 observation/action blocks for online KV inference.
+        infer_context_length_override = min(5, num_unroll_steps)
+    if int(infer_context_length_override) > num_unroll_steps:
+        raise ValueError(
+            'infer_context_length cannot exceed num_unroll_steps because the '
+            f'transformer cache has only that many blocks: {infer_context_length_override} > {num_unroll_steps}'
+        )
+    obs_loss_weight = 10.0 if obs_loss_weight_override is None else float(obs_loss_weight_override)
+    # The historical config declared 0.25, but the historical code hard-coded an effective 0.5.
+    # The v3 arm of the 2026-08 MsPacman matrix isolated this drift and won, so 0.5 is default.
+    value_loss_weight = 0.5 if value_loss_weight_override is None else float(value_loss_weight_override)
+    if obs_loss_weight < 0 or value_loss_weight < 0:
+        raise ValueError('loss weights must be non-negative')
+    root_cache_key_round_decimals = (
+        0 if root_cache_key_round_decimals_override is None
+        else int(root_cache_key_round_decimals_override)
+    )
+    if root_cache_key_round_decimals < 0 or root_cache_key_round_decimals > 7:
+        raise ValueError('root cache key decimals must be between 0 and 7')
+    kv_cache_clear_interval = (
+        2000 if kv_cache_clear_interval_override is None
+        else int(kv_cache_clear_interval_override)
+    )
+    if kv_cache_clear_interval < 0:
+        raise ValueError('kv_cache_clear_interval must be non-negative')
+    empty_cuda_cache_on_cache_reset = (
+        True if empty_cuda_cache_on_cache_reset_override is None
+        else bool(empty_cuda_cache_on_cache_reset_override)
+    )
     grad_clip_value = 5.0 if grad_clip_value_override is None else float(grad_clip_value_override)
     if grad_clip_value <= 0:
         raise ValueError(f'grad_clip_value must be positive, got {grad_clip_value}')
@@ -215,10 +277,14 @@ def main(
             f'gradient_diagnostic_freq must be non-negative, got {gradient_diagnostic_freq}'
         )
 
-    # game_segment_length=20 makes only 20-(num_unroll_steps+td_steps)=5 of the 20 positions in each
-    # non-terminal segment eligible as sampling roots (valid_len in game_buffer._push_game_segment),
-    # i.e. 75% of the collected transitions can never be trained on. 200 restores ~92.5% coverage.
+    # With Htrain=10 and td_steps=5, game_segment_length=20 leaves only five complete
+    # non-terminal roots. GSL200 avoids that structural replay waste for both H5 and H10 variants.
     game_segment_length = 200 if game_segment_length_override is None else int(game_segment_length_override)
+    if game_segment_length <= num_unroll_steps + 5:
+        raise ValueError(
+            'game_segment_length must exceed num_unroll_steps + td_steps (5), got '
+            f'{game_segment_length} <= {num_unroll_steps + 5}'
+        )
     save_ckpt_after_iter = (
         50000 if save_ckpt_after_iter_override is None else int(save_ckpt_after_iter_override)
     )
@@ -232,7 +298,7 @@ def main(
             f'periodic_ckpt_keep_last must be non-negative, got {periodic_ckpt_keep_last}'
         )
     resume_buffer_min_transitions = (
-        10000 if resume_buffer_min_transitions_override is None
+        100000 if resume_buffer_min_transitions_override is None
         else int(resume_buffer_min_transitions_override)
     )
     if resume_buffer_min_transitions < 0:
@@ -248,10 +314,18 @@ def main(
         raise ValueError(
             f'open_loop_diagnostic_freq must be non-negative, got {open_loop_diagnostic_freq}'
         )
+    # The best MsPacman recipe enables the short open-loop consistency loss; pass
+    # --open-loop-consistency-weight 0 to disable it explicitly.
+    if open_loop_consistency_weight_override is None:
+        open_loop_consistency_weight_override = 1.0
+    if open_loop_consistency_batch_size_override is None:
+        open_loop_consistency_batch_size_override = 8
+    if open_loop_consistency_horizon_override is None:
+        open_loop_consistency_horizon_override = 4
+    if open_loop_prefix_transitions_override is None:
+        open_loop_prefix_transitions_override = 3
     if legacy_resume_alpha is not None and legacy_resume_alpha <= 0:
         raise ValueError(f'legacy_resume_alpha must be positive, got {legacy_resume_alpha}')
-    num_unroll_steps = 10
-
     policy_experiment_overrides, world_model_experiment_overrides = (
         _experimental_config_overrides(
             infer_context_length=infer_context_length_override,
@@ -269,14 +343,14 @@ def main(
     )
 
     num_simulations = 50
-    batch_size = 256
-    replay_ratio = 0.1
 
     num_layers = 2
     norm_type = "LN"
 
     if env_id == 'ALE/Pong-v5':
         max_env_step = int(1e6)
+    elif env_id == 'ALE/MsPacman-v5':
+        max_env_step = int(3e6)
     else:
         max_env_step = int(10e6)
     if max_env_step_override is not None:
@@ -292,7 +366,14 @@ def main(
         raise ValueError(
             f'buffer_reanalyze_freq must be positive, got {buffer_reanalyze_freq}'
         )
-    reanalyze_batch_size = 160
+    reanalyze_batch_size = (
+        160 if reanalyze_batch_size_override is None
+        else int(reanalyze_batch_size_override)
+    )
+    if reanalyze_batch_size <= 0:
+        raise ValueError(
+            f'reanalyze_batch_size must be positive, got {reanalyze_batch_size}'
+        )
     reanalyze_partition = 0.75
     # ==============================================================
     # end of the most frequently changed config specified by the user
@@ -336,7 +417,11 @@ def main(
                     num_layers=num_layers,
                     num_heads=8,
                     embed_dim=768,
-                    env_num=max(collector_env_num, evaluator_env_num),
+                    # Reserve disjoint root-cache namespaces for collector
+                    # envs [0, collector_env_num) and evaluator envs after it.
+                    env_num=_resolve_inference_env_num(
+                        collector_env_num, evaluator_env_num, isolate_eval_cache
+                    ),
                     num_simulations=num_simulations,
                     game_segment_length=game_segment_length,
                     device='cuda',
@@ -345,6 +430,7 @@ def main(
                     use_normal_head=True,
                     optim_type='AdamW_mix_lr_wdecay',
                     use_new_cache_manager=use_new_cache_manager,
+                    root_cache_key_round_decimals=root_cache_key_round_decimals,
                     open_loop_diagnostic_freq=open_loop_diagnostic_freq,
                     open_loop_diagnostic_batch_size=collector_env_num,
                     # Policy-stability protections (500K crash chain: extreme target_policy ->
@@ -368,13 +454,20 @@ def main(
             # the default 10k to bound disk usage. ckpt_best (on new best eval) is unaffected.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=save_ckpt_after_iter))),
             periodic_ckpt_keep_last=periodic_ckpt_keep_last,
+            # Curve-first cluster runs may continue through transient/full-filesystem checkpoint
+            # failures. Other training, evaluation, and TensorBoard errors remain fatal.
+            ignore_checkpoint_save_errors=bool(ignore_checkpoint_save_errors),
+            save_ckpt_in_eval=bool(save_ckpt_in_eval),
             # KV caches are cleared once per env per this many env steps. Was hardcoded to
             # game_segment_length, which wiped all MCTS kv caches after every single segment.
-            kv_cache_clear_interval=2000,
+            kv_cache_clear_interval=kv_cache_clear_interval,
+            empty_cuda_cache_on_cache_reset=empty_cuda_cache_on_cache_reset,
             num_simulations=num_simulations,
             fixed_temperature_value=collect_temperature,
+            obs_loss_weight=obs_loss_weight,
+            value_loss_weight=value_loss_weight,
             grad_clip_value=grad_clip_value,
-            use_augmentation=False,
+            use_augmentation=use_augmentation,
 
             # Adaptive target entropy settings from the 2025 Pong run.
             use_adaptive_entropy_weight=not disable_adaptive_alpha,
@@ -399,14 +492,12 @@ def main(
             use_enhanced_policy_monitoring=True,
 
             # Priority settings.
-            # Default ON. A 2026-08-06 Pong A/B suggested PER-off learned faster in the first
-            # ~25k train iters, but the advantage did not reproduce at later iterations (PER-on
-            # matched or exceeded PER-off by iter 35k-40k), so PER remains enabled by default.
+            # Default OFF: uniform replay won the 2026-08 MsPacman 3M matrix (v3 arm).
             # NOTE: model.world_model_cfg.use_priority intentionally remains True so the model
             # always returns a shape-[B] value_priority diagnostic. Setting policy.use_priority
             # False here still gives uniform replay/IS weights; the buffer discards priority
             # write-backs. This is deliberate model-vs-buffer asymmetry, not a synchronized flag.
-            use_priority=True if use_priority is None else use_priority,
+            use_priority=False if use_priority is None else use_priority,
             priority_prob_alpha=0.6,
             priority_prob_beta=0.4,
 
@@ -421,6 +512,7 @@ def main(
             # Environment settings
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            isolate_eval_cache=bool(isolate_eval_cache),
             eval_freq=int(5e3),
             replay_buffer_size=replay_buffer_size,
             # Policy checkpoints omit the ~25GB full Atari replay buffer. Refill a small diverse
@@ -432,8 +524,7 @@ def main(
     atari_unizero_config['policy']['model']['world_model_cfg'].update(
         world_model_experiment_overrides
     )
-    if collect_num_simulations is not None:
-        atari_unizero_config['policy']['collect_num_simulations'] = collect_num_simulations
+    atari_unizero_config['policy']['collect_num_simulations'] = collect_num_simulations
     atari_unizero_config = EasyDict(atari_unizero_config)
     main_config = atari_unizero_config
 
@@ -491,7 +582,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Run configurable UniZero Atari segment experiments.'
     )
-    parser.add_argument('--env', type=str, help='The environment to use', default='ALE/Pong-v5')
+    parser.add_argument('--env', type=str, help='The environment to use', default='ALE/MsPacman-v5')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     parser.add_argument(
         '--output-root', type=str, default='data_unizero',
@@ -504,6 +595,15 @@ if __name__ == "__main__":
     parser.add_argument(
         '--use-new-cache-manager', action='store_true',
         help='Enable the new UniZero KV cache manager; disabled by default for baseline compatibility.'
+    )
+    augmentation_group = parser.add_mutually_exclusive_group()
+    augmentation_group.add_argument(
+        '--use-augmentation', dest='use_augmentation', action='store_true',
+        help='Enable Atari shift/intensity augmentation.'
+    )
+    augmentation_group.add_argument(
+        '--no-augmentation', dest='use_augmentation', action='store_false',
+        help='Disable Atari augmentation (default).'
     )
     adaptive_alpha_group = parser.add_mutually_exclusive_group()
     adaptive_alpha_group.add_argument(
@@ -540,6 +640,7 @@ if __name__ == "__main__":
         disable_adaptive_alpha=True,
         disable_policy_label_smoothing=True,
         encoder_clip_enabled=None,
+        use_augmentation=None,
     )
     parser.add_argument(
         '--resume-from', dest='resume_from', type=str, default=None,
@@ -556,11 +657,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--evaluator-env-num', dest='evaluator_env_num', type=int, default=None,
-        help='Number of deterministic evaluation environments/episodes (default 3).'
+        help='Number of deterministic evaluation environments/episodes (default 8).'
     )
     parser.add_argument(
         '--collect-num-simulations', dest='collect_num_simulations', type=int, default=None,
-        help='Override MCTS simulations per action during collection (policy default 25).'
+        help='Override MCTS simulations per action during collection (default 25).'
     )
     parser.add_argument(
         '--collect-temperature', dest='collect_temperature', type=float, default=None,
@@ -574,6 +675,43 @@ if __name__ == "__main__":
         '--replay-buffer-size', dest='replay_buffer_size', type=int, default=None,
         help='Override replay capacity in transitions (Atari default 500000).'
     )
+    parser.add_argument('--replay-ratio', type=float, default=None,
+                        help='Override replay ratio (default 0.1).')
+    parser.add_argument('--batch-size', type=int, default=None,
+                        help='Override learner batch size (default 256).')
+    parser.add_argument(
+        '--num-unroll-steps', type=int, default=None,
+        help='Override learner unroll horizon (default 10; H5 is the faster MuZero-reference setting).'
+    )
+    parser.add_argument('--obs-loss-weight', type=float, default=None,
+                        help='Override observation reconstruction loss weight (default 10).')
+    parser.add_argument('--value-loss-weight', type=float, default=None,
+                        help='Override value loss weight (default 0.5; the historical declared value was 0.25).')
+    parser.add_argument('--root-cache-key-round-decimals', type=int, default=None,
+                        help='Quantize root latent cache keys to this decimal precision (0 disables).')
+    parser.add_argument('--kv-cache-clear-interval', type=int, default=None,
+                        help='Per-environment root-cache clear interval in episode steps; 0 disables.')
+    cuda_cache_group = parser.add_mutually_exclusive_group()
+    cuda_cache_group.add_argument(
+        '--empty-cuda-cache-on-cache-reset', dest='empty_cuda_cache_on_cache_reset', action='store_true',
+        help='Return cached CUDA allocations to the driver after inference-cache resets.'
+    )
+    cuda_cache_group.add_argument(
+        '--no-empty-cuda-cache-on-cache-reset', dest='empty_cuda_cache_on_cache_reset', action='store_false',
+        help='Keep the PyTorch CUDA allocator warm after cache resets for higher online-training throughput.'
+    )
+    parser.set_defaults(empty_cuda_cache_on_cache_reset=None)
+    eval_cache_group = parser.add_mutually_exclusive_group()
+    eval_cache_group.add_argument(
+        '--isolate-eval-cache', dest='isolate_eval_cache', action='store_true',
+        help='Use disjoint collector/evaluator root-cache namespaces.'
+    )
+    eval_cache_group.add_argument(
+        '--shared-eval-cache', dest='isolate_eval_cache', action='store_false',
+        help='Use the historical shared collector/evaluator cache namespace (default; '
+             'the best MsPacman recipe shares it).'
+    )
+    parser.set_defaults(isolate_eval_cache=False)
     parser.add_argument(
         '--gradient-diagnostic-freq', dest='gradient_diagnostic_freq', type=int, default=None,
         help='Attribute gradient norms to each core loss and module every N learner iterations; '
@@ -583,30 +721,37 @@ if __name__ == "__main__":
         '--resume-buffer-min-transitions', dest='resume_buffer_min_transitions',
         type=int, default=None,
         help='Collect at least this many replay transitions before updating a resumed mature '
-             'checkpoint; default 10000. Fresh runs still use the normal one-batch warmup.'
+             'checkpoint; default 100000. Fresh runs still use the normal one-batch warmup.'
     )
     priority_group = parser.add_mutually_exclusive_group()
     priority_group.add_argument(
         '--use-priority', dest='use_priority', action='store_true',
-        help='Force prioritized replay on (this is the default).'
+        help='Force prioritized replay on.'
     )
     priority_group.add_argument(
         '--no-priority', dest='use_priority', action='store_false',
-        help='Disable prioritized replay (uniform sampling) for ablations.'
+        help='Disable prioritized replay (uniform sampling); the default since the 2026-08 '
+             'MsPacman matrix showed PER-off wins.'
     )
     parser.set_defaults(use_priority=None)
-    parser.add_argument(
+    stab_fix_group = parser.add_mutually_exclusive_group()
+    stab_fix_group.add_argument(
         '--stab-fix', dest='stab_fix', action='store_true',
         help='Enable policy-stability protections (soft_tanh policy-logits clip +-10 + '
-             'continuous label smoothing eps=0.05) from the 500K-crash fix bundle.'
+             'continuous label smoothing eps=0.05) from the 500K-crash fix bundle (default).'
     )
+    stab_fix_group.add_argument(
+        '--no-stab-fix', dest='stab_fix', action='store_false',
+        help='Disable the policy-stability protections for ablations.'
+    )
+    parser.set_defaults(stab_fix=True)
     parser.add_argument(
         '--game-segment-length', dest='game_segment_length', type=int, default=None,
         help='Override game_segment_length (default 200; the 2025-10 known-good Pong run used 20).'
     )
     parser.add_argument(
         '--infer-context-length', dest='infer_context_length', type=int, default=None,
-        help='Override the number of observation/action blocks retained by online KV inference (default 4).'
+        help='Override the number of observation/action blocks retained by online KV inference (default 5).'
     )
     kv_window_group = parser.add_mutually_exclusive_group()
     kv_window_group.add_argument(
@@ -614,27 +759,42 @@ if __name__ == "__main__":
         help='Hard-reset online KV context to its latest latent observation instead of applying an '
              'inexact algebraic positional shift (diagnostic mode).'
     )
-    parser.add_argument(
-        '--bootstrap-value-context', action='store_true',
+    bootstrap_group = parser.add_mutually_exclusive_group()
+    bootstrap_group.add_argument(
+        '--bootstrap-value-context', dest='bootstrap_value_context', action='store_true',
         help='Compute TD bootstrap values from the same exact rolling replay history available '
-             'to online UniZero planning instead of the longer training-only sequence context.'
+             'to online UniZero planning instead of the longer training-only sequence context (default).'
     )
+    bootstrap_group.add_argument(
+        '--no-bootstrap-value-context', dest='bootstrap_value_context', action='store_false',
+        help='Use the longer training-only sequence context for TD bootstrap values.'
+    )
+    parser.set_defaults(bootstrap_value_context=True)
     parser.add_argument(
         '--contextual-reanalysis', action='store_true',
         help='Opt in to rebuilding replay MCTS root priors and KV caches from the same short '
              'observation/action history used by online planning. Legacy reanalysis remains the default.'
     )
     kv_window_group.add_argument(
-        '--rebuild-kv-window-from-tokens', action='store_true',
+        '--rebuild-kv-window-from-tokens', dest='rebuild_kv_window_from_tokens', action='store_true',
         help=(
             'Exactly rebuild a full learned-absolute-position KV window from retained raw '
-            'observation/action embeddings whenever the window advances.'
+            'observation/action embeddings whenever the window advances (default).'
         ),
     )
+    kv_window_group.add_argument(
+        '--no-rebuild-kv-window-from-tokens', dest='rebuild_kv_window_from_tokens', action='store_false',
+        help='Keep the legacy KV window update path for ablations.'
+    )
+    parser.set_defaults(rebuild_kv_window_from_tokens=True)
     parser.add_argument(
         '--buffer-reanalyze-freq', type=float, default=None,
         help='Override periodic replay-buffer policy-target reanalysis frequency '
              '(e.g. 0.02 means once every 50 collect/train epochs).'
+    )
+    parser.add_argument(
+        '--reanalyze-batch-size', type=int, default=None,
+        help='Override replay sequences refreshed per reanalysis event (default 160).'
     )
     parser.add_argument(
         '--save-ckpt-after-iter', dest='save_ckpt_after_iter', type=int, default=None,
@@ -646,6 +806,22 @@ if __name__ == "__main__":
              '0/default disables pruning and never affects ckpt_best.'
     )
     parser.add_argument(
+        '--ignore-checkpoint-save-errors', action='store_true',
+        help='Log OSError/PyTorch RuntimeError from learner checkpoint hooks and continue training. '
+             'This affects only checkpoint writes; other failures remain fatal.'
+    )
+    eval_checkpoint_group = parser.add_mutually_exclusive_group()
+    eval_checkpoint_group.add_argument(
+        '--save-ckpt-in-eval', dest='save_ckpt_in_eval', action='store_true',
+        help='Save ckpt_best whenever evaluation reaches a new best (default).'
+    )
+    eval_checkpoint_group.add_argument(
+        '--no-save-ckpt-in-eval', dest='save_ckpt_in_eval', action='store_false',
+        help='Keep evaluation curve logging but skip ckpt_best writes; periodic recovery '
+             'checkpoints are unaffected.'
+    )
+    parser.set_defaults(save_ckpt_in_eval=True)
+    parser.add_argument(
         '--open-loop-diagnostic-freq', dest='open_loop_diagnostic_freq', type=int, default=None,
         help='Measure detached MCTS-style autoregressive latent rollout error every N learner '
              'iterations; 0/default disables the diagnostic.'
@@ -653,7 +829,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--open-loop-consistency-weight', dest='open_loop_consistency_weight', type=float, default=None,
         help='Weight for the short differentiable MCTS-style latent rollout consistency loss; '
-             '0/default disables it.'
+             'default 1.0 (best MsPacman recipe), pass 0 to disable it.'
     )
     parser.add_argument(
         '--open-loop-recurrent-weight', dest='open_loop_recurrent_weight', type=float, default=None,
@@ -663,16 +839,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--open-loop-consistency-batch-size', dest='open_loop_consistency_batch_size', type=int, default=None,
-        help='Number of replay samples used by the optional open-loop consistency loss.'
+        help='Number of replay samples used by the optional open-loop consistency loss (default 8).'
     )
     parser.add_argument(
         '--open-loop-consistency-horizon', dest='open_loop_consistency_horizon', type=int, default=None,
-        help='Number of predicted-latent transitions in the optional consistency rollout.'
+        help='Number of predicted-latent transitions in the optional consistency rollout (default 4).'
     )
     parser.add_argument(
         '--open-loop-prefix-transitions', dest='open_loop_prefix_transitions', type=int, default=None,
         help='Number of real replay transitions used as a teacher prefix before the optional '
-             'open-loop rollout; 0/default starts from a single root observation.'
+             'open-loop rollout (default 3).'
     )
     parser.add_argument(
         '--legacy-resume-alpha', dest='legacy_resume_alpha', type=float, default=None,
@@ -686,6 +862,16 @@ if __name__ == "__main__":
         output_root=args.output_root,
         run_name=args.run_name,
         use_new_cache_manager=args.use_new_cache_manager,
+        use_augmentation_override=args.use_augmentation,
+        replay_ratio_override=args.replay_ratio,
+        batch_size_override=args.batch_size,
+        num_unroll_steps_override=args.num_unroll_steps,
+        obs_loss_weight_override=args.obs_loss_weight,
+        value_loss_weight_override=args.value_loss_weight,
+        root_cache_key_round_decimals_override=args.root_cache_key_round_decimals,
+        kv_cache_clear_interval_override=args.kv_cache_clear_interval,
+        empty_cuda_cache_on_cache_reset_override=args.empty_cuda_cache_on_cache_reset,
+        isolate_eval_cache=args.isolate_eval_cache,
         evaluator_env_num_override=args.evaluator_env_num,
         collect_num_simulations_override=args.collect_num_simulations,
         collect_temperature_override=args.collect_temperature,
@@ -709,8 +895,11 @@ if __name__ == "__main__":
         bootstrap_value_context=args.bootstrap_value_context,
         resume_buffer_min_transitions_override=args.resume_buffer_min_transitions,
         buffer_reanalyze_freq_override=args.buffer_reanalyze_freq,
+        reanalyze_batch_size_override=args.reanalyze_batch_size,
         save_ckpt_after_iter_override=args.save_ckpt_after_iter,
         periodic_ckpt_keep_last_override=args.periodic_ckpt_keep_last,
+        ignore_checkpoint_save_errors=args.ignore_checkpoint_save_errors,
+        save_ckpt_in_eval=args.save_ckpt_in_eval,
         open_loop_diagnostic_freq_override=args.open_loop_diagnostic_freq,
         open_loop_consistency_weight_override=args.open_loop_consistency_weight,
         open_loop_recurrent_weight_override=args.open_loop_recurrent_weight,

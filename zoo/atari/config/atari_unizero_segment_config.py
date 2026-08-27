@@ -1,32 +1,37 @@
+"""Stable UniZero MsPacman config: the best recipe from the 2026-08 3M matrix.
+
+This mirrors the winning ``v3`` arm of the preregistered MsPacman 3M experiment
+matrix (the historical best recipe with ``value_loss_weight=0.5``) with the
+experimental mechanisms (raw-token KV rebuild, open-loop consistency loss,
+contextual value bootstrap) turned off. Those and other ablation/diagnostic
+knobs live in ``atari_unizero_segment_experimental_config.py``, whose defaults
+reproduce the full v3 recipe.
+"""
+
 from easydict import EasyDict
 
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
-def build_config(env_id='ALE/Pong-v5', seed=0, max_env_step_override=None):
-    """Build the stable UniZero Atari segment baseline.
-
-    Keep this entry point intentionally small and close to
-    ``atari_unizero_config.py``. Performance experiments and operational
-    overrides belong in ``atari_unizero_segment_experimental_config.py``.
-    """
+def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
     action_space_size = atari_env_action_space_map[env_id]
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
-    evaluator_env_num = 3
+    evaluator_env_num = 8
     num_segments = 8
-    game_segment_length = 20
+    game_segment_length = 200
     num_simulations = 50
-    max_env_step = int(5e5)
-    batch_size = 64
+    collect_num_simulations = 25
+    max_env_step = int(3e6)
+    batch_size = 256
     num_unroll_steps = 10
-    infer_context_length = 4
+    infer_context_length = 5
     num_layers = 2
-    replay_ratio = 0.25
-    buffer_reanalyze_freq = 1 / 100000
+    replay_ratio = 0.1
+    buffer_reanalyze_freq = 2e-10
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
     # ==============================================================
@@ -50,43 +55,111 @@ def build_config(env_id='ALE/Pong-v5', seed=0, max_env_step_override=None):
                 manager=dict(shared_memory=False),
             ),
             policy=dict(
-                learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
+                learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000))),
                 model=dict(
                     observation_shape=(3, 64, 64),
                     action_space_size=action_space_size,
+                    reward_support_range=(-300., 301., 1.),
+                    value_support_range=(-300., 301., 1.),
+                    norm_type='LN',
+                    num_res_blocks=1,
+                    num_channels=64,
                     world_model_cfg=dict(
-                        policy_entropy_weight=1e-4,
-                        continuous_action_space=False,
+                        latent_recon_loss_weight=0.0,
+                        perceptual_loss_weight=0.0,
+                        norm_type='LN',
+                        final_norm_option_in_obs_head='LayerNorm',
+                        final_norm_option_in_encoder='LayerNorm',
+                        predict_latent_loss_type='mse',
+                        support_size=601,
+                        # Fixed entropy coefficient; adaptive alpha is disabled below.
+                        policy_entropy_weight=0.005,
                         max_blocks=num_unroll_steps,
                         max_tokens=2 * num_unroll_steps,
                         context_length=2 * infer_context_length,
-                        device='cuda',
                         action_space_size=action_space_size,
                         num_layers=num_layers,
                         num_heads=8,
                         embed_dim=768,
-                        obs_type='image',
+                        env_num=collector_env_num,
+                        num_simulations=num_simulations,
+                        game_segment_length=game_segment_length,
+                        device='cuda',
+                        # Model-side value_priority diagnostic stays on even though the
+                        # buffer samples uniformly (policy.use_priority=False below).
+                        use_priority=True,
                         encoder_type='resnet',
-                        env_num=max(collector_env_num, evaluator_env_num),
-                        rotary_emb=False,
+                        use_normal_head=True,
+                        optim_type='AdamW_mix_lr_wdecay',
+                        root_cache_key_round_decimals=0,
+                        # v3 rebuilds the KV window exactly from retained raw tokens; the
+                        # stable config keeps the legacy update path (experimental-only).
+                        # rebuild_kv_window_from_tokens=True,
+                        rebuild_kv_window_from_tokens=False,
+                        # v3 enables the short differentiable MCTS-style latent rollout
+                        # consistency loss; disabled here (experimental-only).
+                        # open_loop_consistency_loss_weight=1.0,
+                        open_loop_consistency_loss_weight=0,
+                        open_loop_consistency_batch_size=8,
+                        open_loop_consistency_horizon=4,
+                        open_loop_prefix_transitions=3,
+                        # Policy-stability protections (soft_tanh policy-logits clip +-10).
+                        use_policy_logits_clip=True,
+                        policy_logits_clip_method='soft_tanh',
+                        policy_logits_clip_min=-10.0,
+                        policy_logits_clip_max=10.0,
                     ),
                 ),
                 model_path=None,
+                # Learning settings
+                optim_type='AdamW_mix_lr_wdecay',
+                learning_rate=0.0001,
+                weight_decay=1e-2,
+                batch_size=batch_size,
+                replay_ratio=replay_ratio,
                 num_unroll_steps=num_unroll_steps,
                 num_segments=num_segments,
-                replay_ratio=replay_ratio,
-                batch_size=batch_size,
-                learning_rate=0.0001,
-                num_simulations=num_simulations,
-                train_start_after_envsteps=2000,
                 game_segment_length=game_segment_length,
-                replay_buffer_size=int(1e6),
-                eval_freq=int(5e3),
-                collector_env_num=collector_env_num,
-                evaluator_env_num=evaluator_env_num,
+                # KV caches are cleared once per env per this many env steps.
+                kv_cache_clear_interval=2000,
+                empty_cuda_cache_on_cache_reset=True,
+                num_simulations=num_simulations,
+                collect_num_simulations=collect_num_simulations,
+                fixed_temperature_value=0.25,
+                obs_loss_weight=10.0,
+                value_loss_weight=0.5,
+                grad_clip_value=5.0,
+                use_augmentation=False,
+                use_adaptive_entropy_weight=False,
+                # Policy label smoothing disabled; value/reward smoothing is unchanged.
+                policy_ls_eps_start=0.0,
+                policy_ls_eps_end=0.0,
+                label_smoothing_eps=0.1,
+                use_continuous_label_smoothing=True,
+                continuous_ls_eps=0.05,
+                monitor_norm_freq=10000,
+                use_enhanced_policy_monitoring=True,
+                use_priority=False,
+                # use_priority=True,
+                priority_prob_alpha=0.6,
+                priority_prob_beta=0.4,
+                # Reanalyze settings
                 buffer_reanalyze_freq=buffer_reanalyze_freq,
+                reanalyze_search_chunk_size=collector_env_num,
                 reanalyze_batch_size=reanalyze_batch_size,
                 reanalyze_partition=reanalyze_partition,
+                # v3 computes TD bootstrap values from the rolling online-planning
+                # history; the stable config uses the training-only sequence context.
+                # bootstrap_value_context=True,
+                bootstrap_value_context=False,
+                # Environment settings
+                collector_env_num=collector_env_num,
+                evaluator_env_num=evaluator_env_num,
+                eval_freq=int(5e3),
+                replay_buffer_size=int(5e5),
+                # Policy checkpoints omit the replay buffer. Refill a small diverse
+                # on-policy window before updating a resumed mature model.
+                resume_buffer_min_transitions=100000,
             ),
         )
     )
@@ -107,7 +180,7 @@ def build_config(env_id='ALE/Pong-v5', seed=0, max_env_step_override=None):
 
     game_name = env_id.split('/')[-1].split('-')[0]
     main_config.exp_name = (
-        f'data_lz/data_unizero_segment/{game_name}/'
+        f'data_unizero_segment/{game_name}/'
         f'{game_name}_uz_nlayer{num_layers}_gsl{game_segment_length}'
         f'_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}'
         f'_bs{batch_size}_seed{seed}'
@@ -115,7 +188,7 @@ def build_config(env_id='ALE/Pong-v5', seed=0, max_env_step_override=None):
     return main_config, create_config, max_env_step
 
 
-def main(env_id='ALE/Pong-v5', seed=0, max_env_step_override=None):
+def main(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
     main_config, create_config, max_env_step = build_config(
         env_id, seed, max_env_step_override=max_env_step_override
     )
@@ -132,14 +205,14 @@ def main(env_id='ALE/Pong-v5', seed=0, max_env_step_override=None):
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(description='Train the stable UniZero Atari segment baseline.')
-    parser.add_argument('--env', type=str, default='ALE/Pong-v5', help='Atari environment id.')
+    parser = argparse.ArgumentParser(description='Train the stable UniZero MsPacman best recipe.')
+    parser.add_argument('--env', type=str, default='ALE/MsPacman-v5', help='Atari environment id.')
     parser.add_argument('--seed', type=int, default=0, help='Random seed.')
     parser.add_argument(
         '--max-env-step',
         type=int,
         default=None,
-        help='Override the default training budget of 500000 environment steps.',
+        help='Override the default training budget of 3000000 environment steps.',
     )
     args = parser.parse_args()
     main(args.env, args.seed, max_env_step_override=args.max_env_step)

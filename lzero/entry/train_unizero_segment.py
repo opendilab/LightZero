@@ -28,6 +28,45 @@ timer = EasyTimer()
 _PERIODIC_CHECKPOINT_PATTERN = re.compile(r'^iteration_(\d+)\.pth\.tar$')
 
 
+class _NonfatalCheckpointHook:
+    """Keep training alive when an explicitly configured checkpoint write fails.
+
+    DI-engine invokes the same save hook from periodic learner updates, evaluator-best saves, and
+    ``after_run``.  Wrapping the hook (instead of only ``learner.save_checkpoint``) covers all three
+    call sites while leaving every non-checkpoint training exception fatal.
+    """
+
+    def __init__(self, hook) -> None:
+        self._hook = hook
+
+    def __getattr__(self, name):
+        return getattr(self._hook, name)
+
+    def __call__(self, learner) -> None:
+        try:
+            self._hook(learner)
+        except (OSError, RuntimeError) as error:
+            logging.warning(
+                'Checkpoint save failed and was ignored by configuration '
+                '(train_iter=%d, envstep=%d, requested_name=%s): %s',
+                learner.train_iter,
+                learner.collector_envstep,
+                learner.ckpt_name,
+                error,
+            )
+
+
+def _make_checkpoint_errors_nonfatal(learner) -> int:
+    """Wrap all registered checkpoint hooks and return the number changed."""
+    wrapped = 0
+    for position, hooks in learner._hooks.items():
+        for index, hook in enumerate(hooks):
+            if hook.name.startswith('save_ckpt') and not isinstance(hook, _NonfatalCheckpointHook):
+                hooks[index] = _NonfatalCheckpointHook(hook)
+                wrapped += 1
+    return wrapped
+
+
 def _restore_resume_counters(learner, collector, train_iter: int, envstep: int) -> None:
     """Restore both owners of the counters persisted in learner checkpoints.
 
@@ -64,6 +103,20 @@ def _required_replay_transitions(
     if resume_train_iter <= 0:
         return one_full_batch
     return max(one_full_batch, resume_buffer_min_transitions)
+
+
+def _should_evaluate_at_train_iter(train_iter: int, last_evaluated_train_iter, evaluator) -> bool:
+    """Evaluate at most once for a learner iteration, including iteration zero.
+
+    A short first collection can leave the replay buffer below one batch, so the
+    serial loop collects again without advancing ``learner.train_iter``.  The old
+    explicit ``train_iter == 0`` condition then repeated the full initial
+    evaluation before every warmup collection.  Keep the intended initial eval,
+    but make the already-evaluated iteration an explicit loop invariant.
+    """
+    if last_evaluated_train_iter == train_iter:
+        return False
+    return train_iter == 0 or evaluator.should_eval(train_iter)
 
 
 def _resolve_segment_reanalyze_settings(policy_config) -> Tuple[float, int, float]:
@@ -219,6 +272,12 @@ def train_unizero_segment(
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
+    if getattr(cfg.policy, 'ignore_checkpoint_save_errors', False):
+        wrapped_checkpoint_hooks = _make_checkpoint_errors_nonfatal(learner)
+        logging.warning(
+            'Checkpoint write errors are nonfatal for this run; wrapped %d learner hooks.',
+            wrapped_checkpoint_hooks,
+        )
 
     # MCTS+RL algorithms related core code
     policy_config = cfg.policy
@@ -261,6 +320,7 @@ def train_unizero_segment(
     
     buffer_reanalyze_count = 0
     train_epoch = 0
+    last_evaluated_train_iter = None
     buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition = (
         _resolve_segment_reanalyze_settings(cfg.policy)
     )
@@ -304,9 +364,12 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+        if _should_evaluate_at_train_iter(
+            learner.train_iter, last_evaluated_train_iter, evaluator
+        ):
             save_ckpt_fn = learner.save_checkpoint if getattr(cfg.policy, 'save_ckpt_in_eval', True) else None
             stop, reward = evaluator.eval(save_ckpt_fn, learner.train_iter, collector.envstep)
+            last_evaluated_train_iter = learner.train_iter
             if stop:
                 break
 
