@@ -161,6 +161,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span> <span class="o">=</span> <span class="p">[]</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_latest_reanalysis_diagnostics</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">'reanalyze/target_age_mean'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
+            <span class="s1">'reanalyze/roots_refreshed'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="p">}</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">keep_ratio</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">base_idx</span> <span class="o">=</span> <span class="mi">0</span>
@@ -212,13 +217,32 @@
 <span class="sd">        """</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"Beta should be greater than 0"</span>
         <span class="n">num_of_transitions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
-            <span class="c1"># If priority is not used, set all priorities to 1</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">)</span>
+        <span class="n">priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">priorities</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">num_of_transitions</span><span class="p">,):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s1">'Replay priority/index arrays are not transition-aligned: '</span>
+                <span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">priorities</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1"> vs (</span><span class="si">{</span><span class="n">num_of_transitions</span><span class="si">}</span><span class="s1">,)'</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">priorities</span><span class="p">))</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">priorities</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">'Replay priorities must be finite and non-negative'</span><span class="p">)</span>
 
-        <span class="c1"># +1e-6 for numerical stability</span>
-        <span class="n">probs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">**</span> <span class="bp">self</span><span class="o">.</span><span class="n">_alpha</span> <span class="o">+</span> <span class="mf">1e-6</span>
-        <span class="n">probs</span> <span class="o">/=</span> <span class="n">probs</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+        <span class="c1"># Zero is a structural mask for roots lacking a complete unroll/TD target.  Adding an</span>
+        <span class="c1"># epsilon to every entry resurrected those padded segment-tail roots and diluted every</span>
+        <span class="c1"># useful batch.  Keep them exactly unsampleable in both PER and uniform replay.</span>
+        <span class="n">valid_priority_mask</span> <span class="o">=</span> <span class="n">priorities</span> <span class="o">&gt;</span> <span class="mi">0</span>
+        <span class="n">sampleable_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">valid_priority_mask</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">sampleable_count</span> <span class="o">&lt;</span> <span class="n">batch_size</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s1">'Replay has only </span><span class="si">{</span><span class="n">sampleable_count</span><span class="si">}</span><span class="s1"> sampleable transitions for batch_size=</span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s1">; '</span>
+                <span class="sa">f</span><span class="s1">'total stored transitions=</span><span class="si">{</span><span class="n">num_of_transitions</span><span class="si">}</span><span class="s1">'</span>
+            <span class="p">)</span>
+        <span class="n">sampling_priorities</span> <span class="o">=</span> <span class="n">priorities</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_priority</span> <span class="k">else</span> <span class="n">valid_priority_mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">probs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">sampling_priorities</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">probs</span><span class="p">[</span><span class="n">valid_priority_mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">sampling_priorities</span><span class="p">[</span><span class="n">valid_priority_mask</span><span class="p">]</span> <span class="o">**</span> <span class="bp">self</span><span class="o">.</span><span class="n">_alpha</span>
+        <span class="n">probability_sum</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">probs</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">probability_sum</span><span class="p">)</span> <span class="ow">or</span> <span class="n">probability_sum</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">'Replay sampling distribution has no finite positive mass'</span><span class="p">)</span>
+        <span class="n">probs</span> <span class="o">/=</span> <span class="n">probability_sum</span>
 
         <span class="c1"># sample according to transition index</span>
         <span class="n">batch_index_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">num_of_transitions</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">probs</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -289,7 +313,7 @@
                     <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">sampling_upper_bound</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
 
                 <span class="c1"># Step 4: Further adjust based on actual segment length (runtime check)</span>
-                <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span>
+                <span class="n">segment_len</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="c1"># Position exceeds actual segment, resample within valid range</span>
                     <span class="k">if</span> <span class="n">segment_len</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
@@ -306,11 +330,7 @@
                     <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
 
                 <span class="c1"># Compatibility handling for both GameSegment objects and list data (for unittests)</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span>
-                <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
-                    <span class="c1"># For unittest compatibility: when game_segment is a list instead of GameSegment object</span>
-                    <span class="n">segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
+                <span class="n">segment_len</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
 
                 <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="n">segment_len</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="c1"># If the segment is very short (length 0 or 1), we can't randomly sample a position</span>
@@ -330,7 +350,9 @@
 
         <span class="c1"># Calculate the IS weights from the probabilities of the transitions actually used (which may</span>
         <span class="c1"># differ from the originally sampled ones after the position resampling above).</span>
-        <span class="n">weights_list</span> <span class="o">=</span> <span class="p">(</span><span class="n">num_of_transitions</span> <span class="o">*</span> <span class="n">probs</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">])</span> <span class="o">**</span> <span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_beta</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">probs</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">'Position resampling selected a structurally invalid replay root'</span><span class="p">)</span>
+        <span class="n">weights_list</span> <span class="o">=</span> <span class="p">(</span><span class="n">sampleable_count</span> <span class="o">*</span> <span class="n">probs</span><span class="p">[</span><span class="n">adjusted_index_list</span><span class="p">])</span> <span class="o">**</span> <span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_beta</span><span class="p">)</span>
         <span class="n">weights_list</span> <span class="o">/=</span> <span class="n">weights_list</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>  <span class="c1"># Normalize weights</span>
 
         <span class="c1"># Record the actual sampling time: update_priority() only writes back priorities for samples</span>
@@ -390,8 +412,11 @@
 <span class="sd">                    If the `game_segment_length` is too small to accommodate the `num_unroll_steps`.</span>
 <span class="sd">            """</span>
             <span class="n">train_sample_num</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">)</span>
-            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span> <span class="o">&lt;=</span> <span class="mf">0.75</span><span class="p">,</span> <span class="s2">"The reanalyze partition should be less than 0.75."</span>
-            <span class="n">valid_sample_num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">train_sample_num</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s1">'reanalyze_partition must be in (0, 1], got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span><span class="si">}</span><span class="s1">'</span>
+                <span class="p">)</span>
+            <span class="n">partition_segment_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">train_sample_num</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_partition</span><span class="p">)</span>
 
             <span class="c1"># Calculate the number of samples per segment</span>
             <span class="n">samples_per_segment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span>
@@ -400,14 +425,35 @@
             <span class="k">if</span> <span class="n">samples_per_segment</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The game segment length is too small for num_unroll_steps."</span><span class="p">)</span>
 
-            <span class="c1"># Calculate the number of samples per segment</span>
-            <span class="n">batch_size_per_segment</span> <span class="o">=</span> <span class="n">batch_size</span> <span class="o">//</span> <span class="n">samples_per_segment</span>
+            <span class="n">segments_to_sample</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">batch_size</span> <span class="o">/</span> <span class="n">samples_per_segment</span><span class="p">))</span>
 
-            <span class="c1"># If the batch size cannot be divided, process the remainder part</span>
-            <span class="n">extra_samples</span> <span class="o">=</span> <span class="n">batch_size</span> <span class="o">%</span> <span class="n">samples_per_segment</span>
+            <span class="k">if</span> <span class="n">partition_segment_count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">([],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[])</span>
+
+            <span class="n">segment_lengths</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="n">segment</span><span class="p">)</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span>
+            <span class="p">]</span>
+            <span class="n">segment_offsets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(([</span><span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">segment_lengths</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)))</span>
+            <span class="n">candidate_segment_indices</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">candidate_valid_positions</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">segment_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">partition_segment_count</span><span class="p">):</span>
+                <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">segment_offsets</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">segment_offsets</span><span class="p">[</span><span class="n">segment_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+                <span class="n">valid_positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">flatnonzero</span><span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">priorities</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">])</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">priorities</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">end</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">valid_positions</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+                    <span class="n">candidate_segment_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">segment_index</span><span class="p">)</span>
+                    <span class="n">candidate_valid_positions</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">valid_positions</span>
+            <span class="n">valid_sample_num</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">candidate_segment_indices</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">valid_sample_num</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">([],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[])</span>
 
             <span class="c1"># We use the reanalyze_time in the game_segment_buffer to generate weights</span>
-            <span class="n">reanalyze_times</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">segment</span><span class="o">.</span><span class="n">reanalyze_time</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[:</span><span class="n">valid_sample_num</span><span class="p">]])</span>
+            <span class="n">reanalyze_times</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">reanalyze_time</span>
+                <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">candidate_segment_indices</span>
+            <span class="p">])</span>
 
             <span class="c1"># Calculate weights: the larger the reanalyze_time, the smaller the weight (use exp(-reanalyze_time))</span>
             <span class="n">base_decay_rate</span> <span class="o">=</span> <span class="mi">100</span>
@@ -423,34 +469,24 @@
                 <span class="c1"># If all weights are zero, use a uniform distribution</span>
                 <span class="n">probabilities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">valid_sample_num</span><span class="p">)</span> <span class="o">/</span> <span class="n">valid_sample_num</span>
 
-            <span class="c1"># Sample game segments according to the probabilities</span>
-            <span class="c1"># Ensure valid_sample_num is not zero before sampling</span>
-            <span class="k">if</span> <span class="n">valid_sample_num</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="k">return</span> <span class="p">([],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[])</span>
-
-            <span class="n">selected_game_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">valid_sample_num</span><span class="p">,</span> <span class="n">batch_size_per_segment</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                                                    <span class="n">p</span><span class="o">=</span><span class="n">probabilities</span><span class="p">)</span>
-
-            <span class="c1"># If there are extra samples to be allocated, randomly select some game segments and sample again</span>
-            <span class="k">if</span> <span class="n">extra_samples</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="c1"># We need to handle the case where we might sample the same segment again.</span>
-                <span class="c1"># A simple way is to allow replacement for extra samples or sample from remaining ones.</span>
-                <span class="c1"># For simplicity, let's stick to the original logic but ensure it's safe.</span>
-                <span class="n">remaining_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">setdiff1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">valid_sample_num</span><span class="p">),</span> <span class="n">selected_game_segments</span><span class="p">)</span>
-                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">remaining_segments</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">extra_samples</span><span class="p">:</span>
-                    <span class="c1"># If not enough unique segments left, sample with replacement from all valid segments</span>
-                    <span class="n">extra_game_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">valid_sample_num</span><span class="p">,</span> <span class="n">extra_samples</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">probabilities</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="c1"># Sample from the remaining unique segments</span>
-                    <span class="n">remaining_probs</span> <span class="o">=</span> <span class="n">probabilities</span><span class="p">[</span><span class="n">remaining_segments</span><span class="p">]</span>
-                    <span class="n">remaining_probs</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">remaining_probs</span><span class="p">)</span>
-                    <span class="n">extra_game_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">remaining_segments</span><span class="p">,</span> <span class="n">extra_samples</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">remaining_probs</span><span class="p">)</span>
-
-                <span class="n">selected_game_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">selected_game_segments</span><span class="p">,</span> <span class="n">extra_game_segments</span><span class="p">))</span>
+            <span class="c1"># Sample game segments according to the probabilities. Small buffers may contain fewer</span>
+            <span class="c1"># eligible segments than requested; replacement is preferable to a scheduler-dependent</span>
+            <span class="c1"># crash and still preserves the age-weighted distribution.</span>
+            <span class="n">selected_candidate_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
+                <span class="n">valid_sample_num</span><span class="p">,</span>
+                <span class="n">segments_to_sample</span><span class="p">,</span>
+                <span class="n">replace</span><span class="o">=</span><span class="n">segments_to_sample</span> <span class="o">&gt;</span> <span class="n">valid_sample_num</span><span class="p">,</span>
+                <span class="n">p</span><span class="o">=</span><span class="n">probabilities</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">selected_game_segments</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">candidate_segment_indices</span><span class="p">)[</span><span class="n">selected_candidate_indices</span><span class="p">]</span>
 
             <span class="n">game_segment_list</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">pos_in_game_segment_list</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">batch_index_list</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">sampled_target_ages</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">current_train_iter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_current_reanalyze_train_iter'</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">remaining_roots</span> <span class="o">=</span> <span class="n">batch_size</span>
+            <span class="n">updated_segment_indices</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">game_segment_idx</span> <span class="ow">in</span> <span class="n">selected_game_segments</span><span class="p">:</span>
                 <span class="c1"># =========================================================================</span>
                 <span class="c1"># FIX: The line below is the source of the error and has been removed.</span>
@@ -459,23 +495,44 @@
                 <span class="c1"># =========================================================================</span>
                 <span class="n">game_segment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">game_segment_idx</span><span class="p">]</span>
 
-                <span class="c1"># Update reanalyze_time only once</span>
-                <span class="n">game_segment</span><span class="o">.</span><span class="n">reanalyze_time</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">game_segment_idx</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">updated_segment_indices</span><span class="p">:</span>
+                    <span class="n">collection_train_iter</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">game_segment</span><span class="p">,</span> <span class="s1">'collection_train_iter'</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">current_train_iter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">collection_train_iter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">sampled_target_ages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">current_train_iter</span><span class="p">)</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="n">collection_train_iter</span><span class="p">))</span>
+                        <span class="p">)</span>
+                    <span class="n">game_segment</span><span class="o">.</span><span class="n">reanalyze_time</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">updated_segment_indices</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">game_segment_idx</span><span class="p">))</span>
 
-                <span class="c1"># The sampling position should be 0, 0 + num_unroll_steps, ... (integer multiples of num_unroll_steps)</span>
-                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">samples_per_segment</span><span class="p">):</span>
+                <span class="c1"># Refresh only roots admitted by the same validity mask used for learner sampling.</span>
+                <span class="c1"># Evenly cover the segment rather than spending MCTS on zero-priority padding tails.</span>
+                <span class="n">valid_positions</span> <span class="o">=</span> <span class="n">candidate_valid_positions</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">game_segment_idx</span><span class="p">)]</span>
+                <span class="n">roots_from_segment</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">samples_per_segment</span><span class="p">,</span> <span class="n">remaining_roots</span><span class="p">)</span>
+                <span class="n">selected_positions</span> <span class="o">=</span> <span class="n">valid_positions</span><span class="p">[</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_positions</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">roots_from_segment</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">pos_in_game_segment</span> <span class="ow">in</span> <span class="n">selected_positions</span><span class="p">:</span>
                     <span class="n">game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
-                    <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span>
-                    <span class="k">if</span> <span class="n">pos_in_game_segment</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">):</span>
-                        <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-                    <span class="n">pos_in_game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pos_in_game_segment</span><span class="p">)</span>
+                    <span class="n">pos_in_game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">pos_in_game_segment</span><span class="p">))</span>
                     <span class="c1"># NOTE: We should append the physical index here, as it corresponds to the sampled segment.</span>
                     <span class="n">batch_index_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment_idx</span><span class="p">)</span>
+                <span class="n">remaining_roots</span> <span class="o">-=</span> <span class="n">roots_from_segment</span>
+
+            <span class="k">if</span> <span class="n">remaining_roots</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch_index_list</span><span class="p">)</span> <span class="o">!=</span> <span class="n">batch_size</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s1">'Reanalysis sampler produced </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">batch_index_list</span><span class="p">)</span><span class="si">}</span><span class="s1"> roots for requested batch </span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s1">'</span>
+                <span class="p">)</span>
 
             <span class="c1"># Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).</span>
             <span class="n">make_time</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">batch_index_list</span><span class="p">))]</span>
 
             <span class="n">orig_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">,</span> <span class="p">[],</span> <span class="n">make_time</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_latest_reanalysis_diagnostics</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">'reanalyze/target_age_mean'</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">sampled_target_ages</span><span class="p">))</span> <span class="k">if</span> <span class="n">sampled_target_ages</span> <span class="k">else</span> <span class="mf">0.0</span>
+                <span class="p">),</span>
+                <span class="s1">'reanalyze/roots_refreshed'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">batch_index_list</span><span class="p">)),</span>
+            <span class="p">}</span>
             <span class="k">return</span> <span class="n">orig_data</span></div>
 
 <div class="viewcode-block" id="GameBuffer._sample_orig_reanalyze_data"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_data">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_orig_reanalyze_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">:</span>
@@ -740,6 +797,16 @@
         <span class="k">for</span> <span class="p">(</span><span class="n">data_game</span><span class="p">,</span> <span class="n">meta_game</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">meta</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_push_game_segment</span><span class="p">(</span><span class="n">data_game</span><span class="p">,</span> <span class="n">meta_game</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="GameBuffer._game_segment_transition_count"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._game_segment_transition_count">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_game_segment_transition_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return real transitions, excluding bootstrap padding."""</span>
+        <span class="n">valid_transition_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'valid_transition_count'</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">valid_transition_count</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">valid_transition_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+                <span class="n">valid_transition_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">valid_transition_count</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="GameBuffer._push_game_segment"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer._push_game_segment">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_push_game_segment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">meta</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
@@ -754,18 +821,13 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            - buffered_data (:obj:`BufferedData`): The pushed data.</span>
 <span class="sd">        """</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">data_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="c1"># to be compatible with unittest</span>
-            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="n">data_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">data_length</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'done'</span><span class="p">]:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="n">valid_len</span> <span class="o">=</span> <span class="n">data_length</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">valid_len</span> <span class="o">=</span> <span class="n">data_length</span> <span class="o">-</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'unroll_plus_td_steps'</span><span class="p">]</span>
+            <span class="n">valid_len</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">data_length</span> <span class="o">-</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'unroll_plus_td_steps'</span><span class="p">])</span>
             <span class="c1"># print(f'valid_len is {valid_len}')</span>
 
         <span class="k">if</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -777,7 +839,12 @@
             <span class="c1"># if no 'priorities' provided, set the valid part of the new-added game history the max_prio</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">,</span> <span class="p">[</span><span class="n">max_prio</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">valid_len</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">valid_len</span><span class="p">,</span> <span class="n">data_length</span><span class="p">)]))</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="n">data_length</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]),</span> <span class="s2">" priorities should be of same length as the game steps"</span>
+            <span class="k">assert</span> <span class="n">data_length</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]),</span> <span class="p">(</span>
+                <span class="s1">'priorities must match real game transitions: '</span>
+                <span class="sa">f</span><span class="s1">'data_length=</span><span class="si">{</span><span class="n">data_length</span><span class="si">}</span><span class="s1">, priorities_length=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">meta</span><span class="p">[</span><span class="s2">"priorities"</span><span class="p">])</span><span class="si">}</span><span class="s1">, '</span>
+                <span class="sa">f</span><span class="s1">'action_length=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span><span class="si">}</span><span class="s1">, '</span>
+                <span class="sa">f</span><span class="s1">'valid_transition_count=</span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="s2">"valid_transition_count"</span><span class="p">,</span><span class="w"> </span><span class="kc">None</span><span class="p">)</span><span class="si">}</span><span class="s1">'</span>
+            <span class="p">)</span>
             <span class="n">priorities</span> <span class="o">=</span> <span class="n">meta</span><span class="p">[</span><span class="s1">'priorities'</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">priorities</span><span class="p">[</span><span class="n">valid_len</span><span class="p">:</span><span class="n">data_length</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">,</span> <span class="n">priorities</span><span class="p">))</span>
@@ -801,7 +868,7 @@
         <span class="k">if</span> <span class="n">total_transition</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span><span class="p">:</span>
             <span class="n">index</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nums_of_game_segments</span><span class="p">):</span>
-                <span class="n">length_data</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">action_segment</span><span class="p">)</span><span class="o">&lt;</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">game_segment_length</span>
+                <span class="n">length_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
                 <span class="n">total_transition</span> <span class="o">-=</span> <span class="n">length_data</span>
                 <span class="k">if</span> <span class="n">total_transition</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">keep_ratio</span><span class="p">:</span>
                     <span class="c1"># find the max game_segment index to keep in the buffer</span>
@@ -825,7 +892,8 @@
 <span class="sd">            - excess_game_segment_index (:obj:`List[str]`): Index of data.</span>
 <span class="sd">        """</span>
         <span class="n">excess_game_positions</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
-            <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span> <span class="k">for</span> <span class="n">game_segment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[:</span><span class="n">excess_game_segment_index</span><span class="p">]]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">game_segment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[:</span><span class="n">excess_game_segment_index</span><span class="p">]</span>
         <span class="p">)</span>
         <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[:</span><span class="n">excess_game_segment_index</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">[</span><span class="n">excess_game_positions</span><span class="p">:]</span>
@@ -844,6 +912,35 @@
 <div class="viewcode-block" id="GameBuffer.get_num_of_transitions"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_transitions">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_of_transitions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
         <span class="c1"># total number of transitions</span>
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="GameBuffer.get_num_of_sampleable_transitions"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_sampleable_transitions">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_of_sampleable_transitions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return roots with complete targets; zero priority is reserved as the validity mask."""</span>
+        <span class="n">priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">priorities</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">priorities</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)))</span></div>
+
+<div class="viewcode-block" id="GameBuffer.get_replay_diagnostics"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/game_buffer.html#lzero.mcts.buffer.game_buffer.GameBuffer.get_replay_diagnostics">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_replay_diagnostics</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">priorities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">priorities</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s1">'priority/mean'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
+                <span class="s1">'priority/max'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
+                <span class="s1">'priority/valid_ratio'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="n">valid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">priorities</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">priorities</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">valid_priorities</span> <span class="o">=</span> <span class="n">priorities</span><span class="p">[</span><span class="n">valid</span><span class="p">]</span>
+        <span class="n">segment_lengths</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_game_segment_transition_count</span><span class="p">(</span><span class="n">segment</span><span class="p">)</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">'priority/mean'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">valid_priorities</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="k">if</span> <span class="n">valid_priorities</span><span class="o">.</span><span class="n">size</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+            <span class="s1">'priority/max'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">valid_priorities</span><span class="o">.</span><span class="n">max</span><span class="p">())</span> <span class="k">if</span> <span class="n">valid_priorities</span><span class="o">.</span><span class="n">size</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+            <span class="s1">'priority/valid_ratio'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">valid</span><span class="o">.</span><span class="n">mean</span><span class="p">()),</span>
+            <span class="s1">'segment/length_actual'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">segment_lengths</span><span class="p">))</span> <span class="k">if</span> <span class="n">segment_lengths</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+            <span class="s1">'segment/valid_ratio'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">valid</span><span class="o">.</span><span class="n">mean</span><span class="p">()),</span>
+            <span class="s1">'segment/bootstrap_context_len'</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span>
+                <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_latest_bootstrap_context_len'</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+            <span class="p">),</span>
+        <span class="p">}</span></div>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s1">'current buffer statistics is: num_of_all_collected_episodes: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span><span class="si">}</span><span class="s1">, num of game segments: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">)</span><span class="si">}</span><span class="s1">, number of transitions: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span><span class="p">)</span><span class="si">}</span><span class="s1">'</span></div>

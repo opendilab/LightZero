@@ -204,6 +204,8 @@
             <span class="n">min_max_stats_lst</span><span class="o">.</span><span class="n">set_delta</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">value_delta_max</span><span class="p">)</span>
 
             <span class="n">state_action_history</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">search_depth_sums</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="n">search_depth_counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">simulation_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_simulations</span><span class="p">):</span>
                 <span class="c1"># In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.</span>
                 <span class="n">latent_states</span> <span class="o">=</span> <span class="p">[]</span>
@@ -251,6 +253,13 @@
 <span class="sd">                """</span>
                 <span class="c1"># search_depth is used for rope in UniZero</span>
                 <span class="n">search_depth</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">get_search_len</span><span class="p">()</span>
+                <span class="n">search_depth_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">search_depth</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">search_depth_array</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">search_depth_array</span><span class="p">)):</span>
+                    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s1">'MCTS search depth must be finite and batch-aligned, got </span><span class="si">{</span><span class="n">search_depth_array</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">'</span>
+                    <span class="p">)</span>
+                <span class="n">search_depth_sums</span> <span class="o">+=</span> <span class="n">search_depth_array</span>
+                <span class="n">search_depth_counts</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="c1"># print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')</span>
                 <span class="k">if</span> <span class="n">timestep</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="c1"># for UniZero</span>
@@ -300,6 +309,9 @@
                     <span class="n">min_max_stats_lst</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">virtual_to_play_batch</span>
                 <span class="p">)</span>
  
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_search_depth_mean</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">search_depth_sums</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">search_depth_counts</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
             <span class="k">return</span> <span class="n">first_action_latent_map</span>
 
 

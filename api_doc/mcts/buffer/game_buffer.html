@@ -203,6 +203,12 @@
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._game_segment_transition_count">
+<span class="sig-name descname"><span class="pre">_game_segment_transition_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._game_segment_transition_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._game_segment_transition_count" title="Permalink to this definition"></a></dt>
+<dd><p>Return real transitions, excluding bootstrap padding.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._make_batch">
 <em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_make_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">orig_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reanalyze_ratio</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._make_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._make_batch" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
@@ -533,8 +539,19 @@ make_time: the time the batch is made (for correctly updating replay buffer when
 <dd></dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_sampleable_transitions">
+<span class="sig-name descname"><span class="pre">get_num_of_sampleable_transitions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.get_num_of_sampleable_transitions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_sampleable_transitions" title="Permalink to this definition"></a></dt>
+<dd><p>Return roots with complete targets; zero priority is reserved as the validity mask.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_transitions">
 <span class="sig-name descname"><span class="pre">get_num_of_transitions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.get_num_of_transitions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_transitions" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.get_replay_diagnostics">
+<span class="sig-name descname"><span class="pre">get_replay_diagnostics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.get_replay_diagnostics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.get_replay_diagnostics" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
