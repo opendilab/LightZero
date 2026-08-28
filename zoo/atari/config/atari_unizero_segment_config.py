@@ -95,9 +95,9 @@ def build_config(
                         num_simulations=num_simulations,
                         game_segment_length=game_segment_length,
                         device='cuda',
-                        # Model-side value_priority diagnostic stays on even though the
-                        # buffer samples uniformly (policy.use_priority=False below).
-                        use_priority=True,
+                        # Uniform-replay baseline: skip TD-priority computation as well
+                        # as prioritized sampling to avoid redundant learner work.
+                        use_priority=False,
                         encoder_type='resnet',
                         use_normal_head=True,
                         optim_type='AdamW_mix_lr_wdecay',
@@ -151,8 +151,7 @@ def build_config(
                 continuous_ls_eps=0.05,
                 monitor_norm_freq=10000,
                 use_enhanced_policy_monitoring=True,
-                # use_priority=False,
-                use_priority=True,
+                use_priority=False,
                 priority_prob_alpha=0.6,
                 priority_prob_beta=0.4,
                 # Reanalyze settings
@@ -200,7 +199,7 @@ def build_config(
         run_name = (
             f'{game_name}_uz_nlayer{num_layers}_gsl{game_segment_length}'
             f'_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}'
-            f'_bs{batch_size}_seed{seed}_per_{augmentation_tag}'
+            f'_bs{batch_size}_seed{seed}_uniform_{augmentation_tag}'
         )
     else:
         run_name = _safe_run_name(run_name)

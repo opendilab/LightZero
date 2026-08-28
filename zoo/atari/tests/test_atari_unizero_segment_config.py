@@ -31,10 +31,10 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
     assert policy_config.fixed_temperature_value == 0.25
     assert policy_config.obs_loss_weight == 10.0
     assert policy_config.value_loss_weight == 0.5
-    assert policy_config.use_priority is True
+    assert policy_config.use_priority is False
     assert policy_config.use_augmentation is False
     assert policy_config.grad_clip_mode == 'global'
-    assert config.exp_name.endswith('_per_baseline')
+    assert config.exp_name.endswith('_uniform_baseline')
     assert policy_config.use_adaptive_entropy_weight is False
     assert policy_config.bootstrap_value_context is False
     assert policy_config.buffer_reanalyze_freq == 2e-10
@@ -42,6 +42,7 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
     assert policy_config.reanalyze_partition == 0.75
     assert policy_config.replay_buffer_size == int(5e5)
     assert world_model_config.context_length == 10
+    assert world_model_config.use_priority is False
     assert world_model_config.rebuild_kv_window_from_tokens is False
     assert world_model_config.open_loop_consistency_loss_weight == 0
     assert world_model_config.open_loop_consistency_batch_size == 8
@@ -77,7 +78,7 @@ def test_stable_segment_config_resolves_fixed_augmentation_and_unique_run_name()
     assert config.policy.use_augmentation is True
     assert config.policy.augmentation == ['shift', 'intensity']
     assert config.policy.grad_clip_mode == 'separate_encoder'
-    assert config.exp_name.endswith('_per_fixed-aug')
+    assert config.exp_name.endswith('_uniform_fixed-aug')
 
     overridden, _, _ = atari_unizero_segment_config.build_config(
         env_id='ALE/Pong-v5', seed=0, use_augmentation=True,
