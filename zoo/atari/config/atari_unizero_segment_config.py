@@ -1,4 +1,4 @@
-"""Stable UniZero MsPacman config: the best recipe from the 2026-08 3M matrix.
+"""Stable UniZero Atari config: the best recipe from the 2026-08 3M matrix.
 
 This mirrors the winning ``v3`` arm of the preregistered MsPacman 3M experiment
 matrix (the historical best recipe with ``value_loss_weight=0.5``) with the
@@ -10,11 +10,21 @@ reproduce the full v3 recipe.
 
 from easydict import EasyDict
 
+from zoo.atari.config._atari_unizero_segment_utils import _resolve_grad_clip_mode, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
-def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
+def build_config(
+        env_id='ALE/MsPacman-v5',
+        seed=0,
+        max_env_step_override=None,
+        use_augmentation=False,
+        grad_clip_mode_override=None,
+        run_name=None,
+):
     action_space_size = atari_env_action_space_map[env_id]
+    use_augmentation = bool(use_augmentation)
+    grad_clip_mode = _resolve_grad_clip_mode(use_augmentation, grad_clip_mode_override)
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
@@ -129,9 +139,9 @@ def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
                 obs_loss_weight=10.0,
                 value_loss_weight=0.5,
                 grad_clip_value=5.0,
-                # use_augmentation=False,
-                use_augmentation=True,
-
+                grad_clip_mode=grad_clip_mode,
+                use_augmentation=use_augmentation,
+                augmentation=['shift', 'intensity'],
                 use_adaptive_entropy_weight=False,
                 # Policy label smoothing disabled; value/reward smoothing is unchanged.
                 policy_ls_eps_start=0.0,
@@ -141,8 +151,8 @@ def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
                 continuous_ls_eps=0.05,
                 monitor_norm_freq=10000,
                 use_enhanced_policy_monitoring=True,
-                use_priority=False,
-                # use_priority=True,
+                # use_priority=False,
+                use_priority=True,
                 priority_prob_alpha=0.6,
                 priority_prob_beta=0.4,
                 # Reanalyze settings
@@ -181,18 +191,40 @@ def build_config(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
     )
 
     game_name = env_id.split('/')[-1].split('-')[0]
+    if run_name is None:
+        augmentation_tag = (
+            'fixed-aug' if use_augmentation and grad_clip_mode == 'separate_encoder'
+            else 'aug-globalclip' if use_augmentation
+            else 'baseline'
+        )
+        run_name = (
+            f'{game_name}_uz_nlayer{num_layers}_gsl{game_segment_length}'
+            f'_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}'
+            f'_bs{batch_size}_seed{seed}_per_{augmentation_tag}'
+        )
+    else:
+        run_name = _safe_run_name(run_name)
     main_config.exp_name = (
-        f'data_unizero_segment/{game_name}/'
-        f'{game_name}_uz_nlayer{num_layers}_gsl{game_segment_length}'
-        f'_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}'
-        f'_bs{batch_size}_seed{seed}_fix-aug'
+        f'data_unizero_segment/{game_name}/{run_name}'
     )
     return main_config, create_config, max_env_step
 
 
-def main(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
+def main(
+        env_id='ALE/MsPacman-v5',
+        seed=0,
+        max_env_step_override=None,
+        use_augmentation=False,
+        grad_clip_mode_override=None,
+        run_name=None,
+):
     main_config, create_config, max_env_step = build_config(
-        env_id, seed, max_env_step_override=max_env_step_override
+        env_id,
+        seed,
+        max_env_step_override=max_env_step_override,
+        use_augmentation=use_augmentation,
+        grad_clip_mode_override=grad_clip_mode_override,
+        run_name=run_name,
     )
 
     from lzero.entry import train_unizero_segment
@@ -207,9 +239,27 @@ def main(env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=None):
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(description='Train the stable UniZero MsPacman best recipe.')
+    parser = argparse.ArgumentParser(description='Train the stable UniZero Atari baseline or fixed-augmentation recipe.')
     parser.add_argument('--env', type=str, default='ALE/MsPacman-v5', help='Atari environment id.')
     parser.add_argument('--seed', type=int, default=0, help='Random seed.')
+    augmentation_group = parser.add_mutually_exclusive_group()
+    augmentation_group.add_argument(
+        '--use-augmentation', dest='use_augmentation', action='store_true',
+        help='Enable coherent shift/intensity augmentation with separate encoder clipping by default.',
+    )
+    augmentation_group.add_argument(
+        '--no-augmentation', dest='use_augmentation', action='store_false',
+        help='Disable augmentation and use global clipping by default (baseline).',
+    )
+    parser.set_defaults(use_augmentation=False)
+    parser.add_argument(
+        '--grad-clip-mode', choices=('global', 'separate_encoder'), default=None,
+        help='Override clipping topology; normally inferred from the augmentation setting.',
+    )
+    parser.add_argument(
+        '--run-name', type=str, default=None,
+        help='Optional unique run-directory basename under data_unizero_segment/<game>/.',
+    )
     parser.add_argument(
         '--max-env-step',
         type=int,
@@ -217,4 +267,11 @@ if __name__ == '__main__':
         help='Override the default training budget of 3000000 environment steps.',
     )
     args = parser.parse_args()
-    main(args.env, args.seed, max_env_step_override=args.max_env_step)
+    main(
+        args.env,
+        args.seed,
+        max_env_step_override=args.max_env_step,
+        use_augmentation=args.use_augmentation,
+        grad_clip_mode_override=args.grad_clip_mode,
+        run_name=args.run_name,
+    )

@@ -31,8 +31,10 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
     assert policy_config.fixed_temperature_value == 0.25
     assert policy_config.obs_loss_weight == 10.0
     assert policy_config.value_loss_weight == 0.5
-    assert policy_config.use_priority is False
+    assert policy_config.use_priority is True
     assert policy_config.use_augmentation is False
+    assert policy_config.grad_clip_mode == 'global'
+    assert config.exp_name.endswith('_per_baseline')
     assert policy_config.use_adaptive_entropy_weight is False
     assert policy_config.bootstrap_value_context is False
     assert policy_config.buffer_reanalyze_freq == 2e-10
@@ -65,6 +67,28 @@ def test_stable_segment_config_allows_max_env_step_override():
     with pytest.raises(ValueError, match='max_env_step must be positive'):
         atari_unizero_segment_config.build_config(
             env_id='ALE/MsPacman-v5', seed=0, max_env_step_override=0
+        )
+
+
+def test_stable_segment_config_resolves_fixed_augmentation_and_unique_run_name():
+    config, _, _ = atari_unizero_segment_config.build_config(
+        env_id='ALE/Pong-v5', seed=0, use_augmentation=True
+    )
+    assert config.policy.use_augmentation is True
+    assert config.policy.augmentation == ['shift', 'intensity']
+    assert config.policy.grad_clip_mode == 'separate_encoder'
+    assert config.exp_name.endswith('_per_fixed-aug')
+
+    overridden, _, _ = atari_unizero_segment_config.build_config(
+        env_id='ALE/Pong-v5', seed=0, use_augmentation=True,
+        grad_clip_mode_override='global', run_name='pong aug global smoke',
+    )
+    assert overridden.policy.grad_clip_mode == 'global'
+    assert overridden.exp_name.endswith('/pong-aug-global-smoke')
+
+    with pytest.raises(ValueError, match='grad_clip_mode'):
+        atari_unizero_segment_config.build_config(
+            env_id='ALE/Pong-v5', seed=0, grad_clip_mode_override='per_head'
         )
 
 

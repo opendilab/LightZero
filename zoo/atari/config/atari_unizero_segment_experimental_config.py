@@ -19,7 +19,7 @@ import traceback
 from datetime import datetime
 
 from easydict import EasyDict
-from zoo.atari.config._atari_unizero_segment_utils import _Tee, _safe_run_name
+from zoo.atari.config._atari_unizero_segment_utils import _resolve_grad_clip_mode, _Tee, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
@@ -100,14 +100,6 @@ def _resolve_collect_temperature(value):
             f'collect_temperature must be positive, got {collect_temperature}'
         )
     return collect_temperature
-
-
-def _resolve_grad_clip_mode(use_augmentation, override=None):
-    """Protect non-encoder learning from augmentation-driven encoder gradients."""
-    mode = ('separate_encoder' if use_augmentation else 'global') if override is None else str(override)
-    if mode not in {'global', 'separate_encoder'}:
-        raise ValueError(f'Unsupported grad_clip_mode: {mode}')
-    return mode
 
 
 def _resolve_inference_env_num(collector_env_num, evaluator_env_num, isolate_eval_cache):
