@@ -19,7 +19,7 @@ rjob_logs/
 *.png
 !lzero/loss_landscape/images/**/*.png
 *.csv
-zoo/atari/runs/rjob/
+zoo/atari/runs/
 pkg/
 src/
 

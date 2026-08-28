@@ -30,7 +30,10 @@ def build_config(
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
-    evaluator_env_num = 8
+    # Three deterministic episodes are sufficient for fast iteration; evaluate less
+    # often as well so short validation runs spend their budget on collection/training.
+    evaluator_env_num = 3
+    eval_freq = int(1e4)
     num_segments = 8
     game_segment_length = 200
     num_simulations = 50
@@ -166,7 +169,7 @@ def build_config(
                 # Environment settings
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
-                eval_freq=int(5e3),
+                eval_freq=eval_freq,
                 replay_buffer_size=int(5e5),
                 # Policy checkpoints omit the replay buffer. Refill a small diverse
                 # on-policy window before updating a resumed mature model.
@@ -191,15 +194,32 @@ def build_config(
 
     game_name = env_id.split('/')[-1].split('-')[0]
     if run_name is None:
+        policy_config = main_config.policy
+        world_model_config = policy_config.model.world_model_cfg
         augmentation_tag = (
             'fixed-aug' if use_augmentation and grad_clip_mode == 'separate_encoder'
             else 'aug-globalclip' if use_augmentation
-            else 'baseline'
+            else 'noaug'
         )
+        stab_fix_tag = 'stabfix' if world_model_config.use_policy_logits_clip else 'nostabfix'
+        rebuild_kv_tag = (
+            'rebuildkv' if world_model_config.rebuild_kv_window_from_tokens else 'norebuildkv'
+        )
+        contextual_reanalysis_tag = (
+            'ctxreanalyze' if policy_config.get('contextual_reanalysis', False) else 'noctxreanalyze'
+        )
+        bootstrap_tag = 'bootctx' if policy_config.bootstrap_value_context else 'nobootctx'
+        priority_tag = 'per' if policy_config.use_priority else 'noper'
         run_name = (
-            f'{game_name}_uz_nlayer{num_layers}_gsl{game_segment_length}'
-            f'_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}'
-            f'_bs{batch_size}_seed{seed}_uniform_{augmentation_tag}'
+            f'{game_name}_uz_h{num_unroll_steps}_ctx{infer_context_length}'
+            f'_nlayer{num_layers}_gsl{game_segment_length}_bs{batch_size}'
+            f'_rr{replay_ratio:g}_temp{policy_config.fixed_temperature_value:g}'
+            f'_obs{policy_config.obs_loss_weight:g}_value{policy_config.value_loss_weight:g}'
+            f'_{stab_fix_tag}_{rebuild_kv_tag}_{contextual_reanalysis_tag}'
+            f'_reanalyze{policy_config.buffer_reanalyze_freq:g}_{bootstrap_tag}'
+            f'_olc{world_model_config.open_loop_consistency_loss_weight:g}'
+            f'_{priority_tag}_{augmentation_tag}'
+            f'_seed{seed}_{max_env_step / 1e6:g}m'
         )
     else:
         run_name = _safe_run_name(run_name)

@@ -47,7 +47,8 @@ def _default_run_name(
         num_unroll_steps, infer_context_length, game_segment_length, batch_size,
         replay_ratio, collect_temperature, obs_loss_weight, value_loss_weight,
         open_loop_consistency_weight, use_priority, use_augmentation,
-        bootstrap_value_context, rebuild_kv_window_from_tokens, stab_fix, max_env_step,
+        bootstrap_value_context, rebuild_kv_window_from_tokens, contextual_reanalysis,
+        buffer_reanalyze_freq, stab_fix, max_env_step,
 ):
     """Build a self-describing run name from the resolved key config settings."""
     parts = [
@@ -60,16 +61,15 @@ def _default_run_name(
         f'temp{collect_temperature:g}',
         f'obs{obs_loss_weight:g}',
         f'value{value_loss_weight:g}',
+        'stabfix' if stab_fix else 'nostabfix',
+        'rebuildkv' if rebuild_kv_window_from_tokens else 'norebuildkv',
+        'ctxreanalyze' if contextual_reanalysis else 'noctxreanalyze',
+        f'reanalyze{buffer_reanalyze_freq:g}',
+        'bootctx' if bootstrap_value_context else 'nobootctx',
         f'olc{open_loop_consistency_weight:g}',
         'per' if use_priority else 'noper',
         'aug' if use_augmentation else 'noaug',
     ]
-    if bootstrap_value_context:
-        parts.append('bootctx')
-    if rebuild_kv_window_from_tokens:
-        parts.append('rebuildkv')
-    if not stab_fix:
-        parts.append('nostabfix')
     parts.append(f'seed{seed}')
     parts.append(f'{max_env_step / 1e6:g}m')
     parts.append(timestamp)
@@ -259,8 +259,9 @@ def main(
     collector_env_num = 8
     num_segments = 8
     evaluator_env_num = (
-        8 if evaluator_env_num_override is None else int(evaluator_env_num_override)
+        3 if evaluator_env_num_override is None else int(evaluator_env_num_override)
     )
+    eval_freq = int(1e4)
     if evaluator_env_num <= 0:
         raise ValueError(f'evaluator_env_num must be positive, got {evaluator_env_num}')
     collect_num_simulations = (
@@ -584,7 +585,7 @@ def main(
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             isolate_eval_cache=bool(isolate_eval_cache),
-            eval_freq=int(5e3),
+            eval_freq=eval_freq,
             replay_buffer_size=replay_buffer_size,
             # Policy checkpoints omit the ~25GB full Atari replay buffer. Refill a small diverse
             # on-policy window before updating a mature model after preemption.
@@ -633,6 +634,8 @@ def main(
             use_augmentation=use_augmentation,
             bootstrap_value_context=bootstrap_value_context,
             rebuild_kv_window_from_tokens=rebuild_kv_window_from_tokens,
+            contextual_reanalysis=contextual_reanalysis,
+            buffer_reanalyze_freq=buffer_reanalyze_freq,
             stab_fix=stab_fix,
             max_env_step=max_env_step,
         )
@@ -746,7 +749,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--evaluator-env-num', dest='evaluator_env_num', type=int, default=None,
-        help='Number of deterministic evaluation environments/episodes (default 8).'
+        help='Number of deterministic evaluation environments/episodes (default 3).'
     )
     parser.add_argument(
         '--collect-num-simulations', dest='collect_num_simulations', type=int, default=None,

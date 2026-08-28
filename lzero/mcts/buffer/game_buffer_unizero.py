@@ -876,10 +876,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             )
 
         split_history, offset = [], 0
+        encoded = encoded.detach()
         for length in lengths:
-            split_history.append([
-                encoded[index].detach() for index in range(offset, offset + length)
-            ])
+            # Preserve a tensor view per sequence instead of creating one Python
+            # tensor entry per historical observation.
+            split_history.append(encoded[offset:offset + length])
             offset += length
         return split_history
 
