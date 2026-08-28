@@ -20,10 +20,37 @@ class ReanalysisContextMixin:
     def _embed_reanalysis_action(
             self, action, latent_dtype: torch.dtype, task_id: Optional[int]
     ) -> torch.Tensor:
+        """Embed one replay action while preserving the historical helper API."""
+        return self._embed_reanalysis_actions(
+            action, action_count=1, latent_dtype=latent_dtype, task_id=task_id
+        )[0]
+
+    def _embed_reanalysis_actions(
+            self, actions, action_count: int, latent_dtype: torch.dtype,
+            task_id: Optional[int]
+    ) -> torch.Tensor:
+        """Embed a flat replay-action batch with a single module invocation.
+
+        Context construction used to call the embedding table once for every action
+        in every root window.  With Atari B=256/H=10 that creates roughly 28k tiny
+        CUDA kernels per learner update.  Keep the first-action semantics of the old
+        scalar helper, but normalize and embed the complete batch at once.
+        """
+        action_count = int(action_count)
+        if action_count <= 0:
+            raise ValueError(f'action_count must be positive, got {action_count}')
+        try:
+            action_tensor = torch.as_tensor(actions, device=self.device)
+        except (TypeError, ValueError):
+            # Variable sources such as replay lists may contain tensor/ndarray
+            # action vectors. Stack those vectors without converting each one to
+            # a Python scalar (which would synchronize CUDA tensors).
+            action_tensor = torch.stack([
+                torch.as_tensor(action, device=self.device).reshape(-1)
+                for action in actions
+            ])
         if self.continuous_action_space:
-            action_tensor = torch.as_tensor(
-                action, device=self.device, dtype=latent_dtype
-            ).reshape(1, -1)
+            action_tensor = action_tensor.to(dtype=latent_dtype).reshape(action_count, -1)
             action_embedding = self.act_embedding_table
             if isinstance(action_embedding, nn.ModuleList):
                 if task_id is None:
@@ -32,9 +59,10 @@ class ReanalysisContextMixin:
                     )
                 action_embedding = action_embedding[task_id]
         else:
-            action_tensor = torch.as_tensor([action], device=self.device).long()
+            # Legacy normalization selected the first scalar from each action.
+            action_tensor = action_tensor.reshape(action_count, -1)[:, 0].long()
             action_embedding = self.act_embedding_table
-        return action_embedding(action_tensor).reshape(-1, self.embed_dim)
+        return action_embedding(action_tensor).reshape(action_count, -1, self.embed_dim)
 
     def build_reanalysis_root_token_contexts(
             self,
@@ -87,8 +115,36 @@ class ReanalysisContextMixin:
                 f'got {self.context_length}.'
             )
 
+        rollout_action_count = sequence_count * (roots_per_sequence - 1)
+        rollout_action_embeddings = None
+        if rollout_action_count:
+            rollout_action_embeddings = self._embed_reanalysis_actions(
+                actions[:, :roots_per_sequence - 1],
+                action_count=rollout_action_count,
+                latent_dtype=roots.dtype,
+                task_id=task_id,
+            ).reshape(sequence_count, roots_per_sequence - 1, -1, self.embed_dim)
+
+        prefix_action_lengths = [len(sequence) for sequence in history_action_segment]
+        flat_prefix_actions = [
+            action for sequence in history_action_segment for action in sequence
+        ]
+        prefix_action_embeddings = None
+        if flat_prefix_actions:
+            prefix_action_embeddings = self._embed_reanalysis_actions(
+                flat_prefix_actions,
+                action_count=len(flat_prefix_actions),
+                latent_dtype=roots.dtype,
+                task_id=task_id,
+            )
+
+        # Build one raw trajectory timeline per replay sequence. Every root context
+        # is then a view into that timeline. This is exactly equivalent to repeatedly
+        # rebuilding/catting the full prefix for every root, but changes B*(H+1)
+        # concatenations and tens of thousands of action-embedding calls into B
+        # concatenations and at most two batched embedding calls.
         root_contexts = []
-        normalize_action = self._normalize_reanalysis_action
+        prefix_action_offset = 0
         for sequence_index in range(sequence_count):
             prefix_latents = history_latent_segment[sequence_index]
             prefix_actions = history_action_segment[sequence_index]
@@ -98,34 +154,43 @@ class ReanalysisContextMixin:
                     f'{len(prefix_latents)} != {len(prefix_actions)}.'
                 )
 
-            observation_history = [
-                torch.as_tensor(latent, device=self.device).reshape(-1, self.embed_dim)
-                for latent in prefix_latents
-            ]
-            action_history = [
-                normalize_action(action, roots.dtype) for action in prefix_actions
-            ]
+            timeline_parts = []
+            timeline_token_count = 0
+            root_end_offsets = []
+            prefix_action_count = prefix_action_lengths[sequence_index]
+            for prefix_index, latent in enumerate(prefix_latents):
+                observation = torch.as_tensor(
+                    latent, device=self.device
+                ).reshape(-1, self.embed_dim)
+                action_embedding = prefix_action_embeddings[
+                    prefix_action_offset + prefix_index
+                ]
+                timeline_parts.extend((observation, action_embedding))
+                timeline_token_count += observation.size(0) + action_embedding.size(0)
+            prefix_action_offset += prefix_action_count
 
             root_start = sequence_index * roots_per_sequence
             for root_offset in range(roots_per_sequence):
                 current_root = roots[root_start + root_offset].reshape(-1, self.embed_dim)
-                token_parts = []
-                for observation, action in zip(observation_history, action_history):
-                    token_parts.extend((
-                        observation,
-                        self._embed_reanalysis_action(action, roots.dtype, task_id),
-                    ))
-                token_parts.append(current_root)
-                raw_context = torch.cat(token_parts, dim=0).detach()
-                if raw_context.size(0) >= self.context_length - 1:
-                    raw_context = raw_context[-keep_tokens:]
-                root_contexts.append(raw_context)
+                timeline_parts.append(current_root)
+                timeline_token_count += current_root.size(0)
+                root_end_offsets.append(timeline_token_count)
 
                 if root_offset < roots_per_sequence - 1:
-                    observation_history.append(current_root)
-                    action_history.append(normalize_action(
-                        actions[sequence_index, root_offset], roots.dtype
-                    ))
+                    action_embedding = rollout_action_embeddings[
+                        sequence_index, root_offset
+                    ]
+                    timeline_parts.append(action_embedding)
+                    timeline_token_count += action_embedding.size(0)
+
+            timeline = torch.cat(timeline_parts, dim=0).detach()
+            for root_end in root_end_offsets:
+                context_start = (
+                    root_end - keep_tokens
+                    if root_end >= self.context_length - 1
+                    else 0
+                )
+                root_contexts.append(timeline[context_start:root_end])
 
         return root_contexts
 
@@ -249,9 +314,10 @@ class ReanalysisContextMixin:
         length_groups, _ = self._group_root_token_contexts(
             root_token_contexts, 'bootstrap'
         )
-        root_value_logits = [None] * len(root_token_contexts)
+        root_value_logits = None
         transformer_task_id = 0 if task_id is None else int(task_id)
         for context_length, entries in length_groups.items():
+            indices = [index for index, _ in entries]
             raw_context_batch = torch.stack([context for _, context in entries])
             positioned_context, transformer_start_pos = self._position_root_context_batch(
                 raw_context_batch
@@ -264,7 +330,10 @@ class ReanalysisContextMixin:
             contextual_values = self._context_prediction_head('head_value', task_id)(
                 hidden, num_steps=context_length, prev_steps=0
             )[:, -1]
-            for local_index, (root_index, _) in enumerate(entries):
-                root_value_logits[root_index] = contextual_values[local_index]
+            if root_value_logits is None:
+                root_value_logits = contextual_values.new_empty(
+                    (len(root_token_contexts), *contextual_values.shape[1:])
+                )
+            root_value_logits[torch.as_tensor(indices, device=self.device)] = contextual_values
 
-        return torch.stack(root_value_logits)
+        return root_value_logits

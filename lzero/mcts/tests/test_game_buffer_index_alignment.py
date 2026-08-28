@@ -32,6 +32,7 @@ def _make_buffer() -> MuZeroGameBuffer:
         priority_prob_beta=0.4,
         use_priority=True,
         reanalyze_outdated=False,
+        reanalyze_partition=0.75,
         game_segment_length=20,
         num_unroll_steps=5,
         td_steps=10,
@@ -47,6 +48,25 @@ def _make_buffer() -> MuZeroGameBuffer:
 @pytest.mark.unittest
 class TestSampleOrigDataIndexAlignment:
 
+    def test_partial_padded_segment_uses_real_transition_count_for_priorities(self):
+        buf = _make_buffer()
+        seg = SimpleNamespace(
+            action_segment=list(range(20)),
+            valid_transition_count=5,
+        )
+        meta = {
+            'done': False,
+            'unroll_plus_td_steps': 15,
+            'priorities': np.arange(5, dtype=np.float32) + 1,
+        }
+
+        buf.push_game_segments(([seg], [meta]))
+
+        assert buf.get_num_of_transitions() == 5
+        assert len(buf.game_pos_priorities) == 5
+        assert len(buf.game_segment_game_pos_look_up) == 5
+        assert np.all(buf.game_pos_priorities == 0)
+
     def test_index_and_weight_alignment_after_position_resampling(self):
         buf = _make_buffer()
         # One short done segment with 3 transitions and non-uniform priorities.
@@ -57,7 +77,7 @@ class TestSampleOrigDataIndexAlignment:
         assert buf.game_segment_game_pos_look_up == [(0, 0), (0, 1), (0, 2)]
 
         num_transitions = buf.get_num_of_transitions()
-        probs = buf.game_pos_priorities ** buf._alpha + 1e-6
+        probs = buf.game_pos_priorities ** buf._alpha
         probs /= probs.sum()
 
         # batch_size == 3 with replace=False draws every index, so the pos=2 entry (last position
@@ -107,3 +127,58 @@ class TestSampleOrigDataIndexAlignment:
         train_data_stale = [[None, None, None, np.asarray(index_list2), None, np.asarray(stale_make_time)], None]
         buf.update_priority(train_data_stale, np.array([9.9, 9.9, 9.9]))
         assert np.allclose(buf.game_pos_priorities, prios_before)
+
+    @pytest.mark.parametrize('use_priority', [True, False])
+    def test_zero_priority_segment_tail_is_never_sampled(self, use_priority):
+        buf = _make_buffer()
+        buf._cfg.use_priority = use_priority
+        seg = SimpleNamespace(action_segment=list(range(20)), valid_transition_count=20)
+        meta = {
+            'done': False,
+            'unroll_plus_td_steps': 15,
+            'priorities': np.arange(20, dtype=np.float32) + 1,
+        }
+        buf.push_game_segments(([seg], [meta]))
+
+        assert buf.get_num_of_sampleable_transitions() == 5
+        for _ in range(20):
+            _, positions, indices, weights, _ = buf._sample_orig_data(4)
+            assert all(position < 5 for position in positions)
+            assert np.all(buf.game_pos_priorities[indices] > 0)
+            assert np.all(np.isfinite(weights))
+
+        diagnostics = buf.get_replay_diagnostics()
+        assert diagnostics['priority/valid_ratio'] == pytest.approx(0.25)
+
+    def test_priority_update_rejects_nan_before_distribution_is_poisoned(self):
+        buf = _make_buffer()
+        seg = SimpleNamespace(action_segment=[1, 2, 3])
+        meta = {'done': True, 'unroll_plus_td_steps': 15, 'priorities': np.ones(3)}
+        buf.push_game_segments(([seg], [meta]))
+        train_data = [[None, None, np.array([0]), None, np.array([time.time()])], None]
+
+        with pytest.raises(ValueError, match='finite and positive'):
+            buf.update_priority(train_data, np.array([np.nan]))
+
+    def test_reanalysis_batch_is_exact_and_excludes_zero_priority_tail(self):
+        buf = _make_buffer()
+        for collection_iter in range(4):
+            seg = SimpleNamespace(
+                action_segment=list(range(20)),
+                valid_transition_count=20,
+                reanalyze_time=0,
+                collection_train_iter=collection_iter,
+            )
+            meta = {
+                'done': False,
+                'unroll_plus_td_steps': 15,
+                'priorities': np.arange(20, dtype=np.float32) + 1,
+            }
+            buf.push_game_segments(([seg], [meta]))
+
+        buf._current_reanalyze_train_iter = 10
+        segments, positions, indices, _, _ = buf._sample_orig_reanalyze_batch(7)
+
+        assert len(segments) == len(positions) == len(indices) == 7
+        assert all(position < 5 for position in positions)
+        assert buf._latest_reanalysis_diagnostics['reanalyze/target_age_mean'] > 0

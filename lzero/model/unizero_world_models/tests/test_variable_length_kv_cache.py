@@ -144,6 +144,105 @@ class TestVariableLengthKVCache:
         ))
         assert torch.equal(contexts[2], full_root_two[-7:])
 
+    def test_vectorized_root_context_builder_matches_legacy_reference(self):
+        """The optimized timeline builder must be token-identical to the old root loop."""
+        torch.manual_seed(121)
+        world_model = _build_world_model().eval()
+        world_model.context_length = 10
+        roots_per_sequence = 5
+        sequence_count = 3
+        roots = torch.randn(
+            sequence_count * roots_per_sequence, 2, world_model.embed_dim
+        )
+        batch_actions = torch.tensor([
+            [0, 1, 2, 3],
+            [3, 4, 5, 0],
+            [5, 2, 1, 4],
+        ])
+        prefix_latents = [
+            [],
+            [torch.randn(2, world_model.embed_dim) for _ in range(2)],
+            [torch.randn(2, world_model.embed_dim) for _ in range(4)],
+        ]
+        prefix_actions = [[], [4, 5], [1, 2, 3, 4]]
+        original_embedding = world_model.act_embedding_table
+
+        def legacy_reference():
+            contexts = []
+            keep_tokens = world_model.context_length - 3
+            for sequence_index in range(sequence_count):
+                observation_history = list(prefix_latents[sequence_index])
+                action_history = list(prefix_actions[sequence_index])
+                root_start = sequence_index * roots_per_sequence
+                for root_offset in range(roots_per_sequence):
+                    current_root = roots[root_start + root_offset]
+                    parts = []
+                    for observation, action in zip(observation_history, action_history):
+                        parts.extend((
+                            observation,
+                            original_embedding(torch.tensor([action])),
+                        ))
+                    parts.append(current_root)
+                    context = torch.cat(parts).detach()
+                    if context.size(0) >= world_model.context_length - 1:
+                        context = context[-keep_tokens:]
+                    contexts.append(context)
+                    if root_offset < roots_per_sequence - 1:
+                        observation_history.append(current_root)
+                        action_history.append(int(batch_actions[sequence_index, root_offset]))
+            return contexts
+
+        expected = legacy_reference()
+        embedding_calls = []
+
+        class CountingEmbedding(torch.nn.Module):
+
+            def forward(self, actions):
+                embedding_calls.append(tuple(actions.shape))
+                return original_embedding(actions)
+
+        world_model.act_embedding_table = CountingEmbedding()
+        actual = world_model.build_reanalysis_root_token_contexts(
+            roots,
+            batch_actions,
+            roots_per_sequence,
+            prefix_latents,
+            prefix_actions,
+        )
+
+        assert embedding_calls == [(sequence_count * (roots_per_sequence - 1),), (6,)]
+        assert len(actual) == len(expected)
+        for actual_context, expected_context in zip(actual, expected):
+            assert torch.equal(actual_context, expected_context)
+
+    def test_vectorized_root_context_builder_supports_continuous_action_lists(self):
+        world_model = _build_world_model().eval()
+        world_model.context_length = 10
+        world_model.continuous_action_space = True
+        world_model.act_embedding_table = torch.nn.Linear(
+            2, world_model.embed_dim, bias=False
+        )
+        roots = torch.randn(6, 1, world_model.embed_dim)
+        batch_actions = torch.randn(2, 2, 2)
+        prefix_latent = torch.randn(1, world_model.embed_dim)
+        prefix_action = torch.tensor([0.25, -0.5])
+
+        contexts = world_model.build_reanalysis_root_token_contexts(
+            roots,
+            batch_actions,
+            roots_per_sequence=3,
+            history_latent_segment=[[prefix_latent], []],
+            history_action_segment=[[prefix_action], []],
+        )
+
+        expected_first = torch.cat((
+            prefix_latent,
+            world_model.act_embedding_table(prefix_action.reshape(1, -1)),
+            roots[0],
+        ))
+        assert torch.equal(contexts[0], expected_first)
+        assert [context.size(0) for context in contexts] == [3, 5, 7, 1, 3, 5]
+
     def test_seeded_reanalysis_root_cache_matches_direct_prefix_forward(self):
         """MCTS root lookup must hit the K/V produced by its true replay prefix."""
         torch.manual_seed(13)

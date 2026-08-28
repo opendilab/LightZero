@@ -2,7 +2,7 @@ import os
 import re
 from functools import partial
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 import wandb
@@ -26,6 +26,69 @@ from .utils import calculate_update_per_collect, random_collect
 timer = EasyTimer()
 
 _PERIODIC_CHECKPOINT_PATTERN = re.compile(r'^iteration_(\d+)\.pth\.tar$')
+
+
+class _MetricFilteredWriter:
+    """Filter scalar writes by canonical metric name while preserving the writer API."""
+
+    def __init__(self, writer, enabled: bool, metric_filter: Dict[str, bool], log_all: bool) -> None:
+        self._writer = writer
+        self._enabled = bool(enabled)
+        self._metric_filter = dict(metric_filter)
+        self._log_all = bool(log_all)
+
+    def __getattr__(self, name):
+        return getattr(self._writer, name)
+
+    @staticmethod
+    def _canonical_name(tag: str) -> str:
+        name = tag.split('/', 1)[1] if '/' in tag else tag
+        return name[:-4] if name.endswith('_avg') else name
+
+    def add_scalar(self, tag, scalar_value, global_step=None, *args, **kwargs):
+        metric_name = self._canonical_name(str(tag))
+        if self._enabled and (self._log_all or self._metric_filter.get(metric_name, False)):
+            return self._writer.add_scalar(tag, scalar_value, global_step, *args, **kwargs)
+        return None
+
+
+class _NonfatalCheckpointHook:
+    """Keep training alive when an explicitly configured checkpoint write fails.
+
+    DI-engine invokes the same save hook from periodic learner updates, evaluator-best saves, and
+    ``after_run``.  Wrapping the hook (instead of only ``learner.save_checkpoint``) covers all three
+    call sites while leaving every non-checkpoint training exception fatal.
+    """
+
+    def __init__(self, hook) -> None:
+        self._hook = hook
+
+    def __getattr__(self, name):
+        return getattr(self._hook, name)
+
+    def __call__(self, learner) -> None:
+        try:
+            self._hook(learner)
+        except (OSError, RuntimeError) as error:
+            logging.warning(
+                'Checkpoint save failed and was ignored by configuration '
+                '(train_iter=%d, envstep=%d, requested_name=%s): %s',
+                learner.train_iter,
+                learner.collector_envstep,
+                learner.ckpt_name,
+                error,
+            )
+
+
+def _make_checkpoint_errors_nonfatal(learner) -> int:
+    """Wrap all registered checkpoint hooks and return the number changed."""
+    wrapped = 0
+    for position, hooks in learner._hooks.items():
+        for index, hook in enumerate(hooks):
+            if hook.name.startswith('save_ckpt') and not isinstance(hook, _NonfatalCheckpointHook):
+                hooks[index] = _NonfatalCheckpointHook(hook)
+                wrapped += 1
+    return wrapped
 
 
 def _restore_resume_counters(learner, collector, train_iter: int, envstep: int) -> None:
@@ -64,6 +127,61 @@ def _required_replay_transitions(
     if resume_train_iter <= 0:
         return one_full_batch
     return max(one_full_batch, resume_buffer_min_transitions)
+
+
+def _should_evaluate_at_train_iter(train_iter: int, last_evaluated_train_iter, evaluator) -> bool:
+    """Evaluate at most once for a learner iteration, including iteration zero.
+
+    A short first collection can leave the replay buffer below one batch, so the
+    serial loop collects again without advancing ``learner.train_iter``.  The old
+    explicit ``train_iter == 0`` condition then repeated the full initial
+    evaluation before every warmup collection.  Keep the intended initial eval,
+    but make the already-evaluated iteration an explicit loop invariant.
+    """
+    if last_evaluated_train_iter == train_iter:
+        return False
+    return train_iter == 0 or evaluator.should_eval(train_iter)
+
+
+def _resolve_segment_reanalyze_settings(policy_config) -> Tuple[float, int, float]:
+    """Resolve segment-only reanalysis settings for minimal and legacy configs."""
+    buffer_reanalyze_freq = float(
+        getattr(policy_config, 'buffer_reanalyze_freq', 1 / 100000)
+    )
+    reanalyze_batch_size = int(getattr(policy_config, 'reanalyze_batch_size', 160))
+    reanalyze_partition = float(getattr(policy_config, 'reanalyze_partition', 0.75))
+
+    if buffer_reanalyze_freq <= 0:
+        raise ValueError(
+            f'buffer_reanalyze_freq must be positive, got {buffer_reanalyze_freq}'
+        )
+    if reanalyze_batch_size <= 0:
+        raise ValueError(
+            f'reanalyze_batch_size must be positive, got {reanalyze_batch_size}'
+        )
+    if not 0 < reanalyze_partition <= 1:
+        raise ValueError(
+            f'reanalyze_partition must be in (0, 1], got {reanalyze_partition}'
+        )
+    if buffer_reanalyze_freq >= 1 and not float(buffer_reanalyze_freq).is_integer():
+        raise ValueError(
+            'buffer_reanalyze_freq >= 1 denotes an integer number of events per collect epoch; '
+            f'got {buffer_reanalyze_freq}'
+        )
+    return buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition
+
+
+def _should_reanalyze_update(update_index: int, update_count: int, frequency: float) -> bool:
+    """Evenly schedule an integer number of reanalysis events over learner updates."""
+    if frequency < 1:
+        return False
+    if update_count <= 0:
+        raise ValueError(f'update_count must be positive, got {update_count}')
+    event_count = min(int(frequency), update_count)
+    return (
+        ((update_index + 1) * event_count) // update_count
+        > (update_index * event_count) // update_count
+    )
 
 
 def _prune_periodic_checkpoints(exp_name: str, keep_last: int) -> list:
@@ -194,8 +312,23 @@ def train_unizero_segment(
                      f'(resume_train_iter={resume_train_iter}, resume_envstep={resume_envstep})')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
+    if get_rank() == 0:
+        raw_tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
+        tb_logger = _MetricFilteredWriter(
+            raw_tb_logger,
+            enabled=bool(getattr(cfg.policy, 'log_metric', False)),
+            metric_filter=dict(getattr(cfg.policy, 'tb_metric_filter', {})),
+            log_all=bool(getattr(cfg.policy, 'tb_log_all', False)),
+        )
+    else:
+        tb_logger = None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
+    if getattr(cfg.policy, 'ignore_checkpoint_save_errors', False):
+        wrapped_checkpoint_hooks = _make_checkpoint_errors_nonfatal(learner)
+        logging.warning(
+            'Checkpoint write errors are nonfatal for this run; wrapped %d learner hooks.',
+            wrapped_checkpoint_hooks,
+        )
 
     # MCTS+RL algorithms related core code
     policy_config = cfg.policy
@@ -238,7 +371,15 @@ def train_unizero_segment(
     
     buffer_reanalyze_count = 0
     train_epoch = 0
-    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+    reanalyze_epoch_budget = 0.0
+    latest_reanalysis_diagnostics = {
+        'reanalyze/target_age_mean': 0.0,
+        'reanalyze/roots_refreshed': 0.0,
+    }
+    last_evaluated_train_iter = None
+    buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition = (
+        _resolve_segment_reanalyze_settings(cfg.policy)
+    )
     periodic_ckpt_keep_last = int(getattr(cfg.policy, 'periodic_ckpt_keep_last', 0))
     if periodic_ckpt_keep_last < 0:
         raise ValueError(
@@ -279,9 +420,12 @@ def train_unizero_segment(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+        if _should_evaluate_at_train_iter(
+            learner.train_iter, last_evaluated_train_iter, evaluator
+        ):
             save_ckpt_fn = learner.save_checkpoint if getattr(cfg.policy, 'save_ckpt_in_eval', True) else None
             stop, reward = evaluator.eval(save_ckpt_fn, learner.train_iter, collector.envstep)
+            last_evaluated_train_iter = learner.train_iter
             if stop:
                 break
 
@@ -296,15 +440,22 @@ def train_unizero_segment(
         replay_buffer.remove_oldest_data_to_fit()
 
         # Periodically reanalyze buffer
-        if cfg.policy.buffer_reanalyze_freq >= 1:
-            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
-        else:
-            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+        if buffer_reanalyze_freq < 1:
+            # Fractional frequency is an event budget per collect epoch. This avoids reciprocal
+            # truncation (e.g. int(1 / 0.03)) and records the exact long-run requested rate.
+            reanalyze_epoch_budget = min(1.0, reanalyze_epoch_budget + buffer_reanalyze_freq)
+            should_reanalyze = (
+                reanalyze_epoch_budget >= 1.0
+                and replay_buffer.get_num_of_sampleable_transitions() // cfg.policy.num_unroll_steps
+                > int(reanalyze_batch_size / reanalyze_partition)
+            )
+            if should_reanalyze:
                 with timer:
                     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
-                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                    latest_reanalysis_diagnostics = replay_buffer.reanalyze_buffer(
+                        reanalyze_batch_size, policy, train_iter=learner.train_iter
+                    )
+                reanalyze_epoch_budget -= 1.0
                 buffer_reanalyze_count += 1
                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                 logging.info(f'Buffer reanalyze time: {timer.value}')
@@ -316,7 +467,7 @@ def train_unizero_segment(
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
             data_sufficient = data_sufficient and (
-                replay_buffer.get_num_of_transitions() >= required_replay_transitions
+                replay_buffer.get_num_of_sampleable_transitions() >= required_replay_transitions
             )
             if not data_sufficient:
                 logging.warning(
@@ -327,12 +478,19 @@ def train_unizero_segment(
                 continue
 
             for i in range(update_per_collect):
-                if cfg.policy.buffer_reanalyze_freq >= 1:
+                if buffer_reanalyze_freq >= 1:
                     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                    should_reanalyze = (
+                        _should_reanalyze_update(i, update_per_collect, buffer_reanalyze_freq)
+                        and replay_buffer.get_num_of_sampleable_transitions() // cfg.policy.num_unroll_steps
+                        > int(reanalyze_batch_size / reanalyze_partition)
+                    )
+                    if should_reanalyze:
                         with timer:
                             # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
-                            replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                            latest_reanalysis_diagnostics = replay_buffer.reanalyze_buffer(
+                                reanalyze_batch_size, policy, train_iter=learner.train_iter
+                            )
                         buffer_reanalyze_count += 1
                         logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                         logging.info(f'Buffer reanalyze time: {timer.value}')
@@ -343,6 +501,13 @@ def train_unizero_segment(
                     replay_buffer.get_num_of_transitions(),
                     cfg.policy.replay_buffer_size,
                 )
+                pipeline_diagnostics = replay_buffer.get_replay_diagnostics()
+                pipeline_diagnostics.update(latest_reanalysis_diagnostics)
+                pipeline_diagnostics.update({
+                    'reanalyze/count': float(buffer_reanalyze_count),
+                    'reanalyze/freq_actual': float(buffer_reanalyze_count / max(train_epoch + 1, 1)),
+                })
+                policy.set_training_pipeline_diagnostics(pipeline_diagnostics)
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 

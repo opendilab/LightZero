@@ -268,6 +268,13 @@ class MuZeroSegmentCollector(ISerialCollector):
         if self.policy_config.gumbel_algo:
             pad_improved_policy_prob = game_segments[i].improved_policy_probs[beg_index:end_index]
 
+        # Record the real transition count before bootstrap data from the next
+        # segment is appended. This is required for partial segments stashed at
+        # a collect boundary.
+        last_game_segments[i].valid_transition_count = min(
+            len(last_game_segments[i].action_segment), self.policy_config.game_segment_length
+        )
+
         # Pad and finalize the last game segment.
         if self.policy_config.gumbel_algo:
             last_game_segments[i].pad_over(
@@ -287,12 +294,67 @@ class MuZeroSegmentCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
-        # Add the completed game segment to the pool.
-        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
+        # ``last_game_segments[i]`` always precedes ``game_segments[i]`` and is
+        # therefore non-terminal, even when the current segment ended the episode.
+        self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], False))
 
         # Reset placeholders for the next collection cycle.
         last_game_segments[i] = None
         last_game_priorities[i] = None
+
+    def _stash_inflight_segments(
+            self,
+            game_segments: List[GameSegment],
+            pred_values_lst: List[List[float]],
+            search_values_lst: List[List[float]],
+    ) -> int:
+        """Preserve every non-empty per-env segment across ``collect`` calls.
+
+        The segment collector returns as soon as the shared pool reaches its
+        target. Other environments can still have partial trajectories. Pair
+        each such trajectory with priorities computed from the same steps so
+        it can be padded and emitted during the next collection call.
+        """
+        stashed_transitions = 0
+        for env_id, segment in enumerate(game_segments):
+            transition_count = len(segment.action_segment)
+            if transition_count == 0:
+                continue
+
+            if self.last_game_segments[env_id] is not None:
+                self.pad_and_save_last_trajectory(
+                    env_id,
+                    self.last_game_segments,
+                    self.last_game_priorities,
+                    game_segments,
+                    self.dones,
+                )
+
+            segment.valid_transition_count = transition_count
+            self.last_game_segments[env_id] = segment
+            self.last_game_priorities[env_id] = self._compute_priorities(
+                env_id, pred_values_lst, search_values_lst
+            )
+            pred_values_lst[env_id], search_values_lst[env_id] = [], []
+            stashed_transitions += transition_count
+        return stashed_transitions
+
+    def _attach_segment_context(
+            self, segment: GameSegment, previous_segment: Optional[GameSegment], train_iter: int
+    ) -> GameSegment:
+        """Carry exact short history across storage segments for contextual UniZero targets."""
+        segment.collection_train_iter = int(train_iter)
+        if previous_segment is None:
+            return segment
+        if not (
+            getattr(self.policy_config, 'contextual_reanalysis', False)
+            or getattr(self.policy_config, 'bootstrap_value_context', False)
+        ):
+            return segment
+        world_model_cfg = getattr(self.policy_config.model, 'world_model_cfg', None)
+        context_length = int(getattr(world_model_cfg, 'context_length', 2))
+        segment.set_context_prefix(previous_segment, max(context_length // 2, 0))
+        return segment
 
     def collect(
             self,
@@ -348,12 +410,12 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
         game_segments = [
-            GameSegment(
+            self._attach_segment_context(GameSegment(
                 self._env.action_space,
                 game_segment_length=self.policy_config.game_segment_length,
                 config=self.policy_config,
                 task_id=self.task_id
-            ) for _ in range(env_nums)
+            ), self.last_game_segments[env_id], train_iter) for env_id in range(env_nums)
         ]
 
         # Stacked observation windows for initializing game segments.
@@ -372,6 +434,9 @@ class MuZeroSegmentCollector(ISerialCollector):
         # Logging variables.
         eps_steps_lst, visit_entropies_lst = np.zeros(env_nums), np.zeros(env_nums)
         exploration_metric_names = (
+            'simulation/depth_mean',
+            'simulation/value_mean',
+            'simulation/policy_entropy',
             'exploration/prior_entropy_nats',
             'exploration/prior_effective_actions',
             'exploration/prior_top1_probability',
@@ -565,12 +630,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                         self.last_game_priorities[env_id] = priorities
 
                         # Create a new game segment to continue collection.
-                        game_segments[env_id] = GameSegment(
+                        previous_segment = game_segments[env_id]
+                        game_segments[env_id] = self._attach_segment_context(GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
                             config=self.policy_config,
                             task_id=self.task_id
-                        )
+                        ), previous_segment, train_iter)
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
@@ -612,6 +678,10 @@ class MuZeroSegmentCollector(ISerialCollector):
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
                     # NOTE: Store the final game segment of the episode.
+                    game_segments[env_id].valid_transition_count = min(
+                        len(game_segments[env_id].action_segment),
+                        self.policy_config.game_segment_length,
+                    )
                     game_segments[env_id].game_segment_to_array()
                     if len(game_segments[env_id].reward_segment) > 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, self.dones[env_id]))
@@ -629,17 +699,21 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self._reset_stat(env_id)
 
                     # NOTE: If an episode finishes but collection continues, re-initialize its game segment.
-                    game_segments[env_id] = GameSegment(
+                    game_segments[env_id] = self._attach_segment_context(GameSegment(
                         self._env.action_space,
                         game_segment_length=self.policy_config.game_segment_length,
                         config=self.policy_config,
                         task_id=self.task_id
-                    )
+                    ), None, train_iter)
                     game_segments[env_id].reset(observation_window_stack[env_id])
 
             # Check if the required number of segments has been collected.
             if len(self.game_segment_pool) >= self._default_num_segments:
                 self._logger.info(f'Collected {len(self.game_segment_pool)} segments, reaching the target of {self._default_num_segments}.')
+
+                self._stash_inflight_segments(
+                    game_segments, pred_values_lst, search_values_lst
+                )
 
                 # Format data for returning: [game_segments, metadata_list]
                 return_data = [

@@ -328,6 +328,48 @@ class LossWithIntermediateLosses:
             for k, v in kwargs.items()
         }
 
+    def set_loss_weights(
+            self,
+            *,
+            obs_loss_weight=None,
+            reward_loss_weight=None,
+            value_loss_weight=None,
+            policy_loss_weight=None,
+    ):
+        """Apply policy-level loss weights and rebuild the scalar objective.
+
+        Historically UniZero used hard-coded ``10 / 1 / 0.5 / 1`` weights in
+        this container, which silently ignored the policy configuration (in
+        particular ``value_loss_weight``).  Keeping the recomputation here
+        preserves the existing per-sample loss API used by PER while making
+        the configured recipe authoritative.
+        """
+        for name, value in (
+                ('obs_loss_weight', obs_loss_weight),
+                ('reward_loss_weight', reward_loss_weight),
+                ('value_loss_weight', value_loss_weight),
+                ('policy_loss_weight', policy_loss_weight),
+        ):
+            if value is not None:
+                setattr(self, name, float(value))
+
+        self.loss_total = self.loss_total.new_zeros(())
+        component_weights = {
+            'loss_obs': self.obs_loss_weight,
+            'loss_rewards': self.reward_loss_weight,
+            'loss_value': self.value_loss_weight,
+            'loss_policy': self.policy_loss_weight,
+            'loss_ends': self.ends_loss_weight,
+            'latent_recon_loss': self.latent_recon_loss_weight,
+            'perceptual_loss': self.perceptual_loss_weight,
+            'open_loop_consistency_loss': self.open_loop_consistency_loss_weight,
+            'open_loop_recurrent_loss': self.open_loop_recurrent_loss_weight,
+        }
+        for name, weight in component_weights.items():
+            value = self.intermediate_losses.get(name)
+            if value is not None:
+                self.loss_total = self.loss_total + weight * value
+
     def __truediv__(self, value):
         for k, v in self.intermediate_losses.items():
             self.intermediate_losses[k] = v / value

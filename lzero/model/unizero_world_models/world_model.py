@@ -952,6 +952,21 @@ class WorldModel(
         self.reanalysis_root_seed_hit_count = 0
         self._reanalysis_seeded_root_keys = set()
 
+    def _root_cache_key(self, state: np.ndarray) -> int:
+        """Hash a root latent with optional numerical-noise tolerance.
+
+        Re-encoding the same observation in batches of different widths can
+        introduce tiny float32 differences.  Exact-byte hashing then turns a
+        valid continuation into a cache miss and a one-token root.  A
+        configurable decimal quantization makes those harmless differences
+        equivalent while retaining the legacy exact behavior at ``0``.
+        """
+        decimals = int(getattr(getattr(self, 'config', None), 'root_cache_key_round_decimals', 0))
+        array = np.asarray(state, dtype=np.float32)
+        if decimals > 0:
+            array = np.round(array, decimals=decimals).astype(np.float32, copy=False)
+        return hash_state(array)
+
     def _initialize_transformer_keys_values(self) -> None:
         """Initialize keys and values for the transformer."""
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
@@ -1635,7 +1650,7 @@ class WorldModel(
 
                         state_single_env = last_obs_embeddings[i]
                         # Compute hash value using latent state for a single environment
-                        cache_key = hash_state(state_single_env.view(-1).cpu().numpy())  # last_obs_embeddings[i] is torch.Tensor
+                        cache_key = self._root_cache_key(state_single_env.view(-1).cpu().numpy())
 
                         # ==================== Storage Layer Integration ====================
                         # Retrieve cached value
@@ -2080,7 +2095,7 @@ class WorldModel(
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
             cache_env_id = env_ids[i] if is_init_infer else i
-            cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor
+            cache_key = self._root_cache_key(latent_state[i].view(-1).cpu().numpy())
             context_length = self.context_length
 
             effective_size = effective_sizes[i]
@@ -2323,7 +2338,7 @@ class WorldModel(
             if self.current_infer_env_ids is not None and index < len(self.current_infer_env_ids):
                 cache_env_id = int(self.current_infer_env_ids[index])
             state_single_env = latent_state[index]  # latent_state[i] is np.array
-            cache_key = hash_state(state_single_env)
+            cache_key = self._root_cache_key(state_single_env)
 
             matched_from_init_cache = False
             if self.reanalyze_phase:

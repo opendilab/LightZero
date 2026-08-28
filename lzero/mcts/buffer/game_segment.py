@@ -108,6 +108,72 @@ class GameSegment:
         self.valid_transition_count = 0
         self.collection_train_iter = None
         self.episode_id = None
+        # A segment is a storage boundary, not an information-state boundary.  Contextual UniZero
+        # targets retain only this bounded suffix, avoiding object links between replay segments.
+        self.context_prefix_obs_frames = []
+        self.context_prefix_actions = []
+
+    def set_context_prefix(self, previous_segment: 'GameSegment', max_history_transitions: int) -> None:
+        """Copy the bounded trajectory suffix needed by roots at the next segment boundary."""
+        max_history_transitions = max(0, int(max_history_transitions))
+        valid_count = int(getattr(previous_segment, 'valid_transition_count', 0))
+        if valid_count <= 0:
+            valid_count = min(len(previous_segment.action_segment), previous_segment.game_segment_length)
+        prefix_len = min(max_history_transitions, valid_count)
+        if prefix_len == 0:
+            self.context_prefix_obs_frames = []
+            self.context_prefix_actions = []
+            return
+
+        start = valid_count - prefix_len
+        obs_end = valid_count + previous_segment.frame_stack_num - 1
+        self.context_prefix_obs_frames = copy.deepcopy(list(previous_segment.obs_segment[start:obs_end]))
+        self.context_prefix_actions = copy.deepcopy(list(previous_segment.action_segment[start:valid_count]))
+        expected_frames = prefix_len + self.frame_stack_num - 1
+        if len(self.context_prefix_obs_frames) != expected_frames:
+            raise RuntimeError(
+                'Segment context prefix is observation/action misaligned: '
+                f'frames={len(self.context_prefix_obs_frames)}, expected={expected_frames}, '
+                f'actions={len(self.context_prefix_actions)}'
+            )
+
+    def get_context_history(self, state_index: int, max_history_transitions: int) -> Tuple[List, List]:
+        """Return preceding state/action pairs, including a prior segment when available."""
+        state_index = int(state_index)
+        max_history_transitions = max(0, int(max_history_transitions))
+        if state_index < 0:
+            raise ValueError(f'state_index must be non-negative, got {state_index}')
+
+        local_len = min(state_index, max_history_transitions)
+        prefix_available = len(self.context_prefix_actions)
+        prefix_len = min(max_history_transitions - local_len, prefix_available)
+        observations, actions = [], []
+
+        if prefix_len:
+            prefix_start = prefix_available - prefix_len
+            for offset in range(prefix_start, prefix_available):
+                stacked_obs = self.context_prefix_obs_frames[offset:offset + self.frame_stack_num]
+                if len(stacked_obs) != self.frame_stack_num:
+                    raise RuntimeError('Stored segment prefix cannot reconstruct a complete observation stack')
+                if self.transform2string:
+                    stacked_obs = [jpeg_data_decompressor(obs, self.gray_scale) for obs in stacked_obs]
+                observations.append(stacked_obs)
+            actions.extend(self.context_prefix_actions[prefix_start:])
+
+        if local_len:
+            local_start = state_index - local_len
+            history_game_obs = self.get_unroll_obs(local_start, local_len)
+            observations.extend([
+                history_game_obs[offset:offset + self.frame_stack_num] for offset in range(local_len)
+            ])
+            actions.extend(list(self.action_segment[local_start:state_index]))
+
+        if len(observations) != len(actions) or len(actions) > max_history_transitions:
+            raise RuntimeError(
+                'Segment history must contain one action per preceding observation: '
+                f'observations={len(observations)}, actions={len(actions)}, max={max_history_transitions}'
+            )
+        return observations, actions
 
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """

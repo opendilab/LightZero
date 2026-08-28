@@ -65,8 +65,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range)
 
     def reanalyze_buffer(
-            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
-    ) -> List[Any]:
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"],
+            train_iter: Optional[int] = None,
+    ) -> dict:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training.
@@ -78,11 +79,18 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
-
-        # obtain the current_batch and prepare target context
-        policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size, 1)
-        # target policy: current_batch[1]: action, current_batch[2]: child_sampled_actions
-        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+        self._current_reanalyze_train_iter = train_iter
+        try:
+            # obtain the current_batch and prepare target context
+            policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size, 1)
+            # target policy: current_batch[1]: action, current_batch[2]: child_sampled_actions
+            self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+            return dict(getattr(self, '_latest_reanalysis_diagnostics', {
+                'reanalyze/target_age_mean': 0.0,
+                'reanalyze/roots_refreshed': 0.0,
+            }))
+        finally:
+            self._current_reanalyze_train_iter = None
 
     def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """

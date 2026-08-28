@@ -66,6 +66,11 @@ class GameBuffer(ABC, object):
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
 
+        self._latest_reanalysis_diagnostics = {
+            'reanalyze/target_age_mean': 0.0,
+            'reanalyze/roots_refreshed': 0.0,
+        }
+
         self.keep_ratio = 1
         self.num_of_collected_episodes = 0
         self.base_idx = 0
@@ -117,13 +122,32 @@ class GameBuffer(ABC, object):
         """
         assert self._beta > 0, "Beta should be greater than 0"
         num_of_transitions = self.get_num_of_transitions()
-        if not self._cfg.use_priority:
-            # If priority is not used, set all priorities to 1
-            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
+        priorities = np.asarray(self.game_pos_priorities, dtype=np.float64)
+        if priorities.shape != (num_of_transitions,):
+            raise RuntimeError(
+                'Replay priority/index arrays are not transition-aligned: '
+                f'{priorities.shape} vs ({num_of_transitions},)'
+            )
+        if not np.all(np.isfinite(priorities)) or np.any(priorities < 0):
+            raise RuntimeError('Replay priorities must be finite and non-negative')
 
-        # +1e-6 for numerical stability
-        probs = self.game_pos_priorities ** self._alpha + 1e-6
-        probs /= probs.sum()
+        # Zero is a structural mask for roots lacking a complete unroll/TD target.  Adding an
+        # epsilon to every entry resurrected those padded segment-tail roots and diluted every
+        # useful batch.  Keep them exactly unsampleable in both PER and uniform replay.
+        valid_priority_mask = priorities > 0
+        sampleable_count = int(valid_priority_mask.sum())
+        if sampleable_count < batch_size:
+            raise RuntimeError(
+                f'Replay has only {sampleable_count} sampleable transitions for batch_size={batch_size}; '
+                f'total stored transitions={num_of_transitions}'
+            )
+        sampling_priorities = priorities if self._cfg.use_priority else valid_priority_mask.astype(np.float64)
+        probs = np.zeros_like(sampling_priorities, dtype=np.float64)
+        probs[valid_priority_mask] = sampling_priorities[valid_priority_mask] ** self._alpha
+        probability_sum = float(probs.sum())
+        if not np.isfinite(probability_sum) or probability_sum <= 0:
+            raise RuntimeError('Replay sampling distribution has no finite positive mass')
+        probs /= probability_sum
 
         # sample according to transition index
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
@@ -194,7 +218,7 @@ class GameBuffer(ABC, object):
                     pos_in_game_segment = np.random.choice(sampling_upper_bound, 1).item()
 
                 # Step 4: Further adjust based on actual segment length (runtime check)
-                segment_len = len(game_segment.action_segment)
+                segment_len = self._game_segment_transition_count(game_segment)
                 if pos_in_game_segment >= segment_len - 1:
                     # Position exceeds actual segment, resample within valid range
                     if segment_len > 1:
@@ -211,11 +235,7 @@ class GameBuffer(ABC, object):
                     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
                 # Compatibility handling for both GameSegment objects and list data (for unittests)
-                try:
-                    segment_len = len(game_segment.action_segment)
-                except (AttributeError, TypeError):
-                    # For unittest compatibility: when game_segment is a list instead of GameSegment object
-                    segment_len = len(game_segment)
+                segment_len = self._game_segment_transition_count(game_segment)
 
                 if pos_in_game_segment >= segment_len - 1:
                     # If the segment is very short (length 0 or 1), we can't randomly sample a position
@@ -235,7 +255,9 @@ class GameBuffer(ABC, object):
 
         # Calculate the IS weights from the probabilities of the transitions actually used (which may
         # differ from the originally sampled ones after the position resampling above).
-        weights_list = (num_of_transitions * probs[adjusted_index_list]) ** (-self._beta)
+        if np.any(probs[adjusted_index_list] <= 0):
+            raise RuntimeError('Position resampling selected a structurally invalid replay root')
+        weights_list = (sampleable_count * probs[adjusted_index_list]) ** (-self._beta)
         weights_list /= weights_list.max()  # Normalize weights
 
         # Record the actual sampling time: update_priority() only writes back priorities for samples
@@ -295,8 +317,11 @@ class GameBuffer(ABC, object):
                     If the `game_segment_length` is too small to accommodate the `num_unroll_steps`.
             """
             train_sample_num = len(self.game_segment_buffer)
-            assert self._cfg.reanalyze_partition <= 0.75, "The reanalyze partition should be less than 0.75."
-            valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
+            if not 0 < self._cfg.reanalyze_partition <= 1:
+                raise ValueError(
+                    f'reanalyze_partition must be in (0, 1], got {self._cfg.reanalyze_partition}'
+                )
+            partition_segment_count = int(train_sample_num * self._cfg.reanalyze_partition)
 
             # Calculate the number of samples per segment
             samples_per_segment = self._cfg.game_segment_length // self._cfg.num_unroll_steps
@@ -305,14 +330,35 @@ class GameBuffer(ABC, object):
             if samples_per_segment == 0:
                 raise ValueError("The game segment length is too small for num_unroll_steps.")
 
-            # Calculate the number of samples per segment
-            batch_size_per_segment = batch_size // samples_per_segment
+            segments_to_sample = int(np.ceil(batch_size / samples_per_segment))
 
-            # If the batch size cannot be divided, process the remainder part
-            extra_samples = batch_size % samples_per_segment
+            if partition_segment_count == 0:
+                return ([], [], [], [], [])
+
+            segment_lengths = [
+                self._game_segment_transition_count(segment) for segment in self.game_segment_buffer
+            ]
+            segment_offsets = np.concatenate(([0], np.cumsum(segment_lengths, dtype=np.int64)))
+            candidate_segment_indices = []
+            candidate_valid_positions = {}
+            priorities = np.asarray(self.game_pos_priorities)
+            for segment_index in range(partition_segment_count):
+                start, end = int(segment_offsets[segment_index]), int(segment_offsets[segment_index + 1])
+                valid_positions = np.flatnonzero(
+                    np.isfinite(priorities[start:end]) & (priorities[start:end] > 0)
+                )
+                if valid_positions.size:
+                    candidate_segment_indices.append(segment_index)
+                    candidate_valid_positions[segment_index] = valid_positions
+            valid_sample_num = len(candidate_segment_indices)
+            if valid_sample_num == 0:
+                return ([], [], [], [], [])
 
             # We use the reanalyze_time in the game_segment_buffer to generate weights
-            reanalyze_times = np.array([segment.reanalyze_time for segment in self.game_segment_buffer[:valid_sample_num]])
+            reanalyze_times = np.array([
+                self.game_segment_buffer[index].reanalyze_time
+                for index in candidate_segment_indices
+            ])
 
             # Calculate weights: the larger the reanalyze_time, the smaller the weight (use exp(-reanalyze_time))
             base_decay_rate = 100
@@ -328,34 +374,24 @@ class GameBuffer(ABC, object):
                 # If all weights are zero, use a uniform distribution
                 probabilities = np.ones(valid_sample_num) / valid_sample_num
 
-            # Sample game segments according to the probabilities
-            # Ensure valid_sample_num is not zero before sampling
-            if valid_sample_num == 0:
-                return ([], [], [], [], [])
-
-            selected_game_segments = np.random.choice(valid_sample_num, batch_size_per_segment, replace=False,
-                                                    p=probabilities)
-
-            # If there are extra samples to be allocated, randomly select some game segments and sample again
-            if extra_samples > 0:
-                # We need to handle the case where we might sample the same segment again.
-                # A simple way is to allow replacement for extra samples or sample from remaining ones.
-                # For simplicity, let's stick to the original logic but ensure it's safe.
-                remaining_segments = np.setdiff1d(np.arange(valid_sample_num), selected_game_segments)
-                if len(remaining_segments) < extra_samples:
-                    # If not enough unique segments left, sample with replacement from all valid segments
-                    extra_game_segments = np.random.choice(valid_sample_num, extra_samples, replace=True, p=probabilities)
-                else:
-                    # Sample from the remaining unique segments
-                    remaining_probs = probabilities[remaining_segments]
-                    remaining_probs /= np.sum(remaining_probs)
-                    extra_game_segments = np.random.choice(remaining_segments, extra_samples, replace=False, p=remaining_probs)
-
-                selected_game_segments = np.concatenate((selected_game_segments, extra_game_segments))
+            # Sample game segments according to the probabilities. Small buffers may contain fewer
+            # eligible segments than requested; replacement is preferable to a scheduler-dependent
+            # crash and still preserves the age-weighted distribution.
+            selected_candidate_indices = np.random.choice(
+                valid_sample_num,
+                segments_to_sample,
+                replace=segments_to_sample > valid_sample_num,
+                p=probabilities,
+            )
+            selected_game_segments = np.asarray(candidate_segment_indices)[selected_candidate_indices]
 
             game_segment_list = []
             pos_in_game_segment_list = []
             batch_index_list = []
+            sampled_target_ages = []
+            current_train_iter = getattr(self, '_current_reanalyze_train_iter', None)
+            remaining_roots = batch_size
+            updated_segment_indices = set()
             for game_segment_idx in selected_game_segments:
                 # =========================================================================
                 # FIX: The line below is the source of the error and has been removed.
@@ -364,23 +400,44 @@ class GameBuffer(ABC, object):
                 # =========================================================================
                 game_segment = self.game_segment_buffer[game_segment_idx]
 
-                # Update reanalyze_time only once
-                game_segment.reanalyze_time += 1
+                if int(game_segment_idx) not in updated_segment_indices:
+                    collection_train_iter = getattr(game_segment, 'collection_train_iter', None)
+                    if current_train_iter is not None and collection_train_iter is not None:
+                        sampled_target_ages.append(
+                            max(0, int(current_train_iter) - int(collection_train_iter))
+                        )
+                    game_segment.reanalyze_time += 1
+                    updated_segment_indices.add(int(game_segment_idx))
 
-                # The sampling position should be 0, 0 + num_unroll_steps, ... (integer multiples of num_unroll_steps)
-                for i in range(samples_per_segment):
+                # Refresh only roots admitted by the same validity mask used for learner sampling.
+                # Evenly cover the segment rather than spending MCTS on zero-priority padding tails.
+                valid_positions = candidate_valid_positions[int(game_segment_idx)]
+                roots_from_segment = min(samples_per_segment, remaining_roots)
+                selected_positions = valid_positions[
+                    np.linspace(0, len(valid_positions) - 1, roots_from_segment, dtype=np.int64)
+                ]
+                for pos_in_game_segment in selected_positions:
                     game_segment_list.append(game_segment)
-                    pos_in_game_segment = i * self._cfg.num_unroll_steps
-                    if pos_in_game_segment >= len(game_segment):
-                        pos_in_game_segment = np.random.choice(len(game_segment), 1).item()
-                    pos_in_game_segment_list.append(pos_in_game_segment)
+                    pos_in_game_segment_list.append(int(pos_in_game_segment))
                     # NOTE: We should append the physical index here, as it corresponds to the sampled segment.
                     batch_index_list.append(game_segment_idx)
+                remaining_roots -= roots_from_segment
+
+            if remaining_roots != 0 or len(batch_index_list) != batch_size:
+                raise RuntimeError(
+                    f'Reanalysis sampler produced {len(batch_index_list)} roots for requested batch {batch_size}'
+                )
 
             # Set the make_time for each sample (set to 0 for now, but can be the actual time if needed).
             make_time = [0. for _ in range(len(batch_index_list))]
 
             orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+            self._latest_reanalysis_diagnostics = {
+                'reanalyze/target_age_mean': (
+                    float(np.mean(sampled_target_ages)) if sampled_target_ages else 0.0
+                ),
+                'reanalyze/roots_refreshed': float(len(batch_index_list)),
+            }
             return orig_data
 
     def _sample_orig_reanalyze_data(self, batch_size: int) -> Tuple:
@@ -645,6 +702,16 @@ class GameBuffer(ABC, object):
         for (data_game, meta_game) in zip(data, meta):
             self._push_game_segment(data_game, meta_game)
 
+    def _game_segment_transition_count(self, data: Any) -> int:
+        """Return real transitions, excluding bootstrap padding."""
+        valid_transition_count = int(getattr(data, 'valid_transition_count', 0))
+        if valid_transition_count <= 0:
+            try:
+                valid_transition_count = len(data.action_segment)
+            except (AttributeError, TypeError):
+                valid_transition_count = len(data)
+        return min(valid_transition_count, self._cfg.game_segment_length)
+
     def _push_game_segment(self, data: Any, meta: Optional[dict] = None) -> None:
         """
         Overview:
@@ -659,18 +726,13 @@ class GameBuffer(ABC, object):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        try:
-            data_length = len(data.action_segment) if len(data.action_segment) < self._cfg.game_segment_length else self._cfg.game_segment_length
-        except Exception as e:
-            # to be compatible with unittest
-            print(e)
-            data_length = len(data)
+        data_length = self._game_segment_transition_count(data)
 
         if meta['done']:
             self.num_of_collected_episodes += 1
             valid_len = data_length
         else:
-            valid_len = data_length - meta['unroll_plus_td_steps']
+            valid_len = max(0, data_length - meta['unroll_plus_td_steps'])
             # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
@@ -682,7 +744,12 @@ class GameBuffer(ABC, object):
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]))
         else:
-            assert data_length == len(meta['priorities']), " priorities should be of same length as the game steps"
+            assert data_length == len(meta['priorities']), (
+                'priorities must match real game transitions: '
+                f'data_length={data_length}, priorities_length={len(meta["priorities"])}, '
+                f'action_length={len(data.action_segment)}, '
+                f'valid_transition_count={getattr(data, "valid_transition_count", None)}'
+            )
             priorities = meta['priorities'].copy().reshape(-1)
             priorities[valid_len:data_length] = 0.
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
@@ -706,7 +773,7 @@ class GameBuffer(ABC, object):
         if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_segments):
-                length_data = len(self.game_segment_buffer[i].action_segment) if len(self.game_segment_buffer[i].action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+                length_data = self._game_segment_transition_count(self.game_segment_buffer[i])
                 total_transition -= length_data
                 if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     # find the max game_segment index to keep in the buffer
@@ -730,7 +797,8 @@ class GameBuffer(ABC, object):
             - excess_game_segment_index (:obj:`List[str]`): Index of data.
         """
         excess_game_positions = sum(
-            [len(game_segment) for game_segment in self.game_segment_buffer[:excess_game_segment_index]]
+            self._game_segment_transition_count(game_segment)
+            for game_segment in self.game_segment_buffer[:excess_game_segment_index]
         )
         del self.game_segment_buffer[:excess_game_segment_index]
         self.game_pos_priorities = self.game_pos_priorities[excess_game_positions:]
@@ -749,6 +817,35 @@ class GameBuffer(ABC, object):
     def get_num_of_transitions(self) -> int:
         # total number of transitions
         return len(self.game_segment_game_pos_look_up)
+
+    def get_num_of_sampleable_transitions(self) -> int:
+        """Return roots with complete targets; zero priority is reserved as the validity mask."""
+        priorities = np.asarray(self.game_pos_priorities)
+        return int(np.count_nonzero(np.isfinite(priorities) & (priorities > 0)))
+
+    def get_replay_diagnostics(self) -> dict:
+        priorities = np.asarray(self.game_pos_priorities, dtype=np.float64)
+        if priorities.size == 0:
+            return {
+                'priority/mean': 0.0,
+                'priority/max': 0.0,
+                'priority/valid_ratio': 0.0,
+            }
+        valid = np.isfinite(priorities) & (priorities > 0)
+        valid_priorities = priorities[valid]
+        segment_lengths = [
+            self._game_segment_transition_count(segment) for segment in self.game_segment_buffer
+        ]
+        return {
+            'priority/mean': float(valid_priorities.mean()) if valid_priorities.size else 0.0,
+            'priority/max': float(valid_priorities.max()) if valid_priorities.size else 0.0,
+            'priority/valid_ratio': float(valid.mean()),
+            'segment/length_actual': float(np.mean(segment_lengths)) if segment_lengths else 0.0,
+            'segment/valid_ratio': float(valid.mean()),
+            'segment/bootstrap_context_len': float(
+                getattr(self, '_latest_bootstrap_context_len', 0.0)
+            ),
+        }
 
     def __repr__(self):
         return f'current buffer statistics is: num_of_all_collected_episodes: {self.num_of_collected_episodes}, num of game segments: {len(self.game_segment_buffer)}, number of transitions: {len(self.game_segment_game_pos_look_up)}'

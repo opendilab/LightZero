@@ -109,6 +109,8 @@ class UniZeroMCTSCtree(object):
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
             state_action_history = []
+            search_depth_sums = np.zeros(batch_size, dtype=np.float64)
+            search_depth_counts = np.zeros(batch_size, dtype=np.int64)
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
                 latent_states = []
@@ -156,6 +158,13 @@ class UniZeroMCTSCtree(object):
                 """
                 # search_depth is used for rope in UniZero
                 search_depth = results.get_search_len()
+                search_depth_array = np.asarray(search_depth, dtype=np.float64)
+                if search_depth_array.shape != (batch_size,) or not np.all(np.isfinite(search_depth_array)):
+                    raise RuntimeError(
+                        f'MCTS search depth must be finite and batch-aligned, got {search_depth_array.shape}'
+                    )
+                search_depth_sums += search_depth_array
+                search_depth_counts += 1
                 # print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')
                 if timestep is None:
                     # for UniZero
@@ -205,6 +214,9 @@ class UniZeroMCTSCtree(object):
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
  
+            self.last_search_depth_mean = (
+                search_depth_sums / np.maximum(search_depth_counts, 1)
+            ).tolist()
             return first_action_latent_map
 
 

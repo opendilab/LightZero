@@ -459,10 +459,17 @@ def prepare_obs_stack_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> T
     if cfg.model.self_supervised_learning_loss:
         if cfg.model.model_type == 'conv':
             # Prepare the target batch for convolutional models.
-            obs_target_batch = (
-                obs_batch_ori[:, cfg.model.image_channel:, ...]
-                .unfold(1, cfg.model.frame_stack_num * cfg.model.image_channel, cfg.model.image_channel)
-                .reshape(obs_batch_ori.shape[0], -1, *obs_batch_ori.shape[2:])
+            target_windows = obs_batch_ori[:, cfg.model.image_channel:, ...].unfold(
+                1,
+                cfg.model.frame_stack_num * cfg.model.image_channel,
+                cfg.model.image_channel,
+            )
+            # Tensor.unfold appends the window dimension, producing
+            # [B, T, H, W, stack_C]. Flattening that tensor directly used to
+            # reinterpret H/W values as channels. Restore the explicit
+            # [B, T, stack_C, H, W] layout before packing time into channels.
+            obs_target_batch = target_windows.permute(0, 1, 4, 2, 3).reshape(
+                obs_batch_ori.shape[0], -1, *obs_batch_ori.shape[2:]
             )
         else:
             # Prepare the target batch for non-convolutional models.
