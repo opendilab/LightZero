@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from lzero.policy.unizero import (
+    clip_unizero_gradients,
     component_gradient_norms,
     encoder_clip_metrics,
     gradient_clip_metrics,
@@ -12,6 +13,15 @@ from lzero.policy.unizero import (
     should_run_periodic_monitor,
     value_calibration_metrics,
 )
+
+
+class _TinyWorldModel(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.tokenizer = torch.nn.Module()
+        self.tokenizer.encoder = torch.nn.Linear(1, 1, bias=False)
+        self.head = torch.nn.Linear(1, 1, bias=False)
 
 
 def test_representation_health_detects_collapse_even_when_token_norms_match():
@@ -96,6 +106,21 @@ def test_gradient_clip_metrics_match_global_norm_scaling():
     assert clipped['grad/clip_scale'] == pytest.approx(20. / (64. + 1e-6))
     assert clipped['grad/world_model_post_clip_norm'] == pytest.approx(20., rel=1e-5)
     assert untouched['grad/clip_scale'] == 1.
+
+
+def test_separate_encoder_clip_does_not_starve_non_encoder_gradients():
+    model = _TinyWorldModel()
+    model.tokenizer.encoder.weight.grad = torch.tensor([[100.]])
+    model.head.weight.grad = torch.tensor([[1.]])
+
+    total_norm, details = clip_unizero_gradients(model, max_norm=5., mode='separate_encoder')
+
+    assert total_norm.item() == pytest.approx((100. ** 2 + 1.) ** 0.5)
+    assert model.tokenizer.encoder.weight.grad.item() == pytest.approx(5.)
+    assert model.head.weight.grad.item() == pytest.approx(1.)
+    assert details['grad/clip_encoder_scale'] == pytest.approx(0.05)
+    assert details['grad/clip_non_encoder_scale'] == 1.
+    assert details['grad/world_model_post_clip_norm'] == pytest.approx(26. ** 0.5)
 
 
 def test_search_exploration_metrics_separate_prior_search_and_sampling():

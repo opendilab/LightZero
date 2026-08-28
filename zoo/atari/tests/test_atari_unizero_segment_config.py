@@ -94,6 +94,15 @@ def test_experimental_collect_temperature_is_explicit_and_validated():
         atari_unizero_segment_experimental_config._resolve_collect_temperature(0)
 
 
+def test_augmentation_uses_separate_encoder_gradient_clipping_by_default():
+    resolver = atari_unizero_segment_experimental_config._resolve_grad_clip_mode
+    assert resolver(use_augmentation=True) == 'separate_encoder'
+    assert resolver(use_augmentation=False) == 'global'
+    assert resolver(use_augmentation=True, override='global') == 'global'
+    with pytest.raises(ValueError, match='grad_clip_mode'):
+        resolver(use_augmentation=True, override='per_head')
+
+
 def test_experimental_cache_namespace_preserves_legacy_and_isolated_modes():
     resolver = atari_unizero_segment_experimental_config._resolve_inference_env_num
     assert resolver(8, 8, False) == 8

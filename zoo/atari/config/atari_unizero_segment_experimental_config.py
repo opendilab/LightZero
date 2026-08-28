@@ -31,6 +31,8 @@ _CORE_TB_METRIC_FILTER = {
         'simulation/depth_mean', 'simulation/value_mean', 'simulation/policy_entropy',
         'segment/length_actual', 'segment/valid_ratio', 'segment/bootstrap_context_len',
         'grad_norm', 'lr', 'param_norm', 'weight_decay',
+        'grad/clip_encoder_scale', 'grad/clip_non_encoder_scale',
+        'grad/encoder_pre_clip_norm', 'grad/non_encoder_pre_clip_norm',
         'eval/mean_return', 'eval/max_return', 'eval/episode_length',
     )
 }
@@ -98,6 +100,14 @@ def _resolve_collect_temperature(value):
             f'collect_temperature must be positive, got {collect_temperature}'
         )
     return collect_temperature
+
+
+def _resolve_grad_clip_mode(use_augmentation, override=None):
+    """Protect non-encoder learning from augmentation-driven encoder gradients."""
+    mode = ('separate_encoder' if use_augmentation else 'global') if override is None else str(override)
+    if mode not in {'global', 'separate_encoder'}:
+        raise ValueError(f'Unsupported grad_clip_mode: {mode}')
+    return mode
 
 
 def _resolve_inference_env_num(collector_env_num, evaluator_env_num, isolate_eval_cache):
@@ -215,6 +225,7 @@ def main(
         collect_num_simulations_override=None,
         collect_temperature_override=None,
         grad_clip_value_override=None,
+        grad_clip_mode_override=None,
         replay_buffer_size_override=None,
         gradient_diagnostic_freq_override=None,
         disable_adaptive_alpha=True,
@@ -315,6 +326,7 @@ def main(
     grad_clip_value = 5.0 if grad_clip_value_override is None else float(grad_clip_value_override)
     if grad_clip_value <= 0:
         raise ValueError(f'grad_clip_value must be positive, got {grad_clip_value}')
+    grad_clip_mode = _resolve_grad_clip_mode(use_augmentation, grad_clip_mode_override)
     replay_buffer_size = (
         int(5e5) if replay_buffer_size_override is None
         else int(replay_buffer_size_override)
@@ -529,6 +541,7 @@ def main(
             obs_loss_weight=obs_loss_weight,
             value_loss_weight=value_loss_weight,
             grad_clip_value=grad_clip_value,
+            grad_clip_mode=grad_clip_mode,
             use_augmentation=use_augmentation,
 
             # Adaptive target entropy settings from the 2025 Pong run.
@@ -753,7 +766,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--grad-clip-value', dest='grad_clip_value', type=float, default=None,
-        help='Override the global world-model gradient norm threshold (Atari default 5).'
+        help='Override the world-model gradient norm threshold (Atari default 5).'
+    )
+    parser.add_argument(
+        '--grad-clip-mode', choices=('global', 'separate_encoder'), default=None,
+        help='Clipping topology; defaults to separate_encoder with augmentation and global otherwise.'
     )
     parser.add_argument(
         '--replay-buffer-size', dest='replay_buffer_size', type=int, default=None,
@@ -964,6 +981,7 @@ if __name__ == "__main__":
         collect_num_simulations_override=args.collect_num_simulations,
         collect_temperature_override=args.collect_temperature,
         grad_clip_value_override=args.grad_clip_value,
+        grad_clip_mode_override=args.grad_clip_mode,
         replay_buffer_size_override=args.replay_buffer_size,
         gradient_diagnostic_freq_override=args.gradient_diagnostic_freq,
         disable_adaptive_alpha=args.disable_adaptive_alpha,

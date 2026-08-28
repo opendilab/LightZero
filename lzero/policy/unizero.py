@@ -33,6 +33,8 @@ DEFAULT_TB_METRIC_FILTER = {
         'simulation/depth_mean', 'simulation/value_mean', 'simulation/policy_entropy',
         'segment/length_actual', 'segment/valid_ratio', 'segment/bootstrap_context_len',
         'grad_norm', 'lr', 'param_norm', 'weight_decay',
+        'grad/clip_encoder_scale', 'grad/clip_non_encoder_scale',
+        'grad/encoder_pre_clip_norm', 'grad/non_encoder_pre_clip_norm',
         'eval/mean_return', 'eval/max_return', 'eval/episode_length',
     )
 }
@@ -158,6 +160,56 @@ def gradient_clip_metrics(total_norm: float, max_norm: float) -> Dict[str, float
         'grad/clip_scale': float(scale),
         'grad/world_model_post_clip_norm': float(total_norm * scale),
     }
+
+
+def clip_unizero_gradients(
+        world_model: torch.nn.Module,
+        max_norm: float,
+        mode: str = 'global',
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+    """Clip gradients without letting an augmentation-heavy encoder starve planning heads."""
+    if max_norm <= 0:
+        raise ValueError(f'max_norm must be positive, got {max_norm}')
+    if mode not in {'global', 'separate_encoder'}:
+        raise ValueError(f"Unsupported grad_clip_mode {mode!r}")
+
+    all_parameters = [
+        parameter for parameter in world_model.parameters()
+        if parameter.requires_grad and parameter.grad is not None
+    ]
+    if mode == 'global':
+        total_norm = torch.nn.utils.clip_grad_norm_(all_parameters, max_norm)
+        return total_norm, {}
+
+    encoder_ids = {
+        id(parameter) for parameter in world_model.tokenizer.encoder.parameters()
+        if parameter.requires_grad
+    }
+    encoder_parameters = [parameter for parameter in all_parameters if id(parameter) in encoder_ids]
+    remaining_parameters = [parameter for parameter in all_parameters if id(parameter) not in encoder_ids]
+    reference = all_parameters[0] if all_parameters else next(world_model.parameters())
+
+    def clip_group(parameters):
+        if not parameters:
+            return reference.new_tensor(0.)
+        return torch.nn.utils.clip_grad_norm_(parameters, max_norm)
+
+    encoder_norm = clip_group(encoder_parameters)
+    remaining_norm = clip_group(remaining_parameters)
+    total_norm = torch.sqrt(encoder_norm.float().square() + remaining_norm.float().square())
+    post_clip_norm = torch.sqrt(
+        encoder_norm.float().clamp_max(max_norm).square()
+        + remaining_norm.float().clamp_max(max_norm).square()
+    )
+    details = {
+        'grad/clip_scale': min(1., float(post_clip_norm) / (float(total_norm) + 1e-6)),
+        'grad/world_model_post_clip_norm': float(post_clip_norm),
+        'grad/clip_encoder_scale': min(1., max_norm / (float(encoder_norm) + 1e-6)),
+        'grad/clip_non_encoder_scale': min(1., max_norm / (float(remaining_norm) + 1e-6)),
+        'grad/encoder_pre_clip_norm': float(encoder_norm),
+        'grad/non_encoder_pre_clip_norm': float(remaining_norm),
+    }
+    return total_norm, details
 
 
 def search_exploration_metrics(
@@ -812,6 +864,9 @@ class UniZeroPolicy(MuZeroPolicy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=20,
+        # (str) Separate encoder clipping prevents augmentation-driven latent
+        # gradients from shrinking Transformer and prediction-head updates.
+        grad_clip_mode='global',
         # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
@@ -1727,8 +1782,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._target_model.encoder_hook.clear_data()
 
             # Clip gradients to prevent exploding gradients
-            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
-                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            total_grad_norm_before_clip_wm, grad_clip_detail_dict = clip_unizero_gradients(
+                self._learn_model.world_model,
+                self._cfg.grad_clip_value,
+                getattr(self._cfg, 'grad_clip_mode', 'global'),
             )
 
             # Synchronize gradients across multiple GPUs if enabled
@@ -1743,10 +1800,12 @@ class UniZeroPolicy(MuZeroPolicy):
                 torch.cuda.empty_cache()
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
+            grad_clip_detail_dict = {}
 
         grad_clip_log_dict = gradient_clip_metrics(
             total_grad_norm_before_clip_wm.item(), self._cfg.grad_clip_value
         )
+        grad_clip_log_dict.update(grad_clip_detail_dict)
         if should_monitor_norms and total_grad_norm_before_clip_wm.item() > 0:
             total_norm = total_grad_norm_before_clip_wm.item()
             for group_name in self._gradient_diagnostic_module_groups():
@@ -2709,6 +2768,10 @@ class UniZeroPolicy(MuZeroPolicy):
             'grad/clip_applied',
             'grad/clip_scale',
             'grad/world_model_post_clip_norm',
+            'grad/clip_encoder_scale',
+            'grad/clip_non_encoder_scale',
+            'grad/encoder_pre_clip_norm',
+            'grad/non_encoder_pre_clip_norm',
 
             # ==================== Value calibration diagnostics ====================
             'value_calibration/pred_mean',
@@ -2827,7 +2890,9 @@ class UniZeroPolicy(MuZeroPolicy):
         )
         # Preserve order while removing aliases that already occur in the legacy surface.
         all_vars = list(dict.fromkeys(all_vars))
-        if not hasattr(self._cfg, 'log_metric') and not hasattr(self._cfg, 'tb_metric_filter'):
+        if self is None or (
+                not hasattr(self._cfg, 'log_metric') and not hasattr(self._cfg, 'tb_metric_filter')
+        ):
             return all_vars
         if not getattr(self._cfg, 'log_metric', False):
             return []
