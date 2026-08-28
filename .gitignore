@@ -20,6 +20,7 @@ rjob_logs/
 !lzero/loss_landscape/images/**/*.png
 *.csv
 zoo/atari/runs/
+/scripts/
 pkg/
 src/
 
