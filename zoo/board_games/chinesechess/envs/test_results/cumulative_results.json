@@ -1,0 +1,198 @@
+{
+  "uci_vs_random": {
+    "4": {
+      "wins": 892,
+      "losses": 14,
+      "draws": 0,
+      "win_rate": 0.9845474613686535
+    },
+    "8": {
+      "wins": 905,
+      "losses": 1,
+      "draws": 0,
+      "win_rate": 0.9988962472406181
+    },
+    "12": {
+      "wins": 906,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0
+    },
+    "16": {
+      "wins": 905,
+      "losses": 1,
+      "draws": 0,
+      "win_rate": 0.9988962472406181
+    },
+    "20": {
+      "wins": 904,
+      "losses": 2,
+      "draws": 0,
+      "win_rate": 0.9977924944812362
+    }
+  },
+  "uci_vs_uci": {
+    "depth4_vs_depth8": {
+      "wins": 0,
+      "losses": 453,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 4,
+      "depth2": 8
+    },
+    "depth4_vs_depth12": {
+      "wins": 0,
+      "losses": 453,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 4,
+      "depth2": 12
+    },
+    "depth4_vs_depth16": {
+      "wins": 0,
+      "losses": 453,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 4,
+      "depth2": 16
+    },
+    "depth4_vs_depth20": {
+      "wins": 0,
+      "losses": 453,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 4,
+      "depth2": 20
+    },
+    "depth8_vs_depth4": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 8,
+      "depth2": 4
+    },
+    "depth8_vs_depth12": {
+      "wins": 0,
+      "losses": 302,
+      "draws": 151,
+      "win_rate": 0.0,
+      "depth1": 8,
+      "depth2": 12
+    },
+    "depth8_vs_depth16": {
+      "wins": 0,
+      "losses": 453,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 8,
+      "depth2": 16
+    },
+    "depth8_vs_depth20": {
+      "wins": 0,
+      "losses": 453,
+      "draws": 0,
+      "win_rate": 0.0,
+      "depth1": 8,
+      "depth2": 20
+    },
+    "depth12_vs_depth4": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 12,
+      "depth2": 4
+    },
+    "depth12_vs_depth8": {
+      "wins": 151,
+      "losses": 302,
+      "draws": 0,
+      "win_rate": 0.3333333333333333,
+      "depth1": 12,
+      "depth2": 8
+    },
+    "depth12_vs_depth16": {
+      "wins": 151,
+      "losses": 0,
+      "draws": 302,
+      "win_rate": 0.3333333333333333,
+      "depth1": 12,
+      "depth2": 16
+    },
+    "depth12_vs_depth20": {
+      "wins": 151,
+      "losses": 0,
+      "draws": 302,
+      "win_rate": 0.3333333333333333,
+      "depth1": 12,
+      "depth2": 20
+    },
+    "depth16_vs_depth4": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 16,
+      "depth2": 4
+    },
+    "depth16_vs_depth8": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 16,
+      "depth2": 8
+    },
+    "depth16_vs_depth12": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 16,
+      "depth2": 12
+    },
+    "depth16_vs_depth20": {
+      "wins": 0,
+      "losses": 0,
+      "draws": 453,
+      "win_rate": 0.0,
+      "depth1": 16,
+      "depth2": 20
+    },
+    "depth20_vs_depth4": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 20,
+      "depth2": 4
+    },
+    "depth20_vs_depth8": {
+      "wins": 453,
+      "losses": 0,
+      "draws": 0,
+      "win_rate": 1.0,
+      "depth1": 20,
+      "depth2": 8
+    },
+    "depth20_vs_depth12": {
+      "wins": 151,
+      "losses": 0,
+      "draws": 302,
+      "win_rate": 0.3333333333333333,
+      "depth1": 20,
+      "depth2": 12
+    },
+    "depth20_vs_depth16": {
+      "wins": 151,
+      "losses": 0,
+      "draws": 302,
+      "win_rate": 0.3333333333333333,
+      "depth1": 20,
+      "depth2": 16
+    }
+  },
+  "rounds": 151,
+  "last_updated": "2025-12-09T01:05:27.964286"
+}

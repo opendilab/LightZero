@@ -1,0 +1,23 @@
+============================================================
+UCI Engine Depth Performance Analysis Report
+============================================================
+
+【Conclusion】
+✓ Depth vs Depth monotonicity: 85.0%
+✓ Conclusion: Greater depth leads to stronger UCI engine
+
+【UCI vs Random Results】
+Depth  Wins  Losses  Draws  Win Rate
+ 4     892    14       0     98.5%
+ 8     905     1       0     99.9%
+12     906     0       0    100.0%
+16     905     1       0     99.9%
+20     904     2       0     99.8%
+
+【Depth vs Depth Matrix (Win Rate)】
+      4    8   12   16   20
+ 4   -     0.0%  0.0%  0.0%  0.0%
+ 8 100.0%  -     0.0%  0.0%  0.0%
+12 100.0% 33.3%  -    33.3% 33.3%
+16 100.0%100.0%100.0%  -     0.0%
+20 100.0%100.0% 33.3% 33.3%  -   
