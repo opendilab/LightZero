@@ -10,7 +10,7 @@
 
 ## 1. 主要文件说明
 
-### 1.1 `src/priorzero_config.py`
+### 1.1 `configs/priorzero_config.py`
 该文件负责**统一管理实验配置**，是 PriorZero 训练流程的入口配置源。主要职责：
 - 定义可选 LLM 模型预设（`MODEL_CONFIGS`）；
 - 定义 `PriorZeroLLMConfig`（LLM/RFT 训练相关核心参数）；
@@ -158,7 +158,7 @@ bash scripts/run_priorzero_ddp.sh
 
 实际跑实验前，主要改两个地方：
 
-1) `src/priorzero_config.py`
+1) `configs/priorzero_config.py`
 - 修改训练/融合/损失等核心配置（例如 `train_schedule`、`mcts_root_logits_dict`、`advantage_type` 等）。
 - 修改模型预设（`MODEL_CONFIGS`）或 `get_priorzero_config` 中与环境相关的设置。
 

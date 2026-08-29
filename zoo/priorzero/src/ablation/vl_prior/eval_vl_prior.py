@@ -6,10 +6,9 @@ Evaluate VLM prior quality by running episodes with different policies:
 
 Usage (on GPU worker):
   cd zoo/priorzero
-  python scripts/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20
-  python scripts/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20 --prompt_style legacy
-  python scripts/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20 --vlm_image_mode first_and_current
-  python scripts/eval_vl_prior.py --policies random  # random-only baseline (no GPU needed)
+  python src/ablation/vl_prior/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20
+  python src/ablation/vl_prior/eval_vl_prior.py --vl_model Qwen2.5-VL-7b --num_episodes 20 --prompt_style legacy
+  python src/ablation/vl_prior/eval_vl_prior.py --policies random  # random-only baseline (no GPU needed)
 """
 import argparse
 import sys
@@ -87,10 +86,10 @@ else:
 
 
 # ── ensure project root is importable ──
-SCRIPT_DIR = Path(__file__).resolve().parent.parent  # zoo/priorzero
-sys.path.insert(0, str(SCRIPT_DIR))
-sys.path.insert(0, str(SCRIPT_DIR / "src"))
-PROJECT_ROOT = SCRIPT_DIR.parent.parent              # LightZero root
+PRIORZERO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PRIORZERO_ROOT))
+sys.path.insert(0, str(PRIORZERO_ROOT / "src"))
+PROJECT_ROOT = PRIORZERO_ROOT.parent.parent  # LightZero root
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # ── PLACEHOLDER_MORE_IMPORTS ──
@@ -201,9 +200,9 @@ def run_episode(env, policy, history_maxlen: int = 3, max_steps: int = 1000):
 # ---------------------------------------------------------------------------
 def build_vl_policy(args):
     """Build VLPriorGenerator from args. Requires GPU."""
-    from vl_config import VL_MODEL_CONFIGS, GAME_DESCRIPTIONS
-    from vl_engine import VLLMVLEngine
-    from prior_generator import VLPriorGenerator
+    from zoo.priorzero.configs.vl_config import VL_MODEL_CONFIGS, GAME_DESCRIPTIONS
+    from zoo.priorzero.src.vl_engine import VLLMVLEngine
+    from zoo.priorzero.src.prior_generator import VLPriorGenerator
 
     model_cfg = VL_MODEL_CONFIGS[args.vl_model]
     limit_mm = {"image": 4 if args.vlm_image_mode != "current_only" else 1}

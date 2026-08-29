@@ -22,7 +22,7 @@ from tensorboardX import SummaryWriter
 from loguru import logger
 import deepspeed
 
-from priorzero_config import (
+from zoo.priorzero.configs.priorzero_config import (
     get_priorzero_config,
     get_priorzero_debug_config,
     get_available_models,
@@ -352,7 +352,7 @@ Examples:
         logger.info("Using quick test configuration")
         main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
             args.env_id, args.seed, use_cot=args.use_cot,
-            exp_name=f'data_priorzero/priorzero_debug_{args.env_id}',
+            exp_name=f'all_experiments/data_priorzero/priorzero_debug_{args.env_id}',
             model_key=model_key,
         )
     else:

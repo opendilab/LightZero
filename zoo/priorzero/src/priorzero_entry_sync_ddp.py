@@ -23,7 +23,7 @@ from tensorboardX import SummaryWriter
 from loguru import logger
 import deepspeed
 
-from priorzero_config import (
+from zoo.priorzero.configs.priorzero_config import (
     get_priorzero_config,
     get_priorzero_debug_config,
     get_available_models,
@@ -428,7 +428,7 @@ def main():
     print(f"{'='*80}\n")
 
     if args.input_type == 'image':
-        from vl_config import get_priorzero_vl_config
+        from zoo.priorzero.configs.vl_config import get_priorzero_vl_config
         main_cfg, create_cfg, llm_cfg = get_priorzero_vl_config(
             env_id=args.env_id,
             seed=args.seed,
@@ -455,7 +455,7 @@ def main():
             logger.info("Using quick test configuration")
             main_cfg, create_cfg, llm_cfg = get_priorzero_debug_config(
                 args.env_id, args.seed, use_cot=text_use_cot,
-                exp_name=f'data_priorzero/priorzero_debug_{args.env_id}',
+                exp_name=f'all_experiments/data_priorzero/priorzero_debug_{args.env_id}',
                 model_key=args.model,
             )
         else:

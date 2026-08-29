@@ -2,15 +2,15 @@
 set -x
 set -o pipefail
 
-PRIORZERO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PYTHON_BIN="/mnt/afs/niuyazhe/workspace/xiongjyu/envs/rft/bin/python"
+PRIORZERO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 CUDA_DEVICES="${CUDA_DEVICES:-0}"
 ENV_ID="${ENV_ID:-detective.z5}"
 LLM_MODEL="${LLM_MODEL:-qwen2.5-3b}"
 HIS_LEN="${HIS_LEN:-25}"
 SEEDS="${SEEDS:-0 1}"
-LOG_DIR="${LOG_DIR:-${PRIORZERO_DIR}/data_ablation/run_logs}"
+LOG_DIR="${LOG_DIR:-${PRIORZERO_DIR}/all_experiments/data_ablation/run_logs}"
 
 mkdir -p "${LOG_DIR}"
 CURRENT_TIME=$(date +"%Y%m%d_%H%M%S")
@@ -23,7 +23,7 @@ export TOKENIZERS_PARALLELISM=false
 cd "${PRIORZERO_DIR}"
 
 "${PYTHON_BIN}" \
-    "${PRIORZERO_DIR}/ablation/llm_as_policy/run_llm_as_policy.py" \
+    "${PRIORZERO_DIR}/src/ablation/llm_as_policy_legacy/run_llm_as_policy.py" \
     --env_id "${ENV_ID}" \
     --model "${LLM_MODEL}" \
     --history_len "${HIS_LEN}" \

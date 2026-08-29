@@ -3,7 +3,7 @@ set -e
 set -x
 set -o pipefail
 
-PRIORZERO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PRIORZERO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 CUDA_DEVICES="${CUDA_DEVICES:-0}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
@@ -15,7 +15,7 @@ HIS_LEN="${HIS_LEN:-25}"
 SEEDS="${SEEDS:-0 1}"
 MAX_ENV_STEPS="${MAX_ENV_STEPS:-100000}"
 ROLLOUT_EPISODES_PER_ITER="${ROLLOUT_EPISODES_PER_ITER:-50}"
-LOG_DIR="${LOG_DIR:-${PRIORZERO_DIR}/data_ablation/run_logs}"
+LOG_DIR="${LOG_DIR:-${PRIORZERO_DIR}/all_experiments/data_ablation/run_logs}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -35,7 +35,7 @@ for SEED in ${SEEDS}; do
     torchrun \
         --nproc_per_node="${NPROC_PER_NODE}" \
         --master-port="${RUN_MASTER_PORT}" \
-        "${PRIORZERO_DIR}/ablation/rlft/run_rlft.py" \
+        "${PRIORZERO_DIR}/src/ablation/rlft/run_rlft.py" \
         --env_id "${ENV_ID}" \
         --model "${LLM_MODEL}" \
         --seed "${SEED}" \

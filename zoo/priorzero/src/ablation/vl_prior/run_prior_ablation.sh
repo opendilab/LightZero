@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Ablation Study: VLM Prior on LunarLander
-# Runs all parameter combinations and saves results to ablation_results.json
+# Runs all parameter combinations and saves results under all_experiments/data_ablation.
 #
 # Usage (on GPU worker):
 #   cd zoo/priorzero
-#   bash run_ablation.sh
+#   bash src/ablation/vl_prior/run_prior_ablation.sh
 # =============================================================================
 set -euo pipefail
 
 PYTHON="/mnt/shared-storage-user/puyuan/xiongjyu/envs/rft/bin/python3"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-EVAL_SCRIPT="${SCRIPT_DIR}/scripts/eval_vl_prior.py"
-OUTPUT_DIR="${SCRIPT_DIR}/ablation_output"
-MERGED_JSON="${SCRIPT_DIR}/ablation_results.json"
+PRIORZERO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+EVAL_SCRIPT="${SCRIPT_DIR}/eval_vl_prior.py"
+OUTPUT_DIR="${PRIORZERO_ROOT}/all_experiments/data_ablation/vl_prior/output"
+MERGED_JSON="${PRIORZERO_ROOT}/all_experiments/data_ablation/vl_prior/results.json"
 
 # NUM_EPISODES=20
 NUM_EPISODES=2

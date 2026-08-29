@@ -2,14 +2,14 @@
 # PriorZero VL Training on LunarLander-v2 (Image Input)
 #
 # Usage:
-#   bash run_priorzero_vl_lunarlander.sh [NUM_GPUS] [VL_MODEL] [SEED] [EXTRA_ARGS...]
+#   bash scripts/run_priorzero_vl_lunarlander.sh [NUM_GPUS] [VL_MODEL] [SEED] [EXTRA_ARGS...]
 #
 # Examples:
-#   bash run_priorzero_vl_lunarlander.sh 4 Qwen2.5-VL-7b 0
-#   bash run_priorzero_vl_lunarlander.sh 2 Qwen3-VL-2b 42
-#   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test
-#   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test --no_cot --mcts_mode wm_logits
-#   bash run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --cot_weight 0.05
+#   bash scripts/run_priorzero_vl_lunarlander.sh 4 Qwen2.5-VL-7b 0
+#   bash scripts/run_priorzero_vl_lunarlander.sh 2 Qwen3-VL-2b 42
+#   bash scripts/run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test
+#   bash scripts/run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --quick_test --no_cot --mcts_mode wm_logits
+#   bash scripts/run_priorzero_vl_lunarlander.sh 1 Qwen3-VL-2b 0 --cot_weight 0.05
 
 set -euo pipefail
 
@@ -63,7 +63,7 @@ if [ "${COT_TAG}" = "cot" ]; then
 fi
 
 # Build structured log directory: logs/<env>/<model>/<key_params>/
-LOG_DIR="${SCRIPT_DIR}/logs/LunarLander/${VL_MODEL}/${VL_FIXED_TAG}/${COT_TAG}_mcts_${MCTS_MODE}_img_${IMG_MODE}"
+LOG_DIR="${SCRIPT_DIR}/all_experiments/logs/LunarLander/${VL_MODEL}/${VL_FIXED_TAG}/${COT_TAG}_mcts_${MCTS_MODE}_img_${IMG_MODE}"
 mkdir -p "${LOG_DIR}"
 LOG_FILE="${LOG_DIR}/seed${SEED}_gpu${NUM_GPUS}_${TIMESTAMP}.log"
 

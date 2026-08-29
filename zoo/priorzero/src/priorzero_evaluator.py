@@ -72,7 +72,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
         if valid_actions or self.obs_type != 'image':
             return list(valid_actions)
 
-        from zoo.priorzero.atari_action_meanings import get_action_meanings
+        from zoo.priorzero.src.utils.atari_action_meanings import get_action_meanings
         action_space_size = self.policy_config.model.action_space_size
         meanings = get_action_meanings(self.env_id, action_space_size)
         return [meanings[index] for index in range(action_space_size)]
@@ -111,7 +111,7 @@ class PriorZeroEvaluator(OriginalEvaluator):
     def _action_name(self, action_index: int, info: Dict[str, Any]) -> str:
         if self.obs_type != 'image':
             return info['action_str']
-        from zoo.priorzero.atari_action_meanings import action_index_to_name
+        from zoo.priorzero.src.utils.atari_action_meanings import action_index_to_name
         return action_index_to_name(
             self.env_id, action_index, self.policy_config.model.action_space_size
         )

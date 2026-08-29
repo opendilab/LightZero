@@ -216,23 +216,23 @@ python ../../../lzero/mcts/buffer/game_buffer_priorzero.py
 
 ```python
 # 1. Standard PriorZero (World Model + LLM with SFT + RFT)
-from priorzero_config import get_priorzero_config
+from zoo.priorzero.configs.priorzero_config import get_priorzero_config
 main_cfg, create_cfg = get_priorzero_config(env_id='zork1.z5', seed=0)
 
 # 2. Quick Test (reduced resources)
-from priorzero_config import get_priorzero_config_for_quick_test
+from zoo.priorzero.configs.priorzero_config import get_priorzero_config_for_quick_test
 test_cfg, create_cfg = get_priorzero_config_for_quick_test(env_id='zork1.z5', seed=0)
 
 # 3. Pure UniZero (no LLM)
-from priorzero_config import get_config_pure_unizero
+from zoo.priorzero.configs.priorzero_config import get_config_pure_unizero
 cfg, _ = get_config_pure_unizero()
 
 # 4. LLM with only SFT (no RFT)
-from priorzero_config import get_config_llm_only_sft
+from zoo.priorzero.configs.priorzero_config import get_config_llm_only_sft
 cfg, _ = get_config_llm_only_sft()
 
 # 5. LLM with LoRA (memory efficient)
-from priorzero_config import get_config_with_lora
+from zoo.priorzero.configs.priorzero_config import get_config_with_lora
 cfg, _ = get_config_with_lora()
 ```
 
@@ -402,7 +402,7 @@ With proper tuning, PriorZero should achieve:
 ### TensorBoard
 
 ```bash
-tensorboard --logdir=./data_priorzero/ --port=6006
+tensorboard --logdir=./all_experiments/data_priorzero/ --port=6006
 ```
 
 **Key metrics to watch**:
@@ -418,7 +418,7 @@ tensorboard --logdir=./data_priorzero/ --port=6006
 
 ### File Logs
 
-Check `./data_priorzero/{exp_name}/log/` for:
+Check `./all_experiments/data_priorzero/{exp_name}/log/` for:
 - Training logs with detailed statistics
 - LLM prior statistics (success rate, latency, retry count)
 - Game segment statistics (MCTS policies, raw obs, search values)
@@ -596,4 +596,4 @@ This project follows the same license as LightZero (Apache 2.0).
 For questions or issues:
 - Open an issue on GitHub: https://github.com/opendilab/LightZero/issues
 - Check troubleshooting guide above
-- Review log files in `./data_priorzero/{exp_name}/log/`
+- Review log files in `./all_experiments/data_priorzero/{exp_name}/log/`

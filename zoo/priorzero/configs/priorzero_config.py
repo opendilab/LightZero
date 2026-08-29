@@ -377,13 +377,14 @@ def get_priorzero_config(
         env_name = env_id.replace(".z5", "")
         if llm_config.enable_rft:
             exp_name = (
-                f"data_priorzero_latest/llm_rft/priorzero_{env_name}_{model_key}_train_{llm_config.train_mode_dict.mode}/"
+                f"all_experiments/data_priorzero_latest/llm_rft/"
+                f"priorzero_{env_name}_{model_key}_train_{llm_config.train_mode_dict.mode}/"
                 f"useCot_{llm_config.use_cot}_alternate_{llm_config.train_schedule.alternate}/"
                 f"mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_tbs_{llm_config.train_batch_size}_use_mispo_{llm_config.use_mispo}"
             )
         else:
             exp_name = (
-                f"data_priorzero_latest/llm_frozen/priorzero_{env_name}_{model_key}_"
+                f"all_experiments/data_priorzero_latest/llm_frozen/priorzero_{env_name}_{model_key}_"
                 f"train_{llm_config.train_mode_dict.mode}"
                 f"useCot_{llm_config.use_cot}_seed{seed}"
             )

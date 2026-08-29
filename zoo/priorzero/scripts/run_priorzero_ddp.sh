@@ -9,7 +9,7 @@ MASTER_PORT=24554
 
 # 2. 程序相关参数
 ENV_ID="detective.z5"       # "zork1.z5" "acorncourt.z5" "omniquest.z5"
-LOG_DIR="./data_priorzero_0719_try/run_logs"   
+LOG_DIR="./all_experiments/data_priorzero_0719_try/run_logs"
 LLM_MODEL="qwen2.5-3b"  # "qwen2.5-3b" "qwen2.5-7b"
 USE_COT=true                # true / false
 mkdir -p "${LOG_DIR}"       

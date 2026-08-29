@@ -577,7 +577,7 @@ def get_priorzero_vl_config(
     main_config = EasyDict(dict(
         env=env_config,
         policy=policy_config,
-        exp_name=exp_name or f'data_priorzero_vl/{env_id}_seed{seed}',
+        exp_name=exp_name or f'all_experiments/data_priorzero_vl/{env_id}_seed{seed}',
         seed=seed
     ))
 

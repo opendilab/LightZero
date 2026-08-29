@@ -30,14 +30,14 @@ import torch
 import torch.distributed as dist
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 LIGHTZERO_ROOT = REPO_ROOT.parents[1]
 for path in (REPO_ROOT / "src", LIGHTZERO_ROOT):
     path_str = str(path)
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-from priorzero_config import get_priorzero_config  # noqa: E402
+from zoo.priorzero.configs.priorzero_config import get_priorzero_config  # noqa: E402
 from strategy.deepspeed import get_strategy, torch_dist_barrier_and_cuda_sync  # noqa: E402
 from zoo.jericho.envs.jericho_env import JerichoEnv  # noqa: E402
 from local_ppo import RLFTPolicyModel, RLFTReferenceModel, RLFTTrainer  # noqa: E402
@@ -561,7 +561,7 @@ def main() -> None:
         torch.cuda.set_device(local_rank)
 
     env_name = args.env_id.replace(".z5", "")
-    exp_name = args.exp_name or f"data_ablation/rlft/{env_name}_{args.model}_his{args.history_len}"
+    exp_name = args.exp_name or f"all_experiments/data_ablation/rlft/{env_name}_{args.model}_his{args.history_len}"
     main_cfg, _, llm_cfg = get_priorzero_config(
         env_id=args.env_id,
         seed=args.seed,
