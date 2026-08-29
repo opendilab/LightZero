@@ -16,7 +16,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
-    gpu_num = 4
+    gpu_num = 2
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     
@@ -28,7 +28,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         batch_size = int(1*gpu_num)
         accumulation_steps=64
     elif encoder_option == 'legacy':
-        model_name: str = 'BAAI/bge-base-en-v1.5'
+        model_name: str = '/mnt/shared-storage-user/puyuan/xiongjyu/models/bge-base-en-v1.5'
         batch_size = int(64*gpu_num)
         accumulation_steps=1
     else:
@@ -64,7 +64,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     num_layers: int = 2              # Number of layers in the model
     replay_ratio: float = 0.1       # Replay ratio for experience replay
-    embed_dim: int = 512             # Embedding dimension
+    embed_dim: int = 768             # Embedding dimension
 
     # Reanalysis (reanalyze) parameters:
     # buffer_reanalyze_freq: Frequency of reanalysis (e.g., 1 means reanalyze once per epoch)
@@ -91,7 +91,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     jericho_unizero_config: Dict[str, Any] = dict(
         env=dict(
             stop_value=int(1e6),
-            observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
+            observation_shape=512,  # Token sequence length, aligned with max_seq_len
             max_steps=max_steps,
             max_action_num=action_space_size,
             tokenizer_path=model_name,
@@ -117,7 +117,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             ),
             accumulation_steps=accumulation_steps,  # TODO: Accumulated gradient steps (currently default)
             model=dict(
-                observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
+                observation_shape=512,  # Token sequence length, aligned with max_seq_len
                 action_space_size=action_space_size,
                 encoder_url=model_name,
                 encoder_option=encoder_option, 
@@ -203,7 +203,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho/{model_name}/{env_id}/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho/{env_id}/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )
@@ -245,4 +245,4 @@ if __name__ == "__main__":
 
     # Start the main process with the provided arguments
     main(args.env, args.seed)
-# 
+#

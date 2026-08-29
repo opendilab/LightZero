@@ -494,22 +494,21 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # In distributed settings, ensure only rank 0 downloads the model/tokenizer.
         if get_rank() == 0:
             self.pretrained_model = AutoModel.from_pretrained(model_path)
+            if tokenizer is None:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
         if get_world_size() > 1:
             # Wait for rank 0 to finish loading the model.
             torch.distributed.barrier()
         if get_rank() != 0:
+            logging.info(f"Worker process is loading model from cache: {model_path}")
             self.pretrained_model = AutoModel.from_pretrained(model_path)
-        
+            if tokenizer is None:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+
         for p in self.pretrained_model.parameters():
             p.requires_grad = False
 
-        if get_rank() != 0:
-            logging.info(f"Worker process is loading model from cache: {model_path}")
-            self.model = AutoModel.from_pretrained(model_path)
-            if tokenizer is None:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        
         if tokenizer is not None:
             self.tokenizer = tokenizer
 
@@ -543,12 +542,10 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
         if no_grad:
             with torch.no_grad():
-                # 3. 在模型调用时传入 token_type_ids
-                outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
+                outputs = self.pretrained_model(x, attention_mask=attention_mask)
                 cls_embedding = outputs.last_hidden_state[:, 0, :]
         else:
-            # 3. 在模型调用时传入 token_type_ids
-            outputs = self.pretrained_model(x, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            outputs = self.pretrained_model(x, attention_mask=attention_mask)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
 
         cls_embedding = self.embed_proj_head(cls_embedding)

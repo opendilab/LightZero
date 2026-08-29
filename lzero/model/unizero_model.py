@@ -99,8 +99,8 @@ class UniZeroModel(nn.Module):
             logging.info(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             logging.info('==' * 20)
         elif world_model_cfg.obs_type == 'text':
-            # [FIX] Get encoder_option with default fallback
-            encoder_option = kwargs.get('encoder_option', 'BGE')
+            # ``legacy`` is the BGE-based text encoder used by existing configs.
+            encoder_option = kwargs.get('encoder_option', 'legacy')
             if encoder_option == 'legacy':
                 if world_model_cfg.decode_loss_mode is None or world_model_cfg.decode_loss_mode.lower() == 'none':
                     self.decoder_network = None
@@ -138,14 +138,18 @@ class UniZeroModel(nn.Module):
                     self.decoder_network = self.representation_network
                     self.decoder_network_tokenizer = None
             else:
-                raise ValueError(f"Unsupported encoder option: {kwargs['encoder_option']}")     
+                raise ValueError(f"Unsupported encoder option: {encoder_option}")
             
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, decoder_network_tokenizer=self.decoder_network_tokenizer,
-                                    with_lpips=False, projection=projection, encoder_option=kwargs['encoder_option'])
+            self.tokenizer = Tokenizer(
+                encoder=self.representation_network,
+                decoder=self.decoder_network,
+                with_lpips=False,
+                obs_type=world_model_cfg.obs_type,
+                encoder_option=encoder_option,
+                decoder_network_tokenizer=self.decoder_network_tokenizer,
+                projection=projection,
+            )
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
-
-            # --- Log parameter counts for analysis ---
-            self._log_model_parameters(obs_type)
 
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             logging.info('==' * 20)
