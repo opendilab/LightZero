@@ -33,7 +33,7 @@ for path in (REPO_ROOT / "src", LIGHTZERO_ROOT):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-from zoo.priorzero.configs.priorzero_config import get_model_config, get_priorzero_config  # noqa: E402
+from zoo.priorzero.src.priorzero_config import get_model_config, get_priorzero_config  # noqa: E402
 from priorzero_datafactory import DataProcessor  # noqa: E402
 from zoo.jericho.envs.jericho_env import JerichoEnv  # noqa: E402
 

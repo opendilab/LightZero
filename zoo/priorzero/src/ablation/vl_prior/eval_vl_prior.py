@@ -200,7 +200,7 @@ def run_episode(env, policy, history_maxlen: int = 3, max_steps: int = 1000):
 # ---------------------------------------------------------------------------
 def build_vl_policy(args):
     """Build VLPriorGenerator from args. Requires GPU."""
-    from zoo.priorzero.configs.vl_config import VL_MODEL_CONFIGS, GAME_DESCRIPTIONS
+    from zoo.priorzero.src.vl_config import VL_MODEL_CONFIGS, GAME_DESCRIPTIONS
     from zoo.priorzero.src.vl_engine import VLLMVLEngine
     from zoo.priorzero.src.prior_generator import VLPriorGenerator
 

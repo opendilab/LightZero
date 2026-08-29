@@ -22,7 +22,7 @@ from tensorboardX import SummaryWriter
 from loguru import logger
 import deepspeed
 
-from zoo.priorzero.configs.priorzero_config import (
+from zoo.priorzero.src.priorzero_config import (
     get_priorzero_config,
     get_priorzero_debug_config,
     get_available_models,

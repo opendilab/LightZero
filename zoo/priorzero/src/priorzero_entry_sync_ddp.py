@@ -23,7 +23,7 @@ from tensorboardX import SummaryWriter
 from loguru import logger
 import deepspeed
 
-from zoo.priorzero.configs.priorzero_config import (
+from zoo.priorzero.src.priorzero_config import (
     get_priorzero_config,
     get_priorzero_debug_config,
     get_available_models,
@@ -428,7 +428,7 @@ def main():
     print(f"{'='*80}\n")
 
     if args.input_type == 'image':
-        from zoo.priorzero.configs.vl_config import get_priorzero_vl_config
+        from zoo.priorzero.src.vl_config import get_priorzero_vl_config
         main_cfg, create_cfg, llm_cfg = get_priorzero_vl_config(
             env_id=args.env_id,
             seed=args.seed,

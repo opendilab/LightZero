@@ -10,7 +10,7 @@
 
 ## 1. 主要文件说明
 
-### 1.1 `configs/priorzero_config.py`
+### 1.1 `src/priorzero_config.py`
 该文件负责**统一管理实验配置**，是 PriorZero 训练流程的入口配置源。主要职责：
 - 定义可选 LLM 模型预设（`MODEL_CONFIGS`）；
 - 定义 `PriorZeroLLMConfig`（LLM/RFT 训练相关核心参数）；
@@ -147,30 +147,27 @@
 
 ---
 
-## 2. 主实验启动命令（重点：改哪两个文件）
+## 2. 主实验启动命令
 
-主实验建议通过 DDP 脚本启动：
+`configs/` 与 `zoo/jericho/configs/` 保持相同职责，只存放可直接执行的训练配置入口；复用的配置构造逻辑位于 `src/priorzero_config.py` 和 `src/vl_config.py`。
+
+Jericho DDP 主实验：
 
 ```bash
-cd zoo/priorzero
-bash scripts/run_priorzero_ddp.sh
+CUDA_VISIBLE_DEVICES=0,1,2,3 PYTHONFAULTHANDLER=1 \
+TORCH_DISTRIBUTED_DEBUG=DETAIL NCCL_DEBUG=INFO \
+torchrun --nproc_per_node=4 --master-port=24554 \
+./zoo/priorzero/configs/jericho_priorzero_ddp_config.py
 ```
 
-实际跑实验前，主要改两个地方：
+LunarLander 视觉 DDP 实验：
 
-1) `configs/priorzero_config.py`
-- 修改训练/融合/损失等核心配置（例如 `train_schedule`、`mcts_root_logits_dict`、`advantage_type` 等）。
-- 修改模型预设（`MODEL_CONFIGS`）或 `get_priorzero_config` 中与环境相关的设置。
+```bash
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 --master-port=29501 \
+./zoo/priorzero/configs/lunarlander_priorzero_vl_ddp_config.py
+```
 
-2) `scripts/run_priorzero_ddp.sh`
-- 修改 `CUDA_DEVICES`、`NPROC_PER_NODE`、`MASTER_PORT`。
-- 修改 `ENV_ID`、`LLM_MODEL`、`USE_COT`。
-- 确认日志目录 `LOG_DIR`。
-
-建议流程：
-- 先在 `priorzero_config.py` 固化实验配置模板；
-- 再在 `run_priorzero_ddp.sh` 做“本次任务级”覆写（环境名、卡数、端口等）；
-- 用日志文件名区分实验版本，便于后续对比。
+环境、模型、seed、CoT、视觉先验等本次实验参数可直接修改相应 `configs/*_config.py` 的 `main()` 默认值，也可通过命令行参数覆盖。World Model 和 Prior 模型的高频训练参数集中在入口文件顶部的 `WORLD_MODEL_CONFIG`、`LLM_PRIOR_CONFIG` 或 `VL_PRIOR_CONFIG`。GPU 列表、进程数和端口仍由 `CUDA_VISIBLE_DEVICES` 与 `torchrun` 控制。
 
 ---
 

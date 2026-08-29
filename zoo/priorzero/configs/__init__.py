@@ -1,1 +1,1 @@
-"""Configuration modules for PriorZero."""
+"""Executable training configurations for PriorZero."""

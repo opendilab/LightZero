@@ -256,7 +256,6 @@ def get_priorzero_config(
         observation_shape=512,  
         env_id=env_id,
         game_path=f"/mnt/shared-storage-user/puyuan/xiongjyu/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
-        # game_path=f"/mnt/afs/niuyazhe/workspace/xiongjyu/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
         # game_path=f"/mnt/shared-storage-user/puyuan/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
         for_unizero=True,
         tokenizer_path=wm_model_name,
