@@ -30,6 +30,13 @@ class PriorZeroEvaluator(OriginalEvaluator):
     def __init__(self, llm_config: Dict, data_processor=None, prior_generator=None,
                  obs_type: str = 'text', env_id: str = None, **kwargs) -> None:
         super().__init__(**kwargs)
+        if not hasattr(self, '_logger'):
+            self._logger, _ = build_logger(
+                f'./{self._exp_name}/log/evaluator_rank{self._rank}',
+                f'evaluator_rank{self._rank}',
+                need_tb=False,
+            )
+            self._tb_logger = None
         self.llm_cfg = llm_config
         self.data_processor = data_processor
         self.prior_generator = prior_generator

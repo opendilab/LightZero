@@ -22,7 +22,6 @@ from lzero.policy import phi_transform, InverseScalarTransform, scalar_transform
 from lzero.policy import to_torch_float_tensor,mz_network_output_unpack, prepare_obs
 from lzero.policy.utils import select_action
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
-from lzero.entry.utils import initialize_zeros_batch
 import lzero.model.unizero_model  
 
 @POLICY_REGISTRY.register('priorzero', force_overwrite=True)
@@ -85,7 +84,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device)
         batch_for_gpt['scalar_target_value'] = target_value
 
-        wm_losses, pred_values = self._learn_model.world_model.compute_loss(
+        wm_losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt,
             self._target_model.world_model.tokenizer,
             self.value_inverse_scalar_transform_handle,

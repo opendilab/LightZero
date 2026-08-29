@@ -188,7 +188,7 @@ def _set_experiment_name(main_config, llm_config, model: str) -> None:
     env_name = env_config.env_id.replace('.z5', '')
     if llm_config.enable_rft:
         main_config.exp_name = (
-            f'all_experiments/data_priorzero_latest/llm_rft/'
+            f'data_priorzero/llm_rft/'
             f'priorzero_{env_name}_{model}_train_{llm_config.train_mode_dict.mode}/'
             f'useCot_{llm_config.use_cot}_alternate_{llm_config.train_schedule.alternate}/'
             f'mcts_{llm_config.mcts_root_logits_dict.mode}_staleness_{llm_config.max_rollout_staleness}_'
@@ -196,7 +196,7 @@ def _set_experiment_name(main_config, llm_config, model: str) -> None:
         )
     else:
         main_config.exp_name = (
-            f'all_experiments/data_priorzero_latest/llm_frozen/'
+            f'data_priorzero/llm_frozen/'
             f'priorzero_{env_name}_{model}_train_{llm_config.train_mode_dict.mode}'
             f'useCot_{llm_config.use_cot}_seed{main_config.seed}'
         )
