@@ -368,16 +368,29 @@ class AlphaZeroCollector(ISerialCollector):
             - transitions (:obj:`List[dict]`): List of data transitions.
         """
         reward = transitions[-1]['reward']
-        to_play = transitions[-1]['obs']['to_play']
+        to_play = transitions[-1]['obs'].get('to_play', -1)
+
+        if to_play == -1:
+            return self._play_with_bot_mode(transitions, eval_episode_return)
+        else:
+            return self._self_play_mode(transitions, eval_episode_return, to_play, reward)
+
+    def _play_with_bot_mode(self, transitions, eval_episode_return):
+        """
+        Play with bot mode: All rewards are shaped based on eval_episode_return.
+        """
         for t in transitions:
-            if t['obs']['to_play'] == -1:
-                # play_with_bot_mode
-                # the eval_episode_return is calculated from Player 1's perspective
-                t['reward'] = eval_episode_return
+            t['reward'] = eval_episode_return
+        return transitions
+
+    def _self_play_mode(self, transitions, eval_episode_return, to_play, reward):
+        """
+        Self play mode: Reward shaping depends on the player's perspective.
+        """
+        for t in transitions:
+            current_to_play = t['obs'].get('to_play', -1)
+            if current_to_play == to_play:
+                t['reward'] = int(reward)
             else:
-                # self_play_mode
-                if t['obs']['to_play'] == to_play:
-                    t['reward'] = int(reward)
-                else:
-                    t['reward'] = int(-reward)
+                t['reward'] = int(-reward)
         return transitions
