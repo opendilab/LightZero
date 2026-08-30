@@ -271,6 +271,7 @@ def train_priorzero(
             evaluator.eval(wm_train_iter=learner.train_iter, llm_train_iter=llm_train_iter, phase=current_phase)
             if llm_cfg.vllm_enable_sleep and prior_engine is not None:
                 prior_engine.sleep()
+            torch_dist_barrier_and_cuda_sync()
         
         # 2.数据收集阶段         
         if not train_alternate or (train_alternate and current_phase == "wm") or (train_alternate and current_phase == "llm" and llm_collect_mode != "no_collect"):

@@ -263,9 +263,6 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             "temperature_reward",
             "temperature_policy",
             "current_policy_label_eps",
-            'adaptive_alpha',
-            "adaptive_target_entropy_ratio",
-            'alpha_loss',
             "current_encoder_clip_value",
         ]
         # ========================================================================

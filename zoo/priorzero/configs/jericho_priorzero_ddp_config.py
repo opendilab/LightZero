@@ -220,7 +220,6 @@ def main(
         main_config, create_config, llm_config = get_priorzero_debug_config(
             env_id=env_id,
             seed=seed,
-            exp_name=f'all_experiments/data_priorzero/priorzero_debug_{env_id}',
             use_cot=use_cot,
             model_key=model,
         )

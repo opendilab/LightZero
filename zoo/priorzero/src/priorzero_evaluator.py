@@ -161,12 +161,16 @@ class PriorZeroEvaluator(OriginalEvaluator):
             raise ValueError("")
     
     def eval(self, wm_train_iter: int = -1, llm_train_iter: int = -1, phase: str = "wm") -> Tuple[bool, Dict[str, Any]]:
+        # Match upstream single-task evaluation semantics and avoid repeating the
+        # custom LLM-prior rollouts on every DDP rank.
+        if self._rank != 0:
+            return
+
         modes = []
         wm_llm_eval_episode_info = None
         llm_eval_episode_info = None
         if self.eval_mode.world_model and (phase=='wm' or phase is None):
-            world_model_info = super().eval()
-            modes.append(("WM", world_model_info))
+            super().eval(train_iter=wm_train_iter)
         if self.eval_mode.world_model_llm_prior:
             world_model_llm_prior_info, wm_llm_eval_episode_info = self.eval_with_llm_prior()
             modes.append(("WM_LLMPrior", world_model_llm_prior_info)) 
@@ -174,9 +178,6 @@ class PriorZeroEvaluator(OriginalEvaluator):
         if self.eval_mode.llm_prior and phase == 'llm':
             llm_prior_info, llm_eval_episode_info = self.eval_only_llm_prior()
             modes.append(("LLMPrior", llm_prior_info))
-        
-        if self._rank != 0:
-            return
         
         if wm_llm_eval_episode_info and wm_llm_eval_episode_info[0]:
             first_episode = wm_llm_eval_episode_info[0]
@@ -231,8 +232,6 @@ class PriorZeroEvaluator(OriginalEvaluator):
         
         keys = ['avg_envstep_per_episode', 'reward_mean', 'reward_std', 'reward_max', 'reward_min']
         for k in keys:
-            if self.eval_mode.world_model and (phase=='wm' or phase is None):
-                self._tb_logger.add_scalar(f'{self._instance_name}_wm_iter/{k}_WM', world_model_info[k], wm_train_iter)
             if self.eval_mode.world_model_llm_prior:
                 if phase == 'wm' or phase is None:
                     self._tb_logger.add_scalar(f'{self._instance_name}_wm_iter/{k}_WM_LLMPrior', world_model_llm_prior_info[k], wm_train_iter)
