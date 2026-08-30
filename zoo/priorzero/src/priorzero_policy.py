@@ -430,8 +430,7 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
             )
         
         active_eval_env_num = data.shape[0]
-        if ready_env_id is None:
-            ready_env_id = np.arange(active_eval_env_num)
+        ready_env_id = self._normalize_ready_env_id(ready_env_id, active_eval_env_num)
         output = {i: None for i in ready_env_id}
         mcts_info = {i: defaultdict(dict) for i in ready_env_id}
         
@@ -449,7 +448,12 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
         policy_priors = self.pad_to_fixed_length(data=policy_priors, target_len=self.cfg.model.action_space_size, pad_val=-1e9)
         
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action_eval, data, timestep)
+            last_obs_batch, last_action_batch = self._select_last_infer_inputs(
+                self.last_batch_obs_eval, self.last_batch_action_eval, ready_env_id, self.evaluator_env_num
+            )
+            network_output = self._eval_model.initial_inference(
+                last_obs_batch, last_action_batch, data, timestep, ready_env_id=ready_env_id
+            )
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
             
             if mcts_root_logits_dict.mode == "llm_logits":
@@ -532,7 +536,9 @@ class PriorZeroPolicy(OriginalUniZeroPolicy):
                         mcts_info[env_id]["visit_count_distributions"][action] = distributions[idx]
                     else:
                         break
-            self.last_batch_obs_eval = data
-            self.last_batch_action_eval = batch_action
+            self._update_last_infer_inputs(
+                'last_batch_obs_eval', 'last_batch_action_eval',
+                data, batch_action, ready_env_id, self.evaluator_env_num
+            )
 
         return output, mcts_info

@@ -463,6 +463,8 @@ def get_priorzero_debug_config(
     llm_config.micro_train_batch_size = 4
     llm_config.train_schedule.wm_update_iters=2
     llm_config.train_schedule.llm_update_iters=1
+    llm_config.eval_dict.wm_eval_freq = 1
+    llm_config.eval_dict.llm_eval_freq = 1
 
     create_config.max_steps = max_steps
     

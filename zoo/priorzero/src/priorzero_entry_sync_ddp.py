@@ -336,7 +336,9 @@ def train_priorzero(
             if llm_collect_mode != "no_collect":
                 priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=-1, policy=policy, select_last=True)
             else:
-                priorzero_batch = replay_buffer.fetch_latest_batch(batch_size=256, policy=policy, select_last=False)
+                priorzero_batch = replay_buffer.fetch_latest_batch(
+                    batch_size=min(256, num_of_transitions), policy=policy, select_last=False
+                )
             # 清理 policy的cahce，防止OOM
             torch.cuda.empty_cache()
             with prof.block("train_llm", rank=rank):
