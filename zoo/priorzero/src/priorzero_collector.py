@@ -125,6 +125,7 @@ class PriorZeroCollector(OriginalCollector):
         self.history_buffers = defaultdict(
             lambda: deque(maxlen=self.llm_cfg.history_length)
         )
+        self._global_episode_info = []
         self.llm_prior_temperature = llm_config.llm_prior_temperature
 
         self._logger.info(
@@ -700,9 +701,17 @@ class PriorZeroCollector(OriginalCollector):
         # ==================================================================
         # Final Logging
         # ==================================================================
-        collected_duration = sum([d['time'] for d in self._episode_info])
+        local_episode_info = list(self._episode_info)
+        self._episode_info.clear()
+        collected_duration = sum([d['time'] for d in local_episode_info])
 
         if self._world_size > 1:
+            gathered_episode_info = [None for _ in range(self._world_size)]
+            dist.all_gather_object(gathered_episode_info, local_episode_info)
+            if self._rank == 0:
+                for rank_episode_info in gathered_episode_info:
+                    self._global_episode_info.extend(rank_episode_info)
+
             # Before allreduce
             local_step, local_episode = collected_step, collected_episode
             collected_step = allreduce_data(collected_step, 'sum')
@@ -715,6 +724,8 @@ class PriorZeroCollector(OriginalCollector):
                 f"Local: steps={local_step}, episodes={local_episode} | "
                 f"Global: steps={collected_step}, episodes={collected_episode}"
             )
+        else:
+            self._global_episode_info.extend(local_episode_info)
         
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
@@ -732,13 +743,13 @@ class PriorZeroCollector(OriginalCollector):
         if self._rank != 0:
             return
         
-        if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
+        if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._global_episode_info) > 0:
             self._last_train_iter = train_iter
-            episode_count = len(self._episode_info)
-            envstep_count = sum([d['step'] for d in self._episode_info])
-            duration = sum([d['time'] for d in self._episode_info])
-            episode_reward = [d['reward'] for d in self._episode_info]
-            episode_llm_prior_entropy = [d['llm_prior_entropy'] for d in self._episode_info]
+            episode_count = len(self._global_episode_info)
+            envstep_count = sum([d['step'] for d in self._global_episode_info])
+            duration = sum([d['time'] for d in self._global_episode_info])
+            episode_reward = [d['reward'] for d in self._global_episode_info]
+            episode_llm_prior_entropy = [d['llm_prior_entropy'] for d in self._global_episode_info]
             
             info = {
                 'episode_count': episode_count,
@@ -760,19 +771,19 @@ class PriorZeroCollector(OriginalCollector):
             }
             
             if not self.collect_with_pure_policy:
-                visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+                visit_entropy = [d['visit_entropy'] for d in self._global_episode_info]
                 info['visit_entropy_mean'] = np.mean(visit_entropy)
-                llm_weight = [d['llm_weight'] for d in self._episode_info]
+                llm_weight = [d['llm_weight'] for d in self._global_episode_info]
                 info['llm_weight_mean'] = np.mean(llm_weight)
             if self.policy_config.gumbel_algo:
-                completed_value = [d['completed_value'] for d in self._episode_info]
+                completed_value = [d['completed_value'] for d in self._global_episode_info]
                 info['completed_value_mean'] = np.mean(completed_value)
 
-            self._episode_info.clear()
+            self._global_episode_info.clear()
             
             self._logger.info(
                 f"\n{'='*80}\n"
-                f"[RANK {self._rank}][Collector Summary] Train Iter: {train_iter}\n"
+                f"[GLOBAL][Collector Summary] Train Iter: {train_iter}\n"
                 f"{'-'*80}\n"
                 f"Episodes:     {info['episode_count']} (Total: {info['total_episode_count']})\n"
                 f"Steps:        {info['envstep_count']} (Total: {info['total_envstep_count']})\n"

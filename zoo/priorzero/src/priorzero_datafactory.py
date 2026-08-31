@@ -429,6 +429,9 @@ class DataProcessor:
             for rank_samples in gathered_samples:
                 if rank_samples is not None:
                     global_samples.extend(rank_samples)
+            # All ranks see the same gathered list, so a deterministic global
+            # shuffle removes rank-order bias while keeping identical slices.
+            random.Random(0).shuffle(global_samples)
             global_max_samples = self.world_size * max_samples
             selected_global_samples = _select_samples_with_unique_priority(global_samples, global_max_samples)
 
@@ -510,8 +513,16 @@ class DataProcessor:
                 log_status_tmp["final_advantage"] = advantage.tolist()
 
         elif self.args.advantage_type == "advantage_global_batch_norm":
-            # self.global_batch_advantages
-            self.global_batch_advantages += advantage.tolist()
+            batch_advantages = advantage.tolist()
+            if ddp and dist.is_available() and dist.is_initialized():
+                gathered_advantages = [None for _ in range(self.world_size)]
+                dist.all_gather_object(gathered_advantages, batch_advantages)
+                batch_advantages = [
+                    value
+                    for rank_advantages in gathered_advantages
+                    for value in rank_advantages
+                ]
+            self.global_batch_advantages += batch_advantages
             advantage = (advantage - np.mean(self.global_batch_advantages)) / (np.std(self.global_batch_advantages) + 1e-8)
             log_status_tmp["value_advantage"] = advantage.tolist()
             
