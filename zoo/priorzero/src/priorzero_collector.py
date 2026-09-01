@@ -653,6 +653,10 @@ class PriorZeroCollector(OriginalCollector):
                     self.history_buffers[env_id].clear()
                     # Re-initialize game segment
                     init_obs = self._env.ready_obs
+                    while env_id not in init_obs:
+                        self._logger.warning(f'Waiting for env {env_id} to reset...')
+                        time.sleep(retry_waiting_time)
+                        init_obs = self._env.ready_obs
                     observation_window_stack[env_id] = deque(
                             [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
                             maxlen=self.policy_config.model.frame_stack_num

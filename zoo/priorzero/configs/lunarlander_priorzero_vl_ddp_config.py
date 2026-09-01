@@ -7,9 +7,8 @@ Launch from the LightZero repository root::
     torchrun --nproc_per_node=2 --master-port=29501 \
     ./zoo/priorzero/configs/lunarlander_priorzero_vl_ddp_config.py
 
-For a timestamped console log, append for example::
-
-    2>&1 | tee ./zoo/priorzero/all_experiments/logs/LunarLander/run.log
+Experiment outputs are grouped under ``data_priorzero/vl_rft`` or
+``data_priorzero/vl_frozen`` according to whether the VL model is trained.
 """
 
 import argparse
@@ -171,6 +170,27 @@ def _apply_experiment_config(main_config, vl_config) -> None:
     vl_config.value_norm_cfg = EasyDict(prior['value_norm_cfg'])
 
 
+def _set_experiment_name(main_config, vl_config, vl_model: str) -> None:
+    """Build the experiment path after all command-line overrides."""
+    env_name = main_config.env.env_id
+    if vl_config.enable_rft:
+        main_config.exp_name = (
+            f'data_priorzero/vl_rft/'
+            f'priorzero_{env_name}_{vl_model}_train_{vl_config.train_mode_dict.mode}/'
+            f'useCot_{vl_config.use_cot}_alternate_{vl_config.train_schedule.alternate}/'
+            f'mcts_{vl_config.mcts_root_logits_dict.mode}_image_{vl_config.vlm_image_mode}_'
+            f'staleness_{vl_config.max_rollout_staleness}_tbs_{vl_config.train_batch_size}_'
+            f'use_mispo_{vl_config.use_mispo}_seed{main_config.seed}'
+        )
+    else:
+        main_config.exp_name = (
+            f'data_priorzero/vl_frozen/'
+            f'priorzero_{env_name}_{vl_model}_train_{vl_config.train_mode_dict.mode}/'
+            f'useCot_{vl_config.use_cot}_mcts_{vl_config.mcts_root_logits_dict.mode}_'
+            f'image_{vl_config.vlm_image_mode}_seed{main_config.seed}'
+        )
+
+
 def main(
     env_id: str = 'LunarLander-v2',
     seed: int = 0,
@@ -208,6 +228,8 @@ def main(
     vl_config.vl_fixed = vl_fixed
     if vl_fixed:
         vl_config.enable_rft = False
+    if not quick_test:
+        _set_experiment_name(main_config, vl_config, vl_model)
 
     train_priorzero(
         main_config,
