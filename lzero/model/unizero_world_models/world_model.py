@@ -10,8 +10,8 @@ import torch.nn.functional as F
 from einops import rearrange
 from lzero.model.common import SimNorm
 from lzero.model.utils import (calculate_dormant_ratio,
-                               compute_average_weight_magnitude,
-                               compute_effective_rank)
+                               calculate_effective_rank,
+                               compute_average_weight_magnitude)
 from torch.distributions import (Categorical, Independent, Normal,
                                  TanhTransform, TransformedDistribution)
 
@@ -2522,11 +2522,11 @@ class WorldModel(
             # The 'representation_layer_name' argument specifies the target layer within the model's named modules.
             
             # Effective rank for the final linear layer of the encoder.
-            e_rank_last_linear = compute_effective_rank(
+            e_rank_last_linear = calculate_effective_rank(
                 self.tokenizer.encoder, inputs, representation_layer_name="last_linear"
             )
             # Effective rank for the SimNorm layer of the encoder.
-            e_rank_sim_norm = compute_effective_rank(
+            e_rank_sim_norm = calculate_effective_rank(
                 self.tokenizer.encoder, inputs, representation_layer_name="sim_norm"
             )
 
