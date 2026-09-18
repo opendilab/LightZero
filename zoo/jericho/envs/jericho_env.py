@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from collections import OrderedDict
 
-import gym
+import gymnasium
 import numpy as np
 import torch
 from transformers import AutoTokenizer
@@ -125,9 +125,9 @@ class JerichoEnv(BaseEnv):
 
 
         # Define observation, action, and reward spaces.
-        self.observation_space: gym.spaces.Dict = gym.spaces.Dict()
-        self.action_space: gym.spaces.Discrete = gym.spaces.Discrete(self.max_action_num)
-        self.reward_space: gym.spaces.Box = gym.spaces.Box(
+        self.observation_space: gymnasium.spaces.Dict = gymnasium.spaces.Dict()
+        self.action_space: gymnasium.spaces.Discrete = gymnasium.spaces.Discrete(self.max_action_num)
+        self.reward_space: gymnasium.spaces.Box = gymnasium.spaces.Box(
             low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
 
     def prepare_obs(self, obs: str, return_str: bool = False) -> Dict[str, Any]:

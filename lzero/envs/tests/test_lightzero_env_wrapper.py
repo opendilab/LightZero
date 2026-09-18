@@ -3,7 +3,7 @@ import pytest
 from ding.envs import DingEnvWrapper
 from lzero.envs.wrappers import ActionDiscretizationEnvWrapper, LightZeroEnvWrapper
 from easydict import EasyDict
-import gym
+import gymnasium
 import numpy as np
 
 
@@ -22,7 +22,7 @@ class TestLightZeroEnvWrapper:
         )
 
         lightzero_env = DingEnvWrapper(
-            gym.make(env_cfg.env_id), cfg={'env_wrapper': [
+            gymnasium.make(env_cfg.env_id), cfg={'env_wrapper': [
                 lambda env: LightZeroEnvWrapper(env, env_cfg),
             ]}
         )
@@ -52,7 +52,7 @@ class TestLightZeroEnvWrapper:
         )
 
         lightzero_env = DingEnvWrapper(
-            gym.make(env_cfg.env_id),
+            gymnasium.make(env_cfg.env_id),
             cfg={
                 'env_wrapper': [
                     lambda env: ActionDiscretizationEnvWrapper(env, env_cfg),
@@ -86,7 +86,7 @@ class TestLightZeroEnvWrapper:
         )
 
         lightzero_env = DingEnvWrapper(
-            gym.make(env_cfg.env_id), cfg={'env_wrapper': [
+            gymnasium.make(env_cfg.env_id), cfg={'env_wrapper': [
                 lambda env: LightZeroEnvWrapper(env, env_cfg),
             ]}
         )
@@ -116,7 +116,7 @@ class TestLightZeroEnvWrapper:
         )
 
         lightzero_env = DingEnvWrapper(
-            gym.make(env_cfg.env_id),
+            gymnasium.make(env_cfg.env_id),
             cfg={
                 'env_wrapper': [
                     lambda env: ActionDiscretizationEnvWrapper(env, env_cfg),
