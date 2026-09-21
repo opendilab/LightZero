@@ -2,9 +2,11 @@ import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
+from easydict import EasyDict
 
 from lzero.policy.utils import negative_cosine_similarity, to_torch_float_tensor, visualize_avg_softmax, \
-    calculate_topk_accuracy, plot_topk_accuracy, compare_argmax, plot_argmax_distribution
+    calculate_topk_accuracy, plot_topk_accuracy, compare_argmax, plot_argmax_distribution, \
+    prepare_obs_stack_for_unizero
 
 
 # We use the pytest.mark.unittest decorator to mark this class for unit testing.
@@ -110,6 +112,23 @@ class TestVisualizationFunctions:
 # We use the pytest.mark.unittest decorator to mark this class for unit testing.
 @pytest.mark.unittest
 class TestUtils():
+
+    def test_prepare_obs_stack_preserves_channel_and_spatial_layout(self):
+        cfg = EasyDict(model=EasyDict(
+            model_type='conv', frame_stack_num=2, image_channel=1,
+            self_supervised_learning_loss=True,
+        ), device='cpu')
+        observations = np.arange(1 * 4 * 2 * 3, dtype=np.uint8).reshape(1, 4, 2, 3)
+
+        root, targets = prepare_obs_stack_for_unizero(observations, cfg)
+
+        expected_root = torch.from_numpy(observations[:, :2]).float()
+        expected_targets = torch.cat([
+            torch.from_numpy(observations[:, 1:3]).float(),
+            torch.from_numpy(observations[:, 2:4]).float(),
+        ], dim=1)
+        assert torch.equal(root, expected_root)
+        assert torch.equal(targets, expected_targets)
 
     # This function tests the negative_cosine_similarity function.
     # This function computes the negative cosine similarity between two vectors.

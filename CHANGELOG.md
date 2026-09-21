@@ -1,3 +1,16 @@
+Unreleased
+- fix: Restore historical Atari control semantics for `ALE/*-v5`: ALE now advances one raw frame,
+  sticky actions are disabled, and LightZero's outer `MaxAndSkipWrapper` is the sole owner of the
+  configured action repeat. Scores from earlier `ALE/*-v5` runs with compounded frame skip are not
+  directly comparable.
+- fix: Make Atari evaluation tie-breaking and reset-time no-op sampling reproducible. The UniZero
+  Atari segment config now evaluates with 8 environments instead of 3, so evaluation cost changes.
+- feat: Add opt-in contextual UniZero replay reanalysis. H+1 target alignment and bounded MCTS
+  chunking remain unconditional correctness fixes; legacy root context/prior behavior stays the
+  default unless `contextual_reanalysis=True` is set.
+- feat: Let the Atari MuZero segment entrypoint select an output directory, stable run name, and
+  environment-step budget, matching the options used by its rjob launcher.
+
 2025.04.09 (v0.2.0)
 - env: Add Metadrive environment and configurations (#192)
 - env: Add Sampled MuZero/UniZero and DMC environment with related configurations (#260)

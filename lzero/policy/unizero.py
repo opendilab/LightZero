@@ -25,6 +25,21 @@ from torch.nn.utils.convert_parameters import (parameters_to_vector,
 from .utils import configure_optimizers_nanogpt
 
 
+DEFAULT_TB_METRIC_FILTER = {
+    metric_name: True for metric_name in (
+        'loss/total', 'loss/policy', 'loss/value', 'loss/reward',
+        'priority/mean', 'priority/max', 'priority/valid_ratio',
+        'reanalyze/count', 'reanalyze/freq_actual', 'reanalyze/target_age_mean',
+        'simulation/depth_mean', 'simulation/value_mean', 'simulation/policy_entropy',
+        'segment/length_actual', 'segment/valid_ratio', 'segment/bootstrap_context_len',
+        'grad_norm', 'lr', 'param_norm', 'weight_decay',
+        'grad/clip_encoder_scale', 'grad/clip_non_encoder_scale',
+        'grad/encoder_pre_clip_norm', 'grad/non_encoder_pre_clip_norm',
+        'eval/mean_return', 'eval/max_return', 'eval/episode_length',
+    )
+}
+
+
 def representation_health_metrics(x: torch.Tensor, near_constant_threshold: float = 1e-3) -> Dict[str, float]:
     """Measure representation diversity across samples/tokens, per feature.
 
@@ -72,6 +87,222 @@ def replay_distribution_metrics(weights: torch.Tensor, value_priority: torch.Ten
         'replay/value_priority_std': priority_flat.std(unbiased=False).item(),
         'replay/value_priority_min': priority_flat.min().item(),
         'replay/value_priority_max': priority_flat.max().item(),
+    }
+
+
+def replay_sample_age_metrics(
+        indices: np.ndarray, num_transitions: int, capacity: int
+) -> Dict[str, float]:
+    """Describe where a sampled minibatch lies in the oldest-to-newest replay order."""
+    num_transitions, capacity = int(num_transitions), int(capacity)
+    if num_transitions <= 0 or capacity <= 0:
+        raise ValueError('num_transitions and capacity must be positive')
+    positions = np.asarray(indices, dtype=np.float64).reshape(-1)
+    if positions.size == 0:
+        raise ValueError('indices must not be empty')
+    denominator = max(num_transitions - 1, 1)
+    relative_position = np.clip(positions / denominator, 0., 1.)
+    age_fraction = 1. - relative_position
+    return {
+        'replay/buffer_fill_fraction': float(min(num_transitions / capacity, 1.)),
+        'replay/sample_age_fraction_mean': float(age_fraction.mean()),
+        'replay/sample_age_fraction_std': float(age_fraction.std()),
+        'replay/sample_oldest_quarter_fraction': float((relative_position < 0.25).mean()),
+        'replay/sample_newest_quarter_fraction': float((relative_position >= 0.75).mean()),
+    }
+
+
+def value_calibration_metrics(
+        predictions: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor
+) -> Dict[str, float]:
+    """Return detached value-target calibration statistics over valid replay steps."""
+    valid = mask.bool()
+    predicted = predictions.detach().float()[valid]
+    target = targets.detach().float()[valid]
+    if predicted.numel() == 0:
+        return {
+            key: 0.0 for key in (
+                'value_calibration/pred_mean', 'value_calibration/pred_std',
+                'value_calibration/target_mean', 'value_calibration/target_std',
+                'value_calibration/bias', 'value_calibration/mae',
+                'value_calibration/rmse', 'value_calibration/correlation',
+            )
+        }
+    error = predicted - target
+    pred_centered = predicted - predicted.mean()
+    target_centered = target - target.mean()
+    denominator = pred_centered.square().sum().sqrt() * target_centered.square().sum().sqrt()
+    correlation = (
+        (pred_centered * target_centered).sum() / denominator
+        if denominator > 0 else predicted.new_tensor(0.)
+    )
+    return {
+        'value_calibration/pred_mean': predicted.mean().item(),
+        'value_calibration/pred_std': predicted.std(unbiased=False).item(),
+        'value_calibration/target_mean': target.mean().item(),
+        'value_calibration/target_std': target.std(unbiased=False).item(),
+        'value_calibration/bias': error.mean().item(),
+        'value_calibration/mae': error.abs().mean().item(),
+        'value_calibration/rmse': error.square().mean().sqrt().item(),
+        'value_calibration/correlation': correlation.item(),
+    }
+
+
+def gradient_clip_metrics(total_norm: float, max_norm: float) -> Dict[str, float]:
+    """Mirror ``clip_grad_norm_`` scaling as float-only learner diagnostics."""
+    total_norm, max_norm = float(total_norm), float(max_norm)
+    if max_norm <= 0:
+        raise ValueError('max_norm must be positive')
+    scale = min(1., max_norm / (total_norm + 1e-6))
+    return {
+        'grad/clip_threshold': max_norm,
+        'grad/clip_applied': float(total_norm > max_norm),
+        'grad/clip_scale': float(scale),
+        'grad/world_model_post_clip_norm': float(total_norm * scale),
+    }
+
+
+def clip_unizero_gradients(
+        world_model: torch.nn.Module,
+        max_norm: float,
+        mode: str = 'global',
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+    """Clip gradients without letting an augmentation-heavy encoder starve planning heads."""
+    if max_norm <= 0:
+        raise ValueError(f'max_norm must be positive, got {max_norm}')
+    if mode not in {'global', 'separate_encoder'}:
+        raise ValueError(f"Unsupported grad_clip_mode {mode!r}")
+
+    all_parameters = [
+        parameter for parameter in world_model.parameters()
+        if parameter.requires_grad and parameter.grad is not None
+    ]
+    if mode == 'global':
+        total_norm = torch.nn.utils.clip_grad_norm_(all_parameters, max_norm)
+        return total_norm, {}
+
+    encoder_ids = {
+        id(parameter) for parameter in world_model.tokenizer.encoder.parameters()
+        if parameter.requires_grad
+    }
+    encoder_parameters = [parameter for parameter in all_parameters if id(parameter) in encoder_ids]
+    remaining_parameters = [parameter for parameter in all_parameters if id(parameter) not in encoder_ids]
+    reference = all_parameters[0] if all_parameters else next(world_model.parameters())
+
+    def clip_group(parameters):
+        if not parameters:
+            return reference.new_tensor(0.)
+        return torch.nn.utils.clip_grad_norm_(parameters, max_norm)
+
+    encoder_norm = clip_group(encoder_parameters)
+    remaining_norm = clip_group(remaining_parameters)
+    total_norm = torch.sqrt(encoder_norm.float().square() + remaining_norm.float().square())
+    post_clip_norm = torch.sqrt(
+        encoder_norm.float().clamp_max(max_norm).square()
+        + remaining_norm.float().clamp_max(max_norm).square()
+    )
+    details = {
+        'grad/clip_scale': min(1., float(post_clip_norm) / (float(total_norm) + 1e-6)),
+        'grad/world_model_post_clip_norm': float(post_clip_norm),
+        'grad/clip_encoder_scale': min(1., max_norm / (float(encoder_norm) + 1e-6)),
+        'grad/clip_non_encoder_scale': min(1., max_norm / (float(remaining_norm) + 1e-6)),
+        'grad/encoder_pre_clip_norm': float(encoder_norm),
+        'grad/non_encoder_pre_clip_norm': float(remaining_norm),
+    }
+    return total_norm, details
+
+
+def search_exploration_metrics(
+        policy_logits: np.ndarray, visit_counts: np.ndarray, temperature: float
+) -> Dict[str, float]:
+    """Separate network-prior, raw-search, and action-sampling exploration."""
+    logits = np.asarray(policy_logits, dtype=np.float64).reshape(-1)
+    counts = np.asarray(visit_counts, dtype=np.float64).reshape(-1)
+    if logits.size == 0 or logits.shape != counts.shape:
+        raise ValueError('policy_logits and visit_counts must be non-empty with equal shape')
+    if temperature <= 0:
+        raise ValueError('temperature must be positive')
+
+    logits = logits - logits.max()
+    prior = np.exp(logits)
+    prior /= prior.sum()
+    raw_visit = counts / counts.sum() if counts.sum() > 0 else np.full_like(counts, 1. / counts.size)
+    tempered = np.power(np.maximum(counts, 0.), 1. / temperature)
+    tempered = tempered / tempered.sum() if tempered.sum() > 0 else np.full_like(counts, 1. / counts.size)
+
+    def summarize(prefix: str, probabilities: np.ndarray) -> Dict[str, float]:
+        entropy_nats = -np.sum(probabilities * np.log(np.maximum(probabilities, 1e-12)))
+        return {
+            f'exploration/{prefix}_entropy_nats': float(entropy_nats),
+            f'exploration/{prefix}_effective_actions': float(np.exp(entropy_nats)),
+            f'exploration/{prefix}_top1_probability': float(probabilities.max()),
+        }
+
+    metrics = {}
+    metrics.update(summarize('prior', prior))
+    metrics.update(summarize('raw_visit', raw_visit))
+    metrics.update(summarize('sample', tempered))
+    midpoint = 0.5 * (prior + raw_visit)
+    js_divergence = 0.5 * np.sum(prior * np.log(np.maximum(prior / midpoint, 1e-12)))
+    js_divergence += 0.5 * np.sum(raw_visit * np.log(np.maximum(raw_visit / midpoint, 1e-12)))
+    metrics['exploration/prior_visit_js_divergence'] = float(js_divergence)
+    return metrics
+
+
+def component_gradient_norms(
+        components: Dict[str, torch.Tensor], module_groups: Dict[str, torch.nn.Module]
+) -> Dict[str, float]:
+    """Measure loss-component gradient norms without mutating accumulated ``.grad`` tensors."""
+    group_parameters = {
+        name: [parameter for parameter in module.parameters() if parameter.requires_grad]
+        for name, module in module_groups.items()
+    }
+    parameters, parameter_owner = [], []
+    seen = set()
+    for group_name, group_params in group_parameters.items():
+        for parameter in group_params:
+            if id(parameter) not in seen:
+                seen.add(id(parameter))
+                parameters.append(parameter)
+                parameter_owner.append(group_name)
+
+    metrics = {}
+    for component_name, component in components.items():
+        if not component.requires_grad or not parameters:
+            for group_name in group_parameters:
+                metrics[f'grad_component/{component_name}/{group_name}'] = 0.
+            metrics[f'grad_component/{component_name}/_tracked_total_norm'] = 0.
+            continue
+        gradients = torch.autograd.grad(
+            component, parameters, retain_graph=True, allow_unused=True
+        )
+        squared_by_group = {name: 0. for name in group_parameters}
+        for group_name, gradient in zip(parameter_owner, gradients):
+            if gradient is not None:
+                squared_by_group[group_name] += gradient.detach().float().square().sum().item()
+        for group_name, squared_norm in squared_by_group.items():
+            metrics[f'grad_component/{component_name}/{group_name}'] = float(np.sqrt(squared_norm))
+        metrics[f'grad_component/{component_name}/_tracked_total_norm'] = float(
+            np.sqrt(sum(squared_by_group.values()))
+        )
+    return metrics
+
+
+def encoder_clip_metrics(
+        threshold: float,
+        applied: bool,
+        apply_count: int,
+        scale_factor: float,
+        max_latent_norm: float,
+) -> Dict[str, float]:
+    """Return encoder-clip diagnostics using DI-engine's float scalar contract."""
+    return {
+        'encoder_clip/enabled': float(threshold > 0),
+        'encoder_clip/applied': float(applied),
+        'encoder_clip/apply_count': float(apply_count),
+        'encoder_clip/scale_factor': float(scale_factor),
+        'encoder_clip/max_latent_norm': float(max_latent_norm),
+        'encoder_clip/threshold': float(threshold),
     }
 
 
@@ -153,8 +384,60 @@ def apply_per_sample_is_weights(weights, losses, per_sample_policy_loss, scalar_
     auxiliary_loss = (
         losses.latent_recon_loss_weight * losses.intermediate_losses['latent_recon_loss']
         + losses.perceptual_loss_weight * losses.intermediate_losses['perceptual_loss']
+        + getattr(losses, 'open_loop_consistency_loss_weight', 0.)
+        * losses.intermediate_losses.get('open_loop_consistency_loss', 0.)
+        + getattr(losses, 'open_loop_recurrent_loss_weight', 0.)
+        * losses.intermediate_losses.get('open_loop_recurrent_loss', 0.)
     )
     return (weights.reshape(-1) * per_sample_total_loss).mean() + auxiliary_loss
+
+
+def augment_unizero_observation_sequence(image_transforms, obs_batch, obs_target_batch):
+    """Apply one coherent image augmentation to the complete replay sequence.
+
+    ``prepare_obs_stack_for_unizero`` separates the root observation from the
+    following H target observations along the channel dimension. Applying the
+    random crop/intensity transform to those tensors independently creates an
+    artificial discontinuity on the first model transition. Concatenating
+    before augmentation makes the root and every target frame share the same
+    sampled transform while preserving the original tensor layout.
+    """
+    if obs_target_batch is None:
+        return image_transforms.transform(obs_batch), None
+    if obs_batch.ndim != obs_target_batch.ndim or obs_batch.shape[0] != obs_target_batch.shape[0]:
+        raise ValueError(
+            'UniZero augmentation requires root and target observations with '
+            f'matching batch/rank, got {tuple(obs_batch.shape)} and {tuple(obs_target_batch.shape)}.'
+        )
+    root_channels = obs_batch.shape[1]
+    augmented = image_transforms.transform(torch.cat((obs_batch, obs_target_batch), dim=1))
+    return augmented[:, :root_channels], augmented[:, root_channels:]
+
+
+def resolve_eval_cache_env_offset(
+        world_model_env_num: int,
+        collector_env_num: int,
+        evaluator_env_num: int,
+        isolate_eval_cache: bool,
+) -> int:
+    """Validate cache capacity and return the evaluator namespace offset."""
+    if not isolate_eval_cache:
+        return 0
+    required_env_num = int(collector_env_num) + int(evaluator_env_num)
+    if int(world_model_env_num) < required_env_num:
+        raise ValueError(
+            'isolate_eval_cache=True requires world_model.env_num >= '
+            f'collector_env_num + evaluator_env_num ({required_env_num}), '
+            f'got {world_model_env_num}.'
+        )
+    return int(collector_env_num)
+
+
+def apply_open_loop_recurrent_entropy_weight(
+        recurrent_loss, fixed_policy_loss, policy_ce, policy_entropy, entropy_weight
+):
+    """Replace only the policy-entropy term inside an open-loop recurrent loss."""
+    return recurrent_loss - fixed_policy_loss + policy_ce - entropy_weight * policy_entropy
 
 
 def configure_optimizer_unizero(model, learning_rate, weight_decay, device_type, betas):
@@ -259,7 +542,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 max_blocks=10,
                 # (int) The maximum number of tokens, calculated as tokens per block multiplied by max blocks.
                 max_tokens=2 * 10,
-                # (int) The context length, usually calculated as twice the number of some base unit.
+                # (int) Online inference context length in tokens.  The default retains four
+                # observation/action blocks; longer contexts (for example ctx5=10 tokens) are
+                # experimental and must be enabled explicitly by an environment config.
                 context_length=2 * 4,
                 # (bool) Whether to use GRU gating mechanism.
                 gru_gating=False,
@@ -291,14 +576,30 @@ class UniZeroPolicy(MuZeroPolicy):
                 support_size=101,
                 # (int) The maximum size of the cache.
                 max_cache_size=5000,
+                # Decimal precision used for root-cache keys.  Zero keeps
+                # exact-byte hashing; positive values absorb harmless
+                # float32 re-encoding noise across variable-width batches.
+                root_cache_key_round_decimals=0,
                 # (bool) Whether to use the structured KVCacheManager instead of legacy dict pools.
                 use_new_cache_manager=False,
+                # (bool) Exact absolute-position cache repair modes. Both are opt-in because
+                # they replay the retained token window when it rolls over.
+                exact_kv_window_reset=False,
+                rebuild_kv_window_from_tokens=False,
                 # (int) The number of environments.
                 env_num=8,
                 # (float) The weight of the latent reconstruction loss.
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
+                # (float) Optional differentiable open-loop consistency objective.  Keep all
+                # open-loop training objectives disabled by default; experiments opt in by
+                # supplying a positive weight.
+                open_loop_consistency_loss_weight=0.,
+                open_loop_recurrent_loss_weight=0.,
+                # (int) Number of real replay transitions prepended before an optional open-loop
+                # rollout.  Zero is the non-experimental single-root behavior.
+                open_loop_prefix_transitions=0,
                 # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=5e-3,
                 # (str) The normalization type for the final layer in both the head and the encoder.
@@ -394,8 +695,9 @@ class UniZeroPolicy(MuZeroPolicy):
         target_entropy_decay_steps=500000,
 
         # ==================== START: Encoder-Clip Annealing Config ====================
-        # (bool) Whether to enable annealing for encoder-clip values.
-        use_encoder_clip_annealing=True,
+        # Encoder latent-norm projection is experimental and disabled by default.  Enabling
+        # annealing or setting a positive fixed threshold must be an explicit experiment choice.
+        use_encoder_clip_annealing=False,
         # (str) Annealing type. Options: 'linear' or 'cosine'.
         encoder_clip_anneal_type='cosine',
         # (float) Starting clip value for annealing (looser in early training).
@@ -404,8 +706,9 @@ class UniZeroPolicy(MuZeroPolicy):
         encoder_clip_end_value=10.0,
         # (int) Training iteration steps required to complete annealing from start to end value.
         encoder_clip_anneal_steps=100000,  # e.g., reach final value after 100k iterations
-        # (float) Fixed latent norm clip threshold (used when encoder_clip_annealing is disabled)
-        latent_norm_clip_threshold=20.0,
+        # (float) Fixed latent norm clip threshold (used when encoder_clip_annealing is disabled).
+        # A non-positive value disables the projection.
+        latent_norm_clip_threshold=0.0,
         # ===================== END: Encoder-Clip Annealing Config =====================
 
         # ==================== START: Head-Clip Annealing Config ====================
@@ -461,8 +764,13 @@ class UniZeroPolicy(MuZeroPolicy):
         # ===================== END: Learning Rate Scheduler Config =====================
 
         # ==================== START: Monitoring Config ====================
+        log_metric=False,
+        tb_log_all=False,
+        tb_metric_filter=DEFAULT_TB_METRIC_FILTER,
         # (int) Frequency of monitoring model parameter and gradient norms (in training iterations). Set to 0 to disable.
         monitor_norm_freq=5000,
+        # (int) Frequency of loss-component x module gradient attribution. Zero disables it.
+        gradient_diagnostic_freq=0,
         # (bool) Whether to enable enhanced policy monitoring (logits statistics, target policy entropy, etc.)
         use_enhanced_policy_monitoring=False,
         # ===================== END: Monitoring Config =====================
@@ -484,6 +792,10 @@ class UniZeroPolicy(MuZeroPolicy):
         collector_env_num=8,
         # (int) The number of environments used in evaluating policy.
         evaluator_env_num=3,
+        # Keep collector/evaluator root-cache pools disjoint while sharing
+        # model weights. This prevents a long eval episode from evicting an
+        # in-flight collector root.
+        isolate_eval_cache=False,
         # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
         # (str) The type of action space. Options are ['fixed_action_space', 'varied_action_space'].
@@ -492,6 +804,12 @@ class UniZeroPolicy(MuZeroPolicy):
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
+        # (bool) Whether replay-policy reanalysis should seed each MCTS root from the same
+        # short observation/action context used online. Opt-in to preserve legacy targets.
+        contextual_reanalysis=False,
+        # (bool) Whether TD bootstrap values should be evaluated from the exact rolling replay
+        # history.  This changes target semantics and is therefore opt-in.
+        bootstrap_value_context=False,
         # (bool) Whether to call torch.cuda.empty_cache() when resetting inference caches after each train epoch.
         empty_cuda_cache_on_cache_reset=True,
         # (int) The transition number of one ``GameSegment``.
@@ -546,6 +864,9 @@ class UniZeroPolicy(MuZeroPolicy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=20,
+        # (str) Separate encoder clipping prevents augmentation-driven latent
+        # gradients from shrinking Transformer and prediction-head updates.
+        grad_clip_mode='global',
         # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
@@ -562,6 +883,9 @@ class UniZeroPolicy(MuZeroPolicy):
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
         num_unroll_steps=10,
+        # (float) The weight of observation/reconstruction loss.  This used
+        # to be hard-coded inside LossWithIntermediateLosses.
+        obs_loss_weight=10,
         # (float) The weight of reward loss.
         reward_loss_weight=1,
         # (float) The weight of value loss.
@@ -646,6 +970,22 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return 'UniZeroModel', ['lzero.model.unizero_model']
 
+    def set_replay_diagnostics(
+            self, indices: np.ndarray, num_transitions: int, capacity: int
+    ) -> None:
+        """Attach detached replay-age diagnostics to the next learner log record."""
+        self._latest_replay_diagnostic_metrics = replay_sample_age_metrics(
+            indices, num_transitions, capacity
+        )
+
+    def set_training_pipeline_diagnostics(self, metrics: Dict[str, float]) -> None:
+        """Attach finite, detached replay/segment/reanalysis signals to the next learner record."""
+        detached_metrics = {name: float(value) for name, value in metrics.items()}
+        for name, value in detached_metrics.items():
+            if not np.isfinite(value):
+                raise ValueError(f'Training diagnostic {name} must be finite, got {value}')
+        self._latest_training_pipeline_metrics = detached_metrics
+
 
     # ==================== Model Norm Monitoring Function ====================
     def _monitor_model_norms(self) -> Dict[str, float]:
@@ -693,17 +1033,9 @@ class UniZeroPolicy(MuZeroPolicy):
         Returns:
             - grad_metrics (:obj:`Dict[str, float]`): Dictionary containing all gradient norm metrics for logging.
         """
-        world_model = self._learn_model.world_model
         grad_metrics = {}
 
-        # Define module groups to monitor
-        module_groups = {
-            'encoder': world_model.tokenizer.encoder,
-            'transformer': world_model.transformer,
-            'head_value': world_model.head_value,
-            'head_reward': world_model.head_rewards,
-            'head_policy': world_model.head_policy,
-        }
+        module_groups = self._gradient_diagnostic_module_groups()
 
         for group_name, group_module in module_groups.items():
             total_grad_norm_sq = 0.0
@@ -727,6 +1059,19 @@ class UniZeroPolicy(MuZeroPolicy):
                 grad_metrics[f'grad/{group_name}/_total_norm'] = 0.0
 
         return grad_metrics
+
+    def _gradient_diagnostic_module_groups(self) -> Dict[str, torch.nn.Module]:
+        """Return disjoint world-model modules used by periodic gradient attribution."""
+        world_model = self._learn_model.world_model
+        return {
+            'encoder': world_model.tokenizer.encoder,
+            'transformer': world_model.transformer,
+            'action_embedding': world_model.act_embedding_table,
+            'head_observation': world_model.head_observations,
+            'head_reward': world_model.head_rewards,
+            'head_value': world_model.head_value,
+            'head_policy': world_model.head_policy,
+        }
     # =================================================================
 
     def _init_learn(self) -> None:
@@ -794,6 +1139,10 @@ class UniZeroPolicy(MuZeroPolicy):
             update_type='momentum',
             update_kwargs={'theta': self._cfg.target_update_theta}
         )
+        # Target predictions are labels, not trainable activations. Keeping
+        # dropout active here injects fresh noise into every TD/observation
+        # target batch.
+        self._target_model.eval()
         self._learn_model = self._model
 
         if self._cfg.use_augmentation:
@@ -815,6 +1164,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # Cache the last real observation, and force a check on the first batch after resume.
         self._latest_norm_log_dict = {}
         self._last_norm_monitor_iter = -1
+        self._latest_replay_diagnostic_metrics = {}
+        self._latest_training_pipeline_metrics = {}
+        self._last_gradient_diagnostic_iter = -1
 
         if self._cfg.model.model_type == 'conv':
             # for image-input env
@@ -882,6 +1234,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: Initialize Encoder-Clip Annealing Parameters ====================
         self.use_encoder_clip_annealing = self._cfg.use_encoder_clip_annealing
+        self._encoder_clip_apply_count = 0
         self.latent_norm_clip_threshold = self._cfg.latent_norm_clip_threshold  # TODO
         if self.use_encoder_clip_annealing:
             self.encoder_clip_anneal_type = self._cfg.encoder_clip_anneal_type
@@ -948,7 +1301,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 current learning loss and learning statistics.
         """
         self._learn_model.train()
-        self._target_model.train()
+        # Keep the target network deterministic; it supplies bootstrap and
+        # teacher targets and must not enable dropout per learner batch.
+        self._target_model.eval()
 
         current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
@@ -977,9 +1332,9 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
-            obs_batch = self.image_transforms.transform(obs_batch)
-            if self._cfg.model.self_supervised_learning_loss:
-                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+            obs_batch, obs_target_batch = augment_unizero_observation_sequence(
+                self.image_transforms, obs_batch, obs_target_batch
+            )
 
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
@@ -1045,6 +1400,13 @@ class UniZeroPolicy(MuZeroPolicy):
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
         )
+        if hasattr(losses, 'set_loss_weights'):
+            losses.set_loss_weights(
+                obs_loss_weight=getattr(self._cfg, 'obs_loss_weight', None),
+                reward_loss_weight=getattr(self._cfg, 'reward_loss_weight', None),
+                value_loss_weight=getattr(self._cfg, 'value_loss_weight', None),
+                policy_loss_weight=getattr(self._cfg, 'policy_loss_weight', None),
+            )
 
         # ==================== Integrate norm monitoring logic ====================
         norm_log_dict = {}
@@ -1159,6 +1521,19 @@ class UniZeroPolicy(MuZeroPolicy):
         # Convert to numpy array for the replay buffer, adding a small epsilon.
         value_priority_np = value_priority_tensor.detach().cpu().numpy() + 1e-6
         replay_log_dict = replay_distribution_metrics(weights, value_priority_tensor)
+        logits_value = losses.intermediate_losses.get('logits_value')
+        if logits_value is None:
+            value_calibration_log_dict = {}
+        else:
+            value_steps = logits_value.shape[1]
+            predicted_values = self.value_inverse_scalar_transform_handle(
+                logits_value.reshape(-1, logits_value.shape[-1])
+            ).reshape(logits_value.shape[0], value_steps)
+            value_calibration_log_dict = value_calibration_metrics(
+                predicted_values,
+                target_value[:, :value_steps],
+                batch_for_gpt['mask_padding'][:, :value_steps],
+            )
 
         # ==================== START: PER importance-sampling weighting ====================
         # NOTE: losses.loss_total is a batch-level scalar, so ``(weights * losses.loss_total).mean()``
@@ -1181,6 +1556,14 @@ class UniZeroPolicy(MuZeroPolicy):
         value_loss = self.intermediate_losses['loss_value']
         latent_recon_loss = self.intermediate_losses['latent_recon_loss']
         perceptual_loss = self.intermediate_losses['perceptual_loss']
+        open_loop_consistency_loss = self.intermediate_losses['open_loop_consistency_loss']
+        open_loop_recurrent_loss = self.intermediate_losses['open_loop_recurrent_loss']
+        open_loop_recurrent_latent_loss = self.intermediate_losses['open_loop_recurrent_latent_loss']
+        open_loop_recurrent_reward_loss = self.intermediate_losses['open_loop_recurrent_reward_loss']
+        open_loop_recurrent_value_loss = self.intermediate_losses['open_loop_recurrent_value_loss']
+        open_loop_recurrent_policy_loss = self.intermediate_losses['open_loop_recurrent_policy_loss']
+        open_loop_recurrent_policy_ce = self.intermediate_losses['open_loop_recurrent_policy_ce']
+        open_loop_recurrent_policy_entropy = self.intermediate_losses['open_loop_recurrent_policy_entropy']
         orig_policy_loss = self.intermediate_losses['orig_policy_loss']
         policy_entropy = self.intermediate_losses['policy_entropy']
         first_step_losses = self.intermediate_losses['first_step_losses']
@@ -1212,6 +1595,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # ==================== START: Target Entropy Regularization Update Logic ====================
         alpha_loss = None
+        per_sample_weighted_policy_loss = None
         current_alpha = self._cfg.model.world_model_cfg.policy_entropy_weight  # Default to fixed value
         if self.use_adaptive_entropy_weight:
             # Dynamically calculate target entropy (this logic is correct and preserved)
@@ -1240,6 +1624,30 @@ class UniZeroPolicy(MuZeroPolicy):
             # Use current updated alpha (with gradient flow truncated)
             current_alpha = self.log_alpha.exp().detach()
 
+            # Keep the optional recurrent policy objective on the same entropy coefficient as
+            # the main policy objective. The world model initially computes it with the fixed
+            # coefficient so non-adaptive training remains unchanged.
+            open_loop_recurrent_loss = apply_open_loop_recurrent_entropy_weight(
+                open_loop_recurrent_loss,
+                open_loop_recurrent_policy_loss,
+                open_loop_recurrent_policy_ce,
+                open_loop_recurrent_policy_entropy,
+                current_alpha,
+            )
+            open_loop_recurrent_policy_loss = (
+                open_loop_recurrent_policy_ce
+                - current_alpha * open_loop_recurrent_policy_entropy
+            )
+            # ``apply_per_sample_is_weights`` reads auxiliary losses from this container.
+            losses.intermediate_losses['open_loop_recurrent_loss'] = open_loop_recurrent_loss
+            losses.intermediate_losses['open_loop_recurrent_policy_loss'] = (
+                open_loop_recurrent_policy_loss
+            )
+            self.intermediate_losses['open_loop_recurrent_loss'] = open_loop_recurrent_loss
+            self.intermediate_losses['open_loop_recurrent_policy_loss'] = (
+                open_loop_recurrent_policy_loss
+            )
+
             # Recalculate weighted policy loss and total loss
             # Note: policy_entropy here is already an average value of a batch
             weighted_policy_loss = orig_policy_loss - current_alpha * policy_entropy
@@ -1250,7 +1658,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 losses.policy_loss_weight * weighted_policy_loss +
                 losses.obs_loss_weight * obs_loss +
                 losses.latent_recon_loss_weight * latent_recon_loss +
-                losses.perceptual_loss_weight * perceptual_loss
+                losses.perceptual_loss_weight * perceptual_loss +
+                losses.open_loop_consistency_loss_weight * open_loop_consistency_loss +
+                losses.open_loop_recurrent_loss_weight * open_loop_recurrent_loss
             )
             # Per-sample counterpart of ``weighted_policy_loss`` for correct IS weighting.
             per_sample_orig_policy_loss = losses.intermediate_losses.get('per_sample_loss_orig_policy', None)
@@ -1261,6 +1671,41 @@ class UniZeroPolicy(MuZeroPolicy):
                 per_sample_weighted_policy_loss = None
             weighted_total_loss = apply_per_sample_is_weights(weights, losses, per_sample_weighted_policy_loss, total_loss)
         # ===================== END: Target Entropy Regularization Update Logic =====================
+
+        gradient_component_log_dict = {}
+        should_diagnose_gradients = should_run_periodic_monitor(
+            train_iter,
+            int(self._cfg.gradient_diagnostic_freq),
+            self._last_gradient_diagnostic_iter,
+        )
+        if should_diagnose_gradients:
+            per_sample_policy = (
+                per_sample_weighted_policy_loss
+                if per_sample_weighted_policy_loss is not None
+                else losses.intermediate_losses.get('per_sample_loss_policy')
+            )
+            per_sample_components = {
+                'obs': losses.intermediate_losses.get('per_sample_loss_obs'),
+                'reward': losses.intermediate_losses.get('per_sample_loss_rewards'),
+                'value': losses.intermediate_losses.get('per_sample_loss_value'),
+                'policy': per_sample_policy,
+            }
+            component_weights = {
+                'obs': losses.obs_loss_weight,
+                'reward': losses.reward_loss_weight,
+                'value': losses.value_loss_weight,
+                'policy': losses.policy_loss_weight,
+            }
+            loss_components = {
+                name: component_weights[name] * (weights.reshape(-1) * component).mean()
+                for name, component in per_sample_components.items()
+                if component is not None
+            }
+            gradient_component_log_dict = component_gradient_norms(
+                loss_components, self._gradient_diagnostic_module_groups()
+            )
+            gradient_component_log_dict['grad_component/last_check_iter'] = float(train_iter)
+            self._last_gradient_diagnostic_iter = train_iter
 
         # Scale the loss by the number of accumulation steps
         weighted_total_loss = weighted_total_loss / self.accumulation_steps
@@ -1289,12 +1734,19 @@ class UniZeroPolicy(MuZeroPolicy):
             # Bug-fix: previously this block was guarded by `self.use_encoder_clip_annealing`,
             # which made `latent_norm_clip_threshold` a dead config when annealing was disabled.
             # Now the clip fires whenever current_clip_value > 0, regardless of annealing mode.
-            if current_clip_value > 0 and 'obs_embeddings' in losses.intermediate_losses:
+            encoder_clip_applied = False
+            encoder_clip_scale_factor = 1.0
+            encoder_clip_max_latent_norm = 0.0
+            if 'obs_embeddings' in losses.intermediate_losses:
                 obs_embeddings = losses.intermediate_losses['obs_embeddings']
                 if obs_embeddings is not None:
                     max_latent_norm = obs_embeddings.norm(p=2, dim=-1).max()
-                    if max_latent_norm > current_clip_value:
+                    encoder_clip_max_latent_norm = max_latent_norm.item()
+                    if current_clip_value > 0 and max_latent_norm > current_clip_value:
                         scale_factor = current_clip_value / max_latent_norm.item()
+                        encoder_clip_applied = True
+                        encoder_clip_scale_factor = scale_factor
+                        self._encoder_clip_apply_count += 1
                         if train_iter % 1000 == 0:
                             clip_mode = "Annealing" if self.use_encoder_clip_annealing else "Fixed"
                             logging.info(f"[Encoder-Clip {clip_mode}] Iter {train_iter}: Max latent norm {max_latent_norm.item():.2f} > {current_clip_value:.2f}. Scaling by {scale_factor:.4f}.")
@@ -1330,8 +1782,10 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._target_model.encoder_hook.clear_data()
 
             # Clip gradients to prevent exploding gradients
-            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
-                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            total_grad_norm_before_clip_wm, grad_clip_detail_dict = clip_unizero_gradients(
+                self._learn_model.world_model,
+                self._cfg.grad_clip_value,
+                getattr(self._cfg, 'grad_clip_mode', 'global'),
             )
 
             # Synchronize gradients across multiple GPUs if enabled
@@ -1346,6 +1800,20 @@ class UniZeroPolicy(MuZeroPolicy):
                 torch.cuda.empty_cache()
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
+            grad_clip_detail_dict = {}
+
+        grad_clip_log_dict = gradient_clip_metrics(
+            total_grad_norm_before_clip_wm.item(), self._cfg.grad_clip_value
+        )
+        grad_clip_log_dict.update(grad_clip_detail_dict)
+        if should_monitor_norms and total_grad_norm_before_clip_wm.item() > 0:
+            total_norm = total_grad_norm_before_clip_wm.item()
+            for group_name in self._gradient_diagnostic_module_groups():
+                group_norm = norm_log_dict.get(f'grad/{group_name}/_total_norm')
+                if group_norm is not None:
+                    norm_log_dict[f'grad/{group_name}/global_norm_fraction'] = float(
+                        group_norm / total_norm
+                    )
 
         # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
@@ -1389,6 +1857,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'obs_loss': obs_loss.item(),
             'latent_recon_loss': latent_recon_loss.item(),
             'perceptual_loss': perceptual_loss.item(),
+            'open_loop_consistency_loss': open_loop_consistency_loss.item(),
+            'open_loop_recurrent_loss': open_loop_recurrent_loss.item(),
+            'open_loop_recurrent_latent_loss': open_loop_recurrent_latent_loss.item(),
+            'open_loop_recurrent_reward_loss': open_loop_recurrent_reward_loss.item(),
+            'open_loop_recurrent_value_loss': open_loop_recurrent_value_loss.item(),
+            'open_loop_recurrent_policy_loss': open_loop_recurrent_policy_loss.item(),
             'policy_loss': policy_loss.item(),
             'orig_policy_loss': orig_policy_loss.item(),
             'policy_entropy': policy_entropy.item(),
@@ -1426,7 +1900,29 @@ class UniZeroPolicy(MuZeroPolicy):
 
             "current_policy_label_eps":current_policy_label_eps,
         }
+        for metric_name in (
+            'open_loop_latent_mse_mean',
+            'open_loop_latent_mse_first',
+            'open_loop_latent_mse_middle',
+            'open_loop_latent_mse_last',
+            'rolling_teacher_latent_mse_mean',
+            'rolling_teacher_latent_mse_first',
+            'rolling_teacher_latent_mse_middle',
+            'rolling_teacher_latent_mse_last',
+            'teacher_forced_latent_mse_mean',
+            'teacher_forced_latent_mse_first',
+            'rolling_context_ratio',
+            'open_loop_exposure_ratio',
+            'open_loop_total_ratio',
+        ):
+            metric_value = losses.intermediate_losses.get(metric_name)
+            if metric_value is not None:
+                return_log_dict[f'analysis/{metric_name}'] = (
+                    metric_value.item() if isinstance(metric_value, torch.Tensor)
+                    else float(metric_value)
+                )
         return_log_dict.update({
+            'loss/total': weighted_total_loss.item(),
             'loss/weighted_total': weighted_total_loss.item(),
             'loss/obs': obs_loss.item(),
             'loss/reward': reward_loss.item(),
@@ -1442,8 +1938,19 @@ class UniZeroPolicy(MuZeroPolicy):
             'target/transformed_reward': transformed_target_reward.mean().item(),
             'target/transformed_value': transformed_target_value.mean().item(),
             'priority/value': value_priority_np.mean().item(),
+            'priority/mean': float(np.mean(value_priority_np)),
+            'priority/max': float(np.max(value_priority_np)),
+            'priority/valid_ratio': float(
+                np.mean(np.isfinite(value_priority_np) & (value_priority_np > 0))
+            ),
             'lr/world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'lr': self._optimizer_world_model.param_groups[0]['lr'],
             'grad/world_model_total_norm': total_grad_norm_before_clip_wm.item(),
+            'grad_norm': total_grad_norm_before_clip_wm.item(),
+            'weight_decay': max(
+                float(group.get('weight_decay', 0.0))
+                for group in self._optimizer_world_model.param_groups
+            ),
             'memory/current_gpu_gb': current_memory_allocated_gb,
             'memory/max_gpu_gb': max_memory_allocated_gb,
             'collect/epsilon': self._collect_epsilon,
@@ -1451,6 +1958,10 @@ class UniZeroPolicy(MuZeroPolicy):
             'schedule/policy_label_eps': current_policy_label_eps,
         })
         return_log_dict.update(replay_log_dict)
+        return_log_dict.update(self._latest_replay_diagnostic_metrics)
+        return_log_dict.update(value_calibration_log_dict)
+        return_log_dict.update(grad_clip_log_dict)
+        return_log_dict.update(gradient_component_log_dict)
 
         if should_monitor_norms:
             norm_log_dict['stability/last_check_iter'] = float(train_iter)
@@ -1458,6 +1969,13 @@ class UniZeroPolicy(MuZeroPolicy):
             self._last_norm_monitor_iter = train_iter
         if self._latest_norm_log_dict:
             return_log_dict.update(self._latest_norm_log_dict)
+        parameter_group_norms = [
+            float(value) for name, value in self._latest_norm_log_dict.items()
+            if name.startswith('norm/') and name.endswith('/_total_norm')
+        ]
+        if parameter_group_norms:
+            return_log_dict['param_norm'] = float(np.sqrt(np.square(parameter_group_norms).sum()))
+        return_log_dict.update(self._latest_training_pipeline_metrics)
 
         use_enhanced_policy_monitoring = self._cfg.use_enhanced_policy_monitoring
         if use_enhanced_policy_monitoring:
@@ -1509,6 +2027,13 @@ class UniZeroPolicy(MuZeroPolicy):
         if self.use_encoder_clip_annealing:
             return_log_dict['current_encoder_clip_value'] = current_clip_value
             return_log_dict['stability/current_encoder_clip_value'] = current_clip_value
+        return_log_dict.update(encoder_clip_metrics(
+            threshold=current_clip_value,
+            applied=encoder_clip_applied,
+            apply_count=self._encoder_clip_apply_count,
+            scale_factor=encoder_clip_scale_factor,
+            max_latent_norm=encoder_clip_max_latent_norm,
+        ))
 
         if self.use_head_clip and self.head_clip_manager is not None:
             # Add head clip results to log (if any)
@@ -1693,6 +2218,7 @@ class UniZeroPolicy(MuZeroPolicy):
                         distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
                     if np.random.rand() < self._collect_epsilon:
                         action = np.random.choice(legal_actions[i])
                 else:
@@ -1704,6 +2230,12 @@ class UniZeroPolicy(MuZeroPolicy):
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+
+                exploration_metrics = search_exploration_metrics(
+                    np.asarray(policy_logits[i])[legal_actions[i]],
+                    np.asarray(distributions),
+                    self._collect_mcts_temperature,
+                )
 
                 next_latent_state = next_latent_state_with_env[i][action]
 
@@ -1722,6 +2254,10 @@ class UniZeroPolicy(MuZeroPolicy):
                     'predicted_policy_logits': policy_logits[i],
                     'timestep': timestep[i],
                     'predicted_next_text': predicted_next,
+                    'simulation/depth_mean': float(self._mcts_collect.last_search_depth_mean[i]),
+                    'simulation/value_mean': float(value),
+                    'simulation/policy_entropy': float(visit_count_distribution_entropy),
+                    **exploration_metrics,
                 }
                 batch_action.append(action)
 
@@ -1763,6 +2299,12 @@ class UniZeroPolicy(MuZeroPolicy):
             raise NotImplementedError('UniZero policy only supports mcts_ctree=True (C++ tree MCTS).')
 
         self.evaluator_env_num = self._cfg.evaluator_env_num
+        self._eval_cache_env_offset = resolve_eval_cache_env_offset(
+            self._eval_model.world_model.env_num,
+            self.collector_env_num,
+            self.evaluator_env_num,
+            bool(getattr(self._cfg, 'isolate_eval_cache', False)),
+        )
 
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
@@ -1808,8 +2350,9 @@ class UniZeroPolicy(MuZeroPolicy):
             last_obs_batch, last_action_batch = self._select_last_infer_inputs(
                 self.last_batch_obs_eval, self.last_batch_action_eval, ready_env_id, self.evaluator_env_num
             )
+            cache_ready_env_id = [env_id + self._eval_cache_env_offset for env_id in ready_env_id]
             network_output = self._eval_model.initial_inference(
-                last_obs_batch, last_action_batch, data, timestep, ready_env_id=ready_env_id
+                last_obs_batch, last_action_batch, data, timestep, ready_env_id=cache_ready_env_id
             )
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
@@ -1876,6 +2419,57 @@ class UniZeroPolicy(MuZeroPolicy):
 
         return output
 
+    @staticmethod
+    def _interval_env_ids(env_id, current_steps, env_num: int, interval: int) -> List[int]:
+        """Return only environments whose own step counter reached ``interval``.
+
+        The collector invokes ``reset`` after every transition and supplies a
+        per-environment counter.  A global ``world_model.clear_caches()`` here
+        therefore incorrectly discarded the root histories of all other
+        in-flight episodes.
+        """
+        if current_steps is None or interval <= 0:
+            return []
+        if env_id is None:
+            env_ids = list(range(env_num))
+        elif isinstance(env_id, (int, np.integer)):
+            env_ids = [int(env_id)]
+        else:
+            env_ids = [int(value) for value in env_id]
+        if isinstance(current_steps, (list, tuple, np.ndarray, torch.Tensor)):
+            steps = list(current_steps)
+        else:
+            steps = [current_steps] * len(env_ids)
+        if len(steps) == 1 and len(env_ids) > 1:
+            steps *= len(env_ids)
+        return [
+            env_ids[index]
+            for index, step in enumerate(steps[:len(env_ids)])
+            if int(step) > 0 and int(step) % interval == 0
+        ]
+
+    @staticmethod
+    def _clear_env_root_caches(world_model, env_ids: List[int], label: str) -> None:
+        """Clear root/raw-token caches for selected environments only."""
+        if not env_ids:
+            return
+        valid_ids = sorted({int(eid) for eid in env_ids if int(eid) >= 0})
+        if getattr(world_model, 'use_new_cache_manager', False):
+            pools = getattr(getattr(world_model, 'kv_cache_manager', None), 'init_pools', [])
+            for eid in valid_ids:
+                if eid < len(pools):
+                    pools[eid].clear()
+        else:
+            root_pools = getattr(world_model, 'past_kv_cache_init_infer_envs', [])
+            for eid in valid_ids:
+                if eid < len(root_pools):
+                    root_pools[eid].clear()
+        token_pools = getattr(world_model, 'past_token_context_init_infer_envs', [])
+        for eid in valid_ids:
+            if eid < len(token_pools):
+                token_pools[eid].clear()
+        logging.debug('[%s] cleared root KV/raw-token caches for envs=%s', label, valid_ids)
+
     def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
@@ -1890,7 +2484,7 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         # We must handle both single int and list of ints for env_id.
         if env_id is not None:
-            if isinstance(env_id, int):
+            if isinstance(env_id, (int, np.integer)):
                 env_ids_to_reset = [env_id]
             else: # Assumes it's a list
                 env_ids_to_reset = [int(eid) for eid in env_id]
@@ -1935,28 +2529,20 @@ class UniZeroPolicy(MuZeroPolicy):
                         if eid < len(world_model.past_kv_cache_init_infer_envs):
                             world_model.past_kv_cache_init_infer_envs[eid].clear()
                             logging.info(f'>>> [Collector] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                    if hasattr(world_model, 'past_token_context_init_infer_envs') and eid < world_model.env_num:
+                        world_model.past_token_context_init_infer_envs[eid].clear()
                     # =============================================================================
 
-        # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
-        # Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after
-        # every single collected/evaluated segment and making cross-segment cache reuse impossible.
+        # Clear only the selected environment's root cache at its interval.
         clear_interval = int(getattr(self._cfg, 'kv_cache_clear_interval', 2000))
-
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps is not None and clear_interval > 0 and current_steps % clear_interval == 0:
-            logging.debug(f'clear_interval: {clear_interval}')
-
-            # Clear various caches in the collect model's world model
+        envs_to_clear = self._interval_env_ids(
+            env_id, current_steps, self.collector_env_num, clear_interval
+        )
+        if envs_to_clear:
             world_model = self._collect_model.world_model
-            # ==================== Phase 1.5: Use unified clear_caches() method ====================
-            # This automatically handles both old and new cache systems
-            world_model.clear_caches()
-            # ======================================================================================
-
+            self._clear_env_root_caches(world_model, envs_to_clear, 'Collector interval')
             if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-            logging.debug(f'eps_steps_lst[{env_id}]: {current_steps}, collector: collect_model clear()')
 
     def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
@@ -1971,7 +2557,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if env_id is not None:
-            if isinstance(env_id, int):
+            if isinstance(env_id, (int, np.integer)):
                 env_ids_to_reset = [env_id]
             else: # Assumes it's a list
                 env_ids_to_reset = [int(eid) for eid in env_id]
@@ -2011,7 +2597,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # The key condition: `current_steps` is None only on the end-of-episode reset call from the evaluator.
             if current_steps is None:
                 world_model = self._eval_model.world_model
-                for eid in env_ids_to_reset:
+                cache_env_ids = [eid + getattr(self, '_eval_cache_env_offset', 0) for eid in env_ids_to_reset]
+                for eid in cache_env_ids:
                     # ==================== BUG FIX: Refactored Cache Clearing ====================
                     # Clear the specific environment's initial inference cache.
                     if hasattr(world_model, 'use_new_cache_manager') and world_model.use_new_cache_manager:
@@ -2024,39 +2611,38 @@ class UniZeroPolicy(MuZeroPolicy):
                         if eid < len(world_model.past_kv_cache_init_infer_envs):
                             world_model.past_kv_cache_init_infer_envs[eid].clear()
                             logging.info(f'>>> [Evaluator] Cleared KV cache for env_id: {eid} at episode end (OLD system).')
+                    if hasattr(world_model, 'past_token_context_init_infer_envs') and eid < world_model.env_num:
+                        world_model.past_token_context_init_infer_envs[eid].clear()
                     # =============================================================================
 
-                # The recurrent cache is global.
-                # ==================== Phase 1.5: Use unified clear_caches() method ====================
-                # This automatically handles both old and new cache systems
-                world_model.clear_caches()
-                # ======================================================================================
-
+                # The recurrent cache is only scratch space for the current MCTS
+                # search and is safe to clear globally. Do not call clear_caches()
+                # here: that also drops root histories for every still-running
+                # evaluator env whenever just one asynchronous episode ends.
+                if hasattr(world_model, 'use_new_cache_manager') and world_model.use_new_cache_manager:
+                    world_model.kv_cache_manager.clear_recur_cache()
+                else:
+                    world_model.past_kv_cache_recurrent_infer.clear()
+                if hasattr(world_model, 'past_token_context_recurrent_infer'):
+                    world_model.past_token_context_recurrent_infer.clear()
                 world_model.keys_values_wm_list.clear()
                 if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 return
 
-        # Clear the MCTS kv caches once per env per ``kv_cache_clear_interval`` env steps.
-        # Previously this fell back to game_segment_length (e.g. 20), wiping all kv caches after
-        # every single collected/evaluated segment and making cross-segment cache reuse impossible.
+        # Clear only the selected environment's root cache at its interval.
         clear_interval = int(getattr(self._cfg, 'kv_cache_clear_interval', 2000))
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps is not None and clear_interval > 0 and current_steps % clear_interval == 0:
-            logging.debug(f'clear_interval: {clear_interval}')
-
-            # Clear various caches in the eval model's world model
+        envs_to_clear = self._interval_env_ids(
+            env_id, current_steps, self.evaluator_env_num, clear_interval
+        )
+        if envs_to_clear:
             world_model = self._eval_model.world_model
-            # ==================== Phase 1.5: Use unified clear_caches() method ====================
-            # This automatically handles both old and new cache systems
-            world_model.clear_caches()
-            # ======================================================================================
-
+            cache_envs_to_clear = [
+                eid + getattr(self, '_eval_cache_env_offset', 0) for eid in envs_to_clear
+            ]
+            self._clear_env_root_caches(world_model, cache_envs_to_clear, 'Evaluator interval')
             if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-            logging.debug('evaluator: eval_model clear()')
-            logging.debug(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """
@@ -2095,6 +2681,21 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/last_step_loss_rewards',
             'analysis/last_step_loss_obs',
 
+            # ==================== Open-loop / KV-window Diagnostics ====================
+            'analysis/open_loop_latent_mse_mean',
+            'analysis/open_loop_latent_mse_first',
+            'analysis/open_loop_latent_mse_middle',
+            'analysis/open_loop_latent_mse_last',
+            'analysis/rolling_teacher_latent_mse_mean',
+            'analysis/rolling_teacher_latent_mse_first',
+            'analysis/rolling_teacher_latent_mse_middle',
+            'analysis/rolling_teacher_latent_mse_last',
+            'analysis/teacher_forced_latent_mse_mean',
+            'analysis/teacher_forced_latent_mse_first',
+            'analysis/rolling_context_ratio',
+            'analysis/open_loop_exposure_ratio',
+            'analysis/open_loop_total_ratio',
+
             # ==================== System Metrics ====================
             'Current_GPU',
             'Max_GPU',
@@ -2110,6 +2711,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'policy_entropy',
             'latent_recon_loss',
             'perceptual_loss',
+            'open_loop_consistency_loss',
+            'open_loop_recurrent_loss',
+            'open_loop_recurrent_latent_loss',
+            'open_loop_recurrent_reward_loss',
+            'open_loop_recurrent_value_loss',
+            'open_loop_recurrent_policy_loss',
             'target_policy_entropy',
             'reward_loss',
             'value_loss',
@@ -2133,6 +2740,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'adaptive_target_entropy_ratio',
             'alpha_loss',
             'current_encoder_clip_value',
+            'encoder_clip/enabled',
+            'encoder_clip/applied',
+            'encoder_clip/apply_count',
+            'encoder_clip/scale_factor',
+            'encoder_clip/max_latent_norm',
+            'encoder_clip/threshold',
 
             # ==================== Replay / PER Diagnostics ====================
             'replay/is_weight_mean',
@@ -2144,6 +2757,31 @@ class UniZeroPolicy(MuZeroPolicy):
             'replay/value_priority_std',
             'replay/value_priority_min',
             'replay/value_priority_max',
+            'replay/buffer_fill_fraction',
+            'replay/sample_age_fraction_mean',
+            'replay/sample_age_fraction_std',
+            'replay/sample_oldest_quarter_fraction',
+            'replay/sample_newest_quarter_fraction',
+
+            # ==================== Gradient clipping diagnostics ====================
+            'grad/clip_threshold',
+            'grad/clip_applied',
+            'grad/clip_scale',
+            'grad/world_model_post_clip_norm',
+            'grad/clip_encoder_scale',
+            'grad/clip_non_encoder_scale',
+            'grad/encoder_pre_clip_norm',
+            'grad/non_encoder_pre_clip_norm',
+
+            # ==================== Value calibration diagnostics ====================
+            'value_calibration/pred_mean',
+            'value_calibration/pred_std',
+            'value_calibration/target_mean',
+            'value_calibration/target_std',
+            'value_calibration/bias',
+            'value_calibration/mae',
+            'value_calibration/rmse',
+            'value_calibration/correlation',
         ]
 
         # ==================== [NEW] Norm and Intermediate Tensor Monitoring Variables ====================
@@ -2161,6 +2799,8 @@ class UniZeroPolicy(MuZeroPolicy):
             'grad/head_value/_total_norm',
             'grad/head_reward/_total_norm',
             'grad/head_policy/_total_norm',
+            'grad/action_embedding/_total_norm',
+            'grad/head_observation/_total_norm',
 
             # Intermediate tensor x (Transformer output) statistics
             'norm/x_token/mean',
@@ -2228,7 +2868,38 @@ class UniZeroPolicy(MuZeroPolicy):
             'stability/last_check_iter',  # Iteration that produced the cached stability metrics
         ]
 
-        return base_vars + norm_vars+ head_clip_vars + enhanced_policy_vars + stability_vars
+        gradient_groups = (
+            'encoder', 'transformer', 'action_embedding', 'head_observation',
+            'head_reward', 'head_value', 'head_policy'
+        )
+        gradient_component_vars = ['grad_component/last_check_iter']
+        gradient_component_vars.extend(
+            f'grad_component/{component}/{group}'
+            for component in ('obs', 'reward', 'value', 'policy')
+            for group in (*gradient_groups, '_tracked_total_norm')
+        )
+        norm_vars.extend(
+            f'grad/{group}/global_norm_fraction' for group in gradient_groups
+        )
+
+        core_metric_vars = list(DEFAULT_TB_METRIC_FILTER)
+
+        all_vars = (
+            base_vars + norm_vars + head_clip_vars + enhanced_policy_vars
+            + stability_vars + gradient_component_vars + core_metric_vars
+        )
+        # Preserve order while removing aliases that already occur in the legacy surface.
+        all_vars = list(dict.fromkeys(all_vars))
+        if self is None or (
+                not hasattr(self._cfg, 'log_metric') and not hasattr(self._cfg, 'tb_metric_filter')
+        ):
+            return all_vars
+        if not getattr(self._cfg, 'log_metric', False):
+            return []
+        if getattr(self._cfg, 'tb_log_all', False):
+            return all_vars
+        metric_filter = dict(getattr(self._cfg, 'tb_metric_filter', DEFAULT_TB_METRIC_FILTER))
+        return [name for name in all_vars if metric_filter.get(name, False)]
 
 
     def _state_dict_learn(self) -> Dict[str, Any]:
@@ -2297,9 +2968,19 @@ class UniZeroPolicy(MuZeroPolicy):
                 models.append(model)
 
         for model in models:
-            if not self._cfg.model.world_model_cfg.rotary_emb:
-                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
-                model.world_model.precompute_pos_emb_diff_kv()
-            model.world_model.clear_caches()
+            world_model = model.world_model
+            # Position-difference tensors are consumed only by the legacy
+            # approximate K/V rebase path.  Exact reset and raw-token rebuild
+            # discard/rebuild the window instead, so recomputing these tensors
+            # after every learning epoch is pure overhead.
+            if (
+                not self._cfg.model.world_model_cfg.rotary_emb
+                and not world_model.exact_kv_window_reset
+                and not world_model.rebuild_kv_window_from_tokens
+            ):
+                world_model.precompute_pos_emb_diff_kv()
+            # All inference caches contain projections made with the old model
+            # weights and must still be invalidated after learning.
+            world_model.clear_caches()
         if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
             torch.cuda.empty_cache()

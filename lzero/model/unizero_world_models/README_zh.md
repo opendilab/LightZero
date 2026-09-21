@@ -1,80 +1,129 @@
-## UniZero 世界模型中的位置编码
+# UniZero 世界模型
 
-本节详细介绍了 UniZero 世界模型中所采用的位置编码策略，并就两种可配置选项进行了说明，其选择依据为配置参数 `self.config.rotary_emb` 的取值情况。
+本目录实现 UniZero 使用的 latent Transformer 世界模型。模型将 observation 编码为
+latent token，并根据交错的 observation/action 历史预测下一 latent、reward、policy
+和 value。
 
-> **配置选项：**
-> - 当 `self.config.rotary_emb = False` 时，采用 **绝对位置编码** （基于 `nn.Embedding`）。
-> - 当 `self.config.rotary_emb = True` 时，采用 **相对位置编码** （基于 ROPE）。
+## 模型结构
 
----
+标准 Atari 配置中，一个 transition 使用两个 token：
 
-### 1. 绝对位置编码（基于 `nn.Embedding`）
+```text
+[observation latent, action, observation latent, action, ...]
+```
 
-当配置参数 `self.config.rotary_emb` 为 **False** 时，模型使用 `nn.Embedding` 进行位置编码，其实现流程包括以下步骤：
+主要组件包括：
 
-#### 1.1 Embedding 层初始化
+- `Tokenizer`：将 observation 编码为 latent observation token；
+- `Transformer`：对 observation/action token 执行 causal attention；
+- prediction heads：预测下一 latent、reward、policy 和 value；
+- KV cache：在采集、评估和 MCTS 中复用 Transformer 历史。
 
-- **初始化：**  
-  利用 `nn.Embedding` 初始化位置嵌入层，将序列中每个位置索引映射为固定尺寸的嵌入向量。
+`world_model.py` 负责核心模型与推理生命周期，其他功能按职责拆分为：
 
-#### 1.2 上下文长度的限制
+- `cache_window.py`：精确重建 KV 窗口的公共原语；
+- `reanalysis_context.py`：replay root 历史重建及 contextual policy/value 计算；
+- `open_loop.py`：open-loop 诊断和辅助训练目标；
+- `world_model_multitask.py`：多任务扩展。
 
-- **kv_cache 管理：**  
-  由于受限于上下文长度（`context_length`），模型在缓存键值对（kv_cache）时只保留最近的 `<context_length>` 步，以保证计算效率与内存消耗处于可控范围内。
+## 训练与推理
 
-#### 1.3 位置嵌入的矫正
+训练使用 teacher-forced observation/action 序列。Replay reanalysis 的 target 路径
+会计算全部 `H+1` 个 observation root，包括真实 bootstrap 状态 `s[t+H]`；普通
+learner 训练仍保留原来的 `H` 步计算，因为最后的占位 target 会被丢弃。
 
-在复用 kv_cache 时，直接使用历史位置向量会带来索引重复或错误问题，从而引发模型对序列位置信息的混淆。为解决这一问题，引入位置嵌入矫正机制。
+在线推理只保留 `context_length` 个 token 的有界上下文。KV cache 按环境隔离，异步
+episode reset 不会清空其他环境的历史。当同一 batch 内有效历史长度不同时，cache
+使用左 padding，并通过 attention mask 排除 padding，避免其影响预测。
 
-- **问题描述：**  
-  假设推理过程中总步数计算为 `5 * 2 = 10`，则初始 kv_cache 的位置索引为：  
-  `0, 1, 2, 3, 4, 5, 6, 7, 8, 9`  
-  
-  当新的数据到来时，需移除 kv_cache 的前 2 步，此时剩余索引为：  
-  `2, 3, 4, 5, 6, 7, 8, 9`  
-  
-  若直接拼接，可能导致索引重复或错误，例如：  
-  `2, 3, 4, 5, 6, 7, 8, 9, 8, 9`
+## 位置编码与 KV 窗口
 
-- **矫正方案：**  
-  为避免上述问题，模型会对 kv_cache 中的位置索引进行重置，将其重新标定为连续的序列，例如：  
-  `0, 1, 2, 3, 4, 5, 6, 7`
+目前支持两种位置编码：
 
-该机制有效地模拟了相对位置编码的效果，从而确保位置嵌入在复用过程中不会累积误差。
+- `rotary_emb=False`：learned absolute position embedding；
+- `rotary_emb=True`：根据 episode position 对 attention query/key 应用 RoPE。
 
----
+learned-absolute KV 窗口不能通过累加位置投影差来精确平移，因为缓存的 K/V 非线性
+依赖完整隐状态上下文。因此目前提供三种窗口行为：
 
-### 2. 相对位置编码（基于 ROPE）
+| 配置 | 行为 |
+| --- | --- |
+| `rebuild_kv_window_from_tokens=True` | 同步保存有界的原始 embedded token，并通过重放精确重建滚动窗口。 |
+| `exact_kv_window_reset=True` | 只从最新 latent 重建；适合诊断，但会有意丢弃更早历史。 |
+| 两者均为 `False` | 使用 legacy 位置差修正路径，以兼容旧实验。 |
 
-当配置参数 `self.config.rotary_emb` 为 **True** 时，模型采用 ROPE（Rotary Position Embedding）进行位置编码。ROPE 的主要特点和实现流程如下：
+两种重建模式互斥。Raw-token 重建只用于 learned absolute position，与 RoPE 同时启用
+会直接报错。发生窗口溢出时，所有相关样本会通过一次 batched Transformer forward
+完成重建，再复制回各自独立的 cache。
 
-#### 2.1 ROPE 初始化
+RoPE key 在裁剪旧 token 后仍保留原有旋转，因此不需要 learned-position rebasing。
+当前 multitask world model 尚未为每个 root 传递 episode position，所以会明确拒绝
+RoPE，避免静默使用错误位置。
 
-- **预计算频率成分：**  
-  使用提前计算出的频率成分，对查询（Query）和键（Key）的张量施加旋转位置嵌入，将位置信息直接融入自注意力计算中。
+## Replay Reanalysis
 
-#### 2.2 基于剧集时间步的索引方式
+UniZero replay root 不是自包含状态：当前 latent 和 Transformer prefix 共同定义状态。
+当前实现始终保证：
 
-- **索引方式：**  
-  每个位置的索引基于剧集（episode）的时间步进行分配。  
-  例如，在状态 (`s`) 和动作 (`a`) 交替出现的情况下，每个时间步占用两个位置索引。  
-  假设一局游戏总共 50 步，其状态和动作依次为：  
-  `(s₁, a₁, s₂, a₂, ..., s₅₀, a₅₀)`  
-  
-  则对应的位置索引为：  
-  `1, 2, 3, 4, ..., 99, 100`
+- value/policy target 与真实 `H+1` observation root 对齐；
+- C++ replay search 按不超过在线环境容量的宽度分块，避免 recurrent cache ring
+  覆写仍在使用的搜索树；
+- 跨 chunk 保持 root 顺序和 episode position 不变。
 
-#### 2.3 ROPE 的原理
+以下两个历史条件功能可选，且默认关闭：
 
-- **理论依据：**  
-  ROPE 的设计灵感来源于论文 [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864)。  
-  该方法不仅通过旋转矩阵对绝对位置进行了编码，还在自注意力计算中直接融入了相对位置信息，从而实现了：
-  - 更高的灵活性（序列长度可以灵活调整）；
-  - 随着相对距离增加而逐渐衰减的 inter-token 依赖；
-  - 能够兼容线性自注意力结构的相对位置编码。
+- `contextual_reanalysis=True`：重建 replay root 的有界 observation/action prefix，
+  并由同一次 prefix forward 同时产生 root policy prior 和 recurrent KV cache。
+- `bootstrap_value_context=True`：使用在线 planning 实际可获得的 rolling replay
+  context 计算 TD bootstrap value。
 
-### 3. 实际表现
+多任务模式在不添加 task token 时，可选择对应 task 的 tokenizer 和 prediction head。
+add/concat/register task token 的精确 raw-context 语义尚未实现，因此会明确报错。
 
-在依赖关系较短的环境（如 Pong、DMC Cartpole-Swingup）中，绝对位置编码和 ROPE 的表现较为相似。  
-但在依赖关系更长的场景中，ROPE 展现出更高的灵活性和扩展性，更适合处理复杂环境中的长距离依赖问题。
+## 可选 Open-loop 诊断与训练
 
+所有 open-loop 功能默认关闭。
+
+设置 `open_loop_diagnostic_freq > 0` 后，会在关闭 dropout 的情况下比较三条路径：
+
+- full teacher forcing；
+- rolling teacher forcing：使用在线窗口，但输入真实后续 latent；
+- open-loop rolling：将预测 latent 继续反喂给模型。
+
+主要比率用于区分滚窗误差与自回归暴露误差：
+
+```text
+rolling_context_ratio    = rolling_teacher_mse / full_teacher_mse
+open_loop_exposure_ratio = open_loop_mse / rolling_teacher_mse
+open_loop_total_ratio    = open_loop_mse / full_teacher_mse
+```
+
+可以二选一启用以下辅助目标：
+
+- `open_loop_consistency_loss_weight > 0`：在短可微 rollout 上监督预测 latent；
+- `open_loop_recurrent_loss_weight > 0`：进一步在每个 action 后监督 reward，并在预测
+  下一状态上监督 policy/value。
+
+`open_loop_consistency_batch_size`、`open_loop_consistency_horizon` 和
+`open_loop_prefix_transitions` 用于控制 rollout 开销与上下文。目前这些路径只支持
+single-task、离散动作、单 observation token、learned absolute position，并要求
+`rebuild_kv_window_from_tokens=True`。
+
+## 默认行为
+
+UniZero policy 的默认值为：
+
+```python
+context_length = 8                 # 四个 observation/action block
+rotary_emb = False
+exact_kv_window_reset = False
+rebuild_kv_window_from_tokens = False
+contextual_reanalysis = False
+bootstrap_value_context = False
+open_loop_consistency_loss_weight = 0.0
+open_loop_recurrent_loss_weight = 0.0
+open_loop_prefix_transitions = 0
+```
+
+环境配置可以为受控实验覆盖这些值。复现默认基线时应保持算法实验项关闭；评估新机制
+时建议一次只改变一个变量。

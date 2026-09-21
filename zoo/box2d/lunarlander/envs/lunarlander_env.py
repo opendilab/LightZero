@@ -25,7 +25,7 @@ class LunarLanderEnv(CartPoleEnv):
 
     config = dict(
         # (str) The gym environment name.
-        env_id="LunarLander-v2",
+        env_id="LunarLander-v3",
         # (bool) If True, save the replay as a gif file.
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
@@ -62,7 +62,7 @@ class LunarLanderEnv(CartPoleEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        # env_id options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
+        # env_id options = {'LunarLander-v3', 'LunarLanderContinuous-v3'}
         self._env_id = cfg.env_id
         self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
@@ -96,8 +96,12 @@ class LunarLanderEnv(CartPoleEnv):
                 self._env = ObsPlusPrevActRewWrapper(self._env)
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
+            # Gymnasium wrappers intentionally no longer forward arbitrary
+            # attributes such as ``reward_range``.  Read it from the base env
+            # so LunarLander-v3 works through the TimeLimit wrapper.
+            reward_range = getattr(self._env.unwrapped, 'reward_range', (-np.inf, np.inf))
             self._reward_space = gym.spaces.Box(
-                low=self._env.reward_range[0], high=self._env.reward_range[1], shape=(1,), dtype=np.float32
+                low=reward_range[0], high=reward_range[1], shape=(1,), dtype=np.float32
             )
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
@@ -131,8 +135,10 @@ class LunarLanderEnv(CartPoleEnv):
         Returns:
             - timestep (:obj:`BaseEnvTimestep`): The timestep information including observation, reward, done flag, and info.
         """
-        if action.shape == (1,):
-            action = action.item()  # 0-dim array
+        # Policy outputs may be either a Python scalar or a one-element array.
+        # Gymnasium's discrete LunarLander accepts the scalar form.
+        if isinstance(action, np.ndarray) and action.size == 1:
+            action = action.item()
         if self._act_scale:
             action = affine_transform(action, min_val=-1, max_val=1)
         if self._save_replay_gif:

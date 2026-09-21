@@ -6,8 +6,8 @@ import traceback
 from datetime import datetime
 
 from easydict import EasyDict
+from zoo.atari.config._atari_unizero_segment_utils import _Tee, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-from zoo.atari.config.atari_unizero_segment_config import _Tee, _safe_run_name
 
 
 def _atari_game_name(env_id):

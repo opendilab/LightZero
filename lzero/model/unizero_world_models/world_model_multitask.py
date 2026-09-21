@@ -50,6 +50,11 @@ class WorldModelMT(WorldModel):
             - config (:obj:`TransformerConfig`): The configuration object for the transformer and world model.
             - tokenizer (:obj:`Tokenizer`): The tokenizer for encoding observations.
         """
+        if getattr(config, 'rotary_emb', False):
+            raise NotImplementedError(
+                'WorldModelMT does not yet propagate per-root episode positions through its '
+                'cache API, so enabling RoPE would assign incorrect cached positions.'
+            )
         super().__init__(config, tokenizer)
         self.tokenizer = tokenizer
         self.config = config
@@ -80,9 +85,6 @@ class WorldModelMT(WorldModel):
             self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
             nn.init.constant_(self.pos_emb.weight, 0.0)  # Initialize with all zeros.
             self.pos_emb.weight.requires_grad = False    # Disable updates.
-
-        # Precompute positional embedding differences for efficient inference.
-        self.precompute_pos_emb_diff_kv()
 
         self.sim_norm = SimNorm(simnorm_dim=self.config.group_size)
 
@@ -225,6 +227,15 @@ class WorldModelMT(WorldModel):
         # Apply weight initialization. The order of initialization is important.
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
         self._initialize_last_layer_mt()
+        # This must run after the MT transformer and its final weights exist.
+        # Computing it earlier used projections from the temporary single-task
+        # transformer constructed by ``super().__init__``.
+        if (
+            not self.config.rotary_emb
+            and not self.exact_kv_window_reset
+            and not self.rebuild_kv_window_from_tokens
+        ):
+            self.precompute_pos_emb_diff_kv()
 
         # --- Cache and State Initialization ---
         self._initialize_cache_structures()
@@ -235,9 +246,11 @@ class WorldModelMT(WorldModel):
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
-        #  Initially set to game_segment_length to ensure all KVs in self.shared_pool_init_infer are valid.
-        # TODO: Critical. This should be changed to match segment_length.
-        self.shared_pool_size_init = int(self.config.game_segment_length)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
+        # Match the single-task cache ownership invariant: one MCTS search may
+        # materialize up to ``num_simulations`` distinct root entries per env.
+        # A game-segment-sized ring (often 20 for Atari) wraps during a 50-simulation
+        # search and can overwrite entries that the same search still references.
+        self.shared_pool_size_init = self._initial_cache_pool_size(self.config)
 
         self.shared_pool_size_recur = int(self.num_simulations*self.env_num)
         self.shared_pool_recur_infer = [None] * self.shared_pool_size_recur
@@ -344,7 +357,7 @@ class WorldModelMT(WorldModel):
         if norm_layer:
             modules.append(norm_layer)
         return Head(
-            max_blocks=self.config.max_blocks,
+            max_blocks=self.config.max_blocks + 1,
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
@@ -359,7 +372,7 @@ class WorldModelMT(WorldModel):
         if norm_layer:
             modules.append(norm_layer)
         return Head(
-            max_blocks=self.config.max_blocks,
+            max_blocks=self.config.max_blocks + 1,
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
@@ -396,7 +409,7 @@ class WorldModelMT(WorldModel):
         if norm_layer:
             modules.append(norm_layer)
         return Head(
-            max_blocks=self.config.max_blocks,
+            max_blocks=self.config.max_blocks + 1,
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
@@ -470,6 +483,17 @@ class WorldModelMT(WorldModel):
         self.length_largethan_maxminus7_context_cnt = 0
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
+        self.kv_padding_total_batches = 0
+        self.kv_padding_unequal_batches = 0
+        self.kv_padding_total_samples = 0
+        self.kv_padding_padded_samples = 0
+        self.kv_padding_token_count = 0
+        self.kv_padding_max_tokens = 0
+        self.exact_kv_reset_batches = 0
+        self.exact_kv_reset_samples = 0
+        self.reanalysis_root_seed_count = 0
+        self.reanalysis_root_seed_hit_count = 0
+        self._reanalysis_seeded_root_keys = set()
 
     def _initialize_transformer_keys_values(self) -> None:
         """Initializes empty key-value cache structures for the transformer."""
@@ -568,9 +592,6 @@ class WorldModelMT(WorldModel):
         if kvcache_independent:
             prev_steps = torch.tensor([0 if past_keys_values is None else past_kv.size for past_kv in past_keys_values], device=self.device)
 
-        if is_init_infer:
-            valid_context_lengths = None
-
         # --- Branch 1: Inference Phase (Collect/Eval) - Process observation embeddings ---
         if 'obs_embeddings' in obs_embeddings_or_act_tokens:
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
@@ -638,13 +659,10 @@ class WorldModelMT(WorldModel):
             logits_policy = self.head_policy_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_value = self.head_value_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
 
-        # ==================== [NEW] Advanced Policy Logits Control ====================
-        # Apply configurable policy logits control to prevent explosion
-        # Multiple methods available: hard, soft_tanh, soft_sigmoid, normalize_max, etc.
-        self.use_policy_logits_clip=True # TODO
+        # Respect the configured policy-logits control.  This used to be forced on
+        # here, silently overriding checkpoints/configs that explicitly disabled it.
         if self.use_policy_logits_clip:
             logits_policy = self._apply_policy_logits_control(logits_policy)
-        # ================================================================================
 
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
 
@@ -672,19 +690,56 @@ class WorldModelMT(WorldModel):
         """
         if kvcache_independent:
             steps_indices = prev_steps.unsqueeze(1) + torch.arange(num_steps, device=embeddings.device)
-            position_embeddings = self.pos_emb(steps_indices)
+            position_embeddings = self._lookup_position_embeddings(steps_indices)
             return embeddings + position_embeddings
         else:
-            if is_init_infer:
+            if is_init_infer and valid_context_lengths is None:
                 # For initial inference, positions are sequential from the previous step count.
                 pos_indices = prev_steps + torch.arange(num_steps, device=self.device)
-                return embeddings + self.pos_emb(pos_indices)
+                return embeddings + self._lookup_position_embeddings(pos_indices)
             else:
                 # For recurrent steps, use valid_context_lengths to get correct positions.
-                valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
-                pos_indices = valid_context_lengths.unsqueeze(1) + torch.arange(num_steps, device=self.device)
-                position_embeddings = self.pos_emb(pos_indices)
+                if valid_context_lengths is None:
+                    valid_context_lengths = self.keys_values_wm_size_list_current
+                valid_context_lengths = torch.as_tensor(
+                    valid_context_lengths, device=self.device, dtype=torch.long
+                ).reshape(-1, 1)
+                pos_indices = valid_context_lengths + torch.arange(num_steps, device=self.device).unsqueeze(0)
+                position_embeddings = self._lookup_position_embeddings(pos_indices)
                 return embeddings + position_embeddings
+
+    def _observation_tokens_without_position(
+        self, obs_embeddings: torch.Tensor, is_init_infer: bool = True
+    ) -> torch.Tensor:
+        """Apply task conditioning while leaving absolute positions unapplied."""
+        if obs_embeddings.ndim == 2:
+            obs_embeddings = obs_embeddings.unsqueeze(1)
+        if self.task_embed_option == "add_task_embed":
+            return obs_embeddings + self.task_embeddings
+        if self.task_embed_option == "concat_task_embed" and is_init_infer and not self.reanalyze_phase:
+            task_embeddings = self.task_embeddings.view(1, 1, -1).expand(
+                obs_embeddings.size(0), obs_embeddings.size(1), -1
+            )
+            return torch.cat((obs_embeddings, task_embeddings), dim=-1)
+        return obs_embeddings
+
+    def _action_tokens_without_position(self, act_tokens: torch.Tensor, task_id: int) -> torch.Tensor:
+        """Embed an inference action and apply the same task conditioning as ``forward``."""
+        if self.continuous_action_space:
+            act_tokens = act_tokens.float()
+            if act_tokens.ndim == 2:
+                act_tokens = act_tokens.unsqueeze(1)
+            act_embeddings = self.act_embedding_table[task_id](act_tokens)
+        else:
+            if act_tokens.ndim == 3:
+                act_tokens = act_tokens.squeeze(1)
+            act_embeddings = self.act_embedding_table(act_tokens)
+        if self.task_embed_option == "concat_task_embed":
+            task_embeddings = self.task_embeddings.view(1, 1, -1).expand(
+                act_embeddings.size(0), act_embeddings.size(1), -1
+            )
+            act_embeddings = torch.cat((act_embeddings, task_embeddings), dim=-1)
+        return act_embeddings
 
     def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens: dict, prev_steps: int, task_id: int = 0) -> Tuple[torch.Tensor, int]:
         """
@@ -699,22 +754,32 @@ class WorldModelMT(WorldModel):
         """
         obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
         if len(obs_embeddings.shape) == 3:
-            obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens, -1)
-
-        num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
+            obs_embeddings = obs_embeddings.contiguous().view(
+                act_tokens.shape[0], -1, self.num_observations_tokens, obs_embeddings.shape[-1]
+            )
         act_tokens = act_tokens.float()
         if len(act_tokens.shape) == 2:
             act_tokens = act_tokens.unsqueeze(-1)
 
         act_embeddings = self.act_embedding_table[task_id](act_tokens)
 
-        B, L, K, E_obs = obs_embeddings.size()
-        obs_act_embeddings = torch.empty(B, L * (K + 1), self.config.embed_dim, device=self.device)
+        B, obs_steps, K, E_obs = obs_embeddings.size()
+        action_steps = act_embeddings.size(1)
+        if obs_steps not in (action_steps, action_steps + 1):
+            raise ValueError(
+                f"Combined sequence requires the number of observation steps ({obs_steps}) to equal the "
+                f"number of action steps ({action_steps}) or exceed it by one."
+            )
+        has_final_observation = obs_steps == action_steps + 1
+        num_steps = action_steps * (K + 1) + (K if has_final_observation else 0)
+        obs_act_embeddings = torch.empty(
+            B, num_steps, self.config.embed_dim, device=self.device, dtype=obs_embeddings.dtype
+        )
 
         if self.task_embed_option == "concat_task_embed":
             task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(B, 1, -1)
 
-        for i in range(L):
+        for i in range(action_steps):
             obs = obs_embeddings[:, i, :, :]
             if self.task_embed_option == "add_task_embed":
                 obs = obs + self.task_embeddings
@@ -728,8 +793,16 @@ class WorldModelMT(WorldModel):
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
+        if has_final_observation:
+            final_obs = obs_embeddings[:, -1, :, :]
+            if self.task_embed_option == "add_task_embed":
+                final_obs = final_obs + self.task_embeddings
+            elif self.task_embed_option == "concat_task_embed":
+                final_obs = torch.cat([final_obs, task_emb_expanded.expand(B, K, -1)], dim=-1)
+            obs_act_embeddings[:, action_steps * (K + 1):, :] = final_obs
+
         pos_indices = prev_steps + torch.arange(num_steps, device=self.device)
-        return obs_act_embeddings + self.pos_emb(pos_indices), num_steps
+        return obs_act_embeddings + self._lookup_position_embeddings(pos_indices), num_steps
 
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens: dict, prev_steps: int, task_id: int = 0) -> Tuple[torch.Tensor, int]:
         """
@@ -744,18 +817,28 @@ class WorldModelMT(WorldModel):
         """
         obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
         if len(obs_embeddings.shape) == 3:
-            obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens, -1)
-
-        num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
+            obs_embeddings = obs_embeddings.contiguous().view(
+                act_tokens.shape[0], -1, self.num_observations_tokens, obs_embeddings.shape[-1]
+            )
         act_embeddings = self.act_embedding_table(act_tokens)
 
-        B, L, K, E_obs = obs_embeddings.size()
-        obs_act_embeddings = torch.empty(B, L * (K + 1), self.config.embed_dim, device=self.device)
+        B, obs_steps, K, E_obs = obs_embeddings.size()
+        action_steps = act_embeddings.size(1)
+        if obs_steps not in (action_steps, action_steps + 1):
+            raise ValueError(
+                f"Combined sequence requires the number of observation steps ({obs_steps}) to equal the "
+                f"number of action steps ({action_steps}) or exceed it by one."
+            )
+        has_final_observation = obs_steps == action_steps + 1
+        num_steps = action_steps * (K + 1) + (K if has_final_observation else 0)
+        obs_act_embeddings = torch.empty(
+            B, num_steps, self.config.embed_dim, device=self.device, dtype=obs_embeddings.dtype
+        )
 
         if self.task_embed_option == "concat_task_embed":
             task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(B, 1, -1)
 
-        for i in range(L):
+        for i in range(action_steps):
             obs = obs_embeddings[:, i, :, :]
             if self.task_embed_option == "add_task_embed":
                 obs = obs + self.task_embeddings
@@ -769,8 +852,16 @@ class WorldModelMT(WorldModel):
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
+        if has_final_observation:
+            final_obs = obs_embeddings[:, -1, :, :]
+            if self.task_embed_option == "add_task_embed":
+                final_obs = final_obs + self.task_embeddings
+            elif self.task_embed_option == "concat_task_embed":
+                final_obs = torch.cat([final_obs, task_emb_expanded.expand(B, K, -1)], dim=-1)
+            obs_act_embeddings[:, action_steps * (K + 1):, :] = final_obs
+
         pos_indices = prev_steps + torch.arange(num_steps, device=self.device)
-        return obs_act_embeddings + self.pos_emb(pos_indices), num_steps
+        return obs_act_embeddings + self._lookup_position_embeddings(pos_indices), num_steps
 
     def _transformer_pass(
         self,
@@ -794,12 +885,22 @@ class WorldModelMT(WorldModel):
         """
         if kvcache_independent:
             x = [
-                self.transformer(sequences[k].unsqueeze(0), past_kv, valid_context_lengths=valid_context_lengths[k].unsqueeze(0))
+                self.transformer(
+                    sequences[k].unsqueeze(0),
+                    past_kv,
+                    valid_context_lengths=valid_context_lengths[k].unsqueeze(0),
+                    task_id=task_id,
+                )
                 for k, past_kv in enumerate(past_keys_values)
             ]
             return torch.cat(x, dim=0)
         else:
-            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+            return self.transformer(
+                sequences,
+                past_keys_values,
+                valid_context_lengths=valid_context_lengths,
+                task_id=task_id,
+            )
 
     @torch.no_grad()
     def reset_for_initial_inference(self, obs_act_dict: dict, task_id: int = 0) -> Tuple[WorldModelOutput, torch.Tensor]:
@@ -892,6 +993,12 @@ class WorldModelMT(WorldModel):
                     # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
+                    if self.rebuild_kv_window_from_tokens:
+                        root_tokens = self._observation_tokens_without_position(current_obs_embeddings)
+                        self.keys_values_wm_token_context_list = [
+                            root_tokens[index].detach()
+                            for index in range(root_tokens.size(0))
+                        ]
                     
                     if self.use_task_embed and self.task_embed_option in ["concat_task_embed", "add_task_embed"]:
                         # Copy and store keys_values_wm for a single environment
@@ -904,12 +1011,20 @@ class WorldModelMT(WorldModel):
                     ready_env_num = current_obs_embeddings.shape[0]
                     self.keys_values_wm_list = []
                     self.keys_values_wm_size_list = []
+                    if self.rebuild_kv_window_from_tokens:
+                        self.keys_values_wm_token_context_list = []
                     for i in range(ready_env_num):
                         # Retrieve latent state for a single environment
                         state_single_env = last_obs_embeddings[i]
-                        # Compute hash value using latent state for a single environment
+                        # Root entries are stored under the task-conditioned
+                        # latent state. Hashing the raw tokenizer output here
+                        # makes every add/concat-task lookup miss.
+                        cache_state = self._observation_tokens_without_position(
+                            state_single_env.unsqueeze(0)
+                        )[0]
                         cache_key = hash_state(
-                            state_single_env.view(-1).cpu().numpy())  # last_obs_embeddings[i] is torch.Tensor
+                            cache_state.reshape(-1).cpu().numpy()
+                        )
 
                         # Retrieve cached value
                         cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
@@ -925,6 +1040,13 @@ class WorldModelMT(WorldModel):
                             # deepcopy is needed because forward modifies matched_value in place
                             self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                             self.keys_values_wm_size_list.append(matched_value.size)
+                            if self.rebuild_kv_window_from_tokens:
+                                token_context = self.past_token_context_init_infer_envs[i].get(cache_key)
+                                if token_context is None:
+                                    raise RuntimeError(
+                                        'Found a multi-task root KV cache without its raw token context.'
+                                    )
+                                self.keys_values_wm_token_context_list.append(token_context.clone())
                         else:
                             # Reset using zero values
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
@@ -933,6 +1055,13 @@ class WorldModelMT(WorldModel):
                                                       is_init_infer=True, task_id=task_id)
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
+                            if self.rebuild_kv_window_from_tokens:
+                                reset_tokens = self._observation_tokens_without_position(
+                                    state_single_env.unsqueeze(0)
+                                )
+                                self.keys_values_wm_token_context_list.append(
+                                    reset_tokens[0].detach()
+                                )
 
                     # Input self.keys_values_wm_list, output self.keys_values_wm
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
@@ -944,20 +1073,53 @@ class WorldModelMT(WorldModel):
                         act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(1)
                     else:
                         act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(-1)
-                    outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm,
-                                              is_init_infer=True, task_id=task_id)
+                    if self.rebuild_kv_window_from_tokens:
+                        self._append_inference_token_context(
+                            self._action_tokens_without_position(act_tokens, task_id)
+                        )
+                    outputs_wm = self.forward(
+                        {'act_tokens': act_tokens},
+                        past_keys_values=self.keys_values_wm,
+                        is_init_infer=True,
+                        valid_context_lengths=self._variable_context_lengths(
+                            self.keys_values_wm_size_list_current
+                        ),
+                        task_id=task_id,
+                    )
+                    self.keys_values_wm_size_list_current = [
+                        size + 1 for size in self.keys_values_wm_size_list_current
+                    ]
 
+                    if self.rebuild_kv_window_from_tokens:
+                        self._append_inference_token_context(
+                            self._observation_tokens_without_position(current_obs_embeddings)
+                        )
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
-                                              past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
+                                              past_keys_values=self.keys_values_wm, is_init_infer=True,
+                                              valid_context_lengths=self._variable_context_lengths(
+                                                  self.keys_values_wm_size_list_current
+                                              ),
+                                              task_id=task_id)
+                    self.keys_values_wm_size_list_current = [
+                        size + 1 for size in self.keys_values_wm_size_list_current
+                    ]
 
                     # Copy and store keys_values_wm for a single environment
                     if self.use_task_embed and self.task_embed_option in ["concat_task_embed", "add_task_embed"]:
                         # Copy and store keys_values_wm for a single environment
-                        self.update_cache_context(self.latent_state, is_init_infer=True)
+                        self.update_cache_context(
+                            self.latent_state,
+                            is_init_infer=True,
+                            valid_context_lengths=self.keys_values_wm_size_list_current,
+                        )
                     else:
                         # import ipdb; ipdb.set_trace()
                         # Copy and store keys_values_wm for a single environment
-                        self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                        self.update_cache_context(
+                            current_obs_embeddings,
+                            is_init_infer=True,
+                            valid_context_lengths=self.keys_values_wm_size_list_current,
+                        )
 
         elif batch_action is not None and current_obs_embeddings is None:
         # elif n > self.env_num and batch_action is not None and current_obs_embeddings is None:
@@ -966,7 +1128,11 @@ class WorldModelMT(WorldModel):
             last_obs_embeddings = last_obs_embeddings.contiguous().view(batch_action.shape[0], -1, num_observations_tokens,
                                                           self.obs_act_embed_dim)  # (BL, K) for unroll_step=1
 
-            last_obs_embeddings = last_obs_embeddings[:, :-1, :]
+            include_final_observation = self.reanalyze_phase
+            if not include_final_observation:
+                # Regular reward/value target construction discards target[:, -1]
+                # before the learner loss. Preserve its historical 2H-token path.
+                last_obs_embeddings = last_obs_embeddings[:, :-1, :]
             batch_action = torch.from_numpy(batch_action).to(last_obs_embeddings.device)
             
             if self.continuous_action_space:
@@ -974,19 +1140,25 @@ class WorldModelMT(WorldModel):
             else:
                 act_tokens = rearrange(batch_action, 'b l -> b l 1')
 
-            # select the last timestep for each sample
-            # This will select the last column while keeping the dimensions unchanged, and the target policy/value in the final step itself is not used.
-            last_steps_act = act_tokens[:, -1:, :]
-            act_tokens = torch.cat((act_tokens, last_steps_act), dim=1)
-
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, task_id=task_id)
-            
-            # select the last timestep for each sample
-            last_steps_value = outputs_wm.logits_value[:, -1:, :]
-            outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps_value), dim=1)
 
-            last_steps_policy = outputs_wm.logits_policy[:, -1:, :]
-            outputs_wm.logits_policy = torch.cat((outputs_wm.logits_policy, last_steps_policy), dim=1)
+            if include_final_observation:
+                expected_target_steps = act_tokens.size(1) + 1
+                if (outputs_wm.logits_value.size(1) != expected_target_steps or
+                        outputs_wm.logits_policy.size(1) != expected_target_steps):
+                    raise RuntimeError(
+                        "UniZero buffer reanalysis must produce one value/policy prediction for every "
+                        f"observation step: expected {expected_target_steps}, "
+                        f"got value={outputs_wm.logits_value.size(1)} "
+                        f"and policy={outputs_wm.logits_policy.size(1)}."
+                    )
+            else:
+                outputs_wm.logits_value = torch.cat(
+                    (outputs_wm.logits_value, outputs_wm.logits_value[:, -1:, :]), dim=1
+                )
+                outputs_wm.logits_policy = torch.cat(
+                    (outputs_wm.logits_policy, outputs_wm.logits_policy[:, -1:, :]), dim=1
+                )
 
             # Reshape your tensors
             # outputs_wm.logits_value.shape (B, H, 101) = (B*H, 101)
@@ -1010,6 +1182,7 @@ class WorldModelMT(WorldModel):
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_for_initial_inference(obs_act_dict, task_id=task_id)
         self.past_kv_cache_recurrent_infer.clear()
+        self.past_token_context_recurrent_infer.clear()
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
@@ -1017,14 +1190,14 @@ class WorldModelMT(WorldModel):
     #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    latent_state_index_in_search_path=[], task_id = 0):
+                                    latent_state_index_in_search_path=None, task_id=0):
         """
         Perform recurrent inference based on the state-action history.
 
         Arguments:
             - state_action_history (:obj:`list`): List containing tuples of state and action history.
             - simulation_index (:obj:`int`, optional): Index of the current simulation. Defaults to 0.
-            - latent_state_index_in_search_path (:obj:`list`, optional): List containing indices of latent states in the search path. Defaults to [].
+            - latent_state_index_in_search_path (:obj:`list`, optional): Indices of latent states in the search path.
         Returns:
             - tuple: A tuple containing output sequence, updated latent state, reward, logits policy, and logits value.
         """
@@ -1065,8 +1238,16 @@ class WorldModelMT(WorldModel):
             # action_token obs_token
             if k == 0:
                 obs_embeddings_or_act_tokens = {'act_tokens': token}
+                if self.rebuild_kv_window_from_tokens:
+                    self._append_inference_token_context(
+                        self._action_tokens_without_position(token, task_id)
+                    )
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
+                if self.rebuild_kv_window_from_tokens:
+                    self._append_inference_token_context(
+                        self._observation_tokens_without_position(token, is_init_infer=False)
+                    )
 
             # Perform forward pass
             outputs_wm = self.forward(
@@ -1074,6 +1255,9 @@ class WorldModelMT(WorldModel):
                 past_keys_values=self.keys_values_wm,
                 kvcache_independent=False,
                 is_init_infer=False,
+                valid_context_lengths=self._variable_context_lengths(
+                    self.keys_values_wm_size_list_current
+                ),
                 task_id = task_id
             )
 
@@ -1102,61 +1286,28 @@ class WorldModelMT(WorldModel):
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
-    def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
-        """
-        Adjusts the key-value cache for each environment to ensure they all have the same size.
-
-        In a multi-environment setting, the key-value cache (kv_cache) for each environment is stored separately.
-        During recurrent inference, the kv_cache sizes may vary across environments. This method pads each kv_cache
-        to match the largest size found among them, facilitating batch processing in the transformer forward pass.
-
-        Arguments:
-            - is_init_infer (:obj:`bool`): Indicates if this is an initial inference. Default is True.
-        Returns:
-            - list: Updated sizes of the key-value caches.
-        """
-        # Find the maximum size among all key-value caches
-        max_size = max(self.keys_values_wm_size_list)
-
-        # Iterate over each layer of the transformer
-        for layer in range(self.num_layers):
-            kv_cache_k_list = []
-            kv_cache_v_list = []
-
-            # Enumerate through each environment's key-value pairs
-            for idx, keys_values in enumerate(self.keys_values_wm_list):
-                k_cache = keys_values[layer]._k_cache._cache
-                v_cache = keys_values[layer]._v_cache._cache
-
-                effective_size = self.keys_values_wm_size_list[idx]
-                pad_size = max_size - effective_size
-
-                # If padding is required, trim the end and pad the beginning of the cache
-                if pad_size > 0:
-                    k_cache_trimmed = k_cache[:, :, :-pad_size, :]
-                    v_cache_trimmed = v_cache[:, :, :-pad_size, :]
-                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
-                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
-                else:
-                    k_cache_padded = k_cache
-                    v_cache_padded = v_cache
-
-                kv_cache_k_list.append(k_cache_padded)
-                kv_cache_v_list.append(v_cache_padded)
-
-            # Stack the caches along a new dimension and remove any extra dimensions
-            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-            self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-
-            # Update the cache size to the maximum size
-            self.keys_values_wm._keys_values[layer]._k_cache._size = max_size
-            self.keys_values_wm._keys_values[layer]._v_cache._size = max_size
-
-        return self.keys_values_wm_size_list
+    def _log_kv_padding_diagnostics(self) -> None:
+        """Preserve the established multi-task cache diagnostic schema."""
+        logging.info(
+            'KV-cache padding diagnostics: unequal_batches=%d/%d (%.4f), '
+            'padded_samples=%d/%d (%.4f), padding_tokens=%d, max_padding=%d, '
+            'root_hits=%d/%d (%.4f)',
+            self.kv_padding_unequal_batches,
+            self.kv_padding_total_batches,
+            self.kv_padding_unequal_batches / self.kv_padding_total_batches,
+            self.kv_padding_padded_samples,
+            self.kv_padding_total_samples,
+            self.kv_padding_padded_samples / self.kv_padding_total_samples,
+            self.kv_padding_token_count,
+            self.kv_padding_max_tokens,
+            self.root_hit_cnt,
+            self.root_total_query_cnt,
+            self.root_hit_cnt / max(self.root_total_query_cnt, 1),
+        )
 
     #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             latent_state_index_in_search_path=[], valid_context_lengths=None):
+                             latent_state_index_in_search_path=None, valid_context_lengths=None):
         """
         Update the cache context with the given latent state.
 
@@ -1170,6 +1321,12 @@ class WorldModelMT(WorldModel):
         if self.context_length <= 2:
             # No context to update if the context length is less than or equal to 2.
             return
+        if self.exact_kv_window_reset or self.rebuild_kv_window_from_tokens:
+            return self._update_cache_context_exact(
+                latent_state,
+                is_init_infer=is_init_infer,
+                valid_context_lengths=valid_context_lengths,
+            )
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
             cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor
@@ -1250,19 +1407,28 @@ class WorldModelMT(WorldModel):
 
                 for layer in range(self.num_layers):
                     # ============ Apply trimming and padding to each layer of kv_cache ============
+                    batched_size = self.keys_values_wm._keys_values[layer]._k_cache._size
+                    effective_size = (
+                        int(valid_context_lengths[i]) if valid_context_lengths is not None else batched_size
+                    )
+                    trim_size = batched_size - effective_size
+                    k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
+                    v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
+                    if trim_size > 0:
+                        k_cache_current = F.pad(
+                            k_cache_current[:, trim_size:, :], (0, 0, 0, trim_size), "constant", 0
+                        )
+                        v_cache_current = F.pad(
+                            v_cache_current[:, trim_size:, :], (0, 0, 0, trim_size), "constant", 0
+                        )
 
-                    if self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)  # Shape torch.Size([2, 100, 512])
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
+                    if effective_size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_current.unsqueeze(0)
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_current.unsqueeze(0)
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = effective_size
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = effective_size
                     else:
                         # import ipdb; ipdb.set_trace()
-
-                        # Assuming cache dimension is [batch_size, num_heads, sequence_length, features]
-                        k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
-                        v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
-
                         # Remove the first 2 steps, keep the last self.context_length-3 steps
                         k_cache_trimmed = k_cache_current[:, 2:context_length - 1, :]
                         v_cache_trimmed = v_cache_current[:, 2:context_length - 1, :]
@@ -1334,6 +1500,71 @@ class WorldModelMT(WorldModel):
                 self.past_kv_cache_recurrent_infer[cache_key] = cache_index
                 self.pool_idx_to_key_map_recur_infer[index_to_write] = cache_key
 
+    def _update_cache_context_exact(
+        self, latent_state: torch.Tensor, is_init_infer: bool, valid_context_lengths=None
+    ) -> None:
+        """Store MT caches while rebuilding every overflowing absolute-position window."""
+        batched_size = self.keys_values_wm._keys_values[0]._k_cache._size
+        effective_sizes = [
+            int(valid_context_lengths[index]) if valid_context_lengths is not None else batched_size
+            for index in range(latent_state.size(0))
+        ] if is_init_infer else list(self.keys_values_wm_size_list_current)
+
+        reset_batch = self._prepare_exact_cache_resets(latent_state, effective_sizes)
+        overflow_offsets = reset_batch.offsets
+        retained_contexts = reset_batch.retained_contexts
+
+        for index, effective_size in enumerate(effective_sizes):
+            cache_key = hash_state(latent_state[index].reshape(-1).cpu().numpy())
+            if index in overflow_offsets:
+                single_cache = self._copy_exact_cache_reset(reset_batch, index)
+            else:
+                single_cache = self.transformer.generate_empty_keys_values(
+                    n=1, max_tokens=self.context_length
+                )
+                padding = batched_size - effective_size
+                for source_layer, destination_layer in zip(
+                    self.keys_values_wm._keys_values, single_cache._keys_values
+                ):
+                    source_k = source_layer._k_cache._cache[index]
+                    source_v = source_layer._v_cache._cache[index]
+                    if padding:
+                        source_k = F.pad(source_k[:, padding:, :], (0, 0, 0, padding))
+                        source_v = F.pad(source_v[:, padding:, :], (0, 0, 0, padding))
+                    destination_layer._k_cache._cache.copy_(source_k.unsqueeze(0))
+                    destination_layer._v_cache._cache.copy_(source_v.unsqueeze(0))
+                    destination_layer._k_cache._size = effective_size
+                    destination_layer._v_cache._size = effective_size
+            self.keys_values_wm_single_env = single_cache
+
+            if is_init_infer:
+                write_index = self.shared_pool_index_init_envs[index]
+                stale_key = self.pool_idx_to_key_map_init_envs[index][write_index]
+                if stale_key is not None:
+                    self.past_kv_cache_init_infer_envs[index].pop(stale_key, None)
+                    self.past_token_context_init_infer_envs[index].pop(stale_key, None)
+                cache_index = self.custom_copy_kv_cache_to_shared_init_envs(single_cache, index)
+                self.past_kv_cache_init_infer_envs[index][cache_key] = cache_index
+                self.pool_idx_to_key_map_init_envs[index][write_index] = cache_key
+            else:
+                write_index = self.shared_pool_index
+                stale_key = self.pool_idx_to_key_map_recur_infer[write_index]
+                if stale_key is not None:
+                    self.past_kv_cache_recurrent_infer.pop(stale_key, None)
+                    self.past_token_context_recurrent_infer.pop(stale_key, None)
+                cache_index = self.custom_copy_kv_cache_to_shared_recur(single_cache)
+                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
+                self.pool_idx_to_key_map_recur_infer[write_index] = cache_key
+
+            if self.rebuild_kv_window_from_tokens:
+                token_context = retained_contexts.get(
+                    index, self.keys_values_wm_token_context_list[index]
+                ).detach().clone()
+                if is_init_infer:
+                    self.past_token_context_init_infer_envs[index][cache_key] = token_context
+                else:
+                    self.past_token_context_recurrent_infer[cache_key] = token_context
+
 
     #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -1352,6 +1583,8 @@ class WorldModelMT(WorldModel):
         Returns:
             - list: Sizes of the key-value caches for each environment.
         """
+        if self.rebuild_kv_window_from_tokens:
+            self.keys_values_wm_token_context_list = []
         for i in range(ready_env_num):
             self.total_query_count += 1
             state_single_env = latent_state[i]  # latent_state[i] is np.array
@@ -1386,17 +1619,32 @@ class WorldModelMT(WorldModel):
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
                 self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                 self.keys_values_wm_size_list.append(matched_value.size)
+                if self.rebuild_kv_window_from_tokens:
+                    token_context = None
+                    if not self.reanalyze_phase:
+                        token_context = self.past_token_context_init_infer_envs[i].get(cache_key)
+                        if token_context is None:
+                            token_context = self.past_token_context_recurrent_infer.get(cache_key)
+                    if token_context is None:
+                        raise RuntimeError(
+                            'Found a multi-task recurrent KV cache without its raw token context.'
+                        )
+                    self.keys_values_wm_token_context_list.append(token_context.clone())
             else:
                 # If no matching cache is found, generate a new one using zero reset
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
                     n=1, max_tokens=self.context_length
                 )
+                state_tensor = torch.as_tensor(state_single_env, device=self.device).unsqueeze(0)
                 self.forward(
-                    {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
+                    {'obs_embeddings': state_tensor},
                     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id
                     )
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
+                if self.rebuild_kv_window_from_tokens:
+                    state_tokens = self._observation_tokens_without_position(state_tensor)
+                    self.keys_values_wm_token_context_list.append(state_tokens[0].detach())
 
         return self.keys_values_wm_size_list
 
@@ -1637,6 +1885,10 @@ class WorldModelMT(WorldModel):
                 kv_cache_dict_env.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
+            for token_contexts in self.past_token_context_init_infer_envs:
+                token_contexts.clear()
+            self.past_token_context_recurrent_infer.clear()
+            self.keys_values_wm_token_context_list.clear()
             torch.cuda.empty_cache()
         else:
             dormant_ratio_encoder = torch.tensor(0.)
@@ -1754,6 +2006,10 @@ class WorldModelMT(WorldModel):
                 kv_cache_dict_env.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
+            for token_contexts in self.past_token_context_init_infer_envs:
+                token_contexts.clear()
+            self.past_token_context_recurrent_infer.clear()
+            self.keys_values_wm_token_context_list.clear()
             torch.cuda.empty_cache()
         else:
             dormant_ratio_transformer = torch.tensor(0.)
@@ -2055,15 +2311,8 @@ class WorldModelMT(WorldModel):
 
     #@profile
     def clear_caches(self):
-        """
-        Clears the caches of the world model.
-        """
-        for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear()
-        self.past_kv_cache_recurrent_infer.clear()
-        self.keys_values_wm_list.clear()
-
-        print(f'rank {self._rank} Cleared {self.__class__.__name__} past_kv_cache.')
+        """Clear legacy/new-manager KV state through the shared implementation."""
+        super().clear_caches()
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

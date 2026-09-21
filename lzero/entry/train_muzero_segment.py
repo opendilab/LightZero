@@ -1,5 +1,7 @@
 import os
+import re
 from functools import partial
+from pathlib import Path
 from typing import Optional, Tuple
 
 import torch
@@ -20,6 +22,58 @@ from tensorboardX import SummaryWriter
 from .utils import calculate_update_per_collect, random_collect
 
 timer = EasyTimer()
+
+_PERIODIC_CHECKPOINT_PATTERN = re.compile(r'^iteration_(\d+)\.pth\.tar$')
+
+
+def _restore_resume_counters(learner, collector, train_iter: int, envstep: int) -> None:
+    """Restore the two counter owners used by training, evaluation, and checkpoints."""
+    if train_iter > 0:
+        learner._last_iter.update(train_iter)
+    if envstep > 0:
+        collector._total_envstep_count = envstep
+        learner.collector_envstep = envstep
+
+
+def _required_replay_transitions(
+        resume_train_iter: int, batch_size: int, resume_buffer_min_transitions: int
+) -> int:
+    """Require a representative replay population after checkpoint-only resume."""
+    if batch_size <= 0:
+        raise ValueError(f'batch_size must be positive, got {batch_size}')
+    if resume_buffer_min_transitions < 0:
+        raise ValueError(
+            f'resume_buffer_min_transitions must be non-negative, got {resume_buffer_min_transitions}'
+        )
+    one_full_batch = batch_size + 1
+    if resume_train_iter <= 0:
+        return one_full_batch
+    return max(one_full_batch, resume_buffer_min_transitions)
+
+
+def _prune_periodic_checkpoints(exp_name: str, keep_last: int) -> list:
+    """Keep iteration zero and the newest positive-iteration recovery checkpoints."""
+    if keep_last < 0:
+        raise ValueError(f'periodic_ckpt_keep_last must be non-negative, got {keep_last}')
+    if keep_last == 0:
+        return []
+    checkpoint_dir = Path(exp_name) / 'ckpt'
+    if not checkpoint_dir.is_dir():
+        return []
+    checkpoints = []
+    for path in checkpoint_dir.iterdir():
+        match = _PERIODIC_CHECKPOINT_PATTERN.fullmatch(path.name)
+        if match is not None and path.is_file() and int(match.group(1)) > 0:
+            checkpoints.append((int(match.group(1)), path))
+    removed = []
+    for iteration, path in sorted(checkpoints)[:-keep_last]:
+        try:
+            path.unlink()
+        except OSError as error:
+            logging.warning('Failed to remove stale checkpoint iteration=%d (%s): %s', iteration, path, error)
+            continue
+        removed.append(str(path))
+    return removed
 
 
 def train_muzero_segment(
@@ -69,7 +123,11 @@ def train_muzero_segment(
     else:
         cfg.policy.device = 'cpu'
 
-    cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    # The launcher already creates a unique per-run directory.  Reuse it instead of appending a
+    # timestamp merely because it exists; this keeps logs and resume provenance at the declared path.
+    cfg = compile_config(
+        cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True, renew_dir=False
+    )
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
@@ -84,9 +142,22 @@ def train_muzero_segment(
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
-    # load pretrained model
+    # Load a learner checkpoint or raw model weights.
+    resume_train_iter, resume_envstep = 0, 0
     if model_path is not None:
-        policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
+        checkpoint = torch.load(model_path, map_location=cfg.policy.device)
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            resume_train_iter = checkpoint.get('last_iter', 0)
+            resume_envstep = checkpoint.get('last_step', 0)
+            policy.learn_mode.load_state_dict(checkpoint)
+        else:
+            policy._learn_model.load_state_dict(checkpoint)
+        logging.info(
+            'Loaded model from %s (resume_train_iter=%d, resume_envstep=%d)',
+            model_path,
+            resume_train_iter,
+            resume_envstep,
+        )
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -117,6 +188,8 @@ def train_muzero_segment(
         policy_config=policy_config
     )
 
+    _restore_resume_counters(learner, collector, resume_train_iter, resume_envstep)
+
     # ==============================================================
     # Main loop
     # ==============================================================
@@ -131,6 +204,16 @@ def train_muzero_segment(
     # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+    required_replay_transitions = _required_replay_transitions(
+        resume_train_iter,
+        batch_size,
+        int(getattr(cfg.policy, 'resume_buffer_min_transitions', 0)),
+    )
+    if resume_train_iter > 0 and required_replay_transitions > batch_size + 1:
+        logging.info(
+            'Resume replay warmup: collect at least %d transitions before learner updates.',
+            required_replay_transitions,
+        )
     if cfg.policy.eval_offline:
         eval_train_iter_list = []
         eval_train_envstep_list = []
@@ -141,6 +224,9 @@ def train_muzero_segment(
     buffer_reanalyze_count = 0
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+    periodic_ckpt_keep_last = int(getattr(cfg.policy, 'periodic_ckpt_keep_last', 0))
+    if periodic_ckpt_keep_last < 0:
+        raise ValueError(f'periodic_ckpt_keep_last must be non-negative, got {periodic_ckpt_keep_last}')
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -214,12 +300,12 @@ def train_muzero_segment(
                     logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
 
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
+            if replay_buffer.get_num_of_transitions() >= required_replay_transitions:
                 train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, '
+                    f'batch_size: {batch_size}, required_transitions: {required_replay_transitions}, '
                     f'{replay_buffer} '
                     f'continue to collect now ....'
                 )
@@ -232,6 +318,8 @@ def train_muzero_segment(
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         train_epoch += 1
+        if periodic_ckpt_keep_last > 0 and get_rank() == 0:
+            _prune_periodic_checkpoints(cfg.exp_name, periodic_ckpt_keep_last)
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             if cfg.policy.eval_offline:

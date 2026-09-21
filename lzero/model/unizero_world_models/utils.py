@@ -260,11 +260,19 @@ class LossWithIntermediateLosses:
     Arguments:
         - latent_recon_loss_weight (float): The weight for the latent reconstruction loss.
         - perceptual_loss_weight (float): The weight for the perceptual loss.
+        - open_loop_consistency_loss_weight (float): The weight for the optional differentiable
+          autoregressive latent-rollout loss.
+        - open_loop_recurrent_loss_weight (float): The weight for the optional MuZero-style
+          latent/reward/value/policy loss evaluated on recursively predicted states.
         - **kwargs: The intermediate losses to store.
     Returns:
         - None
     """
-    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, continuous_action_space=False, **kwargs):
+    def __init__(
+            self, latent_recon_loss_weight=0, perceptual_loss_weight=0,
+            open_loop_consistency_loss_weight=0, open_loop_recurrent_loss_weight=0,
+            continuous_action_space=False, **kwargs
+    ):
         # Ensure that kwargs is not empty
         if not kwargs:
             raise ValueError("At least one loss must be provided")
@@ -290,6 +298,8 @@ class LossWithIntermediateLosses:
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
+        self.open_loop_consistency_loss_weight = open_loop_consistency_loss_weight
+        self.open_loop_recurrent_loss_weight = open_loop_recurrent_loss_weight
 
         # Initialize the total loss tensor on the correct device
         self.loss_total = torch.tensor(0., device=device)
@@ -308,11 +318,57 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.latent_recon_loss_weight * v
             elif k == 'perceptual_loss':
                 self.loss_total += self.perceptual_loss_weight * v
+            elif k == 'open_loop_consistency_loss':
+                self.loss_total += self.open_loop_consistency_loss_weight * v
+            elif k == 'open_loop_recurrent_loss':
+                self.loss_total += self.open_loop_recurrent_loss_weight * v
 
         self.intermediate_losses = {
             k: v if isinstance(v, dict) or isinstance(v, np.ndarray) or isinstance(v, torch.Tensor) else (v if isinstance(v, float) else v.item())
             for k, v in kwargs.items()
         }
+
+    def set_loss_weights(
+            self,
+            *,
+            obs_loss_weight=None,
+            reward_loss_weight=None,
+            value_loss_weight=None,
+            policy_loss_weight=None,
+    ):
+        """Apply policy-level loss weights and rebuild the scalar objective.
+
+        Historically UniZero used hard-coded ``10 / 1 / 0.5 / 1`` weights in
+        this container, which silently ignored the policy configuration (in
+        particular ``value_loss_weight``).  Keeping the recomputation here
+        preserves the existing per-sample loss API used by PER while making
+        the configured recipe authoritative.
+        """
+        for name, value in (
+                ('obs_loss_weight', obs_loss_weight),
+                ('reward_loss_weight', reward_loss_weight),
+                ('value_loss_weight', value_loss_weight),
+                ('policy_loss_weight', policy_loss_weight),
+        ):
+            if value is not None:
+                setattr(self, name, float(value))
+
+        self.loss_total = self.loss_total.new_zeros(())
+        component_weights = {
+            'loss_obs': self.obs_loss_weight,
+            'loss_rewards': self.reward_loss_weight,
+            'loss_value': self.value_loss_weight,
+            'loss_policy': self.policy_loss_weight,
+            'loss_ends': self.ends_loss_weight,
+            'latent_recon_loss': self.latent_recon_loss_weight,
+            'perceptual_loss': self.perceptual_loss_weight,
+            'open_loop_consistency_loss': self.open_loop_consistency_loss_weight,
+            'open_loop_recurrent_loss': self.open_loop_recurrent_loss_weight,
+        }
+        for name, weight in component_weights.items():
+            value = self.intermediate_losses.get(name)
+            if value is not None:
+                self.loss_total = self.loss_total + weight * value
 
     def __truediv__(self, value):
         for k, v in self.intermediate_losses.items():

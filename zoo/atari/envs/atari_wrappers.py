@@ -25,8 +25,11 @@ def _atari_make_kwargs(config: EasyDict) -> dict:
     sixteen-frame interval.  Keep action repeat owned by exactly one layer.
     """
     kwargs = {
-        'render_mode': 'human' if config.render_mode_human else 'rgb_array',
-        'full_action_space': config.full_action_space,
+        # Older LightZero Atari configs predate these optional fields. Match
+        # Gymnasium/ALE defaults instead of making the frame-skip compatibility
+        # layer reject otherwise valid legacy configs during ``reset``.
+        'render_mode': 'human' if getattr(config, 'render_mode_human', False) else 'rgb_array',
+        'full_action_space': bool(getattr(config, 'full_action_space', False)),
     }
     if str(config.env_id).startswith('ALE/'):
         kwargs.update(frameskip=1, repeat_action_probability=0.0)
@@ -41,6 +44,22 @@ def _strip_gymnasium_reset_info(observation):
         else:
             break
     return observation
+
+
+def _validate_ale_base_semantics(env) -> None:
+    """Fail loudly if an ALE registry ignored LightZero's single-owner action repeat."""
+    actual_kwargs = getattr(getattr(env, 'spec', None), 'kwargs', None) or {}
+    expected = {'frameskip': 1, 'repeat_action_probability': 0.0}
+    mismatches = {
+        name: (actual_kwargs.get(name), value)
+        for name, value in expected.items()
+        if actual_kwargs.get(name) != value
+    }
+    if mismatches:
+        raise RuntimeError(
+            'ALE base environment does not match LightZero action-repeat semantics: '
+            f'{mismatches}; registry kwargs={actual_kwargs!r}'
+        )
 
 
 # only for reference now
@@ -150,9 +169,7 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     # MaxAndSkipWrapper below is the sole owner of action repeat/max-pooling.
     env = gymnasium.make(config.env_id, **_atari_make_kwargs(config))
     if str(config.env_id).startswith('ALE/'):
-        actual_kwargs = env.spec.kwargs
-        assert actual_kwargs.get('frameskip') == 1, actual_kwargs
-        assert actual_kwargs.get('repeat_action_probability') == 0.0, actual_kwargs
+        _validate_ale_base_semantics(env)
         logging.info(
             "LightZero Atari semantics: env=%s, base_frameskip=1, outer_frameskip=%s, "
             "repeat_action_probability=0.0",
@@ -185,7 +202,20 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
 
     if config.warp_frame:
         # we must set WarpFrame before ScaledFloatFrameWrapper
-        env = WarpFrame(env, width=config.observation_shape[1], height=config.observation_shape[2], grayscale=config.gray_scale)
+        observation_shape = getattr(config, 'observation_shape', None)
+        if observation_shape is None:
+            observation_shape = getattr(config, 'obs_shape', None)
+        if observation_shape is None or len(observation_shape) < 3:
+            raise ValueError(
+                'Atari warp_frame requires observation_shape or legacy obs_shape '
+                f'with at least three dimensions, got {observation_shape!r}.'
+            )
+        env = WarpFrame(
+            env,
+            width=observation_shape[1],
+            height=observation_shape[2],
+            grayscale=config.gray_scale,
+        )
     if config.scale:
         env = ScaledFloatFrameWrapper(env)
     if clip_rewards:

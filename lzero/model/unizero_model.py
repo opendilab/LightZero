@@ -20,6 +20,12 @@ from .vit import ViT, ViTConfig
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroModel')
 class UniZeroModel(nn.Module):
+    # Subclasses may replace the world model while keeping UniZero's encoders
+    # and tokenizer construction unchanged.
+    world_model_cls = WorldModel
+
+    def _build_world_model(self, world_model_cfg, tokenizer):
+        return self.world_model_cls(config=world_model_cfg, tokenizer=tokenizer)
 
     def __init__(
             self,
@@ -92,7 +98,7 @@ class UniZeroModel(nn.Module):
             self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = self._build_world_model(world_model_cfg, self.tokenizer)
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             logging.info('==' * 20)
             logging.info(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
@@ -148,8 +154,10 @@ class UniZeroModel(nn.Module):
                 encoder_option=encoder_option,
                 decoder_network_tokenizer=self.decoder_network_tokenizer,
                 projection=projection,
+                encoder_option=kwargs['encoder_option']
             )
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = self._build_world_model(world_model_cfg, self.tokenizer)
+
 
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             logging.info('==' * 20)
@@ -214,7 +222,7 @@ class UniZeroModel(nn.Module):
                     obs_type=world_model_cfg.obs_type
                 )
 
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = self._build_world_model(world_model_cfg, self.tokenizer)
             logging.info(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             logging.info('==' * 20)
             logging.info(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
@@ -245,7 +253,7 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook.setup_hooks(self.representation_network)
 
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder=self.decoder_network, obs_type=world_model_cfg.obs_type)
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = self._build_world_model(world_model_cfg, self.tokenizer)
 
 
 

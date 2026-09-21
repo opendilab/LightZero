@@ -1,5 +1,5 @@
-from typing import Tuple, List
-import random
+from typing import List, Tuple
+
 import torch
 import torch.nn as nn
 
@@ -51,11 +51,30 @@ class RandomCrop(nn.Module):
             - output (:obj:`torch.Tensor`): The output image tensor with shape (B, C, H_, W_), where H_ and W_ are \
                 the target image shape indicated by `image_shape`.
         """
+        if x.ndim != 4:
+            raise ValueError(f"RandomCrop expects a 4D BCHW tensor, got shape {tuple(x.shape)}")
+
+        batch_size = x.shape[0]
         H, W = x.shape[2:]
         H_, W_ = self.image_shape
         dh, dw = H - H_, W - W_
-        h, w = random.randint(0, dh), random.randint(0, dw)
-        return x[..., h:h + H_, w:w + W_]
+        if dh < 0 or dw < 0:
+            raise ValueError(
+                f"RandomCrop target {self.image_shape} is larger than input spatial shape {(H, W)}"
+            )
+        if batch_size == 0:
+            return x[..., :H_, :W_]
+
+        # Draw a different crop for every replay sample.  The previous
+        # implementation drew one Python-random offset for the whole batch,
+        # correlating all augmented samples and also perturbing the global
+        # Python RNG used by other training components.  torch RNG keeps the
+        # transform reproducible under torch.manual_seed and on x.device.
+        h = torch.randint(dh + 1, (batch_size,), device=x.device)
+        w = torch.randint(dw + 1, (batch_size,), device=x.device)
+        patches = x.unfold(2, H_, 1).unfold(3, W_, 1)
+        batch_indices = torch.arange(batch_size, device=x.device)
+        return patches[batch_indices, :, h, w]
 
 
 class ImageTransforms(object):
