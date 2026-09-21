@@ -22,8 +22,24 @@ from .reanalysis_context import ReanalysisContextMixin
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import (LossWithIntermediateLosses, WorldModelOutput, hash_state,
-                    init_weights)
+from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
+from .hf_transformer import HuggingfaceQwenTransformer
+from collections import OrderedDict 
+logging.getLogger().setLevel(logging.DEBUG)
+
+from collections import OrderedDict, defaultdict
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from sklearn.manifold import TSNE
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import os
+import datetime
+import torch
+import torch.nn as nn
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -68,7 +84,13 @@ class WorldModel(
         self.config = config
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
 
-        self.transformer = Transformer(self.config)
+        if getattr(self.config, 'use_qwen_backbone', False):
+            self.transformer = HuggingfaceQwenTransformer.from_pretrained(
+                self.config,
+                self.config.pretrained_path,
+            )
+        else:
+            self.transformer = Transformer(self.config)
         self.task_num = 1
         self.env_num = self.config.env_num
         if self.config.device == 'cpu':
@@ -87,7 +109,8 @@ class WorldModel(
         # Initialize patterns for block masks
         self._initialize_patterns()
 
-        self.hidden_size = config.embed_dim // config.num_heads
+        self.hidden_size = getattr(config, 'hidden_size', config.embed_dim // config.num_heads)
+        config['hidden_size'] = self.hidden_size
 
         # Position embedding
         if not self.config.rotary_emb:
@@ -126,6 +149,9 @@ class WorldModel(
         else:
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+
+        # Apply weight initialization, the order is important
+        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
 
         self.head_dict = {}
         for name, module in self.named_children():
@@ -519,6 +545,7 @@ class WorldModel(
         src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
 
         if self.shared_pool_wm[self.shared_pool_index_wm] is None:
+            # import ipdb; ipdb.set_trace()
             self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
                 src_kv_shape[0],  # Number of elements (n)
                 src_kv_shape[1],  # Number of attention heads (num_heads)
@@ -532,7 +559,10 @@ class WorldModel(
 
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
             # Copy the key and value caches using torch.copy_() for efficient data transfer
+            # try:
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            # except Exception as e:
+            #     import ipdb; ipdb.set_trace()
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
             dst_layer._v_cache._size = src_layer._v_cache._size
@@ -1024,15 +1054,20 @@ class WorldModel(
          Returns:
          - torch.Tensor: The positional embedding tensor.
          """
-        attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
-        if torch.cuda.is_available():
-            return attn_func(self.pos_emb.weight).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).to(self.device).detach()
+        if getattr(self.config, 'use_qwen_backbone', False):
+            positional_embedding = self.transformer._get_positional_embedding(layer, attn_type, self.pos_emb)
+            positional_embedding = positional_embedding.view(
+                1, self.config.max_tokens, self.num_heads, self.hidden_size
+            )
         else:
-            return attn_func(self.pos_emb.weight).view(
+            attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
+            positional_embedding = attn_func(self.pos_emb.weight).view(
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).detach()
+            )
+        if torch.cuda.is_available():
+            return positional_embedding.transpose(1, 2).to(self.device).detach()
+        else:
+            return positional_embedding.transpose(1, 2).detach()
 
     @staticmethod
     def _flatten_reanalysis_positions(start_pos, append_terminal: bool = False):
@@ -1118,7 +1153,31 @@ class WorldModel(
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
             num_steps = obs_embeddings.size(1)
-            
+
+            # [FIX] Check for edge case where num_steps is 0
+            if num_steps == 0:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"[ZERO_STEPS_ERROR] obs_embeddings has size(1)=0. "
+                    f"Shape: {obs_embeddings.shape}, is_init_infer: {is_init_infer}, "
+                    f"kvcache_independent: {kvcache_independent}. "
+                    f"This usually indicates an issue in the KV cache or latent state extraction. "
+                    f"Returning dummy outputs with correct shapes."
+                )
+                # Return outputs with shape [batch, 1, ...] to allow squeeze(1) to work
+                # Important: logits_value and logits_rewards need support_size dimension
+                batch_size = obs_embeddings.shape[0]
+                support_size = self.config.support_size
+                return WorldModelOutput(
+                    torch.zeros(batch_size, 1, self.config.embed_dim, device=self.device),
+                    torch.zeros(batch_size, 1, self.num_observations_tokens, device=self.device),
+                    torch.zeros(batch_size, 1, support_size, device=self.device),  # logits_rewards
+                    None,  # logits_ends
+                    torch.zeros(batch_size, 1, self.config.action_space_size, device=self.device),  # logits_policy
+                    torch.zeros(batch_size, 1, support_size, device=self.device),  # logits_value
+                )
+
             if not self.config.rotary_emb:
                 # Add traditional position embeddings if not using rotary embeddings.
                 sequences = self._add_position_embeddings(
@@ -1180,6 +1239,17 @@ class WorldModel(
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
+                # [FIX] Clamp action tokens to valid range to prevent CUDA assertion
+                # Action tokens must be in range [0, action_space_size-1]
+                if act_tokens.max() >= self.config.action_space_size or act_tokens.min() < 0:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"[ACTION_TOKEN_CLAMP] Invalid action tokens detected: "
+                        f"min={act_tokens.min().item()}, max={act_tokens.max().item()}, "
+                        f"action_space_size={self.config.action_space_size}. Clamping to valid range."
+                    )
+                    act_tokens = torch.clamp(act_tokens, 0, self.config.action_space_size - 1)
             # Convert action tokens to embeddings using the action embedding table.
             act_embeddings = self.act_embedding_table(act_tokens)
             if not self.config.rotary_emb:
@@ -1563,6 +1633,9 @@ class WorldModel(
         Returns:
             - torch.FloatTensor: The outputs from the world model.
         """
+        # [FIX] Initialize outputs_wm to avoid UnboundLocalError if neither branch is taken
+        outputs_wm = None
+
         n, num_observations_tokens, _ = last_obs_embeddings.shape
 
         if current_obs_embeddings is not None:
@@ -1808,6 +1881,14 @@ class WorldModel(
             # outputs_wm.logits_value.shape (B, H, 101) = (B*H, 101)
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
+        else:
+            # [FIX] Handle unexpected case where neither branch is taken
+            raise ValueError(
+                f"Unexpected state in wm_forward_for_initial_infererence: "
+                f"n={n}, env_num={self.env_num}, "
+                f"batch_action={'None' if batch_action is None else 'provided'}, "
+                f"current_obs_embeddings={'None' if current_obs_embeddings is None else 'provided'}"
+            )
 
         return outputs_wm
 
@@ -1886,6 +1967,12 @@ class WorldModel(
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
         self.keys_values_wm_size_list_current = self.keys_values_wm_size_list
 
+        # [FIX] Clamp BEFORE using in forward pass to prevent index overflow
+        self.keys_values_wm_size_list_current = [
+            min(i, self.config.max_tokens - 1)
+            for i in self.keys_values_wm_size_list_current
+        ]
+
         for k in range(2):
             # action_token obs_token
             if k == 0:
@@ -1915,7 +2002,13 @@ class WorldModel(
                 search_depth=search_depth # List containing depth of latent states in the search tree. 
             )
 
-            self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
+            # [FIX] Clamp KV cache size to prevent exceeding max_tokens
+            # This prevents CUDA assertion errors in position embedding access
+            # During MCTS simulation, KV cache can accumulate beyond max_tokens
+            self.keys_values_wm_size_list_current = [
+                min(i + 1, self.config.max_tokens - 1)
+                for i in self.keys_values_wm_size_list_current
+            ]
 
             if k == 0:
                 reward = outputs_wm.logits_rewards  # (B,)
@@ -2135,10 +2228,13 @@ class WorldModel(
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
                     # Update size of self.keys_values_wm_single_env
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = \
-                        self.keys_values_wm_size_list_current[i]
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = \
-                        self.keys_values_wm_size_list_current[i]
+                    # [FIX] Clamp size to prevent exceeding max_tokens
+                    safe_cache_size = min(
+                        max(0, self.keys_values_wm_size_list_current[i]),
+                        self.config.max_tokens - 1
+                    )
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = safe_cache_size
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = safe_cache_size
 
                     # ============ NOTE: Very Important ============
                     if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length - 1:
@@ -2490,6 +2586,7 @@ class WorldModel(
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
         start_pos = batch['timestep']
+        
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 

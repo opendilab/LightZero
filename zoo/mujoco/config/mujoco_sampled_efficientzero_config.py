@@ -1,7 +1,9 @@
 from easydict import EasyDict
 
 # options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
-env_id = 'Hopper-v3'
+# env_id = 'Hopper-v3'
+env_id = 'Ant-v3'
+
 
 if env_id == 'Hopper-v3':
     action_space_size = 3

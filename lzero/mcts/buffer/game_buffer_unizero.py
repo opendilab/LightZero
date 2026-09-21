@@ -1028,6 +1028,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             value_numpy= value_numpy * np.array(value_mask)
             value_list = value_numpy.tolist()
+            
             horizon_id, value_index = 0, 0
 
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,

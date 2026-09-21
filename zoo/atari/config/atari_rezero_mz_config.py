@@ -33,6 +33,9 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # # TODO: only for debug
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
     ),
     policy=dict(
         model=dict(

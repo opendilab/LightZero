@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_muzero import mz_tree as mz_ctree
     from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as gmz_ctree
 
+from line_profiler import line_profiler
 
 class UniZeroMCTSCtree(object):
     """
