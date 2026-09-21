@@ -267,14 +267,6 @@
             <span class="n">game_segment</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span><span class="p">[</span><span class="n">game_segment_idx</span><span class="p">]</span>
 
             <span class="n">game_segment_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
-
-            <span class="c1"># print(f'len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}')</span>
-            <span class="c1"># print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')</span>
-
-            <span class="c1"># In the reanalysis phase, `pos_in_game_segment` should be a multiple of `num_unroll_steps`.</span>
-            <span class="c1"># Indices exceeding `game_segment_length` are padded with the next segment and are not updated</span>
-            <span class="c1"># in the current implementation. Therefore, we need to sample `pos_in_game_segment` within</span>
-            <span class="c1"># [0, game_segment_length - num_unroll_steps] to avoid padded data.</span>
             
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">'varied_action_space'</span><span class="p">:</span>
                 <span class="c1"># For varied action space environments (e.g., board games with short game length like TicTacToe)</span>

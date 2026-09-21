@@ -881,7 +881,27 @@
                         <span class="n">distributions</span> <span class="o">=</span> <span class="n">child_visit</span><span class="p">[</span><span class="n">current_index</span><span class="p">]</span>
                         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">'fixed_action_space'</span><span class="p">:</span>
                             <span class="c1"># for atari/classic_control/box2d environments that only have one player.</span>
-                            <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
+                            <span class="c1"># [FIX] Ensure distributions is padded/truncated to policy_shape</span>
+                            <span class="c1"># Issue: distributions may have variable length (e.g., different valid actions)</span>
+                            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">distributions</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                                <span class="n">distributions</span> <span class="o">=</span> <span class="n">distributions</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+                            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span> <span class="o">==</span> <span class="n">policy_shape</span><span class="p">:</span>
+                                <span class="c1"># Perfect match, use as is</span>
+                                <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
+                            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">policy_shape</span><span class="p">:</span>
+                                <span class="c1"># Pad with zeros</span>
+                                <span class="n">policy_tmp</span> <span class="o">=</span> <span class="n">distributions</span> <span class="o">+</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">policy_shape</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">distributions</span><span class="p">))</span>
+                                <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy_tmp</span><span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="c1"># Truncate (should not happen, but handle gracefully)</span>
+                                <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+                                <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                                    <span class="sa">f</span><span class="s2">"[POLICY_SHAPE_MISMATCH] distributions length (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span><span class="si">}</span><span class="s2">) "</span>
+                                    <span class="sa">f</span><span class="s2">"&gt; policy_shape (</span><span class="si">{</span><span class="n">policy_shape</span><span class="si">}</span><span class="s2">). Truncating."</span>
+                                <span class="p">)</span>
+                                <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">distributions</span><span class="p">[:</span><span class="n">policy_shape</span><span class="p">])</span>
                         <span class="k">else</span><span class="p">:</span>
                             <span class="c1"># for board games that have two players or envs that have varied action space.</span>
                             <span class="n">policy_tmp</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">policy_shape</span><span class="p">)]</span>
