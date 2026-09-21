@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-import gym
+import gymnasium
 import numpy as np
 from easydict import EasyDict
 
@@ -54,9 +54,9 @@ def test_invalid_ale_registry_semantics_raise_even_with_python_optimized():
 
 
 def test_outer_macro_action_advances_exactly_four_frames_and_sums_rewards():
-    class _CountingEnv(gym.Env):
-        observation_space = gym.spaces.Box(0, 255, shape=(2, 2, 1), dtype=np.uint8)
-        action_space = gym.spaces.Discrete(2)
+    class _CountingEnv(gymnasium.Env):
+        observation_space = gymnasium.spaces.Box(0, 255, shape=(2, 2, 1), dtype=np.uint8)
+        action_space = gymnasium.spaces.Discrete(2)
 
         def __init__(self):
             self.frames = 0
