@@ -1,5 +1,8 @@
 import copy
+import importlib
+import sys
 from collections import namedtuple
+from pathlib import Path
 from typing import List, Dict, Tuple
 
 import numpy as np
@@ -14,6 +17,20 @@ from easydict import EasyDict
 from torch.nn import KLDivLoss
 
 from lzero.policy import configure_optimizers
+
+
+def _load_gumbel_alphazero_ctree():
+    build_dir = Path(__file__).resolve().parents[1] / 'mcts' / 'ctree' / 'ctree_gumbel_alphazero' / 'build'
+    build_dir_str = str(build_dir)
+    if build_dir_str not in sys.path:
+        sys.path.insert(0, build_dir_str)
+    try:
+        return importlib.import_module('mcts_gumbel_alphazero')
+    except ImportError as error:
+        make_script = build_dir.parent / 'make.sh'
+        raise ImportError(
+            f'Unable to import the Gumbel AlphaZero C++ tree. Build it first with: {make_script}'
+        ) from error
 
 
 @POLICY_REGISTRY.register('gumbel_alphazero')
@@ -248,18 +265,13 @@ class GumbelAlphaZeroPolicy(Policy):
 
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
-            import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_gumbel_alphazero/build')  # TODO: change this path to your own path
-            import mcts_gumbel_alphazero
-            self._collect_mcts = mcts_gumbel_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
-                                                            self._cfg.mcts.pb_c_base,
-                                                            self._cfg.mcts.pb_c_init,
-                                                            self._cfg.mcts.root_dirichlet_alpha,
-                                                            self._cfg.mcts.root_noise_weight,
-                                                            self._cfg.mcts.maxvisit_init, self._cfg.mcts.value_scale,
-                                                            self._cfg.mcts.gumbel_scale, self._cfg.mcts.gumbel_rng,
-                                                            self._cfg.mcts.max_num_considered_actions,
-                                                            self.simulate_env)
+            mcts_gumbel_alphazero = _load_gumbel_alphazero_ctree()
+            self._collect_mcts = mcts_gumbel_alphazero.MCTS(
+                self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations, self._cfg.mcts.pb_c_base,
+                self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha, self._cfg.mcts.root_noise_weight,
+                self._cfg.mcts.maxvisit_init, self._cfg.mcts.value_scale, self._cfg.mcts.gumbel_scale,
+                self._cfg.mcts.gumbel_rng, self._cfg.mcts.max_num_considered_actions, self.simulate_env
+            )
         else:
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS
@@ -321,16 +333,13 @@ class GumbelAlphaZeroPolicy(Policy):
         self._get_simulation_env()
         # TODO(pu): use double num_simulations for evaluation
         if self._cfg.mcts_ctree:
-            import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_gumbel_alphazero/build')  # TODO: change this path to your own path
-            import mcts_gumbel_alphazero
-            self._eval_mcts = mcts_gumbel_alphazero.MCTS(self._cfg.mcts.max_moves, 2 * self._cfg.mcts.num_simulations,
-                                                         self._cfg.mcts.pb_c_base,
-                                                         self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
-                                                         self._cfg.mcts.root_noise_weight,
-                                                         self._cfg.mcts.maxvisit_init, self._cfg.mcts.value_scale,
-                                                         self._cfg.mcts.gumbel_scale, self._cfg.mcts.gumbel_rng,
-                                                         self._cfg.mcts.max_num_considered_actions, self.simulate_env)
+            mcts_gumbel_alphazero = _load_gumbel_alphazero_ctree()
+            self._eval_mcts = mcts_gumbel_alphazero.MCTS(
+                self._cfg.mcts.max_moves, 2 * self._cfg.mcts.num_simulations, self._cfg.mcts.pb_c_base,
+                self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha, self._cfg.mcts.root_noise_weight,
+                self._cfg.mcts.maxvisit_init, self._cfg.mcts.value_scale, self._cfg.mcts.gumbel_scale,
+                self._cfg.mcts.gumbel_rng, self._cfg.mcts.max_num_considered_actions, self.simulate_env
+            )
         else:
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS

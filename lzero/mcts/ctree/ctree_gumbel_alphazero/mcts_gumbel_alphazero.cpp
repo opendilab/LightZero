@@ -6,9 +6,13 @@
 // The following lines include the necessary headers to facilitate the implementation of the MCTS algorithm.
 
 #include "node_gumbel_alphazero.h"
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <random>
+#include <stdexcept>
 #include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -34,6 +38,7 @@ class MCTS {
     float gumbel_scale;
     float gumbel_rng;
     int max_num_considered_actions;
+    std::mt19937 random_engine;
     std::vector<float> gumbel;
     py::object simulate_env;
 
@@ -54,7 +59,8 @@ public:
           maxvisit_init(maxvisit_init), value_scale(value_scale),
           gumbel_scale(gumbel_scale), gumbel_rng(gumbel_rng),
           max_num_considered_actions(max_num_considered_actions),  // parameters for gumbel alphazero
-          gumbel(_generate_gumbel(gumbel_scale, gumbel_rng, 36)),  //simulate_env.attr("action_space").attr("n").cast<int>())),
+          random_engine(static_cast<std::uint32_t>(gumbel_rng)),
+          gumbel(),
           simulate_env(simulate_env) {}
 
     // Methods: get_next_action，_simulate，_select_child，_expand_leaf_node，_ucb_score，_add_exploration_noise
@@ -77,13 +83,12 @@ public:
         actions.push_back(kv.first);
     }
 
-    std::default_random_engine generator;
     std::gamma_distribution<double> distribution(root_dirichlet_alpha, 1.0);
 
     std::vector<double> noise;
     double sum = 0;
     for (size_t i = 0; i < actions.size(); ++i) {
-        double sample = distribution(generator);
+        double sample = distribution(random_engine);
         noise.push_back(sample);
         sum += sample;
     }
@@ -100,11 +105,14 @@ public:
 }
     // This function generates Gumbel noise for the MCTS algorithm.
     std::vector<float> _generate_gumbel(float gumbel_scale, float gumbel_rng, int shape) {
+        (void)gumbel_rng;  // Kept in the Python API for backward compatibility; the constructor seeds random_engine.
+        if (shape < 0) {
+            throw std::invalid_argument("Gumbel shape must be non-negative");
+        }
         std::vector<float> gumbel;
-        std::mt19937 gen(static_cast<unsigned int>(gumbel_rng));
         std::extreme_value_distribution<float> dis(0, 1);
         for (int i = 0; i < shape; i++) {
-            gumbel.push_back(gumbel_scale * dis(gen));
+            gumbel.push_back(gumbel_scale * dis(random_engine));
         }
         return gumbel;
     }
@@ -143,7 +151,7 @@ public:
 
     // Gumbel related code
     // add different children node select function
-    std::pair<int, Node*> _select_root_child(Node* node, py::object simulate_env) {
+    std::pair<int, Node*> _select_root_child(Node* node, py::object /*simulate_env*/) {
         std::vector<Node*> child_tmp_list;
         std::vector<int> action_list;
         std::vector<int> visit_count_list;
@@ -156,14 +164,22 @@ public:
             visit_count_list.push_back(child_tmp->visit_count);
         }
 
+        if (action_list.empty()) {
+            throw std::runtime_error("Cannot select a root child from an empty node");
+        }
+
         // get mixed q value of child nodes
         std::vector<float> completed_qvalues = _qtransform_completed_by_mix_value(node, child_tmp_list);
-        // get table of considered_visits
-        std::vector<std::vector<int> > table_of_considered_visits = get_table_of_considered_visits(max_num_considered_actions, num_simulations);
 
         // get number of actions
-        int num_actions = action_list.size();
-        int num_considered = std::min(max_num_considered_actions, num_simulations);
+        const int num_actions = static_cast<int>(action_list.size());
+        const int num_considered = std::min({max_num_considered_actions, num_simulations, num_actions});
+        if (num_considered <= 0) {
+            throw std::runtime_error("max_num_considered_actions and num_simulations must be positive");
+        }
+        // get table of considered_visits
+        std::vector<std::vector<int> > table_of_considered_visits =
+            get_table_of_considered_visits(num_considered, num_simulations);
         // get the sum of visit counts of each action
         int simulation_index = std::accumulate(visit_count_list.begin(), visit_count_list.end(), 0);
         int considered_visit = table_of_considered_visits[num_considered][simulation_index];
@@ -178,16 +194,22 @@ public:
             }
         }
 
-        return std::make_pair(action, node->children[action]);
+        return std::make_pair(action, node->children.at(action));
     }
 
     // select interior child
-    std::pair<int, Node*> _select_interior_child(Node* node, py::object simulate_env){
+    std::pair<int, Node*> _select_interior_child(Node* node, py::object /*simulate_env*/){
+        if (node->children.empty()) {
+            throw std::runtime_error("Cannot select an interior child from an empty node");
+        }
+
         // get visit_count and prior for each node
         std::vector<int> visit_counts;
         std::vector<float> priors;
         std::vector<Node*> children;
+        std::vector<int> actions;
         for (const auto& kv : node->children) {
+            actions.push_back(kv.first);
             visit_counts.push_back(kv.second->visit_count);
             priors.push_back(kv.second->prior_p);
             children.push_back(kv.second);
@@ -196,8 +218,8 @@ public:
         std::vector<float> completed_value = _qtransform_completed_by_mix_value(node, children);
         // get probs
         std::vector<double> probs;
-        for (int i = 0; i < visit_counts.size(); i++) {
-            probs.push_back(priors[i] + completed_value[i]);
+        for (std::size_t i = 0; i < visit_counts.size(); i++) {
+            probs.push_back(std::log(std::max(static_cast<double>(priors[i]), 1e-12)) + completed_value[i]);
         }
         // softmax probs
         std::vector<double> probs_softmax = softmax(probs, 1);
@@ -205,51 +227,24 @@ public:
         int sum_visit_count = std::accumulate(visit_counts.begin(), visit_counts.end(), 0);
         // get to_argmax
         std::vector<float> to_argmax;
-        for (int i = 0; i < visit_counts.size(); i++) {
-            to_argmax.push_back(probs[i] - (float)visit_counts[i]/(float)(1+sum_visit_count));
+        for (std::size_t i = 0; i < visit_counts.size(); i++) {
+            to_argmax.push_back(
+                static_cast<float>(probs_softmax[i]) -
+                static_cast<float>(visit_counts[i]) / static_cast<float>(1 + sum_visit_count)
+            );
         }
 
-        // Check if node->children is empty
-        if (node->children.empty()) {
-            // Return default value or throw exception as needed
-            std::cout << "node->children is empty" << std::endl;
-            return std::make_pair(-1, nullptr);
-        }
-
-        // Find the action with the maximum score
+        // to_argmax is indexed by child position, not by the raw action id.
         float argmax = -std::numeric_limits<float>::infinity();
-        int action = -1;
-        for (const auto& kv : node->children) {
-            int action_tmp = kv.first;
-            Node* child_tmp = kv.second;
-            if (to_argmax[action_tmp] > argmax) {
-                argmax = to_argmax[action_tmp];
-                action = action_tmp;
+        std::size_t best_index = 0;
+        for (std::size_t i = 0; i < to_argmax.size(); ++i) {
+            if (to_argmax[i] > argmax) {
+                argmax = to_argmax[i];
+                best_index = i;
             }
         }
 
-        // Check if action has been updated
-        if (action == -1) {
-            // If no action is updated, return a random valid action and corresponding node
-            std::cout << "action == -1, selecting a random valid action" << std::endl;
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<> distrib(0, node->children.size() - 1);
-
-            auto it = std::next(std::begin(node->children), distrib(gen));
-            return std::make_pair(it->first, it->second);
-        }
-
-        // Check if action is a valid key
-        auto it = node->children.find(action);
-        if (it != node->children.end()) {
-            // If the action is valid, return it and the corresponding node
-            return std::make_pair(action, it->second);
-        } else {
-            // If not a valid action, return default value or throw exception as needed
-            std::cout << "action is not a valid key" << std::endl;
-            return std::make_pair(-1, nullptr);
-        }
+        return std::make_pair(actions[best_index], children[best_index]);
     }
 
 
@@ -264,8 +259,6 @@ public:
             priors.push_back(child->prior_p);
             visit_counts.push_back(child->visit_count);
         }
-        // softmax priors
-        std::vector<double> priors_softmax = softmax(priors, 1);
         float value = _compute_mixed_value(node->raw_value, qvalues, visit_counts, priors);
 
         // calculate completed_value
@@ -402,20 +395,23 @@ public:
         Outputs:
             - the score of considered visits.
         */
-        float low_logit = -1e9;
+        if (child_list.empty() || child_list.size() != completed_qvalues.size() || child_list.size() != gumbel.size()) {
+            throw std::runtime_error("Gumbel scores, children, and completed Q-values must have the same non-zero size");
+        }
+        const float low_logit = -1e9;
         // get max priors from child_list
         std::vector<float> priors;
         for (const auto& child : child_list) {
-            priors.push_back(child->prior_p);
+            priors.push_back(std::log(std::max(child->prior_p, 1e-12f)));
         }
         float max_prior = *std::max_element(priors.begin(), priors.end());
         // each priors minus max_logits
-        for (int i = 0; i < priors.size(); i++) {
+        for (std::size_t i = 0; i < priors.size(); i++) {
             priors[i] -= max_prior;
         }
         std::vector<float> penalty;
         // if the visit count of child node is equal to considered_visit, add 0 to penalty, else add -infinity
-        for (int i = 0; i < child_list.size(); i++) {
+        for (std::size_t i = 0; i < child_list.size(); i++) {
             if (child_list[i]->visit_count == considered_visit) {
                 penalty.push_back(0);
             } else {
@@ -425,8 +421,10 @@ public:
 
         // calculate the score of considered visits
         std::vector<float> score_considered;
-        for (int i = 0; i < child_list.size(); i++) {
-            score_considered.push_back(std::max(low_logit, gumbel[i] + priors[i] + penalty[i] + completed_qvalues[i]));
+        for (std::size_t i = 0; i < child_list.size(); i++) {
+            score_considered.push_back(
+                std::max(low_logit, gumbel[i] + priors[i] + completed_qvalues[i]) + penalty[i]
+            );
         }
 
         return score_considered;
@@ -497,9 +495,12 @@ public:
         );
 
         _expand_leaf_node(root, simulate_env, policy_forward_fn);
-        if (sample) {
-            _add_exploration_noise(root);
+        if (root->children.empty()) {
+            throw std::runtime_error("The root node has no legal children after expansion");
         }
+        // Gumbel noise replaces AlphaZero's Dirichlet root noise. Draw a fresh vector for
+        // every move and size it to the current legal action set.
+        gumbel = _generate_gumbel(gumbel_scale, gumbel_rng, static_cast<int>(root->children.size()));
 
         for (int n = 0; n < num_simulations; ++n) {
             simulate_env.attr("reset")(
@@ -532,14 +533,17 @@ public:
         std::vector<double> visits_d(visits.begin(), visits.end());
         std::vector<double> action_probs = visit_count_to_action_distribution(visits_d, temperature);
 
+        std::vector<double> improved_probs = _get_improved_policy(root);
+
         int action;
         if (sample) {
-            action = random_choice(actions, action_probs);
+            action = random_choice(actions, improved_probs);
         } else {
-            action = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
+            action = actions[std::distance(
+                improved_probs.begin(), std::max_element(improved_probs.begin(), improved_probs.end())
+            )];
         }
 
-        std::vector<double> improved_probs = _get_improved_policy(root);
         return std::tuple<int, std::vector<double>, std::vector<double>>(action, action_probs, improved_probs);
 
     }
@@ -563,9 +567,9 @@ public:
 
         // calculate probs
         std::vector<double> probs(simulate_env.attr("action_space").attr("n").cast<int>(), infymin);
-        for (int i = 0; i < actions.size(); ++i) {
+        for (std::size_t i = 0; i < actions.size(); ++i) {
             int action = actions[i];
-            probs[action] = priors[i] + completed_value[i];
+            probs[action] = std::log(std::max(priors[i], 1e-12)) + completed_value[i];
         }
 
         // softmax probs
@@ -705,11 +709,12 @@ static std::vector<double> softmax(const std::vector<double>& values, double tem
 
 
 
-    static int random_choice(const std::vector<int>& actions, const std::vector<double>& probs) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
+    int random_choice(const std::vector<int>& actions, const std::vector<double>& probs) {
+        if (actions.size() != probs.size() || actions.empty()) {
+            throw std::invalid_argument("Actions and probabilities must have the same non-zero size");
+        }
         std::discrete_distribution<> d(probs.begin(), probs.end());
-        return actions[d(gen)];
+        return actions[d(random_engine)];
     }
 
 };
