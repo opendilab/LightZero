@@ -263,6 +263,46 @@ class MCTS(object):
         # Return the selected action and the output probability of each action.
         return action, action_probs
 
+    def get_next_actions_batch(
+            self,
+            state_config_for_simulate_env_reset_list: List[Dict[str, Any]],
+            policy_forward_fn_batch: Callable,
+            temperature: float = 1.0,
+            sample: bool = True,
+            env_list: List[Type[BaseEnv]] = None,
+    ) -> List[Tuple[int, List[float]]]:
+        """
+        Overview:
+            Batch-compatible wrapper for the Python AlphaZero MCTS implementation.
+            The Python tree search is still executed sequentially, but this method
+            keeps the public interface aligned with the C++ AlphaZero MCTS.
+        """
+        if env_list is None:
+            env_list = [self.simulate_env for _ in state_config_for_simulate_env_reset_list]
+        assert len(state_config_for_simulate_env_reset_list) == len(env_list)
+
+        results = []
+        original_simulate_env = self.simulate_env
+        try:
+            for state_config, simulate_env in zip(state_config_for_simulate_env_reset_list, env_list):
+                self.simulate_env = simulate_env
+
+                def policy_forward_fn(env):
+                    return policy_forward_fn_batch([env])[0]
+
+                results.append(
+                    self.get_next_action(
+                        state_config_for_simulate_env_reset=state_config,
+                        policy_forward_fn=policy_forward_fn,
+                        temperature=temperature,
+                        sample=sample,
+                    )
+                )
+        finally:
+            self.simulate_env = original_simulate_env
+
+        return results
+
     def _simulate(self, node: Node, simulate_env: Type[BaseEnv], policy_forward_fn: Callable) -> None:
         """
         Overview:
