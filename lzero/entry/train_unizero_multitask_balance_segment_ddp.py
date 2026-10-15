@@ -117,10 +117,10 @@ class CurriculumController:
                 if is_entering_stage1:
                     logging.info("[Curriculum] Entering Stage 1. Freezing non-LoRA parameters in ViT Encoder.")
                     freeze_non_lora_parameters(vit_encoder, freeze=True, verbose=True)
-                log_module_trainable_status(vit_encoder, "ViT Encoder")
+                log_module_trainable_status(vit_encoder, "ViT Encoder", logging.getLogger())
             else:
                 logging.info("[Curriculum] Skipping curriculum stage update for ViT Encoder as per configuration.")
-                log_module_trainable_status(vit_encoder, "ViT Encoder (Curriculum Not Applied)")
+                log_module_trainable_status(vit_encoder, "ViT Encoder (Curriculum Not Applied)", logging.getLogger())
 
             # 2. Always apply to Transformer Decoder
             logging.info(f"[Curriculum] Applying curriculum stage {self.stage} to Transformer Backbone.")
@@ -128,7 +128,7 @@ class CurriculumController:
             if is_entering_stage1:
                 logging.info("[Curriculum] Entering Stage 1. Freezing non-LoRA parameters in Transformer Backbone.")
                 freeze_non_lora_parameters(transformer_backbone, freeze=True, verbose=True)
-            log_module_trainable_status(transformer_backbone, "Transformer Backbone")
+            log_module_trainable_status(transformer_backbone, "Transformer Backbone", logging.getLogger())
 
             logging.info(
                 f'[Curriculum] Switched to stage {self.stage} '
@@ -139,7 +139,7 @@ class CurriculumController:
             updated_params = sum(p.requires_grad for p in self.policy._learn_model.world_model.parameters())
             total_params = sum(1 for _ in self.policy._learn_model.world_model.parameters())
             logging.info(f'{updated_params}/{total_params} parameters in the world model will be optimized.')
-            log_param_statistics(self.policy._learn_model.world_model)
+            log_param_statistics(self.policy._learn_model.world_model, logging.getLogger())
 
             self.last_solved_count = solved_count
             self.last_switch_iter = train_iter
