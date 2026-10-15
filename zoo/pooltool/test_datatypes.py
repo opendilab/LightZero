@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 from zoo.pooltool.datatypes import PoolToolSimulator, Spaces, State
-from gym import spaces
+from gymnasium import spaces
 
 
 @dataclass

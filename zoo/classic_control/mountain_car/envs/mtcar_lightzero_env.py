@@ -1,5 +1,5 @@
 from typing import Any, List, Union, Optional
-import gym
+import gymnasium
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray, to_list
@@ -27,11 +27,11 @@ class MountainCarEnv(BaseEnv):
         self._replay_path = None
 
         # Following specifications from https://is.gd/29S0dt
-        self._observation_space = gym.spaces.Box(
+        self._observation_space = gymnasium.spaces.Box(
             low=np.array([-1.2, -0.07]), high=np.array([0.6, 0.07]), shape=(2, ), dtype=np.float32
         )
-        self._action_space = gym.spaces.Discrete(3, start=0)
-        self._reward_space = gym.spaces.Box(low=-1, high=0.0, shape=(1, ), dtype=np.float32)
+        self._action_space = gymnasium.spaces.Discrete(3, start=0)
+        self._reward_space = gymnasium.spaces.Box(low=-1, high=0.0, shape=(1, ), dtype=np.float32)
         self._timestep = 0
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
@@ -42,29 +42,28 @@ class MountainCarEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         # Instantiate environment if not already done so
         if not self._init_flag:
-            self._env = gym.make('MountainCar-v0')
+            self._env = gymnasium.make('MountainCar-v0', render_mode='rgb_array')
             self._init_flag = True
 
         # Check if we have a valid replay path and save replay video accordingly
         if self._replay_path is not None:
-            self._env = gym.wrappers.RecordVideo(
+            self._env = gymnasium.wrappers.RecordVideo(
                 self._env,
                 video_folder=self._replay_path,
                 episode_trigger=lambda episode_id: True,
                 name_prefix='rl-video-{}'.format(id(self))
             )
 
-        # Set the seeds for randomization.
+        # Set the seeds for randomization and get first observation from original environment.
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
+            obs, _ = self._env.reset(seed=self._seed + np_seed)
             self._action_space.seed(self._seed + np_seed)
         elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
+            obs, _ = self._env.reset(seed=self._seed)
             self._action_space.seed(self._seed)
-
-        # Get first observation from original environment
-        obs = self._env.reset()
+        else:
+            obs, _ = self._env.reset()
 
         # Convert to numpy array as output
         obs = to_ndarray(obs).astype(np.float32)
@@ -86,7 +85,8 @@ class MountainCarEnv(BaseEnv):
         # Extract action as int, 0-dim array
         action = action.squeeze()
         # Take a step of faith into the unknown!
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
 
         # Cummulate reward
         self._eval_episode_return += rew
@@ -122,15 +122,15 @@ class MountainCarEnv(BaseEnv):
         return random_action
 
     @property
-    def observation_space(self) -> gym.spaces.Space:
+    def observation_space(self) -> gymnasium.spaces.Space:
         return self._observation_space
 
     @property
-    def action_space(self) -> gym.spaces.Space:
+    def action_space(self) -> gymnasium.spaces.Space:
         return self._action_space
 
     @property
-    def reward_space(self) -> gym.spaces.Space:
+    def reward_space(self) -> gymnasium.spaces.Space:
         return self._reward_space
 
     def __repr__(self) -> str:

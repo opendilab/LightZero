@@ -1,4 +1,4 @@
-import gym
+import gymnasium
 from easydict import EasyDict
 
 from ding.envs import DingEnvWrapper
@@ -17,7 +17,7 @@ def get_wrappered_env(wrapper_cfg: EasyDict, env_id: str):
     """
     if wrapper_cfg.manually_discretization:
         return lambda: DingEnvWrapper(
-            gym.make(env_id),
+            gymnasium.make(env_id),
             cfg={
                 'env_wrapper': [
                     lambda env: ActionDiscretizationEnvWrapper(env, wrapper_cfg), lambda env:
@@ -27,5 +27,5 @@ def get_wrappered_env(wrapper_cfg: EasyDict, env_id: str):
         )
     else:
         return lambda: DingEnvWrapper(
-            gym.make(env_id), cfg={'env_wrapper': [lambda env: LightZeroEnvWrapper(env, wrapper_cfg)]}
+            gymnasium.make(env_id), cfg={'env_wrapper': [lambda env: LightZeroEnvWrapper(env, wrapper_cfg)]}
         )

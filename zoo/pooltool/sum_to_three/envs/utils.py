@@ -8,7 +8,7 @@ from typing import Dict, Protocol, Tuple
 import pooltool as pt
 from zoo.pooltool.datatypes import State, Bounds
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 from numpy.typing import NDArray
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig
 from enum import Enum
