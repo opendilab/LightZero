@@ -154,7 +154,6 @@ class UniZeroModel(nn.Module):
                 encoder_option=encoder_option,
                 decoder_network_tokenizer=self.decoder_network_tokenizer,
                 projection=projection,
-                encoder_option=kwargs['encoder_option']
             )
             self.world_model = self._build_world_model(world_model_cfg, self.tokenizer)
 
@@ -467,7 +466,7 @@ class UniZeroModel(nn.Module):
         )
 
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index: int = 0,
-                            search_depth: list = None, start_pos: int = 0) -> MZNetworkOutput:
+                            search_depth: list = None, start_pos: int = 0, parent_node_ids=None) -> MZNetworkOutput:
         """
         Overview:
             Performs recurrent inference of the UniZero model. This method concurrently predicts the latent dynamics 
@@ -495,7 +494,7 @@ class UniZeroModel(nn.Module):
 
         # Perform recurrent inference using the world model
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, search_depth, start_pos)
+            state_action_history, simulation_index, search_depth, start_pos, parent_node_ids=parent_node_ids)
 
         # Extract and squeeze the outputs for clarity
         next_latent_state = logits_observations

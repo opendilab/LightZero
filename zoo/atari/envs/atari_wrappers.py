@@ -62,6 +62,16 @@ def _validate_ale_base_semantics(env) -> None:
         )
 
 
+class RawRewardInfoWrapper(gym.Wrapper):
+    """Expose the reward before clipping without changing environment dynamics."""
+
+    def step(self, action):
+        observation, reward, done, info = self.env.step(action)
+        info = dict(info)
+        info['raw_reward'] = float(reward)
+        return observation, reward, done, info
+
+
 # only for reference now
 # Note: If these functions are to be used with new environments, they also need similar gym/gymnasium compatibility modifications.
 def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):
@@ -218,6 +228,7 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         )
     if config.scale:
         env = ScaledFloatFrameWrapper(env)
+    env = RawRewardInfoWrapper(env)
     if clip_rewards:
         env = ClipRewardWrapper(env)
 

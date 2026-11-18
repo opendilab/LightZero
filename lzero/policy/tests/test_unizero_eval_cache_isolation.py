@@ -4,12 +4,31 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+from easydict import EasyDict
 
 from lzero.policy.unizero import (
     UniZeroPolicy,
     augment_unizero_observation_sequence,
     resolve_eval_cache_env_offset,
 )
+
+
+@pytest.mark.parametrize('setting,expected', [(None, True), (True, True), (False, False)])
+def test_eval_tree_ties_support_legacy_compiled_configs_and_explicit_override(setting, expected):
+    policy = object.__new__(UniZeroPolicy)
+    policy._cfg = EasyDict(
+        model=dict(model_type='conv', observation_shape=(3, 64, 64),
+                   value_support_range=(-5, 6, 1), reward_support_range=(-5, 6, 1),
+                   categorical_distribution=True, analysis_sim_norm=False),
+        eval_num_simulations=50, evaluator_env_num=3, device='cpu', mcts_ctree=True,
+    )
+    if setting is not None:
+        policy._cfg.eval_mcts_deterministic = setting
+    policy._model = SimpleNamespace(world_model=SimpleNamespace(env_num=8))
+    policy.collector_env_num = 8
+    policy._init_eval()
+    assert policy._mcts_eval._cfg.deterministic is expected
+    assert policy._mcts_eval._cfg.num_simulations == 50
 
 
 class _FakeCacheManager:
@@ -186,3 +205,23 @@ def test_open_loop_diagnostics_are_registered_for_logging():
         'analysis/open_loop_exposure_ratio',
         'analysis/open_loop_total_ratio',
     } <= monitored
+
+
+def test_monitor_only_reports_metrics_observed_in_learning():
+    policy = object.__new__(UniZeroPolicy)
+    policy.use_head_clip = False
+    policy._cfg = SimpleNamespace(model=SimpleNamespace(analysis_sim_norm=False), log_metric=True, tb_log_all=True)
+    declared = policy._monitor_vars_learn()
+    assert 'eval/mean_return' in declared and 'loss/total' in declared
+    policy._observed_learn_metric_names = {'loss/total', 'grad_norm'}
+    assert set(policy._monitor_vars_learn()) == {'loss/total', 'grad_norm'}
+
+
+def test_monitor_registers_explicitly_requested_measured_metrics():
+    policy = object.__new__(UniZeroPolicy)
+    policy.use_head_clip = False
+    policy._cfg = SimpleNamespace(model=SimpleNamespace(analysis_sim_norm=False), log_metric=True,
+                                 tb_log_all=False, tb_metric_filter={'loss/obs': True, 'schedule/policy_label_eps': True})
+    assert set(policy._monitor_vars_learn()) == {'loss/obs', 'schedule/policy_label_eps'}
+    policy._observed_learn_metric_names = {'loss/obs'}
+    assert policy._monitor_vars_learn() == ['loss/obs']

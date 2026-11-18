@@ -9,6 +9,7 @@ from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
 from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as tree_gumbel_muzero
 from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 from lzero.policy import DiscreteSupport, InverseScalarTransform, to_detach_cpu_numpy
+from lzero.policy.target_smoothing import scalar_decode_smoothing_eps
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ez_ctree
@@ -60,8 +61,12 @@ class UniZeroMCTSCtree(object):
         self._cfg = default_config
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
-        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(
+            self.value_support, self._cfg.model.categorical_distribution,
+            label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'value'))
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(
+            self.reward_support, self._cfg.model.categorical_distribution,
+            label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'reward'))
 
     @classmethod
     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "mz_ctree":
@@ -97,6 +102,9 @@ class UniZeroMCTSCtree(object):
 
             # preparation some constant
             batch_size = roots.num
+            node_cache = bool(getattr(getattr(model, 'world_model', None), 'mcts_cache_by_node', False))
+            if node_cache:
+                model.world_model.begin_mcts_search()
 
             # Store the latent state of each possible action at the MCTS root for each environment.
             first_action_latent_map = {env_id: {} for env_id in range(batch_size)} # {env_id: {action: latent_state}} 
@@ -166,24 +174,27 @@ class UniZeroMCTSCtree(object):
                     )
                 search_depth_sums += search_depth_array
                 search_depth_counts += 1
+                node_kwargs = {'parent_node_ids': list(zip(
+                    latent_state_index_in_search_path, latent_state_index_in_batch
+                ))} if node_cache else {}
                 # print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')
                 if timestep is None:
                     # for UniZero
                     if task_id is not None:
                         # multi task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id, **node_kwargs)
                     else:
                         # single task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, **node_kwargs)
                 else:
                     # for UniZero using RoPE
                     if task_id is not None:
                         # multi task setting
                         # network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id) # TODO: support RoPE
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id, **node_kwargs)
                     else:
                         # single task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, **node_kwargs)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

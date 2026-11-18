@@ -9,6 +9,7 @@ from ding.utils import BUFFER_REGISTRY
 from lzero.mcts.tree_search.mcts_ctree import UniZeroMCTSCtree as MCTSCtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import DiscreteSupport, to_detach_cpu_numpy, concat_output, inverse_scalar_transform
+from lzero.policy.target_smoothing import scalar_decode_smoothing_eps
 from .game_buffer_muzero import MuZeroGameBuffer
 
 if TYPE_CHECKING:
@@ -163,7 +164,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         output.latent_state, output.value, output.policy_logits = to_detach_cpu_numpy(
             [
                 output.latent_state,
-                inverse_scalar_transform(output.value, self.value_support),
+                inverse_scalar_transform(output.value, self.value_support,
+                                         label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'value')),
                 output.policy_logits,
             ]
         )
@@ -982,7 +984,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                         )
                     latent_state_roots = m_output.latent_state
                     legacy_value_numpy = to_detach_cpu_numpy([
-                        inverse_scalar_transform(m_output.value, self.value_support)
+                        inverse_scalar_transform(m_output.value, self.value_support,
+                                                 label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'value'))
                     ])[0]
 
                 if use_contextual_bootstrap:
@@ -1001,7 +1004,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                         root_token_contexts, task_id=self.task_id
                     )
                     value_numpy = to_detach_cpu_numpy([
-                        inverse_scalar_transform(contextual_value_logits, self.value_support)
+                        inverse_scalar_transform(contextual_value_logits, self.value_support,
+                                                 label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'value'))
                     ])[0]
                     if diagnostic_due:
                         self._log_bootstrap_value_context_diagnostics(
