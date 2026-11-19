@@ -431,7 +431,7 @@ class MuZeroPolicy(Policy):
         # calculate dormant ratio of encoder
         if self._cfg.calculate_dormant_ratio:
             self.dormant_ratio_encoder = calculate_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
-                                                           percentage=self._cfg.dormant_threshold)
+                                                           dormant_threshold=self._cfg.dormant_threshold)
         # calculate L2 norm of latent state
         latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()
         # ========= logging for analysis ===============
@@ -502,7 +502,7 @@ class MuZeroPolicy(Policy):
                 state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
                 self.dormant_ratio_dynamics = calculate_dormant_ratio(self._learn_model.dynamics_network,
                                                                 state_action_encoding.detach(),
-                                                                percentage=self._cfg.dormant_threshold)
+                                                                dormant_threshold=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
 
             # transform the scaled value or its categorical representation to its original value,
