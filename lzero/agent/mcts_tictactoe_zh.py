@@ -7,7 +7,6 @@
 评估 MCTS（默认执 X）对随机策略，并保存胜/平/负率曲线：
     python mcts_tictactoe_zh.py --mode evaluate --num-games 100 --seed 0 --no-show
     python mcts_tictactoe_zh.py --mode evaluate --mcts-player O --no-show
-仅绘图需要 matplotlib，可通过 python -m pip install matplotlib 安装。
 
 实现对应 Game、Node、mcts、play_match、evaluate_and_plot 五个教学接口。
 价值 W 统一从 X 的视角记录（X 胜 +1，O 胜 -1，平局 0）；选择时转换到
@@ -268,15 +267,13 @@ def evaluate_and_plot(
     if isinstance(mcts_player, bool) or mcts_player not in (1, -1):
         raise ValueError("mcts_player 必须是 1（X）或 -1（O）")
 
-    # 可选依赖延迟导入：对战与核心搜索只依赖 Python 标准库。
-    try:
-        import matplotlib
-        if not show:
-            matplotlib.use('Agg')
+    import matplotlib
+    from matplotlib import font_manager
+    if show:
         import matplotlib.pyplot as plt
-        from matplotlib import font_manager
-    except ImportError as error:
-        raise ImportError("绘图需要 matplotlib，请运行：python -m pip install matplotlib") from error
+    else:
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        from matplotlib.figure import Figure
 
     preferred_fonts = {
         'Darwin': ['PingFang SC', 'Heiti TC', 'Arial Unicode MS'],
@@ -305,8 +302,14 @@ def evaluate_and_plot(
     settings = {'axes.unicode_minus': False}
     if font:
         settings['font.sans-serif'] = [font]
-    with plt.rc_context(settings):
-        fig, ax = plt.subplots(figsize=(9, 6))
+    with matplotlib.rc_context(settings):
+        if show:
+            fig, ax = plt.subplots(figsize=(9, 6))
+        else:
+            # 独立画布不会切换全局后端，也不会关闭调用方已经打开的图。
+            fig = Figure(figsize=(9, 6))
+            FigureCanvasAgg(fig)
+            ax = fig.subplots()
         try:
             labels = ('MCTS 胜率', '平局率', '随机策略胜率') if font else ('MCTS win', 'Draw', 'Random win')
             for key, label in zip(('wins', 'draws', 'losses'), labels):
@@ -330,7 +333,8 @@ def evaluate_and_plot(
             if show:
                 plt.show()
         finally:
-            plt.close(fig)
+            if show:
+                plt.close(fig)
     return results
 
 
@@ -358,7 +362,11 @@ def main():
         mode = args.mode
         if mode is None:
             print("请选择模式：\n1. 人机对战 (Play)\n2. 算法评估 (Evaluate)")
-            choice = input("请输入选项 (1 或 2，默认 1)：").strip()
+            while True:
+                choice = input("请输入选项 (1 或 2，默认 1)：").strip()
+                if choice in ('', '1', '2'):
+                    break
+                print("无效的选项，请输入 1 或 2。")
             mode = 'evaluate' if choice == '2' else 'play'
         if mode == 'play':
             play_game(simulations=args.simulations, rng=random.Random(args.seed))
