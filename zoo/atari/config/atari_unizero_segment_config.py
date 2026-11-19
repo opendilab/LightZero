@@ -1,11 +1,12 @@
-"""Stable UniZero Atari config: the best recipe from the 2026-08 3M matrix.
+"""Stable UniZero Atari segment configuration.
 
-This mirrors the winning ``v3`` arm of the preregistered MsPacman 3M experiment
-matrix (the historical best recipe with ``value_loss_weight=0.5``) with the
-experimental mechanisms (raw-token KV rebuild, open-loop consistency loss,
-contextual value bootstrap) turned off. Those and other ablation/diagnostic
-knobs live in ``atari_unizero_segment_experimental_config.py``, whose defaults
-reproduce the full v3 recipe.
+Pong uses exact KV windows and search-node cache identity: the matched seed-0
+audit reached 19 points in 161k steps / 7.12h, versus 400k / 13.86h for its
+control. This is evidence for the combination, not for each flag independently.
+MsPacman keeps the historical training recipe; its long-horizon improvements
+remain unproven. Both games use search-node identity for cache correctness.
+Contextual bootstrap, reanalysis and auxiliary rollout losses remain opt-in in
+``atari_unizero_segment_experimental_config.py``.
 """
 
 from easydict import EasyDict
@@ -23,6 +24,8 @@ def build_config(
         run_name=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
+    is_pong = env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4')
+    use_node_cache = is_pong or env_id in ('ALE/MsPacman-v5', 'MsPacmanNoFrameskip-v4')
     use_augmentation = bool(use_augmentation)
     grad_clip_mode = _resolve_grad_clip_mode(use_augmentation, grad_clip_mode_override)
 
@@ -30,8 +33,7 @@ def build_config(
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
-    # Three deterministic episodes are sufficient for fast iteration; evaluate less
-    # often as well so short validation runs spend their budget on collection/training.
+    # A small evaluation budget for iteration, not a multi-seed performance claim.
     evaluator_env_num = 3
     eval_freq = int(1e4)
     num_segments = 8
@@ -105,13 +107,13 @@ def build_config(
                         use_normal_head=True,
                         optim_type='AdamW_mix_lr_wdecay',
                         root_cache_key_round_decimals=0,
-                        # v3 rebuilds the KV window exactly from retained raw tokens; the
-                        # stable config keeps the legacy update path (experimental-only).
-                        # rebuild_kv_window_from_tokens=True,
-                        rebuild_kv_window_from_tokens=False,
-                        # v3 enables the short differentiable MCTS-style latent rollout
-                        # consistency loss; disabled here (experimental-only).
-                        # open_loop_consistency_loss_weight=1.0,
+                        # Equal latents can have different Transformer histories.
+                        mcts_cache_by_node=use_node_cache,
+                        rebuild_kv_window_from_tokens=is_pong,
+                        # Align prediction windows if contextual targets are enabled.
+                        replay_context_use_prediction_window=use_node_cache,
+                        # Auxiliary rollout objectives have no demonstrated joint
+                        # sample/time benefit for these defaults.
                         open_loop_consistency_loss_weight=0,
                         open_loop_consistency_batch_size=8,
                         open_loop_consistency_horizon=4,
@@ -138,6 +140,9 @@ def build_config(
                 empty_cuda_cache_on_cache_reset=True,
                 num_simulations=num_simulations,
                 collect_num_simulations=collect_num_simulations,
+                # Match MuZero's tree tie rule. Final evaluation actions remain
+                # greedy, without root noise; this is an evaluation protocol choice.
+                eval_mcts_deterministic=False,
                 fixed_temperature_value=0.25,
                 obs_loss_weight=10.0,
                 value_loss_weight=0.5,
@@ -146,11 +151,14 @@ def build_config(
                 use_augmentation=use_augmentation,
                 augmentation=['shift', 'intensity'],
                 use_adaptive_entropy_weight=False,
-                # Policy label smoothing disabled; value/reward smoothing is unchanged.
+                # Preserve the measured Pong search recipe (policy epsilon .05).
+                # MsPacman retains its explicitly disabled policy smoothing.
                 policy_ls_eps_start=0.0,
                 policy_ls_eps_end=0.0,
                 label_smoothing_eps=0.1,
-                use_continuous_label_smoothing=True,
+                reward_label_smoothing_eps=0.1,
+                value_label_smoothing_eps=0.1,
+                use_continuous_label_smoothing=is_pong,
                 continuous_ls_eps=0.05,
                 monitor_norm_freq=10000,
                 use_enhanced_policy_monitoring=True,
@@ -162,9 +170,8 @@ def build_config(
                 reanalyze_search_chunk_size=collector_env_num,
                 reanalyze_batch_size=reanalyze_batch_size,
                 reanalyze_partition=reanalyze_partition,
-                # v3 computes TD bootstrap values from the rolling online-planning
-                # history; the stable config uses the training-only sequence context.
-                # bootstrap_value_context=True,
+                # The aligned-bootstrap bundle is promising on Pong, but its
+                # reward-target change has inconsistent marginal results.
                 bootstrap_value_context=False,
                 # Environment settings
                 collector_env_num=collector_env_num,
@@ -215,6 +222,7 @@ def build_config(
             f'_nlayer{num_layers}_gsl{game_segment_length}_bs{batch_size}'
             f'_rr{replay_ratio:g}_temp{policy_config.fixed_temperature_value:g}'
             f'_obs{policy_config.obs_loss_weight:g}_value{policy_config.value_loss_weight:g}'
+            f'_nodecache{int(use_node_cache)}_policyls{0.05 if is_pong else 0:g}'
             f'_{stab_fix_tag}_{rebuild_kv_tag}_{contextual_reanalysis_tag}'
             f'_reanalyze{policy_config.buffer_reanalyze_freq:g}_{bootstrap_tag}'
             f'_olc{world_model_config.open_loop_consistency_loss_weight:g}'

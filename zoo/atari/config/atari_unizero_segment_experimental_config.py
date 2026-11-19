@@ -251,6 +251,8 @@ def main(
         legacy_resume_alpha=None,
         log_metric=True,
         tb_log_all=False,
+        reward_label_smoothing_eps=None,
+        value_label_smoothing_eps=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
     # ==============================================================
@@ -550,6 +552,8 @@ def main(
             policy_ls_eps_end=0.0 if disable_policy_label_smoothing else 0.01,
             policy_ls_eps_decay_steps=50000,
             label_smoothing_eps=0.1,
+            reward_label_smoothing_eps=reward_label_smoothing_eps,
+            value_label_smoothing_eps=value_label_smoothing_eps,
             # Numerical stability and target regularization are separate interventions. Permanent
             # 0.05 smoothing biases a sharp improved policy even after the instability is gone.
             use_continuous_label_smoothing=False,
@@ -584,6 +588,8 @@ def main(
             # Environment settings
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            # Same tree tie rule as MuZero; final action is still greedy.
+            eval_mcts_deterministic=False,
             isolate_eval_cache=bool(isolate_eval_cache),
             eval_freq=eval_freq,
             replay_buffer_size=replay_buffer_size,
@@ -720,6 +726,10 @@ if __name__ == "__main__":
         help='Explicitly disable encoder latent-norm projection (also the policy default).'
     )
     policy_smoothing_group = parser.add_mutually_exclusive_group()
+    parser.add_argument('--reward-label-smoothing-eps', type=float, default=None,
+                        help='Override reward-target smoothing; 0 preserves the scalar expectation.')
+    parser.add_argument('--value-label-smoothing-eps', type=float, default=None,
+                        help='Override value-target smoothing; 0 preserves the TD scalar expectation.')
     policy_smoothing_group.add_argument(
         '--enable-policy-label-smoothing', dest='disable_policy_label_smoothing', action='store_false',
         help='Enable the 0.05 to 0.01 policy label-smoothing schedule.'
@@ -1009,4 +1019,6 @@ if __name__ == "__main__":
         open_loop_consistency_horizon_override=args.open_loop_consistency_horizon,
         open_loop_prefix_transitions_override=args.open_loop_prefix_transitions,
         legacy_resume_alpha=args.legacy_resume_alpha,
+        reward_label_smoothing_eps=args.reward_label_smoothing_eps,
+        value_label_smoothing_eps=args.value_label_smoothing_eps,
     )

@@ -12,10 +12,11 @@ from ditk import logging
 from lzero.mcts import SampledMuZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import (DiscreteSupport, InverseScalarTransform,
-                          cross_entropy_loss, from, import, lzero.policy,
+                          cross_entropy_loss,
                           mz_network_output_unpack, negative_cosine_similarity,
                           phi_transform, prepare_obs, scalar_transform,
                           select_action, to_torch_float_tensor)
+from lzero.policy.muzero import MuZeroPolicy
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 

@@ -1,3 +1,10 @@
+"""Episode-collector UniZero example.
+
+For the measured Pong / MsPacman segment recipes, use
+``atari_unizero_segment_config.py``. Their sample/time results do not transfer
+automatically to this example's different replay and training budget.
+"""
+
 from easydict import EasyDict
 
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
@@ -5,6 +12,9 @@ from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_m
 
 def main(env_id='PongNoFrameskip-v4', seed=0):
     action_space_size = atari_env_action_space_map[env_id]
+    use_node_cache = env_id in (
+        'ALE/Pong-v5', 'PongNoFrameskip-v4', 'ALE/MsPacman-v5', 'MsPacmanNoFrameskip-v4',
+    )
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
@@ -68,6 +78,9 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     encoder_type='resnet',
                     env_num=max(collector_env_num, evaluator_env_num),
                     rotary_emb=False,
+                    # Cache history belongs to a search node, not its latent bytes.
+                    mcts_cache_by_node=use_node_cache,
+                    replay_context_use_prediction_window=use_node_cache,
                 ),
             ),
             model_path=None,
@@ -76,6 +89,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             batch_size=batch_size,
             learning_rate=0.0001,
             num_simulations=num_simulations,
+            eval_mcts_deterministic=not use_node_cache,
             train_start_after_envsteps=2000,
             # train_start_after_envsteps=0, # TODO: only for debug
             game_segment_length=game_segment_length,

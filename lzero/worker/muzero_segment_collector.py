@@ -14,6 +14,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from lzero.worker.return_metrics import RETURN_METRICS, explicit_return_metrics
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('segment_muzero')
@@ -652,6 +653,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
                     }
+                    info.update(explicit_return_metrics(episode_timestep.info))
                     if not collect_with_pure_policy:
                         info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id] if eps_steps_lst[env_id] > 0 else 0
                         for metric_name in exploration_metric_names:
@@ -782,6 +784,11 @@ class MuZeroSegmentCollector(ISerialCollector):
                 'total_duration': self._total_duration,
                 'visit_entropy_mean': np.mean(visit_entropy),
             }
+            for metric_name in RETURN_METRICS:
+                if all(metric_name in episode for episode in self._episode_info):
+                    info[metric_name + '_mean'] = np.mean([
+                        episode[metric_name] for episode in self._episode_info
+                    ])
             for metric_name in (
                     key for key in self._episode_info[0]
                     if key.startswith('exploration/')
@@ -795,7 +802,10 @@ class MuZeroSegmentCollector(ISerialCollector):
             
             self._episode_info.clear()
 
-            self._logger.info(f"Collector log (rank {self._rank}, task_id {self.task_id}):\n" + '\n'.join([f'{k}: {v}' for k, v in info.items()]))
+            self._logger.info(
+                f"Collector log (rank {self._rank}, task_id {self.task_id}, train_iter {train_iter}):\n"
+                + '\n'.join([f'{k}: {v}' for k, v in info.items()])
+            )
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue

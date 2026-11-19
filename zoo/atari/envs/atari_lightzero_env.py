@@ -195,6 +195,8 @@ class AtariEnvLightZero(BaseEnv):
 
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
+        self._raw_episode_return = 0.
+        self._clipped_episode_return = 0.
         self._timestep = 0
         obs = self.observe()
         return obs
@@ -212,6 +214,14 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
+        raw_reward = info.get('raw_reward', None if self.clip_rewards else reward)
+        if raw_reward is None:
+            # A custom clipped wrapper may not expose the original reward.
+            # Missing raw data must not be presented as a measured raw score.
+            self._raw_episode_return = None
+        elif self._raw_episode_return is not None:
+            self._raw_episode_return += float(raw_reward)
+        self._clipped_episode_return += float(np.sign(reward if raw_reward is None else raw_reward))
         self._timestep += 1
         # if self._timestep % 200 == 0:
         #     logging.info(f'self._timestep: {self._timestep}')
@@ -219,6 +229,11 @@ class AtariEnvLightZero(BaseEnv):
         if done:
             logging.info(f'one episode done! total episode length is: {self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
+            if self._raw_episode_return is not None:
+                info['raw_episode_return'] = self._raw_episode_return
+            info['clipped_episode_return'] = self._clipped_episode_return
+            info['episode_return_is_clipped'] = bool(self.clip_rewards)
+            info['episode_return_is_life'] = bool(self.episode_life)
             logging.debug(f'one episode of {self.cfg.env_id} done')
 
         return BaseEnvTimestep(observation, self.reward, done, info)

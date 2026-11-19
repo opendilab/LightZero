@@ -6,6 +6,49 @@ from ding.torch_utils import is_differentiable
 
 from lzero.model.muzero_model import PredictionNetwork, DynamicsNetwork
 
+
+@pytest.mark.parametrize('norm_type', ['BN', 'LN'])
+def test_atari_prediction_heads_register_parameters_before_optimizer(norm_type):
+    network = PredictionNetwork(
+        observation_shape=(4, 64, 64), action_space_size=6, num_res_blocks=0, num_channels=4,
+        value_head_channels=2, policy_head_channels=2,
+        value_head_hidden_channels=[8], policy_head_hidden_channels=[8], output_support_size=11,
+        flatten_input_size_for_value_head=2 * 8 * 8,
+        flatten_input_size_for_policy_head=2 * 8 * 8, downsample=True, norm_type=norm_type,
+    )
+    optimizer = torch.optim.SGD(network.parameters(), lr=0.1)
+    before = {name: (id(parameter), tuple(parameter.shape)) for name, parameter in network.named_parameters()}
+    policy, value = network(torch.randn(2, 4, 8, 8))
+    assert policy.shape == (2, 6) and value.shape == (2, 11)
+    (policy.sum() + value.sum()).backward()
+    optimizer.step()
+    after = {name: (id(parameter), tuple(parameter.shape)) for name, parameter in network.named_parameters()}
+    assert before == after
+    assert network.fc_value[-1].bias.detach().abs().sum() > 0
+
+@pytest.mark.parametrize('norm_type', ['BN', 'LN'])
+def test_multitask_model_constructs_registered_prediction_heads(norm_type):
+    from lzero.model.muzero_model_multitask import MuZeroMTModel
+
+    model = MuZeroMTModel(
+        observation_shape=(3, 8, 8), action_space_size=3, num_channels=4,
+        reward_head_channels=2, value_head_channels=2, policy_head_channels=2,
+        fc_reward_layers=[8], fc_value_layers=[8], fc_policy_layers=[8],
+        reward_support_size=11, value_support_size=11, task_num=2, norm_type=norm_type,
+    )
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    parameter_ids = {id(parameter) for group in optimizer.param_groups for parameter in group['params']}
+    for task in range(2):
+        output = model.initial_inference(torch.randn(2, 3, 8, 8), task_id=task)
+        assert output.policy_logits.shape == (2, 3)
+        assert output.value.shape == (2, 11)
+        (output.policy_logits.sum() + output.value.sum()).backward()
+    optimizer.step()
+    for head in model.prediction_networks:
+        assert all(id(parameter) in parameter_ids for parameter in head.parameters())
+        assert head.fc_value[-1].bias.detach().abs().sum() > 0
+
+
 batch_size = [10, 100]
 num_res_blocks = [3, 4]
 num_channels = [3]

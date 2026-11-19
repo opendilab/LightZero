@@ -1,4 +1,5 @@
 from typing import Union
+import math
 
 import torch
 import numpy as np
@@ -34,7 +35,8 @@ def inverse_scalar_transform(
         logits: torch.Tensor,
         scalar_support: DiscreteSupport,
         epsilon: float = 0.001,
-        categorical_distribution: bool = True
+        categorical_distribution: bool = True,
+        label_smoothing_eps: float = 0.0,
 ) -> torch.Tensor:
     """
     Overview:
@@ -44,12 +46,15 @@ def inverse_scalar_transform(
         - MuZero Appendix F: Network Architecture.
         - https://arxiv.org/pdf/1805.11593.pdf Appendix A: Proposition A.2
     """
+    _validate_decode_smoothing(label_smoothing_eps, categorical_distribution)
     if categorical_distribution:
         value_probs = torch.softmax(logits, dim=1)
         value_support = scalar_support.arange
 
         value_support = value_support.to(device=value_probs.device)
         value = (value_support * value_probs).sum(1, keepdim=True)
+        if label_smoothing_eps:
+            value = (value - label_smoothing_eps * value_support.mean()) / (1 - label_smoothing_eps)
     else:
         value = logits
 
@@ -59,6 +64,13 @@ def inverse_scalar_transform(
     )
 
     return output
+
+
+def _validate_decode_smoothing(smoothing: float, categorical: bool) -> None:
+    if not math.isfinite(smoothing) or not 0 <= smoothing < 1:
+        raise ValueError('Decode label_smoothing_eps must be finite and in [0, 1)')
+    if smoothing and not categorical:
+        raise ValueError('Label smoothing compensation requires categorical predictions')
 
 
 class InverseScalarTransform:
@@ -74,10 +86,14 @@ class InverseScalarTransform:
     def __init__(
             self,
             scalar_support: DiscreteSupport,
-            categorical_distribution: bool = True
+            categorical_distribution: bool = True,
+            label_smoothing_eps: float = 0.0,
     ) -> None:
+        _validate_decode_smoothing(label_smoothing_eps, categorical_distribution)
         self.value_support = scalar_support.arange
         self.categorical_distribution = categorical_distribution
+        self.label_smoothing_eps = label_smoothing_eps
+        self.uniform_mean = self.value_support.mean() if label_smoothing_eps else None
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
@@ -91,6 +107,10 @@ class InverseScalarTransform:
 
             value_probs = torch.softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
+            if self.label_smoothing_eps:
+                # Targets mix (1-eps)*p with eps*Uniform. Undo its first-moment
+                # shift BEFORE h^-1; dividing decoded raw values is incorrect.
+                value = (value - self.label_smoothing_eps * self.uniform_mean) / (1 - self.label_smoothing_eps)
 
             # If input was 1D, squeeze back to maintain shape consistency
             if was_1d:
@@ -123,7 +143,8 @@ def visit_count_temperature(
 def phi_transform(
     discrete_support: DiscreteSupport,
     x: torch.Tensor,
-    label_smoothing_eps: float = 0.0
+    label_smoothing_eps: float = 0.0,
+    smoothing_mode: str = 'uniform',
 ) -> torch.Tensor:
     """
     Overview:
@@ -155,9 +176,15 @@ def phi_transform(
 
     Notes
     -----
+    ``smoothing_mode='local'`` instead spreads interior mass symmetrically to
+    neighbouring atoms, with absorbing edges. This preserves the clipped input
+    mean and requires no decoder compensation.
+
     • No in-place ops on the input are used, improving autograd safety.
     • Only one `scatter_add_` kernel is launched for efficiency.
     """
+    if smoothing_mode not in ('uniform', 'local'):
+        raise ValueError(f'Unknown scalar smoothing mode: {smoothing_mode}')
     # --- constants ----------------------------------------------------------
     min_bound = discrete_support.arange[0, 0]
     max_bound = discrete_support.arange[0, -1]
@@ -190,6 +217,16 @@ def phi_transform(
 
     # --- 5. Apply label smoothing ------------------------------------------
     if label_smoothing_eps > 0:
+        if smoothing_mode == 'local':
+            # A nearest-neighbour martingale preserves the two-hot target mean.
+            # Boundary atoms are absorbing; reflecting/clamping outward mass
+            # would introduce a bias near the ends of the support.
+            flux = .5 * label_smoothing_eps * target[..., 1:-1]
+            smoothed = target.clone()
+            smoothed[..., 1:-1] -= 2 * flux
+            smoothed[..., :-2] += flux
+            smoothed[..., 2:] += flux
+            return smoothed
         # Mix the original "two-hot" target with a uniform distribution
         # smooth_target
         return (1.0 - label_smoothing_eps) * target + (label_smoothing_eps / size)

@@ -1,6 +1,7 @@
 import pytest
 
 from zoo.atari.config import (
+    atari_unizero_config,
     atari_unizero_segment_config,
     atari_unizero_segment_experimental_config,
 )
@@ -11,7 +12,7 @@ def _unizero_policy():
     return UniZeroPolicy
 
 
-def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_features():
+def test_mspacman_keeps_training_recipe_without_unproven_objectives():
     config, create_config, max_env_step = atari_unizero_segment_config.build_config(
         env_id='ALE/MsPacman-v5', seed=0
     )
@@ -29,6 +30,7 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
     assert policy_config.num_unroll_steps == 10
     assert policy_config.num_simulations == 50
     assert policy_config.collect_num_simulations == 25
+    assert policy_config.eval_mcts_deterministic is False
     assert policy_config.evaluator_env_num == 3
     assert policy_config.eval_freq == int(1e4)
     assert policy_config.fixed_temperature_value == 0.25
@@ -42,6 +44,8 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
         'nobootctx_olc0_noper_noaug_seed0_3m'
     )
     assert policy_config.use_adaptive_entropy_weight is False
+    assert policy_config.use_continuous_label_smoothing is False
+    assert policy_config.policy_ls_eps_start == policy_config.policy_ls_eps_end == 0.0
     assert policy_config.bootstrap_value_context is False
     assert policy_config.buffer_reanalyze_freq == 2e-10
     assert policy_config.reanalyze_batch_size == 160
@@ -49,6 +53,8 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
     assert policy_config.replay_buffer_size == int(5e5)
     assert world_model_config.context_length == 10
     assert world_model_config.use_priority is False
+    assert world_model_config.mcts_cache_by_node is True
+    assert world_model_config.replay_context_use_prediction_window is True
     assert world_model_config.rebuild_kv_window_from_tokens is False
     assert world_model_config.open_loop_consistency_loss_weight == 0
     assert world_model_config.open_loop_consistency_batch_size == 8
@@ -63,6 +69,47 @@ def test_stable_segment_config_is_the_best_mspacman_recipe_without_experimental_
     assert 'open_loop_diagnostic_freq' not in world_model_config
     assert 'contextual_reanalysis' not in policy_config
     assert 'isolate_eval_cache' not in policy_config
+
+
+@pytest.mark.parametrize('env_id', ['ALE/Pong-v5', 'PongNoFrameskip-v4'])
+def test_pong_preserves_measured_search_recipe_and_avoids_failed_scalar_changes(env_id):
+    config, _, _ = atari_unizero_segment_config.build_config(env_id)
+    policy = config.policy
+    world_model = policy.model.world_model_cfg
+    assert world_model.mcts_cache_by_node is True
+    assert world_model.rebuild_kv_window_from_tokens is True
+    assert world_model.replay_context_use_prediction_window is True
+    assert policy.use_continuous_label_smoothing is True
+    assert policy.continuous_ls_eps == 0.05
+    assert policy.reward_label_smoothing_eps == policy.value_label_smoothing_eps == 0.1
+    assert policy.bootstrap_value_context is False
+    defaults = _unizero_policy().config
+    assert defaults['compensate_scalar_label_smoothing'] is False
+    assert defaults['value_label_smoothing_mode'] == 'uniform'
+    assert defaults['model']['world_model_cfg']['open_loop_recurrent_loss_weight'] == 0
+    assert '_nodecache1_policyls0.05_' in config.exp_name
+
+
+def test_mspacman_legacy_alias_uses_the_same_training_recipe():
+    canonical, _, _ = atari_unizero_segment_config.build_config('ALE/MsPacman-v5')
+    legacy, _, _ = atari_unizero_segment_config.build_config('MsPacmanNoFrameskip-v4')
+    assert canonical.policy == legacy.policy
+
+
+@pytest.mark.parametrize('env_id', [
+    'ALE/Pong-v5', 'PongNoFrameskip-v4', 'ALE/MsPacman-v5', 'MsPacmanNoFrameskip-v4',
+])
+def test_episode_entry_uses_cache_fix_without_transplanting_segment_recipe(monkeypatch, env_id):
+    import lzero.entry
+
+    captured = {}
+    monkeypatch.setattr(lzero.entry, 'train_unizero', lambda configs, **kwargs: captured.update(config=configs[0]))
+    atari_unizero_config.main(env_id)
+    policy = captured['config'].policy
+    assert policy.model.world_model_cfg.mcts_cache_by_node is True
+    assert policy.eval_mcts_deterministic is False
+    assert policy.batch_size == 64
+    assert policy.replay_ratio == 0.25
 
 
 def test_stable_segment_config_allows_max_env_step_override():
@@ -85,7 +132,7 @@ def test_stable_segment_config_resolves_fixed_augmentation_and_unique_run_name()
     assert config.policy.augmentation == ['shift', 'intensity']
     assert config.policy.grad_clip_mode == 'separate_encoder'
     assert config.exp_name.endswith(
-        '_stabfix_norebuildkv_noctxreanalyze_reanalyze2e-10_'
+        '_stabfix_rebuildkv_noctxreanalyze_reanalyze2e-10_'
         'nobootctx_olc0_noper_fixed-aug_seed0_3m'
     )
 

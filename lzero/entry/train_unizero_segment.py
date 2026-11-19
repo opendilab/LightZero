@@ -29,7 +29,7 @@ _PERIODIC_CHECKPOINT_PATTERN = re.compile(r'^iteration_(\d+)\.pth\.tar$')
 
 
 class _MetricFilteredWriter:
-    """Filter scalar writes by canonical metric name while preserving the writer API."""
+    """Filter learner diagnostics without dropping collector/evaluator statistics."""
 
     def __init__(self, writer, enabled: bool, metric_filter: Dict[str, bool], log_all: bool) -> None:
         self._writer = writer
@@ -46,6 +46,9 @@ class _MetricFilteredWriter:
         return name[:-4] if name.endswith('_avg') else name
 
     def add_scalar(self, tag, scalar_value, global_step=None, *args, **kwargs):
+        namespace = str(tag).split('/', 1)[0]
+        if not namespace.startswith(('learner_iter', 'learner_step')):
+            return self._writer.add_scalar(tag, scalar_value, global_step, *args, **kwargs)
         metric_name = self._canonical_name(str(tag))
         if self._enabled and (self._log_all or self._metric_filter.get(metric_name, False)):
             return self._writer.add_scalar(tag, scalar_value, global_step, *args, **kwargs)

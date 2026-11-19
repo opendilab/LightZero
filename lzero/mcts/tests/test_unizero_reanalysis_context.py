@@ -232,9 +232,13 @@ def test_contextual_reanalysis_skips_unused_initial_transformer(buffer_cls):
 
 
 @pytest.mark.parametrize('buffer_cls', [UniZeroGameBuffer, SampledUniZeroGameBuffer])
+@pytest.mark.parametrize('compensated', [False, True])
 def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
-        monkeypatch, buffer_cls
+        monkeypatch, buffer_cls, compensated
 ):
+    from lzero.policy.scaling_transform import phi_transform, scalar_transform
+    support = DiscreteSupport(-300, 301)
+    fitted_logits = phi_transform(support, scalar_transform(torch.tensor([10.])), .1).log()
     initial_calls = []
     direct_encode_calls = []
 
@@ -251,7 +255,7 @@ def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
             return [torch.zeros(1, 4) for _ in range(len(latent_state_roots))]
 
         def evaluate_root_token_context_values(self, contexts, task_id=None):
-            return torch.zeros(len(contexts), 3)
+            return fitted_logits.expand(len(contexts), -1)
 
     class _Model:
         world_model = _WorldModel()
@@ -260,7 +264,7 @@ def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
             initial_calls.append(len(observations))
             return SimpleNamespace(
                 latent_state=np.zeros((len(observations), 1, 4), dtype=np.float32),
-                value=torch.zeros(len(observations), 3),
+                value=fitted_logits.expand(len(observations), -1),
                 policy_logits=torch.zeros(len(observations), 2),
             )
 
@@ -274,7 +278,7 @@ def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
     buffer = buffer_cls.__new__(buffer_cls)
     buffer.task_id = None
     buffer.action_space_size = 2
-    buffer.value_support = DiscreteSupport(-1, 2)
+    buffer.value_support = support
     buffer._cfg = SimpleNamespace(
         model=SimpleNamespace(
             model_type='unit_test', continuous_action_space=False
@@ -285,6 +289,8 @@ def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
         num_unroll_steps=1,
         env_type='not_board_games',
         discount_factor=1.0,
+        compensate_scalar_label_smoothing=compensated,
+        value_label_smoothing_eps=.1,
     )
     buffer._preprocess_to_play_and_action_mask = lambda *args: (
         [-1, -1], np.ones((2, 2), dtype=np.int8)
@@ -317,6 +323,10 @@ def test_contextual_bootstrap_skips_legacy_transformer_between_diagnostics(
     assert all(np.array_equal(left, right) for left, right in zip(
         diagnostic_targets, fast_targets
     ))
+    # Only regular UniZero opts into compensation; the sampled implementation
+    # is outside this Atari experiment. Zero rewards and gamma=1 isolate V.
+    expected = 10. if compensated and buffer_cls is UniZeroGameBuffer else 8.52
+    np.testing.assert_allclose(fast_targets[1], expected, atol=.01)
 
 
 @pytest.mark.parametrize('buffer_cls', [UniZeroGameBuffer, SampledUniZeroGameBuffer])
@@ -501,7 +511,7 @@ def test_atari_unizero_reanalysis_passes_h_plus_one_positions_and_restores_phase
 
     monkeypatch.setattr(unizero_buffer_module, 'MCTSCtree', _FailingMCTS)
     monkeypatch.setattr(unizero_buffer_module, 'prepare_observation', lambda obs, model_type: np.asarray(obs))
-    monkeypatch.setattr(unizero_buffer_module, 'inverse_scalar_transform', lambda value, support: value)
+    monkeypatch.setattr(unizero_buffer_module, 'inverse_scalar_transform', lambda value, support, **kwargs: value)
     monkeypatch.setattr(
         unizero_buffer_module,
         'concat_output',
