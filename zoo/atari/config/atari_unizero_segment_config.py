@@ -1,8 +1,11 @@
 """Stable UniZero Atari segment configuration.
 
-Pong uses exact KV windows and search-node cache identity: the matched seed-0
-audit reached 19 points in 161k steps / 7.12h, versus 400k / 13.86h for its
-control. This is evidence for the combination, not for each flag independently.
+Pong uses the search_full_context recipe: a 20-token context, exact KV windows
+and search-node cache identity. Seeds 0/1 reached mean reward >=19 in
+100,397/120,501 steps and 3.84/4.58 hours. The control took 400,364/81,086
+steps and 13.86/2.45 hours; the chosen recipe was more consistent across these
+two seeds, not the fastest individual run or a proven universal optimum.
+Pong stops at 19, with a default 400k-step budget.
 MsPacman keeps the historical training recipe; its long-horizon improvements
 remain unproven. Both games use search-node identity for cache correctness.
 Contextual bootstrap, reanalysis and auxiliary rollout losses remain opt-in in
@@ -35,15 +38,17 @@ def build_config(
     collector_env_num = 8
     # A small evaluation budget for iteration, not a multi-seed performance claim.
     evaluator_env_num = 3
-    eval_freq = int(1e4)
+    # Production evaluation uses learner updates, unlike the audit's 20k
+    # env-step schedule. At replay_ratio=.1, 2k updates is roughly 20k steps.
+    eval_freq = 2000 if is_pong else int(1e4)
     num_segments = 8
     game_segment_length = 200
     num_simulations = 50
     collect_num_simulations = 25
-    max_env_step = int(3e6)
+    max_env_step = int(4e5) if is_pong else int(3e6)
     batch_size = 256
     num_unroll_steps = 10
-    infer_context_length = 5
+    infer_context_length = 10 if is_pong else 5
     num_layers = 2
     replay_ratio = 0.1
     buffer_reanalyze_freq = 2e-10
@@ -60,7 +65,7 @@ def build_config(
     main_config = EasyDict(
         dict(
             env=dict(
-                stop_value=int(1e6),
+                stop_value=19 if is_pong else int(1e6),
                 env_id=env_id,
                 observation_shape=(3, 64, 64),
                 gray_scale=False,
@@ -170,8 +175,8 @@ def build_config(
                 reanalyze_search_chunk_size=collector_env_num,
                 reanalyze_batch_size=reanalyze_batch_size,
                 reanalyze_partition=reanalyze_partition,
-                # The aligned-bootstrap bundle is promising on Pong, but its
-                # reward-target change has inconsistent marginal results.
+                # Full-context bootstrap did not improve Pong time-to-19 over
+                # the full-context-only recipe; keep it opt-in.
                 bootstrap_value_context=False,
                 # Environment settings
                 collector_env_num=collector_env_num,
@@ -184,6 +189,11 @@ def build_config(
             ),
         )
     )
+
+    if is_pong:
+        # Match the audited evaluation cap so a looping policy cannot consume
+        # the default 108k steps per evaluation episode.
+        main_config.env.eval_max_episode_steps = 12000
 
     create_config = EasyDict(
         dict(
@@ -291,7 +301,7 @@ if __name__ == '__main__':
         '--max-env-step',
         type=int,
         default=None,
-        help='Override the default training budget of 3000000 environment steps.',
+        help='Override the default env-step budget: 400000 for Pong, 3000000 for other games.',
     )
     args = parser.parse_args()
     main(

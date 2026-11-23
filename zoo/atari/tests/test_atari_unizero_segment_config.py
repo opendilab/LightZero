@@ -73,12 +73,19 @@ def test_mspacman_keeps_training_recipe_without_unproven_objectives():
 
 @pytest.mark.parametrize('env_id', ['ALE/Pong-v5', 'PongNoFrameskip-v4'])
 def test_pong_preserves_measured_search_recipe_and_avoids_failed_scalar_changes(env_id):
-    config, _, _ = atari_unizero_segment_config.build_config(env_id)
+    config, _, max_env_step = atari_unizero_segment_config.build_config(env_id)
     policy = config.policy
     world_model = policy.model.world_model_cfg
     assert world_model.mcts_cache_by_node is True
     assert world_model.rebuild_kv_window_from_tokens is True
     assert world_model.replay_context_use_prediction_window is True
+    assert world_model.context_length == 20
+    assert world_model.max_tokens == 20
+    assert max_env_step == 400000
+    assert config.env.stop_value == 19
+    assert config.env.eval_max_episode_steps == 12000
+    assert config.env.n_evaluator_episode == 3
+    assert policy.eval_freq == 2000  # Learner updates, approximately 20k env steps.
     assert policy.use_continuous_label_smoothing is True
     assert policy.continuous_ls_eps == 0.05
     assert policy.reward_label_smoothing_eps == policy.value_label_smoothing_eps == 0.1
@@ -88,6 +95,8 @@ def test_pong_preserves_measured_search_recipe_and_avoids_failed_scalar_changes(
     assert 'value_label_smoothing_mode' not in defaults
     assert defaults['model']['world_model_cfg']['open_loop_recurrent_loss_weight'] == 0
     assert '_nodecache1_policyls0.05_' in config.exp_name
+    assert '_ctx10_' in config.exp_name
+    assert config.exp_name.endswith('_seed0_0.4m')
 
 
 def test_mspacman_legacy_alias_uses_the_same_training_recipe():
@@ -133,7 +142,7 @@ def test_stable_segment_config_resolves_fixed_augmentation_and_unique_run_name()
     assert config.policy.grad_clip_mode == 'separate_encoder'
     assert config.exp_name.endswith(
         '_stabfix_rebuildkv_noctxreanalyze_reanalyze2e-10_'
-        'nobootctx_olc0_noper_fixed-aug_seed0_3m'
+        'nobootctx_olc0_noper_fixed-aug_seed0_0.4m'
     )
 
     overridden, _, _ = atari_unizero_segment_config.build_config(
