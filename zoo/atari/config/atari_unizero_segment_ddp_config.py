@@ -1,5 +1,6 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 
 def main(env_id, seed):
@@ -19,7 +20,7 @@ def main(env_id, seed):
     num_layers = 2
     replay_ratio = 0.25
     num_unroll_steps = 10
-    infer_context_length = 4
+    infer_context_length = num_unroll_steps
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     buffer_reanalyze_freq = 1/100000
@@ -41,7 +42,7 @@ def main(env_id, seed):
 
     atari_unizero_config = dict(
         env=dict(
-            stop_value=int(1e6),
+            stop_value=19 if env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4') else int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
             gray_scale=False,
@@ -66,7 +67,7 @@ def main(env_id, seed):
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
-                    context_length=2 * infer_context_length,
+                    **full_context_world_model_config(num_unroll_steps),
                     device='cuda',
                     action_space_size=action_space_size,
                     num_layers=num_layers,
@@ -89,6 +90,7 @@ def main(env_id, seed):
             optim_type='AdamW',
             learning_rate=0.0001,
             num_simulations=num_simulations,
+            eval_mcts_deterministic=False,
             num_segments=num_segments,
             td_steps=5,
             train_start_after_envsteps=0,

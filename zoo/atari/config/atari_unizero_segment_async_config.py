@@ -8,6 +8,7 @@ from datetime import datetime
 from easydict import EasyDict
 from zoo.atari.config._atari_unizero_segment_utils import _Tee, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 
 def _atari_game_name(env_id):
@@ -83,7 +84,7 @@ def main(
     # i.e. 75% of the collected transitions can never be trained on. 200 restores ~92.5% coverage.
     game_segment_length = 200
     num_unroll_steps = 10
-    infer_context_length = 4
+    infer_context_length = num_unroll_steps
 
     num_simulations = 50
     batch_size = 256
@@ -106,7 +107,7 @@ def main(
         evaluator_env_num = 1
         game_segment_length = 16
         num_unroll_steps = 2
-        infer_context_length = 1
+        infer_context_length = num_unroll_steps
         num_simulations = 2
         batch_size = 2
         replay_ratio = 1.0
@@ -147,7 +148,7 @@ def main(
 
     atari_unizero_config = dict(
         env=dict(
-            stop_value=int(1e6),
+            stop_value=19 if env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4') else int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
             gray_scale=False,
@@ -176,7 +177,7 @@ def main(
                     policy_entropy_weight=5e-3,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
-                    context_length=2 * infer_context_length,
+                    **full_context_world_model_config(num_unroll_steps),
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=8,
@@ -212,6 +213,7 @@ def main(
             num_segments=num_segments,
             game_segment_length=game_segment_length,
             num_simulations=num_simulations,
+            eval_mcts_deterministic=False,
             grad_clip_value=5,
             use_augmentation=False,
 
@@ -300,7 +302,7 @@ def main(
         from lzero.entry import train_unizero_segment as train_entry
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     if run_name is None:
-        run_name = run_tag or f'{game_name.lower()}_async_2025baseline_seed{seed}_{timestamp}'
+        run_name = run_tag or f'{game_name.lower()}_async_fullcontext_seed{seed}_{timestamp}'
     run_name = _safe_run_name(run_name)
     run_dir = os.path.relpath(os.path.abspath(os.path.join(exp_root, run_name)), os.getcwd())
     if os.path.exists(run_dir):
@@ -319,9 +321,12 @@ def main(
         'env_id': env_id,
         'seed': seed,
         'cuda_visible_devices': os.environ.get('CUDA_VISIBLE_DEVICES'),
-        'variant': baseline_name or 'async_2025baseline_encoder_clip_off',
+        'variant': baseline_name or 'async_fullcontext_encoder_clip_off',
         'pipeline': 'async' if async_pipeline else 'sync',
         'key_hyperparameters': {
+            'context_length': 2 * infer_context_length,
+            'rebuild_kv_window_from_tokens': True,
+            'mcts_cache_by_node': True,
             'batch_size': batch_size,
             'replay_ratio': replay_ratio,
             'target_entropy_ratio': [0.98, 0.7],

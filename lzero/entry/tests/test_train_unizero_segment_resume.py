@@ -58,6 +58,19 @@ def test_tensorboard_writer_can_restore_all_scalar_metrics():
     assert len(raw_writer.calls) == 1
 
 
+@pytest.mark.parametrize('enabled', [True, False])
+def test_learner_filter_does_not_remove_operational_metrics(enabled):
+    raw = _ScalarWriter()
+    writer = _MetricFilteredWriter(raw, enabled=enabled, metric_filter={}, log_all=False)
+    tags = ['collector_step/reward_mean', 'collector_iter/total_envstep_count',
+            'evaluator_step/reward_mean', 'Buffer/num_transitions',
+            'collector_step_task2/reward_mean']
+    for tag in tags:
+        writer.add_scalar(tag, 1., 100)
+    writer.add_scalar('learner_step/unknown_avg', 1., 100)
+    assert [call[0][0] for call in raw.calls] == tags
+
+
 class _Learner:
 
     def __init__(self):

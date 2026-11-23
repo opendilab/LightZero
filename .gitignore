@@ -26,6 +26,18 @@ zoo/atari/runs/rjob/
 zoo/atari/runs/
 /scripts/
 
+# Local Atari audits and machine-specific reproduction tooling.
+/zoo/atari/experiments/
+/zoo/atari/tests/test_atari_audit.py
+/zoo/atari/tests/test_audit_process_control.py
+/zoo/atari/tests/test_repair_tensorboard.py
+/zoo/atari/tests/test_structural_audit.py
+/lzero/entry/segment_experiment.py
+/lzero/entry/tests/test_segment_experiment.py
+/tools/lightzero_atari/
+/data_unizero_audit/
+/docs/tmp/
+
 pkg/
 
 ### CVS template
@@ -1460,3 +1472,6 @@ events.*
 lzero/mcts/ctree/ctree_alphazero/pybind11
 
 zoo/jericho/envs/z-machine-games-master
+
+# Host migration backups and experiment checkpoints are transferred separately.
+/handoff_artifacts/

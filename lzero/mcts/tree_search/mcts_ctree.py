@@ -97,6 +97,9 @@ class UniZeroMCTSCtree(object):
 
             # preparation some constant
             batch_size = roots.num
+            node_cache = bool(getattr(getattr(model, 'world_model', None), 'mcts_cache_by_node', False))
+            if node_cache:
+                model.world_model.begin_mcts_search()
 
             # Store the latent state of each possible action at the MCTS root for each environment.
             first_action_latent_map = {env_id: {} for env_id in range(batch_size)} # {env_id: {action: latent_state}} 
@@ -166,24 +169,27 @@ class UniZeroMCTSCtree(object):
                     )
                 search_depth_sums += search_depth_array
                 search_depth_counts += 1
+                node_kwargs = {'parent_node_ids': list(zip(
+                    latent_state_index_in_search_path, latent_state_index_in_batch
+                ))} if node_cache else {}
                 # print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')
                 if timestep is None:
                     # for UniZero
                     if task_id is not None:
                         # multi task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id, **node_kwargs)
                     else:
                         # single task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, **node_kwargs)
                 else:
                     # for UniZero using RoPE
                     if task_id is not None:
                         # multi task setting
                         # network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, task_id=task_id) # TODO: support RoPE
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, task_id=task_id, **node_kwargs)
                     else:
                         # single task setting
-                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
+                        network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep, **node_kwargs)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

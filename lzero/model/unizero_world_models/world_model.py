@@ -245,6 +245,20 @@ class WorldModel(
         self.past_token_context_init_infer_envs = [{} for _ in range(self.env_num)]
         self.keys_values_wm_token_context_list = []
 
+        # These projections and inference histories are not state_dict entries.
+        # A recursive parent/policy checkpoint load must invalidate them too.
+        self.register_load_state_dict_post_hook(self._refresh_inference_state_after_load)
+
+    @staticmethod
+    def _refresh_inference_state_after_load(module, incompatible_keys) -> None:
+        if (
+            not module.config.rotary_emb
+            and not module.exact_kv_window_reset
+            and not module.rebuild_kv_window_from_tokens
+        ):
+            module.precompute_pos_emb_diff_kv()
+        module.clear_caches()
+
     def _initialize_cache_structures(self) -> None:
         """Initialize cache structures for past keys and values."""
         from collections import defaultdict
@@ -626,6 +640,11 @@ class WorldModel(
         self.rebuild_kv_window_from_tokens = getattr(
             self.config, 'rebuild_kv_window_from_tokens', False
         )
+        # A Transformer search state includes its history. Equal observation
+        # latents therefore do not imply interchangeable recurrent K/V caches.
+        self.mcts_cache_by_node = bool(getattr(self.config, 'mcts_cache_by_node', False))
+        if self.mcts_cache_by_node and self.context_length < 4:
+            raise ValueError('mcts_cache_by_node requires context_length >= 4')
         self.open_loop_diagnostic_freq = int(
             getattr(self.config, 'open_loop_diagnostic_freq', 0)
         )
@@ -1922,7 +1941,7 @@ class WorldModel(
     #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    search_depth=None, start_pos: int = 0):
+                                    search_depth=None, start_pos: int = 0, parent_node_ids=None):
         """
         Perform recurrent inference based on the state-action history.
 
@@ -1937,9 +1956,18 @@ class WorldModel(
         search_depth = [] if search_depth is None else search_depth
         ready_env_num = latest_state.shape[0]
 
+        if self.mcts_cache_by_node:
+            if parent_node_ids is None or len(parent_node_ids) != ready_env_num:
+                raise ValueError('Node-keyed MCTS requires one parent node ID per root')
+            for index, (expansion, root) in enumerate(parent_node_ids):
+                if int(root) != index or not 0 <= int(expansion) <= simulation_index:
+                    raise ValueError(f'Invalid parent node ID {(expansion, root)} at simulation {simulation_index}')
+
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
-        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index, start_pos)
+        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(
+            latest_state, ready_env_num, simulation_index, start_pos, parent_node_ids=parent_node_ids
+        )
 
         latent_state_list = []
         if not self.continuous_action_space:
@@ -2019,7 +2047,8 @@ class WorldModel(
                     token = token.unsqueeze(1)  # (8,1024) -> (8,1,1024)
                 latent_state_list.append(token)
 
-        del self.latent_state  # Very important to minimize cuda memory usage
+        # Contextual replay can seed roots directly without initial_inference,
+        # so latent_state need not exist yet. Assignment releases any old tensor.
         self.latent_state = torch.cat(latent_state_list, dim=1)  # (B, K)
 
         self.update_cache_context(
@@ -2138,6 +2167,20 @@ class WorldModel(
 
         return self.keys_values_wm_size_list
 
+    def begin_mcts_search(self):
+        """Give node identifiers a fresh search scope, preserving the real roots."""
+        if self.use_new_cache_manager:
+            self.kv_cache_manager.clear_recur_cache()
+        else:
+            self.past_kv_cache_recurrent_infer.clear()
+            self.shared_pool_index = 0
+            self.pool_idx_to_key_map_recur_infer = [None] * self.shared_pool_size_recur
+        self.past_token_context_recurrent_infer.clear()
+
+    @staticmethod
+    def _search_node_cache_key(expansion, root):
+        return ('mcts_node', int(expansion), int(root))
+
     #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
                              search_depth=None, valid_context_lengths=None,
@@ -2188,7 +2231,11 @@ class WorldModel(
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
             cache_env_id = env_ids[i] if is_init_infer else i
-            cache_key = self._root_cache_key(latent_state[i].view(-1).cpu().numpy())
+            cache_key = (
+                self._search_node_cache_key(simulation_index + 1, i)
+                if self.mcts_cache_by_node and not is_init_infer
+                else self._root_cache_key(latent_state[i].view(-1).cpu().numpy())
+            )
             context_length = self.context_length
 
             effective_size = effective_sizes[i]
@@ -2349,8 +2396,10 @@ class WorldModel(
                     index_to_write = self.shared_pool_index_init_envs[cache_env_id]
                     # 2. Use auxiliary list to find the old key stored at this index
                     old_key_to_evict = self.pool_idx_to_key_map_init_envs[cache_env_id][index_to_write]
-                    # 3. If old key exists, delete it from the main cache map
-                    if old_key_to_evict is not None:
+                    # A repeated latent may now point to a newer slot. Only
+                    # evict a mapping still owned by the overwritten slot.
+                    if (old_key_to_evict is not None and
+                            self.past_kv_cache_init_infer_envs[cache_env_id].get(old_key_to_evict) == index_to_write):
                         # Ensure the key to be deleted actually exists to avoid unexpected errors
                         if old_key_to_evict in self.past_kv_cache_init_infer_envs[cache_env_id]:
                             del self.past_kv_cache_init_infer_envs[cache_env_id][old_key_to_evict]
@@ -2370,8 +2419,10 @@ class WorldModel(
                     index_to_write = self.shared_pool_index
                     # 2. Use auxiliary list to find the old key stored at this index
                     old_key_to_evict = self.pool_idx_to_key_map_recur_infer[index_to_write]
-                    # 3. If old key exists, delete it from the main cache map
-                    if old_key_to_evict is not None:
+                    # Old slots can retain duplicate keys from previous searches;
+                    # they must not evict a newer copy at a different index.
+                    if (old_key_to_evict is not None and
+                            self.past_kv_cache_recurrent_infer.get(old_key_to_evict) == index_to_write):
                         if old_key_to_evict in self.past_kv_cache_recurrent_infer:
                             del self.past_kv_cache_recurrent_infer[old_key_to_evict]
                         self.past_token_context_recurrent_infer.pop(old_key_to_evict, None)
@@ -2405,7 +2456,8 @@ class WorldModel(
 
     #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
-                                     simulation_index: int = 0, start_pos: int = 0) -> list:
+                                     simulation_index: int = 0, start_pos: int = 0,
+                                     parent_node_ids=None) -> list:
         """
         Retrieves or generates key-value caches for each environment based on the latent state.
 
@@ -2428,6 +2480,9 @@ class WorldModel(
                 f'ready_env_num ({ready_env_num}) exceeds env_num ({self.env_num})'
         if self.rebuild_kv_window_from_tokens:
             self.keys_values_wm_token_context_list = []
+        node_cache = bool(getattr(self, 'mcts_cache_by_node', False))
+        if node_cache and (parent_node_ids is None or len(parent_node_ids) != ready_env_num):
+            raise ValueError('Node-keyed cache lookup requires one parent node ID per root')
         for index in range(ready_env_num):
             self.total_query_count += 1
             cache_env_id = index
@@ -2437,7 +2492,26 @@ class WorldModel(
             cache_key = self._root_cache_key(state_single_env)
 
             matched_from_init_cache = False
-            if self.reanalyze_phase:
+            if node_cache:
+                expansion, root = parent_node_ids[index]
+                matched_from_init_cache = int(expansion) == 0
+                if not matched_from_init_cache:
+                    cache_key = self._search_node_cache_key(expansion, root)
+                if self.use_new_cache_manager:
+                    matched_value = (
+                        self.kv_cache_manager.get_init_cache(cache_env_id, cache_key)
+                        if matched_from_init_cache else self.kv_cache_manager.get_recur_cache(cache_key)
+                    )
+                else:
+                    cache_map = (self.past_kv_cache_init_infer_envs[cache_env_id]
+                                 if matched_from_init_cache else self.past_kv_cache_recurrent_infer)
+                    pool = (self.shared_pool_init_infer[cache_env_id]
+                            if matched_from_init_cache else self.shared_pool_recur_infer)
+                    cache_index = cache_map.get(cache_key)
+                    matched_value = pool[cache_index] if cache_index is not None else None
+                if matched_value is None and not matched_from_init_cache:
+                    raise RuntimeError(f'Missing MCTS history for node {cache_key}; cannot reconstruct it from its latent')
+            elif self.reanalyze_phase:
                 # Seeded replay roots use per-root init pools, while descendants
                 # created earlier in this MCTS search use the recurrent pool.
                 if not reanalysis_cache_enabled:
@@ -2507,7 +2581,7 @@ class WorldModel(
                     self.keys_values_wm_list.append(self.custom_copy_kv_cache_to_shared_wm(matched_value))
                 self.keys_values_wm_size_list.append(matched_value.size)
                 if self.rebuild_kv_window_from_tokens:
-                    if self.reanalyze_phase:
+                    if self.reanalyze_phase or node_cache:
                         if matched_from_init_cache:
                             token_context = self.past_token_context_init_infer_envs[cache_env_id].get(cache_key)
                         else:
@@ -2534,7 +2608,7 @@ class WorldModel(
                         start_pos, index, ready_env_num
                     )
                 else:
-                    start_pos_adjusted = int(start_pos[index].item())
+                    start_pos_adjusted = self._start_pos_value(start_pos, index)
 
                 self.forward(
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},

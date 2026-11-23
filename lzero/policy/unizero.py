@@ -18,6 +18,7 @@ from lzero.policy import (DiscreteSupport, InverseScalarTransform,
 from lzero.policy.head_clip_manager import (HeadClipConfig, HeadClipManager,
                                             create_head_clip_manager_from_dict)
 from lzero.policy.muzero import MuZeroPolicy
+from lzero.policy.target_smoothing import scalar_smoothing_eps
 from lzero.policy.utils import initialize_pad_batch
 from torch.nn.utils.convert_parameters import (parameters_to_vector,
                                                vector_to_parameters)
@@ -586,6 +587,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 # they replay the retained token window when it rolls over.
                 exact_kv_window_reset=False,
                 rebuild_kv_window_from_tokens=False,
+                # Search node identity includes its trajectory even when latents coincide.
+                mcts_cache_by_node=False,
+                replay_context_use_prediction_window=False,
                 # (int) The number of environments.
                 env_num=8,
                 # (float) The weight of the latent reconstruction loss.
@@ -748,7 +752,11 @@ class UniZeroPolicy(MuZeroPolicy):
         # (int) Number of training steps to decay label smoothing epsilon from start to end
         policy_ls_eps_decay_steps=50000,
         
-        label_smoothing_eps=0.1,  # TODO: For value
+        # Legacy shared scalar-head setting. Uniform smoothing changes the decoded
+        # scalar expectation, but removing it can destabilize value learning.
+        label_smoothing_eps=0.1,
+        reward_label_smoothing_eps=None,
+        value_label_smoothing_eps=None,
 
         # (bool) Whether to use continuous (fixed) label smoothing throughout training
         use_continuous_label_smoothing=False,
@@ -877,6 +885,10 @@ class UniZeroPolicy(MuZeroPolicy):
         collect_num_simulations=25,
         # (int) The number of simulations in MCTS for the eval phase.
         eval_num_simulations=50,
+        # (bool) Preserve historical deterministic tree ties by default.
+        # False uses MuZero's stochastic tree ties; the final action remains
+        # greedy and evaluation still has no root Dirichlet noise.
+        eval_mcts_deterministic=True,
         # (float) Discount factor (gamma) for returns.
         discount_factor=0.997,
         # (int) The number of steps for calculating target q_value.
@@ -1079,6 +1091,8 @@ class UniZeroPolicy(MuZeroPolicy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
+        self._reward_label_smoothing_eps = scalar_smoothing_eps(self._cfg, 'reward')
+        self._value_label_smoothing_eps = scalar_smoothing_eps(self._cfg, 'value')
         if self._cfg.optim_type == 'SGD':
             # Configure SGD optimizer
             self._optimizer_world_model = torch.optim.SGD(
@@ -1152,8 +1166,10 @@ class UniZeroPolicy(MuZeroPolicy):
             )
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
-        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(
+            self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(
+            self.reward_support, self._cfg.model.categorical_distribution)
 
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
@@ -1352,8 +1368,14 @@ class UniZeroPolicy(MuZeroPolicy):
         transformed_target_value = scalar_transform(target_value)
 
         # Convert to categorical distributions
-        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward, label_smoothing_eps= self._cfg.label_smoothing_eps)
-        target_value_categorical = phi_transform(self.value_support, transformed_target_value, label_smoothing_eps=self._cfg.label_smoothing_eps)
+        target_reward_categorical = phi_transform(
+            self.reward_support, transformed_target_reward,
+            label_smoothing_eps=self._reward_label_smoothing_eps,
+        )
+        target_value_categorical = phi_transform(
+            self.value_support, transformed_target_value,
+            label_smoothing_eps=self._value_label_smoothing_eps,
+        )
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
@@ -1956,6 +1978,8 @@ class UniZeroPolicy(MuZeroPolicy):
             'collect/epsilon': self._collect_epsilon,
             'collect/mcts_temperature': self._collect_mcts_temperature,
             'schedule/policy_label_eps': current_policy_label_eps,
+            'schedule/reward_label_eps': self._reward_label_smoothing_eps,
+            'schedule/value_label_eps': self._value_label_smoothing_eps,
         })
         return_log_dict.update(replay_log_dict)
         return_log_dict.update(self._latest_replay_diagnostic_metrics)
@@ -2048,6 +2072,10 @@ class UniZeroPolicy(MuZeroPolicy):
             wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
             wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
 
+        # DI-engine returns a numerical zero for declared monitor variables that
+        # have no observations. Keep the declaration for monitor construction,
+        # but report only metrics actually produced by this learner update.
+        self._observed_learn_metric_names = set(return_log_dict)
         return return_log_dict
 
     def monitor_weights_and_grads(self, model):
@@ -2290,7 +2318,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Create a configuration copy for eval MCTS and set specific simulation count
         mcts_eval_cfg = copy.deepcopy(self._cfg)
         mcts_eval_cfg.num_simulations = self._cfg.eval_num_simulations
-        mcts_eval_cfg.deterministic = True
+        mcts_eval_cfg.deterministic = getattr(self._cfg, 'eval_mcts_deterministic', True)
 
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(mcts_eval_cfg)
@@ -2736,6 +2764,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # ==================== Training Configuration ====================
             'current_policy_label_eps',
+            'schedule/reward_label_eps',
+            'schedule/value_label_eps',
             'adaptive_alpha',
             'adaptive_target_entropy_ratio',
             'alpha_loss',
@@ -2888,8 +2918,15 @@ class UniZeroPolicy(MuZeroPolicy):
             base_vars + norm_vars + head_clip_vars + enhanced_policy_vars
             + stability_vars + gradient_component_vars + core_metric_vars
         )
+        # Explicit whitelist entries may name measured metrics absent from the
+        # legacy declaration (e.g. loss/obs or schedule/policy_label_eps).
+        if self is not None and hasattr(self, '_cfg'):
+            all_vars += list(getattr(self._cfg, 'tb_metric_filter', {}))
         # Preserve order while removing aliases that already occur in the legacy surface.
         all_vars = list(dict.fromkeys(all_vars))
+        observed = getattr(self, '_observed_learn_metric_names', None)
+        if observed is not None:
+            all_vars = [name for name in all_vars if name in observed]
         if self is None or (
                 not hasattr(self._cfg, 'log_metric') and not hasattr(self._cfg, 'tb_metric_filter')
         ):

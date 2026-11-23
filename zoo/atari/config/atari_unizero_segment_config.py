@@ -1,17 +1,22 @@
-"""Stable UniZero Atari config: the best recipe from the 2026-08 3M matrix.
+"""Stable UniZero Atari segment configuration.
 
-This mirrors the winning ``v3`` arm of the preregistered MsPacman 3M experiment
-matrix (the historical best recipe with ``value_loss_weight=0.5``) with the
-experimental mechanisms (raw-token KV rebuild, open-loop consistency loss,
-contextual value bootstrap) turned off. Those and other ablation/diagnostic
-knobs live in ``atari_unizero_segment_experimental_config.py``, whose defaults
-reproduce the full v3 recipe.
+Pong uses the search_full_context recipe: a 20-token context, exact KV windows
+and search-node cache identity. Seeds 0/1 reached mean reward >=19 in
+100,397/120,501 steps and 3.84/4.58 hours. The control took 400,364/81,086
+steps and 13.86/2.45 hours; the chosen recipe was more consistent across these
+two seeds, not the fastest individual run or a proven universal optimum.
+Pong stops at 19, with a default 400k-step budget.
+Other Atari games share these search defaults for fresh runs; their long-horizon
+improvements remain unproven. Training losses and replay settings are unchanged.
+Contextual bootstrap, reanalysis and auxiliary rollout losses remain opt-in in
+``atari_unizero_segment_experimental_config.py``.
 """
 
 from easydict import EasyDict
 
 from zoo.atari.config._atari_unizero_segment_utils import _resolve_grad_clip_mode, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 
 def build_config(
@@ -23,6 +28,7 @@ def build_config(
         run_name=None,
 ):
     action_space_size = atari_env_action_space_map[env_id]
+    is_pong = env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4')
     use_augmentation = bool(use_augmentation)
     grad_clip_mode = _resolve_grad_clip_mode(use_augmentation, grad_clip_mode_override)
 
@@ -30,18 +36,19 @@ def build_config(
     # begin of the most frequently changed config specified by the user
     # ==============================================================
     collector_env_num = 8
-    # Three deterministic episodes are sufficient for fast iteration; evaluate less
-    # often as well so short validation runs spend their budget on collection/training.
+    # A small evaluation budget for iteration, not a multi-seed performance claim.
     evaluator_env_num = 3
-    eval_freq = int(1e4)
+    # Production evaluation uses learner updates, unlike the audit's 20k
+    # env-step schedule. At replay_ratio=.1, 2k updates is roughly 20k steps.
+    eval_freq = 2000 if is_pong else int(1e4)
     num_segments = 8
     game_segment_length = 200
     num_simulations = 50
     collect_num_simulations = 25
-    max_env_step = int(3e6)
+    max_env_step = int(4e5) if is_pong else int(3e6)
     batch_size = 256
     num_unroll_steps = 10
-    infer_context_length = 5
+    infer_context_length = num_unroll_steps
     num_layers = 2
     replay_ratio = 0.1
     buffer_reanalyze_freq = 2e-10
@@ -58,7 +65,7 @@ def build_config(
     main_config = EasyDict(
         dict(
             env=dict(
-                stop_value=int(1e6),
+                stop_value=19 if is_pong else int(1e6),
                 env_id=env_id,
                 observation_shape=(3, 64, 64),
                 gray_scale=False,
@@ -89,7 +96,7 @@ def build_config(
                         policy_entropy_weight=0.005,
                         max_blocks=num_unroll_steps,
                         max_tokens=2 * num_unroll_steps,
-                        context_length=2 * infer_context_length,
+                        **full_context_world_model_config(num_unroll_steps),
                         action_space_size=action_space_size,
                         num_layers=num_layers,
                         num_heads=8,
@@ -105,13 +112,8 @@ def build_config(
                         use_normal_head=True,
                         optim_type='AdamW_mix_lr_wdecay',
                         root_cache_key_round_decimals=0,
-                        # v3 rebuilds the KV window exactly from retained raw tokens; the
-                        # stable config keeps the legacy update path (experimental-only).
-                        # rebuild_kv_window_from_tokens=True,
-                        rebuild_kv_window_from_tokens=False,
-                        # v3 enables the short differentiable MCTS-style latent rollout
-                        # consistency loss; disabled here (experimental-only).
-                        # open_loop_consistency_loss_weight=1.0,
+                        # Auxiliary rollout objectives have no demonstrated joint
+                        # sample/time benefit for these defaults.
                         open_loop_consistency_loss_weight=0,
                         open_loop_consistency_batch_size=8,
                         open_loop_consistency_horizon=4,
@@ -138,6 +140,9 @@ def build_config(
                 empty_cuda_cache_on_cache_reset=True,
                 num_simulations=num_simulations,
                 collect_num_simulations=collect_num_simulations,
+                # Match MuZero's tree tie rule. Final evaluation actions remain
+                # greedy, without root noise; this is an evaluation protocol choice.
+                eval_mcts_deterministic=False,
                 fixed_temperature_value=0.25,
                 obs_loss_weight=10.0,
                 value_loss_weight=0.5,
@@ -146,11 +151,14 @@ def build_config(
                 use_augmentation=use_augmentation,
                 augmentation=['shift', 'intensity'],
                 use_adaptive_entropy_weight=False,
-                # Policy label smoothing disabled; value/reward smoothing is unchanged.
+                # Preserve the measured Pong search recipe (policy epsilon .05).
+                # MsPacman retains its explicitly disabled policy smoothing.
                 policy_ls_eps_start=0.0,
                 policy_ls_eps_end=0.0,
                 label_smoothing_eps=0.1,
-                use_continuous_label_smoothing=True,
+                reward_label_smoothing_eps=0.1,
+                value_label_smoothing_eps=0.1,
+                use_continuous_label_smoothing=is_pong,
                 continuous_ls_eps=0.05,
                 monitor_norm_freq=10000,
                 use_enhanced_policy_monitoring=True,
@@ -162,9 +170,8 @@ def build_config(
                 reanalyze_search_chunk_size=collector_env_num,
                 reanalyze_batch_size=reanalyze_batch_size,
                 reanalyze_partition=reanalyze_partition,
-                # v3 computes TD bootstrap values from the rolling online-planning
-                # history; the stable config uses the training-only sequence context.
-                # bootstrap_value_context=True,
+                # Full-context bootstrap did not improve Pong time-to-19 over
+                # the full-context-only recipe; keep it opt-in.
                 bootstrap_value_context=False,
                 # Environment settings
                 collector_env_num=collector_env_num,
@@ -177,6 +184,11 @@ def build_config(
             ),
         )
     )
+
+    if is_pong:
+        # Match the audited evaluation cap so a looping policy cannot consume
+        # the default 108k steps per evaluation episode.
+        main_config.env.eval_max_episode_steps = 12000
 
     create_config = EasyDict(
         dict(
@@ -215,6 +227,7 @@ def build_config(
             f'_nlayer{num_layers}_gsl{game_segment_length}_bs{batch_size}'
             f'_rr{replay_ratio:g}_temp{policy_config.fixed_temperature_value:g}'
             f'_obs{policy_config.obs_loss_weight:g}_value{policy_config.value_loss_weight:g}'
+            f'_nodecache{int(world_model_config.mcts_cache_by_node)}_policyls{0.05 if is_pong else 0:g}'
             f'_{stab_fix_tag}_{rebuild_kv_tag}_{contextual_reanalysis_tag}'
             f'_reanalyze{policy_config.buffer_reanalyze_freq:g}_{bootstrap_tag}'
             f'_olc{world_model_config.open_loop_consistency_loss_weight:g}'
@@ -283,7 +296,7 @@ if __name__ == '__main__':
         '--max-env-step',
         type=int,
         default=None,
-        help='Override the default training budget of 3000000 environment steps.',
+        help='Override the default env-step budget: 400000 for Pong, 3000000 for other games.',
     )
     args = parser.parse_args()
     main(

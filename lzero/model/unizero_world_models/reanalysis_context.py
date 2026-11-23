@@ -108,7 +108,12 @@ class ReanalysisContextMixin:
         ):
             raise ValueError('Replay history observations/actions must align with root sequences.')
 
-        keep_tokens = self.context_length - 3
+        # Online prediction consumes the retained cache plus the newest action
+        # and observation (9 tokens for context_length=10). Only *after* that
+        # prediction is the stored cache trimmed to 7. Targets/priors must use
+        # the prediction window; legacy audit recipes can retain the old rule.
+        prediction_window = bool(getattr(self.config, 'replay_context_use_prediction_window', False))
+        keep_tokens = self.context_length - (1 if prediction_window else 3)
         if keep_tokens <= 0:
             raise ValueError(
                 'UniZero recurrent context_length must reserve at least one raw token, '
@@ -208,9 +213,11 @@ class ReanalysisContextMixin:
                 context, device=self.device
             ).reshape(-1, self.embed_dim)
             context_length = context.size(0)
-            if context_length <= 0 or context_length > self.context_length - 2:
+            maximum = self.context_length - (1 if getattr(
+                self.config, 'replay_context_use_prediction_window', False) else 2)
+            if context_length <= 0 or context_length > maximum:
                 raise ValueError(
-                    f'A {purpose} root context must leave room for action and next observation: '
+                    f'A {purpose} root context exceeds the configured prediction window: '
                     f'length={context_length}, context_length={self.context_length}.'
                 )
             normalized.append(context)

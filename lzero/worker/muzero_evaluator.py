@@ -17,6 +17,7 @@ from ditk import logging
 from easydict import EasyDict
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from lzero.worker.return_metrics import explicit_return_metrics
 import threading
 
 
@@ -384,8 +385,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                         dones[env_id] = done
                         if episode_timestep.done:
                             self._policy.reset([env_id])
-                            reward = episode_timestep.info['score']
-                            saved_info = {'eval_episode_return': episode_timestep.info['score']}
+                            # Atari and the BaseEnv contract report cumulative return
+                            # under eval_episode_return; some text environments use score.
+                            reward = (episode_timestep.info['eval_episode_return']
+                                      if 'eval_episode_return' in episode_timestep.info
+                                      else episode_timestep.info['score'])
+                            saved_info = {'eval_episode_return': reward}
+                            saved_info.update(explicit_return_metrics(episode_timestep.info))
                             if 'episode_info' in episode_timestep.info:
                                 saved_info.update(episode_timestep.info['episode_info'])
                             eval_monitor.update_info(env_id, saved_info)

@@ -300,7 +300,7 @@ def train_muzero_segment(
                     logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
 
             # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() >= required_replay_transitions:
+            if replay_buffer.get_num_of_sampleable_transitions() >= required_replay_transitions:
                 train_data = replay_buffer.sample(batch_size, policy)
             else:
                 logging.warning(

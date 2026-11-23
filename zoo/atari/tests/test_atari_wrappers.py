@@ -1,14 +1,66 @@
 from types import SimpleNamespace
 
 import gym
+import gymnasium
 import numpy as np
 from easydict import EasyDict
 
 from zoo.atari.envs.atari_wrappers import (
     MaxAndSkipWrapper,
+    EpisodicLifeWrapper,
+    GymnasiumToGymWrapper,
     _atari_make_kwargs,
     _validate_ale_base_semantics,
 )
+
+
+def test_reseeding_after_life_loss_preserves_game_until_real_game_over():
+    class LifeEnv(gymnasium.Env):
+        observation_space = gymnasium.spaces.Box(0, 255, shape=(1,), dtype=np.uint8)
+        action_space = gymnasium.spaces.Discrete(2)
+
+        def __init__(self):
+            self.remaining_lives = 3
+            self.frames = 0
+            self.reset_seeds = []
+            self.ale = SimpleNamespace(lives=lambda: self.remaining_lives)
+
+        def reset(self, *, seed=None, options=None):
+            super().reset(seed=seed)
+            self.reset_seeds.append(seed)
+            self.remaining_lives = 3
+            self.frames = 0
+            return np.array([0], dtype=np.uint8), {}
+
+        def step(self, action):
+            self.frames += 1
+            self.remaining_lives -= int(action == 1)
+            return np.array([self.frames], dtype=np.uint8), 0., self.remaining_lives == 0, False, {}
+
+    base = LifeEnv()
+    adapter = GymnasiumToGymWrapper(base)
+    env = EpisodicLifeWrapper(adapter)
+    env.seed(11)
+    assert base.reset_seeds == []
+    env.reset()
+    assert base.reset_seeds == [11]
+
+    for lives, seed in ((2, 22), (1, 33)):
+        assert env.step(1)[2]
+        frames = base.frames
+        env.seed(seed)
+        env.reset()
+        assert base.remaining_lives == lives
+        assert base.frames == frames + 1  # Continue with the life wrapper's no-op.
+        assert base.reset_seeds == [11]
+
+    assert env.step(1)[2]
+    env.seed(44)
+    env.reset()
+    assert base.remaining_lives == 3
+    assert base.reset_seeds == [11, 44]
+    env.reset()
+    assert base.reset_seeds == [11, 44, None]  # A pending seed is consumed once.
 
 
 def test_ale_v5_base_env_does_not_double_apply_frame_skip_or_sticky_actions():
