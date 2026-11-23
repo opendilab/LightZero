@@ -1,5 +1,6 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 action_space_size = atari_env_action_space_map[env_id]
@@ -18,7 +19,7 @@ num_simulations = 50
 max_env_step = int(2e5)
 batch_size = 64
 num_unroll_steps = 10
-infer_context_length = 4
+infer_context_length = num_unroll_steps
 seed = 0
 
 # ==============================================================
@@ -26,9 +27,9 @@ seed = 0
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
+    exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}',
     env=dict(
-        stop_value=int(1e6),
+        stop_value=19 if env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4') else int(1e6),
         env_id=env_id,
         observation_shape=(3, 64, 64),
         gray_scale=False,
@@ -48,7 +49,7 @@ atari_unizero_config = dict(
                 continuous_action_space=False,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
-                context_length=2 * infer_context_length,
+                **full_context_world_model_config(num_unroll_steps),
                 device='cuda',
                 action_space_size=action_space_size,
                 num_layers=2,
@@ -75,6 +76,7 @@ atari_unizero_config = dict(
         batch_size=batch_size,
         optim_type='AdamW',
         num_simulations=num_simulations,
+        eval_mcts_deterministic=False,
         num_segments=num_segments,
         n_episode=n_episode,
         replay_buffer_size=int(1e6),

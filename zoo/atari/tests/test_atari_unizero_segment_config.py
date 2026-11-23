@@ -40,7 +40,7 @@ def test_mspacman_keeps_training_recipe_without_unproven_objectives():
     assert policy_config.use_augmentation is False
     assert policy_config.grad_clip_mode == 'global'
     assert config.exp_name.endswith(
-        '_stabfix_norebuildkv_noctxreanalyze_reanalyze2e-10_'
+        '_stabfix_rebuildkv_noctxreanalyze_reanalyze2e-10_'
         'nobootctx_olc0_noper_noaug_seed0_3m'
     )
     assert policy_config.use_adaptive_entropy_weight is False
@@ -51,11 +51,11 @@ def test_mspacman_keeps_training_recipe_without_unproven_objectives():
     assert policy_config.reanalyze_batch_size == 160
     assert policy_config.reanalyze_partition == 0.75
     assert policy_config.replay_buffer_size == int(5e5)
-    assert world_model_config.context_length == 10
+    assert world_model_config.context_length == 20
     assert world_model_config.use_priority is False
     assert world_model_config.mcts_cache_by_node is True
     assert world_model_config.replay_context_use_prediction_window is True
-    assert world_model_config.rebuild_kv_window_from_tokens is False
+    assert world_model_config.rebuild_kv_window_from_tokens is True
     assert world_model_config.open_loop_consistency_loss_weight == 0
     assert world_model_config.open_loop_consistency_batch_size == 8
     assert world_model_config.open_loop_consistency_horizon == 4
@@ -116,6 +116,8 @@ def test_episode_entry_uses_cache_fix_without_transplanting_segment_recipe(monke
     atari_unizero_config.main(env_id)
     policy = captured['config'].policy
     assert policy.model.world_model_cfg.mcts_cache_by_node is True
+    assert policy.model.world_model_cfg.context_length == 20
+    assert policy.model.world_model_cfg.rebuild_kv_window_from_tokens is True
     assert policy.eval_mcts_deterministic is False
     assert policy.batch_size == 64
     assert policy.replay_ratio == 0.25

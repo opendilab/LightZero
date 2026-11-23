@@ -6,8 +6,8 @@ and search-node cache identity. Seeds 0/1 reached mean reward >=19 in
 steps and 13.86/2.45 hours; the chosen recipe was more consistent across these
 two seeds, not the fastest individual run or a proven universal optimum.
 Pong stops at 19, with a default 400k-step budget.
-MsPacman keeps the historical training recipe; its long-horizon improvements
-remain unproven. Both games use search-node identity for cache correctness.
+Other Atari games share these search defaults for fresh runs; their long-horizon
+improvements remain unproven. Training losses and replay settings are unchanged.
 Contextual bootstrap, reanalysis and auxiliary rollout losses remain opt-in in
 ``atari_unizero_segment_experimental_config.py``.
 """
@@ -16,6 +16,7 @@ from easydict import EasyDict
 
 from zoo.atari.config._atari_unizero_segment_utils import _resolve_grad_clip_mode, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 
 def build_config(
@@ -28,7 +29,6 @@ def build_config(
 ):
     action_space_size = atari_env_action_space_map[env_id]
     is_pong = env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4')
-    use_node_cache = is_pong or env_id in ('ALE/MsPacman-v5', 'MsPacmanNoFrameskip-v4')
     use_augmentation = bool(use_augmentation)
     grad_clip_mode = _resolve_grad_clip_mode(use_augmentation, grad_clip_mode_override)
 
@@ -48,7 +48,7 @@ def build_config(
     max_env_step = int(4e5) if is_pong else int(3e6)
     batch_size = 256
     num_unroll_steps = 10
-    infer_context_length = 10 if is_pong else 5
+    infer_context_length = num_unroll_steps
     num_layers = 2
     replay_ratio = 0.1
     buffer_reanalyze_freq = 2e-10
@@ -96,7 +96,7 @@ def build_config(
                         policy_entropy_weight=0.005,
                         max_blocks=num_unroll_steps,
                         max_tokens=2 * num_unroll_steps,
-                        context_length=2 * infer_context_length,
+                        **full_context_world_model_config(num_unroll_steps),
                         action_space_size=action_space_size,
                         num_layers=num_layers,
                         num_heads=8,
@@ -112,11 +112,6 @@ def build_config(
                         use_normal_head=True,
                         optim_type='AdamW_mix_lr_wdecay',
                         root_cache_key_round_decimals=0,
-                        # Equal latents can have different Transformer histories.
-                        mcts_cache_by_node=use_node_cache,
-                        rebuild_kv_window_from_tokens=is_pong,
-                        # Align prediction windows if contextual targets are enabled.
-                        replay_context_use_prediction_window=use_node_cache,
                         # Auxiliary rollout objectives have no demonstrated joint
                         # sample/time benefit for these defaults.
                         open_loop_consistency_loss_weight=0,
@@ -232,7 +227,7 @@ def build_config(
             f'_nlayer{num_layers}_gsl{game_segment_length}_bs{batch_size}'
             f'_rr{replay_ratio:g}_temp{policy_config.fixed_temperature_value:g}'
             f'_obs{policy_config.obs_loss_weight:g}_value{policy_config.value_loss_weight:g}'
-            f'_nodecache{int(use_node_cache)}_policyls{0.05 if is_pong else 0:g}'
+            f'_nodecache{int(world_model_config.mcts_cache_by_node)}_policyls{0.05 if is_pong else 0:g}'
             f'_{stab_fix_tag}_{rebuild_kv_tag}_{contextual_reanalysis_tag}'
             f'_reanalyze{policy_config.buffer_reanalyze_freq:g}_{bootstrap_tag}'
             f'_olc{world_model_config.open_loop_consistency_loss_weight:g}'

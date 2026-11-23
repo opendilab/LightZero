@@ -1,6 +1,6 @@
-from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-from zoo.atari.config.atari_unizero_config import atari_unizero_config, atari_unizero_create_config
+from zoo.atari.config.atari_unizero_config import build_config
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 action_space_size = atari_env_action_space_map[env_id]
@@ -16,21 +16,22 @@ replay_ratio = 0.25
 reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
-infer_context_length = 4
+infer_context_length = num_unroll_steps
 max_env_step = int(5e5)
 num_simulations = 50
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_unizero_stack4_config = EasyDict(atari_unizero_config)  # Copy the base config
+atari_unizero_stack4_config, atari_unizero_create_config, _ = build_config(env_id)
 
 # Modify specific parts for stack4
-atari_unizero_stack4_config.exp_name = f'data_unizero/{env_id[:-14]}_stack4_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0'
+atari_unizero_stack4_config.exp_name = f'data_unizero/{env_id[:-14]}_stack4_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed0'
 atari_unizero_stack4_config.env.update(
     dict(
         observation_shape=(4, 64, 64),
         gray_scale=True,
+        frame_stack_num=4,
         collect_max_episode_steps=int(2e4),
         eval_max_episode_steps=int(1e4),
     )
@@ -46,7 +47,7 @@ atari_unizero_stack4_config.policy.update(
             world_model_cfg=dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,
-                context_length=2 * infer_context_length,
+                **full_context_world_model_config(num_unroll_steps),
                 device='cuda',
                 # device='cpu',
                 action_space_size=action_space_size,
@@ -78,6 +79,6 @@ if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack4_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack4_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

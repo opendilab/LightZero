@@ -1,13 +1,10 @@
 """UniZero Atari segment experiment launcher.
 
-Defaults reproduce the baseline arm of the 2026-08 MsPacman 3M matrix: no
-reanalysis, no prioritized replay, no augmentation, and the experimental
-mechanisms (raw-token KV rebuild, contextual value bootstrap, open-loop
-consistency loss) off. Pass ``--rebuild-kv-window-from-tokens
---bootstrap-value-context --open-loop-consistency-weight 1.0`` for the full v3
-recipe. This module intentionally contains the performance, diagnostics,
-recovery, and ablation controls used by iterative experiments. Keep the stable
-baseline in ``atari_unizero_segment_config.py`` free of these overrides.
+Fresh runs use full trained inference context, exact token-window rebuilds and
+search-node cache identity, matching the single-task MCTS search defaults.
+Bootstrap, reanalysis, augmentation and auxiliary losses remain opt-in.
+Explicit context/cache controls support ablations and historical checkpoints;
+use their original settings when reproducing an older inference protocol.
 """
 
 import json
@@ -21,6 +18,7 @@ from datetime import datetime
 from easydict import EasyDict
 from zoo.atari.config._atari_unizero_segment_utils import _resolve_grad_clip_mode, _Tee, _safe_run_name
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+from zoo.atari.config._atari_unizero_search import full_context_world_model_config
 
 
 _CORE_TB_METRIC_FILTER = {
@@ -48,7 +46,7 @@ def _default_run_name(
         replay_ratio, collect_temperature, obs_loss_weight, value_loss_weight,
         open_loop_consistency_weight, use_priority, use_augmentation,
         bootstrap_value_context, rebuild_kv_window_from_tokens, contextual_reanalysis,
-        buffer_reanalyze_freq, stab_fix, max_env_step,
+        buffer_reanalyze_freq, stab_fix, max_env_step, mcts_cache_by_node=True,
 ):
     """Build a self-describing run name from the resolved key config settings."""
     parts = [
@@ -61,6 +59,7 @@ def _default_run_name(
         f'temp{collect_temperature:g}',
         f'obs{obs_loss_weight:g}',
         f'value{value_loss_weight:g}',
+        f'nodecache{int(mcts_cache_by_node)}',
         'stabfix' if stab_fix else 'nostabfix',
         'rebuildkv' if rebuild_kv_window_from_tokens else 'norebuildkv',
         'ctxreanalyze' if contextual_reanalysis else 'noctxreanalyze',
@@ -232,7 +231,7 @@ def main(
         game_segment_length_override=None,
         infer_context_length_override=None,
         exact_kv_window_reset=False,
-        rebuild_kv_window_from_tokens=False,
+        rebuild_kv_window_from_tokens=None,
         contextual_reanalysis=False,
         bootstrap_value_context=False,
         resume_buffer_min_transitions_override=None,
@@ -253,6 +252,7 @@ def main(
         tb_log_all=False,
         reward_label_smoothing_eps=None,
         value_label_smoothing_eps=None,
+        mcts_cache_by_node=True,
 ):
     action_space_size = atari_env_action_space_map[env_id]
     # ==============================================================
@@ -289,13 +289,18 @@ def main(
     if num_unroll_steps <= 0:
         raise ValueError(f'num_unroll_steps must be positive, got {num_unroll_steps}')
     if infer_context_length_override is None:
-        # The best MsPacman recipe retains 5 observation/action blocks for online KV inference.
-        infer_context_length_override = min(5, num_unroll_steps)
+        infer_context_length_override = num_unroll_steps
     if int(infer_context_length_override) > num_unroll_steps:
         raise ValueError(
             'infer_context_length cannot exceed num_unroll_steps because the '
             f'transformer cache has only that many blocks: {infer_context_length_override} > {num_unroll_steps}'
         )
+    if mcts_cache_by_node and int(infer_context_length_override) < 2:
+        raise ValueError('mcts_cache_by_node requires infer_context_length >= 2')
+    if rebuild_kv_window_from_tokens is None:
+        rebuild_kv_window_from_tokens = not exact_kv_window_reset
+    if exact_kv_window_reset and rebuild_kv_window_from_tokens:
+        raise ValueError('exact_kv_window_reset and rebuild_kv_window_from_tokens are mutually exclusive')
     obs_loss_weight = 10.0 if obs_loss_weight_override is None else float(obs_loss_weight_override)
     # The historical config declared 0.25, but the historical code hard-coded an effective 0.5.
     # The v3 arm of the 2026-08 MsPacman matrix isolated this drift and won, so 0.5 is default.
@@ -409,6 +414,11 @@ def main(
             encoder_clip_enabled=encoder_clip_enabled,
         )
     )
+    # Preserve explicit False values when overriding the new search defaults.
+    world_model_experiment_overrides.update(
+        rebuild_kv_window_from_tokens=bool(rebuild_kv_window_from_tokens),
+        mcts_cache_by_node=bool(mcts_cache_by_node),
+    )
 
     num_simulations = 50
 
@@ -449,7 +459,7 @@ def main(
 
     atari_unizero_config = dict(
         env=dict(
-            stop_value=int(1e6),
+            stop_value=19 if env_id in ('ALE/Pong-v5', 'PongNoFrameskip-v4') else int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
             gray_scale=False,
@@ -481,6 +491,7 @@ def main(
                     policy_entropy_weight=fixed_alpha,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
+                    **full_context_world_model_config(num_unroll_steps),
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=8,
@@ -644,6 +655,7 @@ def main(
             buffer_reanalyze_freq=buffer_reanalyze_freq,
             stab_fix=stab_fix,
             max_env_step=max_env_step,
+            mcts_cache_by_node=mcts_cache_by_node,
         )
     run_name = _safe_run_name(run_name)
 
@@ -856,7 +868,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--infer-context-length', dest='infer_context_length', type=int, default=None,
-        help='Override the number of observation/action blocks retained by online KV inference (default 5).'
+        help='Override inference history blocks (default: num_unroll_steps, retaining the full trained prefix).'
     )
     kv_window_group = parser.add_mutually_exclusive_group()
     kv_window_group.add_argument(
@@ -889,9 +901,15 @@ if __name__ == "__main__":
     )
     kv_window_group.add_argument(
         '--no-rebuild-kv-window-from-tokens', dest='rebuild_kv_window_from_tokens', action='store_false',
-        help='Keep the legacy KV window update path (default).'
+        help='Use the legacy KV window update path for a historical run or ablation.'
     )
-    parser.set_defaults(rebuild_kv_window_from_tokens=False)
+    # None selects exact token rebuild, unless the hard-reset diagnostic was requested.
+    parser.set_defaults(rebuild_kv_window_from_tokens=None)
+    parser.add_argument(
+        '--no-mcts-cache-by-node', dest='mcts_cache_by_node', action='store_false',
+        help='Use legacy latent-keyed search caches for a historical run or ablation.',
+    )
+    parser.set_defaults(mcts_cache_by_node=True)
     parser.add_argument(
         '--buffer-reanalyze-freq', type=float, default=None,
         help='Override periodic replay-buffer policy-target reanalysis frequency '
@@ -1002,6 +1020,7 @@ if __name__ == "__main__":
         infer_context_length_override=args.infer_context_length,
         exact_kv_window_reset=args.exact_kv_window_reset,
         rebuild_kv_window_from_tokens=args.rebuild_kv_window_from_tokens,
+        mcts_cache_by_node=args.mcts_cache_by_node,
         contextual_reanalysis=args.contextual_reanalysis,
         bootstrap_value_context=args.bootstrap_value_context,
         resume_buffer_min_transitions_override=args.resume_buffer_min_transitions,
