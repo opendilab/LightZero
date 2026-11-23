@@ -365,9 +365,10 @@ class GymnasiumToGymWrapper(gym.Wrapper):
         self._seed = None
 
     def seed(self, seed):
+        # Defer reseeding until a real reset reaches this adapter. Resetting
+        # here bypasses EpisodicLifeWrapper: every lost life would silently
+        # start a new game, while the outer wrapper only performs a no-op.
         self._seed = seed
-        # Call gymnasium's new seeder
-        self.env.reset(seed=seed)
 
     def reset(self, **kwargs):
         # If seed is in kwargs, use it with priority
