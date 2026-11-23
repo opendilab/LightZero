@@ -84,8 +84,8 @@ def test_pong_preserves_measured_search_recipe_and_avoids_failed_scalar_changes(
     assert policy.reward_label_smoothing_eps == policy.value_label_smoothing_eps == 0.1
     assert policy.bootstrap_value_context is False
     defaults = _unizero_policy().config
-    assert defaults['compensate_scalar_label_smoothing'] is False
-    assert defaults['value_label_smoothing_mode'] == 'uniform'
+    assert 'compensate_scalar_label_smoothing' not in defaults
+    assert 'value_label_smoothing_mode' not in defaults
     assert defaults['model']['world_model_cfg']['open_loop_recurrent_loss_weight'] == 0
     assert '_nodecache1_policyls0.05_' in config.exp_name
 

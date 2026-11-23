@@ -9,7 +9,6 @@ from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
 from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as tree_gumbel_muzero
 from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 from lzero.policy import DiscreteSupport, InverseScalarTransform, to_detach_cpu_numpy
-from lzero.policy.target_smoothing import scalar_decode_smoothing_eps
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ez_ctree
@@ -61,12 +60,8 @@ class UniZeroMCTSCtree(object):
         self._cfg = default_config
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
-        self.value_inverse_scalar_transform_handle = InverseScalarTransform(
-            self.value_support, self._cfg.model.categorical_distribution,
-            label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'value'))
-        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(
-            self.reward_support, self._cfg.model.categorical_distribution,
-            label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'reward'))
+        self.value_inverse_scalar_transform_handle = InverseScalarTransform(self.value_support, self._cfg.model.categorical_distribution)
+        self.reward_inverse_scalar_transform_handle = InverseScalarTransform(self.reward_support, self._cfg.model.categorical_distribution)
 
     @classmethod
     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "mz_ctree":

@@ -45,9 +45,9 @@ class OpenLoopWorldModelMixin:
         'open_loop_total_ratio': 0.0,
     }
 
-    def _validate_open_loop_support(self, operation: str) -> None:
+    def _validate_open_loop_support(self, operation: str, *, require_exact_inference: bool = True) -> None:
         """Validate the model assumptions shared by every open-loop path."""
-        if not self.rebuild_kv_window_from_tokens:
+        if require_exact_inference and not self.rebuild_kv_window_from_tokens:
             raise RuntimeError(
                 f'{operation} currently requires rebuild_kv_window_from_tokens=True.'
             )
@@ -419,7 +419,9 @@ class OpenLoopWorldModelMixin:
             labels_value: torch.Tensor
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Mirror MuZero's learner exposure on a short differentiable rollout."""
-        self._validate_open_loop_support('Open-loop recurrent training')
+        # _open_loop_hidden rebuilds differentiable raw-token windows without
+        # online KV caches, even when inference uses approximate eviction.
+        self._validate_open_loop_support('Open-loop recurrent training', require_exact_inference=False)
         rollout = self._prepare_open_loop_batch(
             obs_embeddings,
             target_obs_embeddings,
@@ -533,8 +535,13 @@ class OpenLoopWorldModelMixin:
             'policy_ce': policy_ce_mean,
             'policy_entropy': policy_entropy_mean,
         }
+        # Only the auxiliary latent term is optional; compute_loss retains the
+        # standard one-step objective and components retains the raw diagnostic.
+        weighted_latent_loss = 0.
+        if getattr(self.config, 'open_loop_recurrent_include_latent_loss', True):
+            weighted_latent_loss = 10. * components['latent']
         total = (
-            10. * components['latent']
+            weighted_latent_loss
             + components['reward']
             + 0.5 * components['value']
             + components['policy']

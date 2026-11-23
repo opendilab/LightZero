@@ -9,9 +9,14 @@ from .test_per_sample_is_weights import _build_world_model
 from lzero.model.unizero_world_models.world_model import WorldModel
 
 
-def prediction_model():
+def prediction_model(context_length=None):
     template = _build_world_model()
-    return WorldModel(EasyDict(dict(template.config, num_layers=2)), template.tokenizer).eval()
+    config = EasyDict(dict(template.config, num_layers=2))
+    if context_length is not None:
+        config.context_length = context_length
+        config.max_tokens = max(config.max_tokens, context_length)
+        config.max_blocks = config.max_tokens // config.tokens_per_block
+    return WorldModel(config, template.tokenizer).eval()
 
 
 def test_contextual_reanalysis_search_needs_no_prior_online_inference():
@@ -41,10 +46,10 @@ def test_contextual_reanalysis_search_needs_no_prior_online_inference():
     assert wm.reanalysis_root_seed_hit_count == 2
 
 
-@pytest.mark.parametrize('context_length', [8, 10])
+@pytest.mark.parametrize('context_length', [8, 10, 20])
 def test_bootstrap_values_and_reanalysis_priors_match_online_rollovers(context_length):
     torch.manual_seed(42)
-    wm = prediction_model()
+    wm = prediction_model(context_length)
     wm.rebuild_kv_window_from_tokens = True
     wm.context_length = context_length
     wm.config.replay_context_use_prediction_window = True
@@ -54,7 +59,7 @@ def test_bootstrap_values_and_reanalysis_priors_match_online_rollovers(context_l
         torch.nn.init.normal_(last_linear.weight, std=.1)
     observations, actions = [], []
     with torch.no_grad():
-        for step in range(10):
+        for step in range(context_length + 2):
             current = torch.randn(2, 1, wm.embed_dim)
             previous = observations[-1] if observations else current
             action = torch.tensor([step % 6, (step + 1) % 6]) if step else [-1, -1]

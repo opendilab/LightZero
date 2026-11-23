@@ -1472,3 +1472,6 @@ events.*
 lzero/mcts/ctree/ctree_alphazero/pybind11
 
 zoo/jericho/envs/z-machine-games-master
+
+# Host migration backups and experiment checkpoints are transferred separately.
+/handoff_artifacts/

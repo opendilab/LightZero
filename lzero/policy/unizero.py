@@ -18,7 +18,7 @@ from lzero.policy import (DiscreteSupport, InverseScalarTransform,
 from lzero.policy.head_clip_manager import (HeadClipConfig, HeadClipManager,
                                             create_head_clip_manager_from_dict)
 from lzero.policy.muzero import MuZeroPolicy
-from lzero.policy.target_smoothing import scalar_smoothing_eps, scalar_decode_smoothing_eps, scalar_smoothing_mode
+from lzero.policy.target_smoothing import scalar_smoothing_eps
 from lzero.policy.utils import initialize_pad_batch
 from torch.nn.utils.convert_parameters import (parameters_to_vector,
                                                vector_to_parameters)
@@ -757,11 +757,6 @@ class UniZeroPolicy(MuZeroPolicy):
         label_smoothing_eps=0.1,
         reward_label_smoothing_eps=None,
         value_label_smoothing_eps=None,
-        reward_label_smoothing_mode='uniform',
-        value_label_smoothing_mode='uniform',
-        # Experimental: undo scalar-mean shrinkage while retaining smooth CE.
-        # This failed the Pong regression with divergent values; keep disabled.
-        compensate_scalar_label_smoothing=False,
 
         # (bool) Whether to use continuous (fixed) label smoothing throughout training
         use_continuous_label_smoothing=False,
@@ -1098,8 +1093,6 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         self._reward_label_smoothing_eps = scalar_smoothing_eps(self._cfg, 'reward')
         self._value_label_smoothing_eps = scalar_smoothing_eps(self._cfg, 'value')
-        self._reward_label_smoothing_mode = scalar_smoothing_mode(self._cfg, 'reward')
-        self._value_label_smoothing_mode = scalar_smoothing_mode(self._cfg, 'value')
         if self._cfg.optim_type == 'SGD':
             # Configure SGD optimizer
             self._optimizer_world_model = torch.optim.SGD(
@@ -1174,11 +1167,9 @@ class UniZeroPolicy(MuZeroPolicy):
         self.value_support = DiscreteSupport(*self._cfg.model.value_support_range, self._cfg.device)
         self.reward_support = DiscreteSupport(*self._cfg.model.reward_support_range, self._cfg.device)
         self.value_inverse_scalar_transform_handle = InverseScalarTransform(
-            self.value_support, self._cfg.model.categorical_distribution,
-            label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'value'))
+            self.value_support, self._cfg.model.categorical_distribution)
         self.reward_inverse_scalar_transform_handle = InverseScalarTransform(
-            self.reward_support, self._cfg.model.categorical_distribution,
-            label_smoothing_eps=scalar_decode_smoothing_eps(self._cfg, 'reward'))
+            self.reward_support, self._cfg.model.categorical_distribution)
 
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
@@ -1380,12 +1371,10 @@ class UniZeroPolicy(MuZeroPolicy):
         target_reward_categorical = phi_transform(
             self.reward_support, transformed_target_reward,
             label_smoothing_eps=self._reward_label_smoothing_eps,
-            smoothing_mode=self._reward_label_smoothing_mode,
         )
         target_value_categorical = phi_transform(
             self.value_support, transformed_target_value,
             label_smoothing_eps=self._value_label_smoothing_eps,
-            smoothing_mode=self._value_label_smoothing_mode,
         )
 
         # Prepare batch for GPT model
@@ -1432,7 +1421,6 @@ class UniZeroPolicy(MuZeroPolicy):
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.value_inverse_scalar_transform_handle, global_step=train_iter, current_policy_label_eps=current_policy_label_eps,
-            reward_inverse_scalar_transform_handle=self.reward_inverse_scalar_transform_handle,
         )
         if hasattr(losses, 'set_loss_weights'):
             losses.set_loss_weights(

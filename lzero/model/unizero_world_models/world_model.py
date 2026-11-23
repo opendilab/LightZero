@@ -2745,8 +2745,7 @@ class WorldModel(
                 pred_rew_logits = outputs.logits_rewards.view(batch_size * seq_len, -1)
 
                 scalar_values = inverse_scalar_transform_handle(pred_val_logits).squeeze(-1)
-                reward_decoder = kwargs.get('reward_inverse_scalar_transform_handle', inverse_scalar_transform_handle)
-                scalar_rewards = reward_decoder(pred_rew_logits).squeeze(-1)
+                scalar_rewards = inverse_scalar_transform_handle(pred_rew_logits).squeeze(-1)
 
                 self._analyze_latent_representation(
                     latent_states=obs_embeddings,
