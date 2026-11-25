@@ -1,0 +1,35 @@
+name: Native MCTS NumPy compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'lzero/mcts/ctree/**'
+      - 'setup.py'
+      - 'pyproject.toml'
+      - 'tests/test_ctree_numpy_compatibility.py'
+      - '.github/workflows/numpy-ctree.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  native-mcts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build-numpy: ['numpy==1.26.4', 'numpy>=2,<3']
+        runtime-numpy: ['numpy==1.26.4', 'numpy>=2,<3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native build and test dependencies
+        run: python -m pip install 'setuptools<81' wheel 'Cython>=3' pytest pytest-timeout '${{ matrix.build-numpy }}'
+      - name: Build native extensions without installing the training stack
+        run: python setup.py build_ext --inplace
+      - name: Select runtime NumPy
+        run: python -m pip install --upgrade '${{ matrix.runtime-numpy }}'
+      - name: Exercise native imports and MuZero search
+        run: python -m pytest -q tests/test_ctree_numpy_compatibility.py

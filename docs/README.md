@@ -14,6 +14,7 @@ For those interested in customizing environments and algorithms, we provide rele
 - [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/logs/logs.md)
 - [MuZero / UniZero Async Segment Pipeline](async_pipeline_muzero_unizero.md) / [中文说明](async_pipeline_muzero_unizero_zh.md)
 - [UniZero + PPO](source/tutorials/algos/unizero_ppo.md) / [中文说明](source/tutorials/algos/unizero_ppo_zh.md)
+- [NumPy compatibility and native MCTS validation](numpy_compatibility.md)
 
 Should you have any questions, feel free to contact us for support.
 
