@@ -8,6 +8,7 @@ on:
       - 'lzero/**'
       - 'zoo/classic_control/**'
       - 'tests/test_numpy_training_compatibility.py'
+      - 'tests/test_gymnasium_migration.py'
       - '.github/workflows/numpy-training.yml'
   workflow_dispatch:
 jobs:
@@ -43,6 +44,7 @@ jobs:
       - name: Exercise environments, replay, search and a learner update
         run: >-
           python -m pytest -q tests/test_numpy_training_compatibility.py
+          tests/test_gymnasium_migration.py
           lzero/mcts/tests/test_game_buffer_index_alignment.py
           lzero/worker/tests/test_muzero_evaluator.py
           zoo/minigrid/tests/test_minigrid_muzero_rnd.py

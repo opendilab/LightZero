@@ -3,8 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 import cv2
-import gym  # For legacy API wrapper base class
-import gymnasium  # For creating environments
+import gymnasium
 import ale_py
 import numpy as np
 from ditk import logging
@@ -129,14 +128,31 @@ def wrap_deepmind_mr(env_id, episode_life=True, clip_rewards=True, frame_stack=4
     return env
 
 
+class LegacyWrapper:
+    """
+    Overview:
+        A minimal base class replacing ``gym.Wrapper``. Stores the wrapped environment
+        in ``self.env`` and delegates attribute access to it via ``__getattr__``.
+        Subclasses override spaces by direct assignment (e.g. ``self.observation_space = ...``).
+    """
+
+    def __init__(self, env):
+        self.env = env
+
+    def __getattr__(self, name):
+        if name.startswith('_') or name == 'env':
+            raise AttributeError(f"attempted to get missing attribute '{name}'")
+        return getattr(self.env, name)
+
+
 # This TimeLimit class can be replaced by ding.envs.TimeLimitWrapper for better consistency.
 # However, if it needs to be retained, it now works correctly because it wraps the output of GymnasiumToGymWrapper.
-class TimeLimit(gym.Wrapper):
+class TimeLimit(LegacyWrapper):
     """
     Overview:
         A wrapper that limits the maximum number of steps in an episode.
     """
-    def __init__(self, env: gym.Env, max_episode_steps: Optional[int] = None):
+    def __init__(self, env, max_episode_steps: Optional[int] = None):
         super(TimeLimit, self).__init__(env)
         self._max_episode_steps = max_episode_steps
         self._elapsed_steps = 0
@@ -153,7 +169,7 @@ class TimeLimit(gym.Wrapper):
         self._elapsed_steps = 0
         return self.env.reset(**kwargs)
 
-def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> gym.Env:
+def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool):
     """
     Overview:
         Configure environment for MuZero-style Atari. The observation is
@@ -163,7 +179,7 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         - episode_life (:obj:`bool`): If True, the agent starts with a set number of lives and loses them during the game.
         - clip_rewards (:obj:`bool`): If True, the rewards are clipped to a certain range.
     Return:
-        - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
+        - env: The wrapped Atari environment with the given configurations.
     """
     # Step 1: Create an unskipped deterministic base environment.  The outer
     # MaxAndSkipWrapper below is the sole owner of action repeat/max-pooling.
@@ -228,17 +244,17 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     return env
 
 
-class WarpFrame(gym.ObservationWrapper):
+class WarpFrame(LegacyWrapper):
     """
     Overview:
         A wrapper that warps frames to 84x84 as done in the Nature paper and later work.
     """
 
-    def __init__(self, env: gym.Env, width: int = 84, height: int = 84, grayscale: bool = True,
+    def __init__(self, env, width: int = 84, height: int = 84, grayscale: bool = True,
                  dict_space_key: Optional[str] = None):
         """
         Arguments:
-            - env (:obj:`gym.Env`): The environment to wrap.
+            - env: The environment to wrap.
             - width (:obj:`int`): The width to which the frames are resized.
             - height (:obj:`int`): The height to which the frames are resized.
             - grayscale (:obj:`bool`): If True, convert frames to grayscale.
@@ -254,7 +270,7 @@ class WarpFrame(gym.ObservationWrapper):
         else:
             num_colors = 3
 
-        new_space = gym.spaces.Box(
+        new_space = gymnasium.spaces.Box(
             low=0,
             high=255,
             shape=(self._height, self._width, num_colors),
@@ -267,6 +283,13 @@ class WarpFrame(gym.ObservationWrapper):
             original_space = self.observation_space.spaces[self._key]
             self.observation_space.spaces[self._key] = new_space
         assert original_space.dtype == np.uint8 and len(original_space.shape) == 3
+
+    def reset(self, **kwargs):
+        return self.observation(self.env.reset(**kwargs))
+
+    def step(self, action):
+        observation, reward, done, info = self.env.step(action)
+        return self.observation(observation), reward, done, info
 
     def observation(self, obs):
         obs = _strip_gymnasium_reset_info(obs)
@@ -292,16 +315,16 @@ class WarpFrame(gym.ObservationWrapper):
         return obs
 
 
-class JpegWrapper(gym.Wrapper):
+class JpegWrapper(LegacyWrapper):
     """
     Overview:
         A wrapper that converts the observation into a string to save memory.
     """
 
-    def __init__(self, env: gym.Env, transform2string: bool = True):
+    def __init__(self, env, transform2string: bool = True):
         """
         Arguments:
-            - env (:obj:`gym.Env`): The environment to wrap.
+            - env: The environment to wrap.
             - transform2string (:obj:`bool`): If True, transform the observations to string.
         """
         super().__init__(env)
@@ -324,16 +347,16 @@ class JpegWrapper(gym.Wrapper):
         return observation
 
 
-class GameWrapper(gym.Wrapper):
+class GameWrapper(LegacyWrapper):
     """
     Overview:
         A wrapper to adapt the environment to the game interface.
     """
 
-    def __init__(self, env: gym.Env):
+    def __init__(self, env):
         """
         Arguments:
-            - env (:obj:`gym.Env`): The environment to wrap.
+            - env: The environment to wrap.
         """
         super().__init__(env)
 
@@ -342,7 +365,7 @@ class GameWrapper(gym.Wrapper):
         
 
 # This is the key compatibility wrapper
-class GymnasiumToGymWrapper(gym.Wrapper):
+class GymnasiumToGymWrapper(LegacyWrapper):
     """
     Overview:
         A wrapper class that adapts a Gymnasium environment to the Gym interface.

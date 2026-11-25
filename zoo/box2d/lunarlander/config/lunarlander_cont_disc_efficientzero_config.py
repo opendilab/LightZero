@@ -1,5 +1,5 @@
 """
-NOTE: the lunarlander_cont_disc in file name means we use the lunarlander continuous env ('LunarLanderContinuous-v2')
+NOTE: the lunarlander_cont_disc in file name means we use the lunarlander continuous env ('LunarLanderContinuous-v3')
 with manually discretized action space. That is to say, the final action space is discrete.
 """
 from easydict import EasyDict
@@ -23,7 +23,7 @@ reanalyze_ratio = 0.
 lunarlander_cont_disc_efficientzero_config = dict(
     exp_name=f'data_ez/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
-        env_id='LunarLanderContinuous-v2',
+        env_id='LunarLanderContinuous-v3',
         continuous=False,
         manually_discretization=True,
         each_dim_disc_size=each_dim_disc_size,

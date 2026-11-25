@@ -26,6 +26,7 @@ python -m pip install 'torch==2.6.0' --index-url https://download.pytorch.org/wh
 python -m pip install -e . 'numpy>=2,<3' pytest-timeout 'opencv-python-headless>=4.10'
 python -m pip check
 OMP_NUM_THREADS=1 python -m pytest -q tests/test_numpy_training_compatibility.py \
+  tests/test_gymnasium_migration.py \
   lzero/mcts/tests/test_game_buffer_index_alignment.py \
   lzero/worker/tests/test_muzero_evaluator.py \
   zoo/minigrid/tests/test_minigrid_muzero_rnd.py
@@ -38,8 +39,8 @@ is complementary; it does not replace the full-stack installation/training gate.
 ## Environment and validation scope
 
 The generic environment factory now creates Gymnasium environments. DI-engine
-adapts them to the existing LightZero timestep API; spaces retain the correct
-Gym/Gymnasium family, and discretized action spaces are available before the
+adapts them to the existing LightZero timestep API; the wrappers require Gymnasium spaces,
+and discretized action spaces are available before the
 environment manager snapshots them. MountainCar also uses Gymnasium and
 combines termination/truncation correctly. NumPy arrays containing a single
 discretized action are converted with `.item()` instead of implicit scalar

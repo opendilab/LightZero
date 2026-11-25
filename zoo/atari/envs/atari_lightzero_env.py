@@ -2,7 +2,7 @@ import copy
 from ditk import logging
 from typing import List
 
-import gym
+import gymnasium
 import ale_py
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -154,25 +154,25 @@ class AtariEnvLightZero(BaseEnv):
 
             self._action_space = self._env.action_space
 
-            self._observation_space = gym.spaces.Dict({
-                'observation': gym.spaces.Box(
+            self._observation_space = gymnasium.spaces.Dict({
+                'observation': gymnasium.spaces.Box(
                     low=0, high=1, shape=observation_space_before_stack, dtype=np.float32
                 ),
-                'action_mask': gym.spaces.Box(
+                'action_mask': gymnasium.spaces.Box(
                     low=0, high=1, shape=(self._action_space.n,), dtype=np.int8
                 ),
-                'to_play': gym.spaces.Box(
+                'to_play': gymnasium.spaces.Box(
                     low=-1, high=2, shape=(), dtype=np.int8
                 ),
-                'timestep': gym.spaces.Box(
+                'timestep': gymnasium.spaces.Box(
                     low=0, high=self.cfg.collect_max_episode_steps, shape=(), dtype=np.int32
                 ),
             })
 
-            # self._reward_space = gym.spaces.Box(
+            # self._reward_space = gymnasium.spaces.Box(
             #     low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
             # )
-            self._reward_space = gym.spaces.Box(
+            self._reward_space = gymnasium.spaces.Box(
                 low=-9999, high=9999, shape=(1,), dtype=np.float32
             )
 
@@ -266,21 +266,21 @@ class AtariEnvLightZero(BaseEnv):
         self._seed_rng = np.random.RandomState(self._seed)
 
     @property
-    def observation_space(self) -> gym.spaces.Space:
+    def observation_space(self) -> gymnasium.spaces.Space:
         """
         Property to access the observation space of the environment.
         """
         return self._observation_space
 
     @property
-    def action_space(self) -> gym.spaces.Space:
+    def action_space(self) -> gymnasium.spaces.Space:
         """
         Property to access the action space of the environment.
         """
         return self._action_space
 
     @property
-    def reward_space(self) -> gym.spaces.Space:
+    def reward_space(self) -> gymnasium.spaces.Space:
         """
         Property to access the reward space of the environment.
         """
