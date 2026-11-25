@@ -157,7 +157,8 @@
 <span class="sd">            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \</span>
 <span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
 <span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.</span>
-<span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.</span>
+<span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to False.</span>
+<span class="sd">                Set ``policy.model.state_norm=True`` to enable it.</span>
 <span class="sd">            - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.</span>
 <span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.</span>
 <span class="sd">            - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.</span>

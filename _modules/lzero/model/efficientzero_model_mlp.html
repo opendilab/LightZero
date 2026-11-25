@@ -159,7 +159,8 @@
 <span class="sd">            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in Sampled EfficientZero model, default set it to False.</span>
 <span class="sd">            - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.</span>
 <span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.</span>
-<span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.</span>
+<span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to False.</span>
+<span class="sd">                Set ``policy.model.state_norm=True`` to enable it.</span>
 <span class="sd">            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \</span>
 <span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
 <span class="sd">            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}</span>

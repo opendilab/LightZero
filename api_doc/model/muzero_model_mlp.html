@@ -340,7 +340,8 @@ The prediction network is an MLP network which predicts the value and policy giv
 <li><p><strong>categorical_distribution</strong> (<em>-</em>) – Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.</p></li>
 <li><p><strong>activation</strong> (<em>-</em>) – Activation function used in network, which often use in-place                 operation to speedup, e.g. ReLU(inplace=True).</p></li>
 <li><p><strong>last_linear_layer_init_zero</strong> (<em>-</em>) – Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.</p></li>
-<li><p><strong>state_norm</strong> (<em>-</em>) – Whether to use normalization for latent states, default sets it to True.</p></li>
+<li><p><strong>state_norm</strong> (<em>-</em>) – Whether to use normalization for latent states, default sets it to False.
+Set <code class="docutils literal notranslate"><span class="pre">policy.model.state_norm=True</span></code> to enable it.</p></li>
 <li><p><strong>discrete_action_encoding_type</strong> (<em>-</em>) – The encoding type of discrete action, which can be ‘one_hot’ or ‘not_one_hot’.</p></li>
 <li><p><strong>norm_type</strong> (<em>-</em>) – The type of normalization in networks. defaults to ‘BN’.</p></li>
 <li><p><strong>res_connection_in_dynamics</strong> (<em>-</em>) – Whether to use residual connection for dynamics network, default set it to False.</p></li>

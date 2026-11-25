@@ -184,7 +184,8 @@
 <span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
 <span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \</span>
 <span class="sd">                value/policy mlp, default sets it to True.</span>
-<span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to True.</span>
+<span class="sd">            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to False.</span>
+<span class="sd">                Set ``policy.model.state_norm=True`` to enable it.</span>
 <span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \</span>
 <span class="sd">                defaults to True. This option is often used in video games like Atari. In board games like go, \</span>
 <span class="sd">                we don't need this module.</span>

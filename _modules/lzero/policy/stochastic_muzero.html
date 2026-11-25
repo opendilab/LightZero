@@ -124,6 +124,8 @@
     <span class="c1"># The default_config for Stochastic MuZero policy.</span>
     <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
         <span class="n">model</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+            <span class="c1"># (bool) Apply min-max normalization to latent states; matches the model constructor default.</span>
+            <span class="n">state_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="c1"># (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.</span>
             <span class="n">model_type</span><span class="o">=</span><span class="s1">'conv'</span><span class="p">,</span>  <span class="c1"># options={'mlp', 'conv'}</span>
             <span class="c1"># (bool) If True, the action space of the environment is continuous, otherwise discrete.</span>
