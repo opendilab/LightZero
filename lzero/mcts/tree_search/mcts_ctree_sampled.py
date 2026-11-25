@@ -178,6 +178,7 @@ class SampledUniZeroMCTSCtree(object):
                 network_output.reward = to_detach_cpu_numpy(self.reward_inverse_scalar_transform_handle(network_output.reward))
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
+                # print("network_output.latent_state.shape:", network_output.latent_state.shape)
 
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()

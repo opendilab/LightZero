@@ -3,6 +3,7 @@ from typing import Optional, Tuple, Sequence, List
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
@@ -187,11 +188,11 @@ class MuZeroMTModel(nn.Module):
                 num_channels=num_channels,
                 value_head_channels=value_head_channels,
                 policy_head_channels=policy_head_channels,
-                fc_value_layers=fc_value_layers,
-                fc_policy_layers=fc_policy_layers,
+                value_head_hidden_channels=fc_value_layers,
+                policy_head_hidden_channels=fc_policy_layers,
                 output_support_size=self.value_support_size,
-                flatten_output_size_for_value_head=value_head_channels * latent_size,
-                flatten_output_size_for_policy_head=policy_head_channels * latent_size,
+                flatten_input_size_for_value_head=value_head_channels * latent_size,
+                flatten_input_size_for_policy_head=policy_head_channels * latent_size,
                 downsample=self.downsample,
                 last_linear_layer_init_zero=last_linear_layer_init_zero,
                 activation=activation,

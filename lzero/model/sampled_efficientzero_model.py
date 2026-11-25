@@ -89,7 +89,8 @@ class SampledEfficientZeroModel(nn.Module):
                 operation to speedup, e.g. ReLU(inplace=True).
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
                 value/policy mlp, default sets it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for hidden states, default sets it to False.
+                Set ``policy.model.state_norm=True`` to enable it.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.

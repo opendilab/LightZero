@@ -42,7 +42,10 @@ class Tokenizer(nn.Module):
             encoder: nn.Module,
             decoder: nn.Module,
             with_lpips: bool = False,
-            obs_type: str = 'image'
+            obs_type: str = 'image',
+            encoder_option: str = "legacy",
+            decoder_network_tokenizer=None,
+            projection: Optional[List[int]] = None,
     ) -> None:
         """
         Overview:
@@ -57,7 +60,10 @@ class Tokenizer(nn.Module):
         self.encoder = encoder
         self.decoder_network = decoder
         self.obs_type = obs_type
+        self.encoder_option = encoder_option
+        self.decoder_network_tokenizer = decoder_network_tokenizer
         self.lpips: Optional[nn.Module] = None
+        self.projection_layer = nn.Identity() if projection is None else nn.Linear(projection[0], projection[1])
         if with_lpips:
             # Lazily import LPIPS as it's an optional dependency.
             from lzero.model.unizero_world_models.lpips import LPIPS

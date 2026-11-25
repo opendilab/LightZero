@@ -18,7 +18,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     """
     env_id = 'detective.z5'
 
-    collector_env_num: int = 4       # Number of collector environments
+    collector_env_num: int = 8       # Number of collector environments
     n_episode = int(collector_env_num)
     batch_size=64
 
@@ -39,7 +39,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # ------------------------------------------------------------------
     # User frequently modified configurations
     # ------------------------------------------------------------------
-    evaluator_env_num: int = 3       # Number of evaluator environments
+    evaluator_env_num: int = 8       # Number of evaluator environments
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
@@ -85,7 +85,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     jericho_unizero_config: Dict[str, Any] = dict(
         env=dict(
             stop_value=int(1e6),
-            observation_shape=512,
+            observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
             max_steps=max_steps,
             max_action_num=action_space_size,
             tokenizer_path=model_name,
@@ -111,7 +111,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             ),
             accumulation_steps=1,  # TODO: Accumulated gradient steps (currently default)
             model=dict(
-                observation_shape=512,
+                observation_shape=512,  # BGE-base-en-v1.5 embedding dimension
                 action_space_size=action_space_size,
                 encoder_option=encoder_option,
                 encoder_url=model_name,
@@ -134,8 +134,26 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     embed_dim=embed_dim,
                     obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),
+
+                    task_embed_option=None,
+                    use_task_embed=False,
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
+
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
+                    n_shared_experts=1,
+                    num_experts_per_tok=1,
+                    num_experts_of_moe_in_transformer=8,
+                    lora_r= 0,
+                    lora_alpha =1,
+                    lora_dropout= 0.0,
+
                     decode_loss_mode=None, # Controls where to compute reconstruction loss: after_backbone, before_backbone, or None.
-                    latent_recon_loss_weight=0.1
+                    latent_recon_loss_weight=0.1,
+                    game_segment_length=50
                 ),
             ),
             update_per_collect=int(collector_env_num*max_steps*replay_ratio ),  # Important for DDP
@@ -153,7 +171,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
             replay_buffer_size=int(5e5),
-            eval_freq=int(3e4),
+            eval_freq=int(300),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -188,7 +206,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"data_lz_fixed2/data_unizero_jericho/bge-base-en-v1.5/{env_id}/uz_gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )

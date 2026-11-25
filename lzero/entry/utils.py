@@ -1044,3 +1044,76 @@ if __name__ == '__main__':
     print("\nParameter status after un-freezing:")
     log_module_trainable_status(model, "DummyModel", logging.getLogger())
     
+
+
+# ==============================================================================
+# Example Usage
+# ==============================================================================
+if __name__ == '__main__':
+    # Configure a basic logger to see output from functions with `verbose=True`
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    print("\n--- Example for `compute_task_weights` ---")
+    task_rewards_list = [
+        {"task1": 10, "task2": 100, "task3": 1000, "task4": 500, "task5": 300},
+        {"task1": 1, "task2": 10, "task3": 100, "task4": 1000, "task5": 10000},
+        {"task1": 0.1, "task2": 0.5, "task3": 0.9, "task4": 5, "task5": 10},
+    ]
+
+    for i, task_rewards in enumerate(task_rewards_list, start=1):
+        print(f"\n--- Case {i} ---")
+        print(f"Original Rewards: {task_rewards}")
+
+        # Example 1: Using 'none' normalization (proportional to raw values)
+        weights_none = compute_task_weights(task_rewards, option="none", use_softmax=False)
+        print(f"Weights (proportional to raw values): {weights_none}")
+
+        # Example 2: Using 'symlog' normalization
+        weights_symlog = compute_task_weights(task_rewards, option="symlog", use_softmax=False)
+        print(f"Weights (with symlog normalization): {weights_symlog}")
+
+        # Example 3: Using 'rank' normalization and softmax with inverse proportion
+        weights_rank_softmax = compute_task_weights(task_rewards, option="rank", use_softmax=True, reverse=True)
+        print(f"Weights (inverse rank with softmax): {weights_rank_softmax}")
+
+    print("\n--- Example for `freeze_non_lora` ---")
+
+    # ==========================================================================
+    # FIX: The nn.Parameter must be wrapped in an nn.Module subclass to be
+    #      placed inside an nn.ModuleDict.
+    # ==========================================================================
+    class AdapterScale(nn.Module):
+        """A simple nn.Module wrapper for a single learnable parameter."""
+        def __init__(self):
+            super().__init__()
+            self.logit = nn.Parameter(torch.randn(1))
+
+    # Create a dummy model to demonstrate freezing
+    class DummyModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = nn.Linear(10, 10)
+            self.layer1 = nn.Linear(10, 10)
+            # Simulate LoRA parameters with correct naming
+            self.layer1.lora_A = nn.Parameter(torch.randn(10, 2))
+            self.layer1.lora_B = nn.Parameter(torch.randn(2, 10))
+            
+            # Correctly structure the adapter_scales using the wrapper module.
+            # This ensures that the value associated with key '0' is a valid nn.Module.
+            self.adapter_scales = nn.ModuleDict({
+                '0': AdapterScale()
+            })
+
+    model = DummyModel()
+    print("Initial parameter status:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nFreezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=True, verbose=True)
+    print("\nParameter status after freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
+
+    print("\nUn-freezing non-LoRA parameters...")
+    freeze_non_lora(model, freeze=False, verbose=True)
+    print("\nParameter status after un-freezing:")
+    log_module_trainable_status(model, "DummyModel", logging.getLogger())
