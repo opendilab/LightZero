@@ -1556,7 +1556,11 @@ Processes multiple game states in a single forward pass instead of iterating ind
 <dt class="sig sig-object py" id="lzero.policy.alphazero.AlphaZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.alphazero.AlphaZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -1566,7 +1570,7 @@ Processes multiple game states in a single forward pass instead of iterating ind
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -2587,7 +2591,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.muzero.MuZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.muzero.MuZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -2597,7 +2605,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -3605,7 +3613,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.efficientzero.EfficientZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.efficientzero.EfficientZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -3615,7 +3627,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -4532,7 +4544,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.gumbel_alphazero.GumbelAlphaZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.gumbel_alphazero.GumbelAlphaZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -4542,7 +4558,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -5553,7 +5569,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.gumbel_muzero.GumbelMuZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.gumbel_muzero.GumbelMuZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -5563,7 +5583,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -6485,7 +6505,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.sampled_alphazero.SampledAlphaZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.sampled_alphazero.SampledAlphaZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -6495,7 +6519,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -7576,7 +7600,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.sampled_muzero.SampledMuZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.sampled_muzero.SampledMuZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -7586,7 +7614,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -8667,7 +8695,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.sampled_efficientzero.SampledEfficientZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.sampled_efficientzero.SampledEfficientZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -8677,7 +8709,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -9682,7 +9714,11 @@ tensorboard according to the return value <code class="docutils literal notransl
 <dt class="sig sig-object py" id="lzero.policy.stochastic_muzero.StochasticMuZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.stochastic_muzero.StochasticMuZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -9692,7 +9728,7 @@ tensorboard according to the return value <code class="docutils literal notransl
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 
@@ -10825,7 +10861,11 @@ Clear the caches and precompute positional embedding matrices in the model.</p>
 <dt class="sig sig-object py" id="lzero.policy.unizero.UniZeroPolicy.sync_gradients">
 <span class="sig-name descname"><span class="pre">sync_gradients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.policy.unizero.UniZeroPolicy.sync_gradients" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
-<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-gpu training.</p>
+<dt>Overview:</dt><dd><p>Synchronize (allreduce) gradients of model parameters in data-parallel multi-GPU training.
+For parameters that did not participate in the forward/backward pass in some GPUs,
+assign a zero gradient with an indicator of 0. This ensures that only GPUs which contributed
+to the gradient computation are considered when averaging, thereby avoiding an incorrect
+division by the total number of GPUs.</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -10835,7 +10875,7 @@ Clear the caches and precompute positional embedding matrices in the model.</p>
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This method is only used in multi-gpu training, and it should be called after <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to synchronize             gradients allreduce and optimizer updates.</p>
+<p>This method is only used in multi-gpu training, and it should be called after the <code class="docutils literal notranslate"><span class="pre">backward</span></code> method and             before the <code class="docutils literal notranslate"><span class="pre">step</span></code> method. The user can also use the <code class="docutils literal notranslate"><span class="pre">bp_update_sync</span></code> config to control whether to             synchronize gradients allreduce and optimizer updates.</p>
 </div>
 </dd></dl>
 

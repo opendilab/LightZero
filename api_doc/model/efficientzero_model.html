@@ -1152,6 +1152,9 @@ parameters in the result. Defaults to True.</p></li>
 <dt class="sig sig-object py" id="lzero.model.efficientzero_model.DynamicsNetwork.parameters">
 <span class="sig-name descname"><span class="pre">parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Parameter</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.efficientzero_model.DynamicsNetwork.parameters" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module parameters.</p>
+<p>The exact order of the returned parameters is unspecified, but repeated
+calls to the <code class="docutils literal notranslate"><span class="pre">parameters()</span></code> method of an unchanged module return the
+parameters in the same order.</p>
 <p>This is typically passed to an optimizer.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
