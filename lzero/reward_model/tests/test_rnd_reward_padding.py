@@ -14,11 +14,12 @@ class ObservationError(torch.nn.Module):
         return obs, torch.zeros_like(obs)
 
 
-def make_model():
+def make_model(input_norm=False, extrinsic_reward_norm=False):
     cfg = EasyDict(deepcopy(RNDRewardModel.config))
     cfg.update(input_type='obs', obs_shape=4, latent_state_dim=4, rnd_buffer_size=16,
-               weight_decay=0.0, hidden_size_list=[4, 4], input_norm=False,
-               intrinsic_reward_weight=1.0, extrinsic_reward_norm=False)
+               weight_decay=0.0, hidden_size_list=[4, 4], input_norm=input_norm,
+               input_norm_clamp_min=-5, input_norm_clamp_max=5,
+               intrinsic_reward_weight=1.0, extrinsic_reward_norm=extrinsic_reward_norm)
     model = RNDRewardModel(cfg, 'cpu', tb_logger=Mock())
     model.reward_model = ObservationError()
     return model
@@ -31,10 +32,12 @@ def make_batch(padding_value=100.0, mask=(1, 1, 0)):
 
 
 @pytest.mark.unittest
-def test_padding_does_not_receive_bonus_or_change_valid_reward_scale():
+@pytest.mark.parametrize('input_norm', [False, True])
+@pytest.mark.parametrize('extrinsic_reward_norm', [False, True])
+def test_padding_does_not_receive_bonus_or_change_valid_reward_scale(input_norm, extrinsic_reward_norm):
     outputs = []
     for padding in (3.0, 100.0):
-        model = make_model()
+        model = make_model(input_norm, extrinsic_reward_norm)
         batch = make_batch(padding)
         original_rewards = batch[1][0]
         outputs.append(model.estimate(batch)[1][0])
