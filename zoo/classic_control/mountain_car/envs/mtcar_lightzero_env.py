@@ -81,7 +81,7 @@ class MountainCarEnv(BaseEnv):
         # assert isinstance(action, np.ndarray), type(action)
 
         # Extract action as int, 0-dim array
-        action = action.squeeze()
+        action = int(np.asarray(action).item())
         # Take a step of faith into the unknown!
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated

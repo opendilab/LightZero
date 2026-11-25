@@ -91,7 +91,7 @@ class ActionDiscretizationEnvWrapper:
         """
         if self.cfg.manually_discretization:
             # disc_to_cont: transform discrete action index to original continuous action
-            action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
+            action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(np.asarray(action).item())]]
             action = to_ndarray(action)
 
         # The core original env step.
