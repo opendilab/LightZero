@@ -1,6 +1,6 @@
 from itertools import product
 
-import gym
+import gymnasium
 import numpy as np
 from easydict import EasyDict
 
@@ -10,7 +10,7 @@ from ding.utils import ENV_WRAPPER_REGISTRY
 
 
 @ENV_WRAPPER_REGISTRY.register('action_discretization_env_wrapper')
-class ActionDiscretizationEnvWrapper(gym.Wrapper):
+class ActionDiscretizationEnvWrapper:
     """
     Overview:
         The modified environment with manually discretized action space. For each dimension, equally dividing the
@@ -19,23 +19,45 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
     Interface:
         ``__init__``,  ``reset``, ``step``
     Properties:
-        - env (:obj:`gym.Env`): the environment to wrap.
+        - env: the environment to wrap.
     """
 
-    def __init__(self, env: gym.Env, cfg: EasyDict) -> None:
+    def __init__(self, env, cfg: EasyDict) -> None:
         """
         Overview:
             Initialize ``self.`` See ``help(type(self))`` for accurate signature;  \
                 setup the properties according to running mean and std.
         Arguments:
-            - env (:obj:`gym.Env`): the environment to wrap.
+            - env: the environment to wrap.
         """
-        super().__init__(env)
+        if not isinstance(env.action_space, gymnasium.spaces.Space) or not isinstance(
+            env.observation_space, gymnasium.spaces.Space
+        ):
+            raise TypeError(
+                'ActionDiscretizationEnvWrapper requires Gymnasium spaces; use gymnasium.make().'
+            )
+        self.env = env
         assert 'is_train' in cfg, '`is_train` flag must set in the config of env'
         self.is_train = cfg.is_train
         self.cfg = cfg
         self.env_id = cfg.env_id
         self.continuous = cfg.continuous
+
+        self._raw_action_space = self.env.action_space
+
+        if self.cfg.manually_discretization:
+            # disc_to_cont: transform discrete action index to original continuous action
+            self.m = self._raw_action_space.shape[0]
+            self.n = self.cfg.each_dim_disc_size
+            self.K = self.n ** self.m
+            self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
+            # the modified discrete action space
+            self.action_space = gymnasium.spaces.Discrete(self.K)
+
+    def __getattr__(self, name):
+        if name.startswith('_') or name == 'env':
+            raise AttributeError(f"attempted to get missing attribute '{name}'")
+        return getattr(self.env, name)
 
     def reset(self, **kwargs):
         """
@@ -47,17 +69,6 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
             - observation (:obj:`Any`): New observation after reset
         """
         obs = self.env.reset(**kwargs)
-        self._raw_action_space = self.env.action_space
-
-        if self.cfg.manually_discretization:
-            # disc_to_cont: transform discrete action index to original continuous action
-            self.m = self._raw_action_space.shape[0]
-            self.n = self.cfg.each_dim_disc_size
-            self.K = self.n ** self.m
-            self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
-            # the modified discrete action space
-            self._action_space = gym.spaces.Discrete(self.K)
-
         return obs
 
     def step(self, action):
@@ -84,7 +95,12 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
             action = to_ndarray(action)
 
         # The core original env step.
-        obs, rew, done, info = self.env.step(action)
+        result = self.env.step(action)
+        if len(result) == 5:
+            obs, rew, terminated, truncated, info = result
+            done = terminated or truncated
+        else:
+            obs, rew, done, info = result
 
         return BaseEnvTimestep(obs, rew, done, info)
 

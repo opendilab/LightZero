@@ -48,7 +48,7 @@ import pooltool as pt
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
-from gym import spaces
+from gymnasium import spaces
 from numpy.typing import NDArray
 
 from zoo.pooltool.datatypes import (
