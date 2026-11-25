@@ -93,7 +93,7 @@
     
     
   <h1>Source code for lzero.envs.wrappers.lightzero_env_wrapper</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gym</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gymnasium</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">easydict</span><span class="w"> </span><span class="kn">import</span> <span class="n">EasyDict</span>
 
@@ -102,7 +102,7 @@
 
 
 <div class="viewcode-block" id="LightZeroEnvWrapper"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper">[docs]</a><span class="nd">@ENV_WRAPPER_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">'lightzero_env_wrapper'</span><span class="p">)</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LightZeroEnvWrapper</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Overview:</span>
 <span class="sd">       Package the classic_control, box2d environment into the format required by LightZero.</span>
@@ -110,23 +110,54 @@
 <span class="sd">    Interface:</span>
 <span class="sd">        ``__init__``,  ``reset``, ``step``</span>
 <span class="sd">    Properties:</span>
-<span class="sd">        - env (:obj:`gym.Env`): the environment to wrap.</span>
+<span class="sd">        - env: the environment to wrap.</span>
 <span class="sd">    """</span>
 
-<div class="viewcode-block" id="LightZeroEnvWrapper.__init__"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="LightZeroEnvWrapper.__init__"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Initialize ``self.`` See ``help(type(self))`` for accurate signature;  \</span>
 <span class="sd">                setup the properties according to running mean and std.</span>
 <span class="sd">        Arguments:</span>
-<span class="sd">            - env (:obj:`gym.Env`): the environment to wrap.</span>
+<span class="sd">            - env: the environment to wrap.</span>
 <span class="sd">        """</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env</span><span class="o">.</span><span class="n">observation_space</span><span class="p">,</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Space</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="p">,</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Space</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">'LightZeroEnvWrapper requires Gymnasium spaces; create the environment with gymnasium.make().'</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">env</span> <span class="o">=</span> <span class="n">env</span>
         <span class="k">assert</span> <span class="s1">'is_train'</span> <span class="ow">in</span> <span class="n">cfg</span><span class="p">,</span> <span class="s1">'`is_train` flag must set in the config of env'</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">is_train</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">is_train</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">cfg</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">env_id</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">env_id</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">continuous</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">continuous</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">observation_space</span> <span class="o">=</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s1">'observation'</span><span class="p">:</span> <span class="n">env</span><span class="o">.</span><span class="n">observation_space</span><span class="p">,</span>
+                    <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span><span class="n">low</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+                                                        <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">)),</span>  <span class="c1"># TODO: gymnasium.spaces.Constant(None)</span>
+                    <span class="s1">'to_play'</span><span class="p">:</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span><span class="n">low</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">high</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+                                                    <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">)),</span>  <span class="c1"># TODO: gymnasium.spaces.Constant(-1)</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">observation_space</span> <span class="o">=</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s1">'observation'</span><span class="p">:</span> <span class="n">env</span><span class="o">.</span><span class="n">observation_space</span><span class="p">,</span>
+                    <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">MultiDiscrete</span><span class="p">([</span><span class="mi">2</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="p">,</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Discrete</span><span class="p">)</span> <span class="k">else</span>
+                    <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">MultiDiscrete</span><span class="p">([</span><span class="mi">2</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]),</span>  <span class="c1"># {0,1}</span>
+                    <span class="s1">'to_play'</span><span class="p">:</span> <span class="n">gymnasium</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span><span class="n">low</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">high</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+                                                    <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">)),</span>  <span class="c1"># TODO: gymnasium.spaces.Constant(-1)</span>
+                <span class="p">}</span>
+            <span class="p">)</span></div>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'_'</span><span class="p">)</span> <span class="ow">or</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">'env'</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"attempted to get missing attribute '</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">'"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
 <div class="viewcode-block" id="LightZeroEnvWrapper.reset"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reset">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -139,33 +170,14 @@
 <span class="sd">        """</span>
         <span class="c1"># The core original env reset.</span>
         <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">obs</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">obs</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_eval_episode_return</span> <span class="o">=</span> <span class="mf">0.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_raw_observation_space</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">observation_space</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span><span class="p">:</span>
             <span class="n">action_mask</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">action_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="s1">'int8'</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_observation_space</span> <span class="o">=</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
-                <span class="p">{</span>
-                    <span class="s1">'observation'</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_observation_space</span><span class="p">,</span>
-                    <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span><span class="n">low</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
-                                                  <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">)),</span>  <span class="c1"># TODO: gym.spaces.Constant(None)</span>
-                    <span class="s1">'to_play'</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span><span class="n">low</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">high</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">)),</span>  <span class="c1"># TODO: gym.spaces.Constant(-1)</span>
-                <span class="p">}</span>
-            <span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_observation_space</span> <span class="o">=</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Dict</span><span class="p">(</span>
-                <span class="p">{</span>
-                    <span class="s1">'observation'</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_observation_space</span><span class="p">,</span>
-                    <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">MultiDiscrete</span><span class="p">([</span><span class="mi">2</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
-                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="p">,</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Discrete</span><span class="p">)</span> <span class="k">else</span>
-                    <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">MultiDiscrete</span><span class="p">([</span><span class="mi">2</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]),</span>  <span class="c1"># {0,1}</span>
-                    <span class="s1">'to_play'</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">spaces</span><span class="o">.</span><span class="n">Box</span><span class="p">(</span><span class="n">low</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">high</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="p">)),</span>  <span class="c1"># TODO: gym.spaces.Constant(-1)</span>
-                <span class="p">}</span>
-            <span class="p">)</span>
 
         <span class="n">lightzero_obs_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'observation'</span><span class="p">:</span> <span class="n">obs</span><span class="p">,</span> <span class="s1">'action_mask'</span><span class="p">:</span> <span class="n">action_mask</span><span class="p">,</span> <span class="s1">'to_play'</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">}</span>
         <span class="k">return</span> <span class="n">lightzero_obs_dict</span></div>
@@ -189,7 +201,12 @@
 
 <span class="sd">        """</span>
         <span class="c1"># The core original env step.</span>
-        <span class="n">obs</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="n">obs</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">terminated</span><span class="p">,</span> <span class="n">truncated</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">result</span>
+            <span class="n">done</span> <span class="o">=</span> <span class="n">terminated</span> <span class="ow">or</span> <span class="n">truncated</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">obs</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">result</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span><span class="p">:</span>
             <span class="n">action_mask</span> <span class="o">=</span> <span class="kc">None</span>
