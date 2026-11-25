@@ -76,7 +76,8 @@ class SampledMuZeroModel(nn.Module):
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to False.
+                Set ``policy.model.state_norm=True`` to enable it.
             # ==============================================================
             # specific sampled related config
             # ==============================================================

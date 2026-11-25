@@ -30,6 +30,8 @@ class EfficientZeroPolicy(MuZeroPolicy):
     # The default_config for EfficientZero policy.
     config = dict(
         model=dict(
+            # (bool) Apply min-max normalization to latent states; matches the model constructor default.
+            state_norm=False,
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
