@@ -62,7 +62,8 @@ class MuZeroModelMLP(nn.Module):
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to False.
+                Set ``policy.model.state_norm=True`` to enable it.
             - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.

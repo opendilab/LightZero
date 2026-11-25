@@ -64,7 +64,8 @@ class EfficientZeroModelMLP(nn.Module):
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in Sampled EfficientZero model, default set it to False.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
-            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to True.
+            - state_norm (:obj:`bool`): Whether to use normalization for latent states, default sets it to False.
+                Set ``policy.model.state_norm=True`` to enable it.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}

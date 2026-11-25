@@ -12,10 +12,11 @@ from ditk import logging
 from lzero.mcts import SampledMuZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import (DiscreteSupport, InverseScalarTransform,
-                          cross_entropy_loss, from, import, lzero.policy,
+                          cross_entropy_loss,
                           mz_network_output_unpack, negative_cosine_similarity,
                           phi_transform, prepare_obs, scalar_transform,
                           select_action, to_torch_float_tensor)
+from lzero.policy.muzero import MuZeroPolicy
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
@@ -32,6 +33,8 @@ class SampledMuZeroPolicy(MuZeroPolicy):
     # The default_config for Sampled MuZero policy.
     config = dict(
         model=dict(
+            # (bool) Apply min-max normalization to latent states; matches the model constructor default.
+            state_norm=False,
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
