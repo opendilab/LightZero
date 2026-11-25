@@ -43,16 +43,14 @@ class MountainCarEnv(BaseEnv):
         # Instantiate environment if not already done so
         if not self._init_flag:
             self._env = gymnasium.make('MountainCar-v0', render_mode='rgb_array')
+            if self._replay_path is not None:
+                self._env = gymnasium.wrappers.RecordVideo(
+                    self._env,
+                    video_folder=self._replay_path,
+                    episode_trigger=lambda episode_id: True,
+                    name_prefix='rl-video-{}'.format(id(self))
+                )
             self._init_flag = True
-
-        # Check if we have a valid replay path and save replay video accordingly
-        if self._replay_path is not None:
-            self._env = gymnasium.wrappers.RecordVideo(
-                self._env,
-                video_folder=self._replay_path,
-                episode_trigger=lambda episode_id: True,
-                name_prefix='rl-video-{}'.format(id(self))
-            )
 
         # Set the seeds for randomization and get first observation from original environment.
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
@@ -97,7 +95,7 @@ class MountainCarEnv(BaseEnv):
 
         # Making sure we conform to di-engine conventions
         obs = to_ndarray(obs)
-        rew = to_ndarray(rew).astype(np.float32)
+        rew = to_ndarray([rew], dtype=np.float32)
         action_mask = np.ones(self.action_space.n, 'int8')
         self._timestep += 1
 
@@ -114,6 +112,8 @@ class MountainCarEnv(BaseEnv):
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
         if replay_path is None:
             replay_path = './video'
+        if replay_path != self._replay_path and self._init_flag:
+            self.close()  # Recreate once on the next reset when recording settings change.
         self._replay_path = replay_path
 
     def random_action(self) -> np.ndarray:

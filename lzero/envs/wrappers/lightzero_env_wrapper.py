@@ -26,12 +26,38 @@ class LightZeroEnvWrapper:
         Arguments:
             - env: the environment to wrap.
         """
+        if not isinstance(env.observation_space, gymnasium.spaces.Space) or not isinstance(
+            env.action_space, gymnasium.spaces.Space
+        ):
+            raise TypeError('LightZeroEnvWrapper requires Gymnasium spaces; create the environment with gymnasium.make().')
         self.env = env
         assert 'is_train' in cfg, '`is_train` flag must set in the config of env'
         self.is_train = cfg.is_train
         self.cfg = cfg
         self.env_id = cfg.env_id
         self.continuous = cfg.continuous
+
+        if self.cfg.continuous:
+            self.observation_space = gymnasium.spaces.Dict(
+                {
+                    'observation': env.observation_space,
+                    'action_mask': gymnasium.spaces.Box(low=np.inf, high=np.inf,
+                                                        shape=(1, )),  # TODO: gymnasium.spaces.Constant(None)
+                    'to_play': gymnasium.spaces.Box(low=-1, high=-1,
+                                                    shape=(1, )),  # TODO: gymnasium.spaces.Constant(-1)
+                }
+            )
+        else:
+            self.observation_space = gymnasium.spaces.Dict(
+                {
+                    'observation': env.observation_space,
+                    'action_mask': gymnasium.spaces.MultiDiscrete([2 for _ in range(env.action_space.n)])
+                    if isinstance(env.action_space, gymnasium.spaces.Discrete) else
+                    gymnasium.spaces.MultiDiscrete([2 for _ in range(env.action_space.shape[0])]),  # {0,1}
+                    'to_play': gymnasium.spaces.Box(low=-1, high=-1,
+                                                    shape=(1, )),  # TODO: gymnasium.spaces.Constant(-1)
+                }
+            )
 
     def __getattr__(self, name):
         if name.startswith('_') or name == 'env':
@@ -49,35 +75,14 @@ class LightZeroEnvWrapper:
         """
         # The core original env reset.
         obs = self.env.reset(**kwargs)
+        if isinstance(obs, tuple) and len(obs) == 2 and isinstance(obs[1], dict):
+            obs, _ = obs
         self._eval_episode_return = 0.
-        self._raw_observation_space = self.env.observation_space
 
         if self.cfg.continuous:
             action_mask = None
         else:
             action_mask = np.ones(self.env.action_space.n, 'int8')
-
-        if self.cfg.continuous:
-            self.observation_space = gymnasium.spaces.Dict(
-                {
-                    'observation': self._raw_observation_space,
-                    'action_mask': gymnasium.spaces.Box(low=np.inf, high=np.inf,
-                                                        shape=(1, )),  # TODO: gymnasium.spaces.Constant(None)
-                    'to_play': gymnasium.spaces.Box(low=-1, high=-1,
-                                                    shape=(1, )),  # TODO: gymnasium.spaces.Constant(-1)
-                }
-            )
-        else:
-            self.observation_space = gymnasium.spaces.Dict(
-                {
-                    'observation': self._raw_observation_space,
-                    'action_mask': gymnasium.spaces.MultiDiscrete([2 for _ in range(self.env.action_space.n)])
-                    if isinstance(self.env.action_space, gymnasium.spaces.Discrete) else
-                    gymnasium.spaces.MultiDiscrete([2 for _ in range(self.env.action_space.shape[0])]),  # {0,1}
-                    'to_play': gymnasium.spaces.Box(low=-1, high=-1,
-                                                    shape=(1, )),  # TODO: gymnasium.spaces.Constant(-1)
-                }
-            )
 
         lightzero_obs_dict = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         return lightzero_obs_dict
@@ -101,7 +106,12 @@ class LightZeroEnvWrapper:
 
         """
         # The core original env step.
-        obs, rew, done, info = self.env.step(action)
+        result = self.env.step(action)
+        if len(result) == 5:
+            obs, rew, terminated, truncated, info = result
+            done = terminated or truncated
+        else:
+            obs, rew, done, info = result
 
         if self.cfg.continuous:
             action_mask = None
