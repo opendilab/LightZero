@@ -152,6 +152,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         self.dones = np.array([False for _ in range(self._env_num)])
         self.last_game_segments = [None for _ in range(self._env_num)]
         self.last_game_priorities = [None for _ in range(self._env_num)]
+        self._frame_windows = [deque(maxlen=self.policy_config.model.frame_stack_num) for _ in range(self._env_num)]
 
         self._episode_info = []
         self._total_envstep_count = 0
@@ -350,6 +351,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         if not (
             getattr(self.policy_config, 'contextual_reanalysis', False)
             or getattr(self.policy_config, 'bootstrap_value_context', False)
+            or getattr(self.policy_config, 'learner_replay_context', False)
         ):
             return segment
         world_model_cfg = getattr(self.policy_config.model, 'world_model_cfg', None)
@@ -420,10 +422,12 @@ class MuZeroSegmentCollector(ISerialCollector):
         ]
 
         # Stacked observation windows for initializing game segments.
-        observation_window_stack = [deque(maxlen=self.policy_config.model.frame_stack_num) for _ in range(env_nums)]
+        observation_window_stack = self._frame_windows
         for env_id in range(env_nums):
-            initial_frames = [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)]
-            observation_window_stack[env_id].extend(initial_frames)
+            if not observation_window_stack[env_id]:
+                observation_window_stack[env_id].extend(
+                    [to_ndarray(init_obs[env_id]['observation'])] * self.policy_config.model.frame_stack_num
+                )
             game_segments[env_id].reset(observation_window_stack[env_id])
 
         # Lists for storing values for priority calculation.
@@ -466,6 +470,20 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Get observations from ready environments.
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
+                for env_id in ready_env_id:
+                    if not observation_window_stack[env_id]:
+                        # Auto-reset completes asynchronously. Its ready observation belongs
+                        # to the new trajectory, while the preceding step returned a terminal frame.
+                        initial = obs[env_id]
+                        observation_window_stack[env_id].extend(
+                            [to_ndarray(initial['observation'])] * self.policy_config.model.frame_stack_num
+                        )
+                        game_segments[env_id].reset(observation_window_stack[env_id])
+                        self.action_mask_dict[env_id] = to_ndarray(initial['action_mask'])
+                        self.to_play_dict[env_id] = to_ndarray(initial['to_play'])
+                        self.timestep_dict[env_id] = to_ndarray(initial.get('timestep', -1))
+                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                            self.chance_dict[env_id] = to_ndarray(initial['chance'])
                 if len(ready_env_id) < self._env_num:
                     self._logger.debug(f'Only {len(ready_env_id)}/{self._env_num} envs are ready.')
 
@@ -541,6 +559,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                 with self._timer:
                     # Handle abnormal timesteps by resetting the environment and policy state.
                     if episode_timestep.info.get('abnormal', False):
+                        observation_window_stack[env_id].clear()
+                        self.last_game_segments[env_id] = self.last_game_priorities[env_id] = None
+                        game_segments[env_id] = self._attach_segment_context(GameSegment(
+                            self._env.action_space, self.policy_config.game_segment_length,
+                            self.policy_config, self.task_id
+                        ), None, train_iter)
+                        pred_values_lst[env_id], search_values_lst[env_id] = [], []
                         self._env.reset({env_id: None})
                         self._policy.reset([env_id])
                         self._reset_stat(env_id)
@@ -566,7 +591,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                             game_segments[env_id].store_search_stats(distributions_dict_with_env_id[env_id], value_dict_with_env_id[env_id])
 
                     # Append the new transition to the game segment.
-                    append_kwargs = {'timestep': to_ndarray(obs.get('timestep', -1))}
+                    append_kwargs = {'timestep': self.timestep_dict_tmp[env_id]}
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         append_kwargs['chance'] = self.chance_dict_tmp[env_id]
                     
@@ -646,7 +671,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if episode_timestep.done:
                     self._logger.info(f'======== Environment {env_id} episode finished! ========')
-                    self._total_episode_count += 1
 
                     info = {
                         'reward': episode_timestep.info['eval_episode_return'],
@@ -707,7 +731,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                         config=self.policy_config,
                         task_id=self.task_id
                     ), None, train_iter)
-                    game_segments[env_id].reset(observation_window_stack[env_id])
+                    observation_window_stack[env_id].clear()
 
             # Check if the required number of segments has been collected.
             if len(self.game_segment_pool) >= self._default_num_segments:

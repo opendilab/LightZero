@@ -2,8 +2,10 @@
 
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from .utils import hash_state
 
@@ -243,6 +245,75 @@ class ReanalysisContextMixin:
             head_index = 0 if getattr(self, 'share_head', False) else int(task_id)
             return multi_task_head[head_index]
         return getattr(self, name)
+
+    def learner_decision_logits(self, observations, actions, prefix):
+        """Score each learner root using its observed rollout prefix and the online prediction window."""
+        frames, previous_actions, lengths = prefix
+        batch, horizon = actions.shape
+        history = (self.context_length - 2) // 2
+        roots = observations.reshape(batch, horizon, self.embed_dim)
+        lengths = np.asarray(lengths, dtype=np.int64)
+        previous = roots.new_zeros((batch, history, self.embed_dim))
+        previous_act = torch.zeros((batch, history), device=roots.device, dtype=torch.long)
+        if frames is not None:
+            rows, cols = np.nonzero(np.arange(history)[None, :] >= history - lengths[:, None])
+            rows = torch.as_tensor(rows, device=roots.device)
+            cols = torch.as_tensor(cols, device=roots.device)
+            flat = torch.as_tensor(frames, device=roots.device, dtype=roots.dtype)
+            encoded = torch.cat([
+                checkpoint(self.tokenizer.encode_to_obs_embeddings, chunk, use_reentrant=False)
+                for chunk in flat.split(64)
+            ])
+            previous[rows, cols] = encoded.reshape(-1, self.embed_dim)
+            previous_act[rows, cols] = torch.as_tensor(previous_actions, device=roots.device).reshape(-1).long()
+
+        states = torch.cat((previous, roots), dim=1)
+        embedded_actions = self.act_embedding_table(torch.cat((previous_act, actions), dim=1))
+        tokens = torch.stack((states, embedded_actions), dim=2).flatten(1, 2)
+        available = np.minimum(history, lengths[:, None] + np.arange(horizon))
+        result_indices, policies, values = [], [], []
+        for n in np.unique(available):
+            rows, steps = np.nonzero(available == n)
+            row = torch.as_tensor(rows, device=roots.device)
+            step = torch.as_tensor(steps, device=roots.device)
+            width = int(2 * n + 1)
+            offsets = torch.arange(width, device=roots.device)
+            starts = 2 * (history + step - int(n))
+            for ids, left in zip(row.split(128), starts.split(128)):
+                context = tokens[ids[:, None], left[:, None] + offsets]
+                pi, val = checkpoint(self._learner_root_heads, context, use_reentrant=False)
+                policies.append(pi)
+                values.append(val)
+            result_indices.append(row * horizon + step)
+        order = torch.cat(result_indices).argsort()
+        return (torch.cat(policies)[order].reshape(batch, horizon, -1),
+                torch.cat(values)[order].reshape(batch, horizon, -1))
+
+    def _learner_root_heads(self, context):
+        positioned, start = self._position_root_context_batch(context)
+        hidden = self.transformer(positioned, start_pos=start)[:, -1:]
+        policy = self.head_policy(hidden, num_steps=1, prev_steps=0)[:, 0]
+        if self.use_policy_logits_clip:
+            policy = self._apply_policy_logits_control(policy)
+        return policy, self.head_value(hidden, num_steps=1, prev_steps=0)[:, 0]
+
+    @torch.no_grad()
+    def restore_observed_root_cache(self, env_id, history, last_latent):
+        """Retokenize the retained real trajectory after the learner changes weights."""
+        frames, actions, positions = zip(*history)
+        last = last_latent.reshape(1, self.embed_dim)
+        tokens = last
+        if len(frames) > 1:
+            states = self.tokenizer.encode_to_obs_embeddings(torch.cat(frames[:-1])).reshape(-1, self.embed_dim)
+            acts = self.act_embedding_table(torch.as_tensor(actions[:-1], device=states.device))
+            tokens = torch.cat((torch.stack((states, acts), dim=1).flatten(0, 1), last))
+        positioned, start = self._position_root_context_batch(tokens.unsqueeze(0))
+        if self.config.rotary_emb:
+            start = int(positions[0]) * 2
+        self.keys_values_wm = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
+        self.transformer(positioned, past_keys_values=self.keys_values_wm, start_pos=start)
+        self.keys_values_wm_token_context_list = [tokens]
+        self.update_cache_context(last_latent, valid_context_lengths=[len(tokens)], env_ids=[env_id])
 
     @torch.no_grad()
     def seed_reanalysis_root_caches(

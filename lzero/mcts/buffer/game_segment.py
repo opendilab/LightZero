@@ -119,16 +119,25 @@ class GameSegment:
         valid_count = int(getattr(previous_segment, 'valid_transition_count', 0))
         if valid_count <= 0:
             valid_count = min(len(previous_segment.action_segment), previous_segment.game_segment_length)
-        prefix_len = min(max_history_transitions, valid_count)
+        previous_prefix = list(getattr(previous_segment, 'context_prefix_actions', []))
+        prefix_len = min(max_history_transitions, valid_count + len(previous_prefix))
         if prefix_len == 0:
             self.context_prefix_obs_frames = []
             self.context_prefix_actions = []
             return
 
-        start = valid_count - prefix_len
+        local_len = min(valid_count, prefix_len)
+        inherited = prefix_len - local_len
+        start = valid_count - local_len
         obs_end = valid_count + previous_segment.frame_stack_num - 1
-        self.context_prefix_obs_frames = copy.deepcopy(list(previous_segment.obs_segment[start:obs_end]))
-        self.context_prefix_actions = copy.deepcopy(list(previous_segment.action_segment[start:valid_count]))
+        frames = list(previous_segment.obs_segment[start:obs_end])
+        actions = list(previous_segment.action_segment[start:valid_count])
+        if inherited:
+            offset = len(previous_prefix) - inherited
+            frames = list(previous_segment.context_prefix_obs_frames[offset:offset + inherited]) + frames
+            actions = previous_prefix[offset:] + actions
+        self.context_prefix_obs_frames = copy.deepcopy(frames)
+        self.context_prefix_actions = copy.deepcopy(actions)
         expected_frames = prefix_len + self.frame_stack_num - 1
         if len(self.context_prefix_obs_frames) != expected_frames:
             raise RuntimeError(

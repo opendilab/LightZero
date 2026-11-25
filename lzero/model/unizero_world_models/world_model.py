@@ -2729,6 +2729,10 @@ class WorldModel(
 
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
+        if 'decision_prefix' in batch:
+            outputs.logits_policy, outputs.logits_value = self.learner_decision_logits(
+                obs_embeddings, batch['actions'], batch['decision_prefix']
+            )
         
         # Get intermediate tensor x from model output and detach computation graph
         intermediate_tensor_x = outputs.output_sequence.detach()

@@ -305,7 +305,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2], current_batch[-1]  # current_batch[2] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[2], current_batch[7]
         )
 
         # target policy
@@ -412,6 +412,17 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
+
+        if getattr(self._cfg, 'learner_replay_context', False):
+            history_steps = (self._cfg.model.world_model_cfg.context_length - 2) // 2
+            prefix_obs, prefix_actions, lengths = [], [], []
+            for segment, index in zip(game_segment_list, pos_in_game_segment_list):
+                observations, actions = self._get_segment_context_history(segment, index, history_steps)
+                prefix_obs.extend(observations)
+                prefix_actions.extend(actions)
+                lengths.append(len(actions))
+            prepared = prepare_observation(prefix_obs, self._cfg.model.model_type) if prefix_obs else None
+            current_batch.append((prepared, np.asarray(prefix_actions), np.asarray(lengths)))
 
         total_transitions = self.get_num_of_transitions()
 

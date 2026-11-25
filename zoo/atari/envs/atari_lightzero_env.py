@@ -75,6 +75,7 @@ class AtariEnvLightZero(BaseEnv):
         # (int) Specifies the number of consecutive frames to stack after collecting environment data.
         # The stacking process is applied within the collector and evaluator modules.
         frame_stack_num=1,
+        collector_episode_life=True,
         # (int) The number of frames to skip between each action. Higher values result in faster simulation.
         frame_skip=4,
         # (bool) If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.
@@ -197,6 +198,10 @@ class AtariEnvLightZero(BaseEnv):
         self._eval_episode_return = 0.
         self._raw_episode_return = 0.
         self._clipped_episode_return = 0.
+        ale = getattr(getattr(self._env, 'unwrapped', None), 'ale', None)
+        self._previous_lives = ale.lives() if ale is not None else None
+        self._first_life_return = 0.
+        self._lost_life = False
         self._timestep = 0
         obs = self.observe()
         return obs
@@ -222,6 +227,12 @@ class AtariEnvLightZero(BaseEnv):
         elif self._raw_episode_return is not None:
             self._raw_episode_return += float(raw_reward)
         self._clipped_episode_return += float(np.sign(reward if raw_reward is None else raw_reward))
+        lives = info.get('lives')
+        if lives is not None and self._previous_lives is not None:
+            if not self._lost_life and raw_reward is not None:
+                self._first_life_return += float(raw_reward)
+            self._lost_life |= lives < self._previous_lives
+            self._previous_lives = lives
         self._timestep += 1
         # if self._timestep % 200 == 0:
         #     logging.info(f'self._timestep: {self._timestep}')
@@ -231,6 +242,11 @@ class AtariEnvLightZero(BaseEnv):
             info['eval_episode_return'] = self._eval_episode_return
             if self._raw_episode_return is not None:
                 info['raw_episode_return'] = self._raw_episode_return
+                if not self.episode_life and lives is not None and self._previous_lives is not None:
+                    info.setdefault('episode_info', {}).update(
+                        first_life_raw=self._first_life_return,
+                        later_lives_raw=self._raw_episode_return - self._first_life_return,
+                    )
             info['clipped_episode_return'] = self._clipped_episode_return
             info['episode_return_is_clipped'] = bool(self.clip_rewards)
             info['episode_return_is_life'] = bool(self.episode_life)
@@ -309,7 +325,7 @@ class AtariEnvLightZero(BaseEnv):
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.collect_max_episode_steps
-        cfg.episode_life = True
+        cfg.episode_life = cfg.get('collector_episode_life', True)
         cfg.clip_rewards = True
         return [cfg for _ in range(collector_env_num)]
 

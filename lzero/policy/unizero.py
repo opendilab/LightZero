@@ -1,6 +1,6 @@
 import copy
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
@@ -812,6 +812,8 @@ class UniZeroPolicy(MuZeroPolicy):
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
+        learner_replay_context=False,
+        restore_collect_history=False,
         # (bool) Whether replay-policy reanalysis should seed each MCTS root from the same
         # short observation/action context used online. Opt-in to preserve legacy targets.
         contextual_reanalysis=False,
@@ -1322,7 +1324,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.eval()
 
         current_batch, target_batch, train_iter = data
-        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
+        obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch[:8]
         target_reward, target_value, target_policy = target_batch
 
         # Calculate current epsilon for policy label smoothing
@@ -1379,6 +1381,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
+        if getattr(self._cfg, 'learner_replay_context', False):
+            batch_for_gpt['decision_prefix'] = current_batch[8]
         if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
             batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
                 self._cfg.batch_size, -1, self._cfg.model.observation_shape)
@@ -2104,6 +2108,10 @@ class UniZeroPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = 1.
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
+        if getattr(self._cfg, 'restore_collect_history', False):
+            length = (self._collect_model.world_model.context_length - 2) // 2
+            self._collect_history = [deque(maxlen=length) for _ in range(self.collector_env_num)]
+            self._collect_history_dirty = set()
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
@@ -2205,6 +2213,18 @@ class UniZeroPolicy(MuZeroPolicy):
             last_obs_batch, last_action_batch = self._select_last_infer_inputs(
                 self.last_batch_obs_collect, self.last_batch_action_collect, ready_env_id, self.collector_env_num
             )
+            pending = getattr(self, '_collect_history_dirty', set()).intersection(ready_env_id)
+            if pending:
+                wm = self._collect_model.world_model
+                # Root keys depend on exact encoder bytes, including batch-dependent
+                # roundoff. Use the same input batch as the immediately following lookup.
+                last_latents = wm.tokenizer.encode_to_obs_embeddings(last_obs_batch)
+                for slot, eid in enumerate(ready_env_id):
+                    if eid in pending:
+                        history = self._collect_history[eid]
+                        if history:
+                            wm.restore_observed_root_cache(eid, history, last_latents[slot:slot + 1])
+                        self._collect_history_dirty.discard(eid)
             network_output = self._collect_model.initial_inference(
                 last_obs_batch, last_action_batch, data, timestep, ready_env_id=ready_env_id
             )
@@ -2289,6 +2309,9 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
+            if hasattr(self, '_collect_history'):
+                for slot, eid in enumerate(ready_env_id):
+                    self._collect_history[eid].append((data[slot:slot + 1].detach().clone(), batch_action[slot], int(timestep[slot])))
             self._update_last_infer_inputs(
                 'last_batch_obs_collect', 'last_batch_action_collect',
                 data, batch_action, ready_env_id, self.collector_env_num
@@ -2520,6 +2543,10 @@ class UniZeroPolicy(MuZeroPolicy):
             env_ids_to_reset = None
 
         if reset_init_data:
+            if hasattr(self, '_collect_history'):
+                for eid in range(self.collector_env_num) if env_ids_to_reset is None else env_ids_to_reset:
+                    self._collect_history[eid].clear()
+                    self._collect_history_dirty.discard(eid)
             if env_ids_to_reset is None:
                 self.last_batch_obs_collect = initialize_pad_batch(
                     self._cfg.model.observation_shape,
@@ -2569,6 +2596,8 @@ class UniZeroPolicy(MuZeroPolicy):
         if envs_to_clear:
             world_model = self._collect_model.world_model
             self._clear_env_root_caches(world_model, envs_to_clear, 'Collector interval')
+            if hasattr(self, '_collect_history_dirty'):
+                self._collect_history_dirty.update(envs_to_clear)
             if self._cfg.empty_cuda_cache_on_cache_reset and torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -2998,6 +3027,8 @@ class UniZeroPolicy(MuZeroPolicy):
             Overview:
             Clear the caches and precompute positional embedding matrices in the model.
         """
+        if hasattr(self, '_collect_history'):
+            self._collect_history_dirty.update(i for i, history in enumerate(self._collect_history) if history)
         models = []
         for attr in ('_learn_model', '_collect_model', '_eval_model', '_target_model'):
             model = getattr(self, attr, None)

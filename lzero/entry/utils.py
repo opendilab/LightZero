@@ -534,7 +534,7 @@ def calculate_update_per_collect(
     # Note: A game segment's length can be less than `game_segment_length` if it's the
     # final segment of an episode.
     collected_transitions_num = sum(
-        min(len(game_segment), cfg.policy.game_segment_length)
+        min(getattr(game_segment, 'valid_transition_count', 0) or len(game_segment), cfg.policy.game_segment_length)
         for game_segment in new_data[0]
     )
 
