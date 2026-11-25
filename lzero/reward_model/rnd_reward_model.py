@@ -283,48 +283,64 @@ class RNDRewardModel(BaseRewardModel):
                 f'RND observation sequence length ({sequence_length}) does not match reward target sequence '
                 f'length ({target_sequence_length}). Check frame_stack_num and num_unroll_steps.'
             )
+        valid_mask = np.asarray(data[0][2], dtype=bool)
+        if valid_mask.shape != (batch_size, sequence_length):
+            raise ValueError(
+                f'RND transition mask shape {valid_mask.shape} does not match '
+                f'observation/reward shape {(batch_size, sequence_length)}.'
+            )
+        valid_mask = valid_mask.reshape(-1)
         obs_batch_tmp = np.reshape(obs_batch_orig, (batch_size * sequence_length, self.cfg.obs_shape))
 
-        if self.input_type == 'latent_state':
-            with torch.no_grad():
-                latent_state = self.representation_network(
-                    torch.from_numpy(obs_batch_tmp).to(self.device).float()
-                )
-            input_data = latent_state
-        elif self.input_type in ['obs', 'obs_latent_state']:
-            input_data = to_tensor(obs_batch_tmp).to(self.device).float()
+        # Keep padded/absorbing targets at zero bonus. In particular, padding
+        # must not change the min/max used to scale valid transition novelty.
+        # Select before representation inference too: its normalization layers
+        # may depend on the batch, especially for latent-state RND inputs.
+        rnd_reward = np.zeros((batch_size * sequence_length, 1), dtype=np.float32)
+        reward_stats = torch.zeros(1, device=self.device)
+        if valid_mask.any():
+            inference_modules = [self.reward_model]
+            if self.input_type == 'latent_state':
+                inference_modules.append(self.representation_network)
+            training_states = {module: module.training for root in inference_modules for module in root.modules()}
+            try:
+                # Estimates are inference: do not update shared encoder BatchNorm
+                # statistics, and support a batch with only one valid transition.
+                for root in inference_modules:
+                    root.eval()
+                input_data = torch.as_tensor(obs_batch_tmp[valid_mask], device=self.device).float()
+                if self.input_type == 'latent_state':
+                    with torch.no_grad():
+                        input_data = self.representation_network(input_data)
 
-        # NOTE: deepcopy reward part of data is very important,
-        # otherwise the reward of data in the replay buffer will be incorrectly modified.
-        target_reward_augmented = copy.deepcopy(target_reward)
-        target_reward_augmented = np.reshape(target_reward_augmented, (batch_size * sequence_length, 1))
+                if self.cfg.input_norm:
+                    input_data = (input_data - to_tensor(self._running_mean_std_rnd_obs.mean).to(self.device)) / to_tensor(
+                        self._running_mean_std_rnd_obs.std
+                    ).to(self.device)
+                    input_data = torch.clamp(
+                        input_data, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max
+                    )
+                with torch.no_grad():
+                    predict_feature, target_feature = self.reward_model(input_data)
+                    mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)
+                    self._running_mean_std_rnd_reward.update(mse.detach().cpu().numpy())
+                    reward_stats = (mse - mse.min()) / (mse.max() - mse.min() + 1e-6)
+                    rnd_reward[valid_mask, 0] = reward_stats.cpu().numpy()
 
-        if self.cfg.input_norm:
-            # add this line to avoid inplace operation on the original tensor.
-            input_data = input_data.clone()
-            # Note: observation normalization: transform obs to mean 0, std 1
-            input_data = (input_data - to_tensor(self._running_mean_std_rnd_obs.mean
-                                                 ).to(self.device)) / to_tensor(self._running_mean_std_rnd_obs.std).to(
-                self.device)
-            input_data = torch.clamp(input_data, min=self.cfg.input_norm_clamp_min, max=self.cfg.input_norm_clamp_max)
-        else:
-            input_data = input_data
-        with torch.no_grad():
-            predict_feature, target_feature = self.reward_model(input_data)
-            mse = F.mse_loss(predict_feature, target_feature, reduction='none').mean(dim=1)
-            self._running_mean_std_rnd_reward.update(mse.detach().cpu().numpy())
+            finally:
+                for module, training in training_states.items():
+                    module.training = training
 
-            # Note: according to the min-max normalization, transform rnd reward to [0,1]
-            rnd_reward = (mse - mse.min()) / (mse.max() - mse.min() + 1e-6)
+        self.estimate_cnt_rnd += 1
+        self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', reward_stats.max(), self.estimate_cnt_rnd)
+        self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', reward_stats.mean(), self.estimate_cnt_rnd)
+        self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', reward_stats.min(), self.estimate_cnt_rnd)
+        self.tb_logger.add_scalar(
+            'rnd_reward_model/rnd_reward_std', reward_stats.std(unbiased=False), self.estimate_cnt_rnd
+        )
 
-            # save the rnd_reward statistics into tb_logger
-            self.estimate_cnt_rnd += 1
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_max', rnd_reward.max(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_mean', rnd_reward.mean(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_min', rnd_reward.min(), self.estimate_cnt_rnd)
-            self.tb_logger.add_scalar('rnd_reward_model/rnd_reward_std', rnd_reward.std(), self.estimate_cnt_rnd)
-
-        rnd_reward = rnd_reward.to(self.device).unsqueeze(1).cpu().numpy()
+        # Preserve rewards held by callers/replay when replacing batch targets.
+        target_reward_augmented = copy.deepcopy(target_reward).reshape(batch_size * sequence_length, 1)
         intrinsic_reward_weight = self._current_intrinsic_reward_weight()
         self.tb_logger.add_scalar(
             'rnd_reward_model/intrinsic_reward_weight', intrinsic_reward_weight, self.estimate_cnt_rnd
