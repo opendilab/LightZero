@@ -1,6 +1,7 @@
 from itertools import product
 
 import gym
+import gymnasium
 import numpy as np
 from easydict import EasyDict
 
@@ -36,6 +37,19 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
         self.cfg = cfg
         self.env_id = cfg.env_id
         self.continuous = cfg.continuous
+        self._spaces = gymnasium.spaces if isinstance(env.action_space, gymnasium.Space) else gym.spaces
+
+        self._raw_action_space = self.env.action_space
+
+        if self.cfg.manually_discretization:
+            # disc_to_cont: transform discrete action index to original continuous action
+            self.m = self._raw_action_space.shape[0]
+            self.n = self.cfg.each_dim_disc_size
+            self.K = self.n ** self.m
+            self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
+            # the modified discrete action space
+            self._action_space = self._spaces.Discrete(self.K)
+
 
     def reset(self, **kwargs):
         """
@@ -47,16 +61,6 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
             - observation (:obj:`Any`): New observation after reset
         """
         obs = self.env.reset(**kwargs)
-        self._raw_action_space = self.env.action_space
-
-        if self.cfg.manually_discretization:
-            # disc_to_cont: transform discrete action index to original continuous action
-            self.m = self._raw_action_space.shape[0]
-            self.n = self.cfg.each_dim_disc_size
-            self.K = self.n ** self.m
-            self.disc_to_cont = list(product(*[list(range(self.n)) for dim in range(self.m)]))
-            # the modified discrete action space
-            self._action_space = gym.spaces.Discrete(self.K)
 
         return obs
 
@@ -80,7 +84,7 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
         """
         if self.cfg.manually_discretization:
             # disc_to_cont: transform discrete action index to original continuous action
-            action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
+            action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(np.asarray(action).item())]]
             action = to_ndarray(action)
 
         # The core original env step.

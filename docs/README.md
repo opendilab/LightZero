@@ -60,3 +60,5 @@ If you have any questions about documentation, please add a new issue or contact
 # License
 
 LightZero-Docs released under the Apache 2.0 license
+
+- [NumPy 1 and 2 training compatibility](numpy_training_compatibility.md)

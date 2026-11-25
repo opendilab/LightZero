@@ -1,5 +1,5 @@
 from typing import Any, List, Union, Optional
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray, to_list
@@ -42,7 +42,7 @@ class MountainCarEnv(BaseEnv):
     def reset(self) -> np.ndarray:
         # Instantiate environment if not already done so
         if not self._init_flag:
-            self._env = gym.make('MountainCar-v0')
+            self._env = gym.make('MountainCar-v0', render_mode='rgb_array' if self._replay_path else None)
             self._init_flag = True
 
         # Check if we have a valid replay path and save replay video accordingly
@@ -54,17 +54,18 @@ class MountainCarEnv(BaseEnv):
                 name_prefix='rl-video-{}'.format(id(self))
             )
 
+        reset_seed = None
         # Set the seeds for randomization.
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
-            self._env.seed(self._seed + np_seed)
+            reset_seed = int(self._seed + np_seed)
             self._action_space.seed(self._seed + np_seed)
         elif hasattr(self, '_seed'):
-            self._env.seed(self._seed)
+            reset_seed = int(self._seed)
             self._action_space.seed(self._seed)
 
         # Get first observation from original environment
-        obs = self._env.reset()
+        obs, _ = self._env.reset(seed=reset_seed)
 
         # Convert to numpy array as output
         obs = to_ndarray(obs).astype(np.float32)
@@ -84,9 +85,10 @@ class MountainCarEnv(BaseEnv):
         # assert isinstance(action, np.ndarray), type(action)
 
         # Extract action as int, 0-dim array
-        action = action.squeeze()
+        action = int(np.asarray(action).item())
         # Take a step of faith into the unknown!
-        obs, rew, done, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
 
         # Cummulate reward
         self._eval_episode_return += rew

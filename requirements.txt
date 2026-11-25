@@ -1,7 +1,7 @@
-DI-engine>=0.5.3
+DI-engine @ git+https://github.com/opendilab/DI-engine.git@ce54f6baa8d39d5b98adaf9a7e82560a444a2b1a
 gymnasium[atari]>=1.0.0
 ale-py>=0.10.1
-numpy>=1.24.1,<2
+numpy>=1.24.1,<3
 transformers
 pympler
 minigrid
